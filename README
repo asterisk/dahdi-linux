@@ -1,0 +1,233 @@
+DAHDI Telephony Interface Driver
+=================================
+Asterisk Development Team <asteriskteam@digium.com>
+$Revision$, $Date$
+
+DAHDI stands for Digium Asterisk Hardware Device Interface. This
+package contains the userspace tools to configure the kernel modules
+included in the package dahdi-linux.
+
+Build Requirements
+------------------
+This package needs the headers from dahdi-linux. Thus you should install
+dahdi-linux before building dahdi-tools.
+
+Build System
+~~~~~~~~~~~~
+gcc and friends. Generally you will need to install the package gcc.
+There may be cases where you will need a specific version of gcc to build
+kernel modules.
+
+
+Extra Libraries
+~~~~~~~~~~~~~~~
+Some libraries are needed for extra utilities that are provided with
+DAHDI.
+
+- libusb is needed for building fpga_load, needed for firmware loading of
+  the Xorcom Astribank.
+- libnewt is needed to build the optional but useful utility dahdi_tool.
+
+
+Installation
+~~~~~~~~~~~~
+Note: If using `sudo` to build/install, you may need to add /sbin to your PATH.
+----------------------------------
+./configure
+# optional step: select custom configuration:
+#make menuselect
+make
+make install
+# To install init scripts and config files:
+#make config
+----------------------------------
+
+
+Build Tweaks
+~~~~~~~~~~~~
+Partial Build/Install
+^^^^^^^^^^^^^^^^^^^^^
+There are some make targets that are provided to build or install just
+parts of DAHDI:
+
+. Build targets:
+  - make: Build DAHDI userspace programs. partial 
+    targets of it:
+    * make 'utilname': builds 'utilname' alone (e.g: `make dahdi_diag`)
+    * make utils: Build libtonezone.
+    * make libs: Build libtonezone.
+. Install targets:
+  - make install: Installs user space tools into /usr/sbin/ (TODO - list
+    partial targets)
+  - make config: should be run once to configure 
+
+
+Installation to a Subtree
+^^^^^^^^^^^^^^^^^^^^^^^^^
+The following may be useful when testing the package or when preparing a
+package for a binary distribution (such as an rpm package) installing
+onto a subtree rather than on th real system. 
+
+  make install DESTDIR=targetdir
+
+This can be useful for any partial install target from the list above.
+
+
+Options For ./configure
+^^^^^^^^^^^^^^^^^^^^^^^
+The configure script various several tests and based on them generates
+some files ( build_tools/menuselect-deps and makeopts). You can pass it
+--with options and variable settings, for instance:
+
+  ./configure --without-ncurses CC="gcc-4.10"
+
+If you just want to recreate the same files without a full detection
+run, use:
+
+  ./config.status
+
+To re-run ./configure with the same parameters it was run with last
+time, use:
+
+  ./ocnfig.status --recheck
+
+
+Configuration
+-------------
+Configuration for DAHDI resides under /etc/dahdi . 
+
+/etc/dahdi/system.conf
+~~~~~~~~~~~~~~~~~~~~~~
+The main method to configure DAHDI devices is using the utility
+*dahdi_cfg*. dahdi_cfg reads data from the configuration file 
+/etc/dahdi/system.conf , figures out what configuration to send to 
+channels, and send it to the kernel.
+
+A sample annotated system.conf is included in this directory and
+installed by default. Edit it to suit your configuration. Alternatively 
+use the script dahdi_genconf to generate one that should work with your 
+system.
+
+/etc/dahdi/init.conf
+~~~~~~~~~~~~~~~~~~~~
+The configuration file of the dahdi init.d script is
+/etc/dahdi/init.conf . That file is used to override defaults that are 
+set at the beginning of the init.d script.
+
+Reference Configuration
+~~~~~~~~~~~~~~~~~~~~~~~
+Sample system.conf
+~~~~~~~~~~~~~~~~~~
+include::system.conf.asciidoc[]
+
+
+Sample init.conf
+~~~~~~~~~~~~~~~~
+include::init.conf.asciidoc[]
+
+
+Sample genconf_parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~
+FIXME: still not properly formatted.
+
+include::genconf_parameters.asciidoc[]
+
+
+Tonezones
+~~~~~~~~~
+The file zonedata.c contains the information about the tone zones used
+in libtonezone (and hence also in ztcfg). Here is a list of those zones:
+
+include::tonezones.txt[]
+
+
+DAHDI PERL modules
+~~~~~~~~~~~~~~~~~~
+The directory xpp has, in addition to helper utilities for the
+Xorcom Astribank, a collection of perl modules to provide information
+related to DAHDI. The perl modules themselves are under xpp/perl_modules/ .
+In xpp/ there are several utilities that use those modules:
+- xpp-specific: dahdi_registration, xpp_sync, xpp_blink .
+- General: lsdahdi, dahdi_genconf, dahdi_hardware, dahdi_drivers
+
+The DAHDI perl modules will currently only be automatically installed if you
+happen to install the xpp directory. Those utilities require the perl modules 
+to be installed, however they will also look for them in the directory 
+perl_modules, and thus can be run directly from the DAHDI source tree. For 
+example:
+
+  ./xpp/dahdi_hardware -v
+
+To get usage information on a program, you can also use perldoc
+(sometimes provided in a package separate from perl itself). For
+instance:
+
+  perldoc ./xpp/lsdahdi
+
+Some of them are specific for the Xorcom Astribank and described in its
+docuemntation. the others are:
+
+lsdahdi:: 
+  A somewhat glorified `cat /proc/dahdi/*`.
+dahdi_genconf::
+  Generates configuration based on the existing DAHDI channels and on
+  /etc/dahdi/genconf_parameters (replaces genzaptelconf as well).
+dahdi_drivers::
+  A two-liner script (not installed by default) that simply returns the
+  modules that should be modprobed on this system.
+dahdi_hardware:: 
+  Uses the information from sysfs and its own knowledge to show
+  what PCI/USB DAHDI hardware is connected and if it is currently used
+  by a driver. Shows also some more information for Astribanks from
+  /proc/xpp .
+
+
+PPP Support
+~~~~~~~~~~~
+DAHDI digital cards can provide data channels through ppp as
+point-to-point connections. This requires a plugin to the ppp daemon
+that is included in the ppp/ subdirectory. To install it:
+
+1. Make sure you have the PPP source / headers installed. On Debian:
+
+   apt-get install ppp-dev
+
+2. Run 'make' on the ppp subdirectory:
+
+   make -C ppp 
+   make -C ppp install
+
+3. Make sure your kernel has support for both PPP (which is common is
+   distribution kernels and for HDLC (much less common) - CONFIG_PPP and
+   CONFIG_HDLC .
+
+
+include::UPGRADE.txt[]
+
+
+License
+-------
+This package is distributed under the terms of the GNU General Public License
+Version 2, except for some components which are distributed under the terms of
+the GNU Lesser General Public License Version 2.1. Both licenses are included
+in this directory, and each file is clearly marked as to which license applies.
+
+If you wish to use the DAHDI drivers in an application for which the license
+terms are not appropriate (e.g. a proprietary embedded system), licenses under
+more flexible terms can be readily obtained through Digium, Inc. at reasonable
+cost.
+
+
+Reporting Bugs
+--------------
+Please report bug and patches to the Asterisk bug tracker at
+http://bugs.digium.com/[] in the "DAHDI" category.
+
+
+Links
+-----
+- http://asterisk.org/[] - The Asterisk PBX
+- http://voip-info.org/[]
+- http://voip-info.org/wiki/view/DAHDI[]
+- http://docs.tzafrir.org.il/dahdi-tools/README.html[Up-to-date HTML version
+  of this file]

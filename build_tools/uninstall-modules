@@ -1,0 +1,41 @@
+#!/bin/sh
+# uninstall-modules
+#
+# Remove all the modules passed in on the command line from the modules
+# directory.  This script is called by the makefile.
+
+KERNEL_MODULES_DIR=$1
+shift
+MODULES="$*"
+
+usage() {
+	echo "$0: Used to delete kernel modules from the modules directory."
+	echo ""
+	echo "Usage:"
+	echo "  $0 MODULES_BASE_DIR mod1 [mod2 [...]]"
+	echo ""
+	echo "  MODULES_BASE_DIR - typically /lib/modules/KVERS"
+	echo "  modN -             (optionally partial) module name to remove."
+}
+
+if [ -z "$KERNEL_MODULES_DIR" ]; then
+	echo "Missing kernel module directory."
+	usage
+	exit 1;
+fi
+
+if [ -z "$MODULES" ]; then
+	echo "Missing one or more modules to delete."
+	usage
+	exit 1;
+fi
+for mod in $MODULES; do 
+	BASE=`basename $mod`
+	for file in `cat $KERNEL_MODULES_DIR/modules.dep | cut -d : -f 1 | grep "$BASE$"`; do
+		if [ -e "$file" ]; then
+			#echo "Deleting $file."
+			rm -f $file
+		fi
+	done
+done
+exit 0

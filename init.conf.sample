@@ -1,0 +1,19 @@
+#
+# Shell settings for Dahdi initialization scripts.
+# This replaces the old/per-platform files (/etc/sysconfig/zaptel,
+# /etc/defaults/zaptel)
+#
+
+# The maximal timeout (seconds) to wait for udevd to finish generating 
+# device nodes after the modules have loaded and before running dahdi_cfg. 
+#DAHDI_DEV_TIMEOUT=40
+
+# A list of modules to unload when stopping.
+# All of their dependencies will be unloaded as well.
+#DAHDI_UNLOAD_MODULES=""		# Disable module unloading
+#DAHDI_UNLOAD_MODULES="dahdi echo"	# If you use OSLEC
+
+# Override settings for xpp_fxloader
+#XPP_FIRMWARE_DIR=/usr/share/dahdi
+#XPP_HOTPLUG_DISABLED=yes
+#XPP_HOTPLUG_DAHDI=yes

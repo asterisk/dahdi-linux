@@ -1,0 +1,150 @@
+#!/bin/bash
+
+# astribank_upgrade: force load Xorcom Astribank (XPP) USB firmware
+# A reduced version of xpp_fxloader for manual upgrades.
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2009 Xorcom
+#
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+set -e
+
+# Make sure fxload is in the path:
+PATH="$PATH:/usr/local/sbin:/sbin:/usr/sbin"
+export PATH
+
+me=`basename $0`
+
+if [ -t 2 ]; then
+	LOGGER="logger -i -t '$me' -s"
+else
+	LOGGER="logger -i -t '$me'"
+fi
+
+USBFS_PREFIX=/proc/bus/usb
+DEVUSB_PREFIX=/dev/bus/usb
+USB_PREFIX=
+
+USB_FW="${USB_FW:-USB_FW.hex}"
+
+if [ "$USB_PREFIX" = '' ]; then
+	if [ -d "$DEVUSB_PREFIX" ]; then
+		USB_PREFIX=$DEVUSB_PREFIX
+	elif [ -r "$USBFS_PREFIX/devices" ]; then
+		USB_PREFIX=$USBFS_PREFIX
+	fi
+fi
+
+# With Kernels older that 2.6.10 it seems to be possible
+# to trigger a race condition by running fxload or fpga_load 
+# immediately after the detection of the device.
+KERNEL_HAS_USB_RACE=0
+case "`uname -r`" in 2.6.[89]*) KERNEL_HAS_USB_RACE=1;; esac
+sleep_if_race() {
+  if [ "$KERNEL_HAS_USB_RACE" = '1' ]; then
+    sleep 2
+  fi
+}
+
+find_dev() {
+  v_id=$1
+  p_id=$2
+  
+  lsusb | tr -d : | awk "/ ID $v_id$p_id/{printf \"$USB_PREFIX/%s/%s \",\$2,\$4}"
+}
+
+run_fxload() {
+  sleep_if_race
+  fxload -t fx2 $* 2>&1 1>/dev/null | $LOGGER
+  status=$PIPESTATUS
+  if [ $status != 0 ]; then
+    $LOGGER "fxload failed with status $status"
+    exit 55
+  fi
+}
+
+load_usb_fw() {
+  v_id=$1
+  p_id=$2
+  fw=$3
+  
+  devices=`find_dev $v_id $p_id`
+  for dev in $devices
+  do
+    ver=$(awk '/\$Id:/ { print $4 }' $FIRMWARE_DIR/$fw)
+    $LOGGER "USB Firmware $FIRMWARE_DIR/$fw (Version=$ver) into $dev"
+    run_fxload -D $dev -I $FIRMWARE_DIR/$fw || exit 1
+  done
+}
+
+numdevs() {
+  v_ids="$1"
+  p_ids="$2"
+
+  for v in $v_ids
+  do
+    (
+      for p in $p_ids
+      do
+        find_dev $v $p
+      done
+    )
+  done | wc -w
+}
+
+wait_renumeration() {
+  num="$1"
+  v_ids="$2"
+  p_ids="$3"
+
+  while
+    n=`numdevs "$v_ids" "$p_ids"`
+    [ "$num" -gt "$n" ]
+  do
+    echo -n "."
+    sleep 1
+  done
+  echo "Got all $num devices"
+}
+
+if [ "$#" -ne 1 ]; then
+	echo >&2 "Usage: $0 <firmware_directory>"
+	exit 1
+fi
+FIRMWARE_DIR="$1"
+[ -f "$FIRMWARE_DIR/$USB_FW" ] || {
+	echo >&2 "$0: Could not find '$FIRMWARE_DIR/$USB_FW'"
+	exit 1
+}
+numdevs=`numdevs e4e4 '11[3456][01]'`
+$LOGGER -- "--------- LOADING NEW USB FIRMWARE: ($1) [$numdevs devices]"
+load_usb_fw e4e4 1130 $USB_FW
+load_usb_fw e4e4 1140 $USB_FW
+load_usb_fw e4e4 1150 $USB_FW
+load_usb_fw e4e4 1160 $USB_FW
+load_usb_fw e4e4 1131 $USB_FW
+load_usb_fw e4e4 1141 $USB_FW
+load_usb_fw e4e4 1151 $USB_FW
+load_usb_fw e4e4 1161 $USB_FW
+load_usb_fw e4e4 1132 $USB_FW
+load_usb_fw e4e4 1142 $USB_FW
+load_usb_fw e4e4 1152 $USB_FW
+load_usb_fw e4e4 1162 $USB_FW
+wait_renumeration $numdevs e4e4 '11[3456]1'
+$LOGGER -- "--------- NEW USB FIRMWARE IS LOADED"

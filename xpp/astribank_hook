@@ -1,0 +1,114 @@
+#! /bin/sh
+
+me=`basename $0`
+dir=`dirname $0`
+LOGGER="logger -i -t '$me'"
+
+# Always redirect stderr somewhere, otherwise the shell script will die
+# when it tries to do I/O related stuff on closed file descriptor.
+# Our default is to throw it down the bit-bucket.
+#exec 2> /dev/console
+## If you wish to trace this script:
+#exec 2> "/tmp/${me}_$XBUS_NAME" 1>&2
+
+# Our directory in the beginning, so we can use local lab setup
+PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
+
+set -e
+
+[ -r /etc/dahdi/init.conf ] && . /etc/dahdi/init.conf
+
+# For lab testing
+liveconf="$dir/liveconf/dahdi"
+
+if [ -d "$liveconf" ]; then
+	dahdi_conf="$liveconf"
+else
+	dahdi_conf="/etc/dahdi"
+fi
+
+export XPPORDER_CONF="$dahdi_conf/xpp_order"
+if [ ! -r "$XPPORDER_CONF" ]; then
+	(
+		echo "Skip($ACTION): No '$XPPORDER_CONF'"
+		echo "Removing uneeded startup semaphore"
+		astribank_is_starting -v -r 2>&1
+	) 2>&1 | $LOGGER
+	exit 0
+fi
+export DAHDI_CFG_CMD="dahdi_cfg -c $dahdi_conf/system.conf"
+export CALLED_FROM_ATRIBANK_HOOK=yes
+
+clean_lines() {
+	sed -e 's/#.*//' -e 'y/\t/ /' -e 's/^ *//' -e 's/ *$//' -e '$s/$/\n/' "$XPPORDER_CONF"
+}
+
+matched_devices() {
+	ready=`grep -H READY /sys/bus/astribanks/devices/*/xbus_state | sed 's,/xbus_state.*,,'`
+	for dev in $ready
+	do
+		label=`cat "$dev/label"`
+		connector=`cat "$dev/connector"`
+		xbus=`echo "$dev" | sed 's,.*/,,'`
+		lineno=`clean_lines | egrep -n "^${label}$|^@${connector}$" | cut -d: -f1`
+		if [ "$lineno" != "" ]; then
+			#echo "$xbus: $XPPORDER_CONF:$lineno -- Match ${label} @${connector}" | $LOGGER
+			printf "${xbus}\t${label}\n"
+		else
+			echo "${xbus}: ${label} @${connector} not found in $XPPORDER_CONF: Ignore($ACTION)" | $LOGGER
+		fi
+	done
+}
+
+NUM_WANTED=`clean_lines | sed '/^$/d' | wc -l`
+NUM_GOOD=`matched_devices | wc -l`
+
+start_dahdi() {
+	script=/etc/init.d/dahdi
+	if [ "$XPP_HOTPLUG_DAHDI" = yes ]; then
+		echo "Starting $script."
+		"$script" start | logger -i -t "$script"
+		status=$?
+		echo "Status($script): $status"
+	else
+		echo "$0: Skip($script): No XPP_HOTPLUG_DAHDI=yes in /etc/dahdi/init.conf"
+		exit 0
+	fi
+	if [ -x "$dir/twinstar_hook" ]; then
+		"$dir/twinstar_hook"
+	fi
+	# Finished astribanks
+	echo "Removing semaphore"
+	astribank_is_starting -v -r
+}
+
+case "$ACTION" in
+add)
+	;;
+remove)
+	;;
+online)
+	echo "$ACTION($XBUS_NAME): $NUM_GOOD/$NUM_WANTED from $XPPORDER_CONF" | $LOGGER
+	if [ "$NUM_GOOD" -eq "$NUM_WANTED" ]; then
+		echo "START-DAHDI: Total $NUM_GOOD online." | $LOGGER
+		# Fork services
+		start_dahdi < /dev/null 2>&1 | $LOGGER &
+	fi
+	;;
+offline)
+	echo "$ACTION($XBUS_NAME): $NUM_GOOD/$NUM_WANTED from $XPPORDER_CONF" | $LOGGER
+	if [ "$NUM_GOOD" -eq 0 ]; then
+		echo "All Astribanks offline" | $LOGGER
+		if [ -x "$dir/twinstar_hook" ]; then
+			"$dir/twinstar_hook"
+		fi
+	fi
+	;;
+*)
+	echo "$0: Unknown ACTION='$ACTION'" | $LOGGER
+	echo "$0: ARGS='$*'" | $LOGGER
+	echo "$0: ENV:" | $LOGGER
+	env | $LOGGER
+	exit 1
+esac
+

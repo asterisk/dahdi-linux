@@ -1,0 +1,155 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2009, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+BEGIN {
+	my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules");
+	$ENV{PATH} = "$dir:$ENV{PATH}";
+}
+
+use Dahdi::Config::Gen qw(is_true);
+use Dahdi::Hardware;
+use Dahdi::Xpp::Mpp;
+use Dahdi::Xpp::Xbus;
+
+my $xpporder_file = $ENV{XPPORDER_CONF} || "/etc/dahdi/xpp_order";
+
+my @devices = Dahdi::Hardware->device_list;
+my @xbuses = Dahdi::Xpp::xbuses;
+
+my $format = "%-20s %-10s        # %s\n";
+
+sub bad_xpds($) {
+	my $xbus = shift || die;
+	my $bad_xpds = 0;
+
+	foreach my $xpd ($xbus->xpds) {
+		if(! $xpd->spanno) {
+			my $fqn = $xpd->fqn;
+			warn "\t$fqn -- Not registered with DAHDI\n";
+			$bad_xpds++;
+		}
+	}
+	return $bad_xpds;
+}
+
+sub twinstar_checks() {
+	my @twinstar_good;
+	my $first_port;
+	if(! -d "/sys/bus/astribanks") {
+		die "CANNOT generate TwinStar setup -- xpp drivers are not loaded\n";
+	}
+	foreach my $dev (@devices) {
+		my $hwname = $dev->hardware_name;
+		my $xbus;
+		my $loaded;
+		my $tws_port;
+		my $tws_power;
+		my $tws_watchdog;
+		my $mppinfo;
+		if(! $dev->is_astribank) {
+			warn "SKIP $hwname -- Only Astribanks can be used for TwinStar\n";
+			next;
+		}
+		Dahdi::Xpp::Mpp->mpp_addinfo($dev);
+		$mppinfo = $dev->mppinfo;
+		if(! defined $mppinfo) {
+			warn "SKIP $hwname -- is not TwinStar ready\n";
+			next;
+		}
+		if(! defined $mppinfo->{MPP_TALK}) {
+			warn "SKIP $hwname -- USB firmware is not loaded\n";
+			next;
+		}
+		if(! $mppinfo->{TWINSTAR_CAPABLE}) {
+			warn "SKIP $hwname -- is not TwinStar capable\n";
+			next;
+		}
+		$xbus = $dev->xbus;
+		if(! defined $xbus) {
+			warn "SKIP $hwname -- No XBUS for this device (FPGA firmware? Initialization?)\n";
+			next;
+		}
+		my $dev = $xbus->transport;
+		my $connector = $xbus->connector;
+		my $label = $xbus->label;
+		my $xbusstr = sprintf "%s (%s) [%s]", $xbus->name, $connector, $label;
+		if(bad_xpds($xbus)) {
+			warn "SKIP $xbusstr -- Not registered with DAHDI\n";
+			next;
+		}
+		my $port = $mppinfo->{TWINSTAR_PORT};
+		if(! defined $port) {
+			warn "SKIP $xbusstr -- Cannot read USB port info\n";
+			next;
+		}
+		my $power = $mppinfo->{TWINSTAR_POWER};
+		if(! defined $power) {
+			warn "SKIP $xbusstr -- Cannot read USB power info\n";
+			next;
+		}
+		if(!$power->[0] || !$power->[1]) {
+			warn "WARNING: Only one cable: $xbusstr\n";
+		}
+		$first_port = $port unless defined $first_port;
+		printf "GOOD: %-15s port=%d %s\n", $label, $port, $connector;
+		push(@twinstar_good, $xbus);
+		if($first_port != $port) {
+			die
+				"$0: ",
+				"XBUS($connector, $label) ",
+				"connected to PORT $port ",
+				"(others to $first_port)\n";
+		}
+	}
+	return @twinstar_good;
+}
+
+my @twinstar_good = twinstar_checks;
+if(!@twinstar_good) {
+	print STDERR "Abort. No Twinstar capable Astribanks found\n";
+	exit 1;
+}
+print "Generating Configuration\n";
+system("dahdi_genconf -v xpporder");
+die "Failed: $?\n" if $?;
+
+1;
+
+__END__
+
+=head1 NAME
+
+twinstar_setup - Prepares a server for Astribank TwinStar operation.
+
+=head1 DESCRIPTION
+
+This script prepares a server for Astribank TwinStar operation.
+The stages are:
+
+=over
+
+=item Preliminary checks
+
+Check that we have only TwinStar capable Astribanks, that the drivers are already loaded.
+
+=item Configuration Generation
+
+Indirectly generate the F</etc/dahdi/xpp_order> file that describes the current configuration.
+This is done by running C<dahdi_genconf xpporder>
+
+This configuration file is used by twinstar_hook(8) to know when all Astribanks has reconnected
+to the backup server.
+
+=item Deployment to Backup Server
+
+Not implemented yet. Should be done manualy.
+
+=back

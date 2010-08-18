@@ -1,0 +1,70 @@
+.TH "ASTRIBANK_ALLOW" "8" "29 March 2009" "" ""
+
+.SH NAME
+astribank_allow \- License Xorcom Astribank (xpp) capabilities.
+.SH SYNOPSIS
+.B astribank_allow \-D \fIdevice-path\fR [ options ]
+
+.B astribank_allow [\-h]
+
+.SH DESCRIPTION
+Modern Astribanks (with USB product id's 116x) contain capabilities
+that may be licensed.
+
+.B astribank_allow
+is used to upload/download the licensing information to/from the device.
+
+Uploading a valid license file to an Astribank, changes its capabilities.
+The change becomes effective after a firmware reset (either by powering
+the device off and on again, or via the \fBastribank_tool\fR full reset option).
+
+Downloading license from the device, produces a valid license file for its
+current capabilities. This may be backed up, so the device may be later
+restored to its previous capabilities.
+
+The license file contains both a human readable description of the
+device capabilities for the end user and a hash of the licensing
+information used by Xorcom to generate/modify licensed capabilities.
+
+.SH OPTIONS
+.B \-D
+.I device-path
+.RS
+Required. The device to read from/write to. On modern UDEV-based system
+this is usually /dev/bus/usb/\fIbus_num\fR/\fIdevice_num\fR,
+where \fIbus_num\fR and \fIdevice_num\fR are the first two numbers in the
+output of lsusb(8).
+On older systems that use usbfs, it is usually
+/proc/bus/usb/\fIbus_num\fR/\fIdevice_num\fR.
+.RE
+
+.B \-w
+.RS
+Write capabilities to EEPROM, otherwise read capabilities
+.RE
+
+.B \-f \fIfilename\fR
+.RS
+License filename (stdin/stdout if not specified)
+.RE
+
+.B \-v
+.RS
+Increase verbosity. May be used multiple times.
+.RE
+
+.B \-d \fImask\fR
+.RS
+Set debug mask to \fImask\fR. Default is 0, 0xFF is "everything".
+.RE
+
+.B \-h
+.RS
+Displays usage message.
+.RE
+
+.SH SEE ALSO
+fxload(8), lsusb(8), astribank_hexload(8), astribank_tool(8)
+
+.SH AUTHOR
+Alex Landau

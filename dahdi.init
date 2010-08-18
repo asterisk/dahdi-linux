@@ -1,0 +1,333 @@
+#!/bin/sh
+#
+# dahdi         This shell script takes care of loading and unloading \
+#               DAHDI Telephony interfaces
+# chkconfig: 2345 9 92
+# description: The DAHDI drivers allow you to use your linux \
+# computer to accept incoming data and voice interfaces
+#
+# config: /etc/dahdi/init.conf
+
+### BEGIN INIT INFO
+# Provides:        dahdi
+# Required-Start:  $local_fs $remote_fs
+# Required-Stop:   $local_fs $remote_fs
+# Should-Start:    $network $syslog
+# Should-Stop:     $network $syslog
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Description:     dahdi - load and configure DAHDI modules
+### END INIT INFO
+
+initdir=/etc/init.d
+
+# Don't edit the following values. Edit /etc/dahdi/init.conf instead.
+
+DAHDI_CFG=/usr/sbin/dahdi_cfg
+DAHDI_CFG_CMD=${DAHDI_CFG_CMD:-"$DAHDI_CFG"} # e.g: for a custom system.conf location
+
+FXOTUNE=/usr/sbin/fxotune
+
+# The default syncer Astribank. Usually set automatically to a sane
+# value by xpp_sync(1) if you have an Astribank. You can set this to an
+# explicit Astribank (e.g: 01).
+XPP_SYNC=auto
+
+# The maximal timeout (seconds) to wait for udevd to finish generating
+# device nodes after the modules have loaded and before running dahdi_cfg.
+DAHDI_DEV_TIMEOUT=20
+
+# A list of modules to unload when stopping.
+# All of their dependencies will be unloaded as well.
+DAHDI_UNLOAD_MODULES="dahdi"
+
+#
+# Determine which kind of configuration we're using
+#
+system=redhat  # assume redhat
+if [ -f /etc/debian_version ]; then
+    system=debian
+fi
+
+if [ -f /etc/gentoo-release ]; then
+    system=debian
+fi
+
+if [ -f /etc/SuSE-release -o -f /etc/novell-release ]
+then
+    system=debian
+fi
+
+# Source function library.
+if [ $system = redhat ]; then
+    . $initdir/functions || exit 0
+fi
+
+DAHDI_MODULES_FILE="/etc/dahdi/modules"
+
+[ -r /etc/dahdi/init.conf ] && . /etc/dahdi/init.conf
+
+if [ $system = redhat ]; then
+	LOCKFILE=/var/lock/subsys/dahdi
+fi
+
+# recursively unload a module and its dependencies, if possible.
+# where's modprobe -r when you need it?
+# inputs: module to unload.
+# returns: the result from
+unload_module() {
+	module="$1"
+	line=`lsmod 2>/dev/null | grep "^$1 "`
+	if [ "$line" = '' ]; then return; fi # module was not loaded
+
+	set -- $line
+	# $1: the original module, $2: size, $3: refcount, $4: deps list
+	mods=`echo $4 | tr , ' '`
+	ec_modules=""
+	# xpp_usb keeps the xpds below busy if an xpp hardware is
+	# connected. Hence must be removed before them:
+	case "$module" in xpd_*) mods="xpp_usb $mods";; esac
+
+	for mod in $mods; do
+		case "$mod" in
+		dahdi_echocan_*)
+			ec_modules="$mod $ec_modules"
+			;;
+		*)
+			# run in a subshell, so it won't step over our vars:
+			(unload_module $mod)
+			;;
+		esac
+	done
+	# Now that all the other dependencies are unloaded, we can unload the
+	# dahdi_echocan modules.  The drivers that register spans may keep
+	# references on the echocan modules before they are unloaded.
+	for mod in $ec_modules; do
+		(unload_module $mod)
+	done
+	rmmod $module
+}
+
+unload_modules() {
+	for module in $DAHDI_UNLOAD_MODULES; do
+		unload_module $module
+	done
+}
+
+# In (xpp) hotplug mode, the init script is also executed from the
+# hotplug hook. In that case it should not attempt to loade modules.
+#
+# This function only retunrs false (1) if we're in hotplug mode and
+# coming from the hotplug hook script.
+hotplug_should_load_modules() {
+	if [ "$XPP_HOTPLUG_DAHDI" = yes -a "$CALLED_FROM_ATRIBANK_HOOK" != '' ]
+	then
+		return 1
+	fi
+	return 0
+}
+
+# In (xpp) hotplug mode: quit after we loaded modules.
+#
+# In hotplug mode, the main run should end here, whereas the rest of the
+# script should be finished by the instance running from the hook.
+# Note that we only get here if there are actually Astribanks on the
+# system (otherwise noone will trigger the run of the hotplug hook
+# script).
+hotplug_exit_after_load() {
+	if [ "$XPP_HOTPLUG_DAHDI" = yes -a "$CALLED_FROM_ATRIBANK_HOOK" = '' ]
+	then
+		exit 0
+	fi
+}
+
+# Initialize the Xorcom Astribank (xpp/) using perl utiliites:
+xpp_startup() {
+	# do nothing if there are no astribank devices:
+	if ! /usr/share/dahdi/waitfor_xpds; then return 0; fi
+
+	hotplug_exit_after_load
+
+	# overriding locales for the above two, as perl can be noisy
+	# when locales are missing.
+	# No register all the devices if they didn't auto-register:
+	LC_ALL=C dahdi_registration on
+}
+
+
+hpec_start() {
+	# HPEC license found
+	if ! echo /var/lib/digium/licenses/HPEC-*.lic | grep -v '\*' | grep -q .; then
+		return
+	fi
+
+	# dahdihpec_enable not installed in /usr/sbin
+	if [ ! -f /usr/sbin/dahdihpec_enable ]; then
+		echo -n "Running dahdihpec_enable: Failed"
+		echo -n "."
+		echo "  The dahdihpec_enable binary is not installed in /usr/sbin."
+		return
+	fi
+
+	# dahdihpec_enable not set executable
+	if [ ! -x /usr/sbin/dahdihpec_enable ]; then
+		echo -n "Running dahdihpec_enable: Failed"
+		echo -n "."
+		echo "  /usr/sbin/dahdihpec_enable is not set as executable."
+		return
+	fi
+
+	# dahdihpec_enable properly installed
+	if [ $system = debian ]; then
+		echo -n "Running dahdihpec_enable: "
+		/usr/sbin/dahdihpec_enable 2> /dev/null
+	elif [ $system = redhat ]; then
+		action "Running dahdihpec_enable: " /usr/sbin/dahdihpec_enable
+	fi
+	if [ $? = 0 ]; then
+		echo -n "done"
+		echo "."
+	else
+		echo -n "Failed"
+		echo -n "."
+		echo "  This can be caused if you had already run dahdihpec_enable, or if your HPEC license is no longer valid."
+	fi
+}
+
+shutdown_dynamic() {
+	if ! grep -q ' DYN/' /proc/dahdi/* 2>/dev/null; then return; fi
+
+	# we should only get here if we have dynamic spans. Right?
+	$DAHDI_CFG_CMD -s
+}
+
+load_modules() {
+  	# Some systems, e.g. Debian Lenny, add here -b, which will break
+	# loading of modules blacklisted in modprobe.d/*
+	unset MODPROBE_OPTIONS
+  	modules=`sed -e 's/#.*$//' $DAHDI_MODULES_FILE 2>/dev/null`
+	#if [ "$modules" = '' ]; then
+		# what?
+	#fi
+	echo "Loading DAHDI hardware modules:"
+	modprobe dahdi
+	for line in $modules; do
+		if [ $system = debian ]; then
+			echo -n "   ${line}: "
+			if modprobe $line 2> /dev/null; then
+				echo -n "done"
+			else
+				echo -n "error"
+			fi
+		elif [ $system = redhat ]; then
+			action "  ${line}: " modprobe $line
+		fi
+	done
+	echo ""
+}
+
+if [ ! -x "$DAHDI_CFG" ]; then
+       echo "dahdi_cfg not executable"
+       exit 0
+fi
+
+if [ ! -f /etc/dahdi/system.conf ]; then
+	echo "/etc/dahdi/system.conf not found. Nothing to do."
+       exit 0
+fi
+
+RETVAL=0
+
+# See how we were called.
+case "$1" in
+  start)
+  	if hotplug_should_load_modules; then
+		load_modules
+	fi
+
+	TMOUT=$DAHDI_DEV_TIMEOUT # max secs to wait
+
+	while [ ! -d /dev/dahdi ] ; do
+ 		sleep 1
+		TMOUT=`expr $TMOUT - 1`
+		if [ $TMOUT -eq 0 ] ; then
+			echo "Error: missing /dev/dahdi!"
+			exit 1
+		fi
+	done
+
+	xpp_startup
+
+	if [ ! -e /proc/dahdi/1 ]; then
+		echo "No hardware timing source found in /proc/dahdi, loading dahdi_dummy"
+		modprobe dahdi_dummy 2> /dev/null
+	fi
+
+	if [ $system = debian ]; then
+	    echo -n "Running dahdi_cfg: "
+	    $DAHDI_CFG_CMD 2> /dev/null && echo -n "done"
+	    echo "."
+	elif [ $system = redhat ]; then
+	    action "Running dahdi_cfg: " $DAHDI_CFG_CMD
+	fi
+	RETVAL=$?
+
+	if [ "$LOCKFILE" != '' ]; then
+		[ $RETVAL -eq 0 ] && touch $LOCKFILE
+	fi
+
+	if [ -x "$FXOTUNE" ] && [ -r /etc/fxotune.conf ]; then
+		# Allowed to fail if e.g. Asterisk already uses channels:
+		$FXOTUNE -s || :
+	fi
+
+	# Set the right Astribanks ticker:
+	LC_ALL=C xpp_sync "$XPP_SYNC"
+
+	hpec_start
+	;;
+  stop)
+	# Unload drivers
+	#shutdown_dynamic # FIXME: needs test from someone with dynamic spans
+	echo -n "Unloading DAHDI hardware modules: "
+	if unload_modules; then
+		echo "done"
+	else
+		echo "error"
+	fi
+	if [ "$LOCKFILE" != '' ]; then
+		[ $RETVAL -eq 0 ] && rm -f $LOCKFILE
+	fi
+	;;
+  unload)
+	unload_modules
+	;;
+  restart|force-reload)
+	$0 stop
+	$0 start
+	;;
+  reload)
+	if [ $system = debian ]; then
+	    echo -n "Rerunning dahdi_cfg: "
+	    $DAHDI_CFG_CMD 2> /dev/null && echo -n "done"
+	    echo "."
+	elif [ $system = redhat ]; then
+	    action "Rerunning dahdi_cfg: " $DAHDI_CFG_CMD
+	fi
+	RETVAL=$?
+	;;
+  status)
+	if [ -d /proc/dahdi ]; then
+		/usr/sbin/lsdahdi
+		RETVAL=0
+	else
+		RETVAL=3
+	fi
+	;;
+  *)
+	echo "Usage: dahdi {start|stop|restart|status|reload|unload}"
+	exit 1
+esac
+
+exit $RETVAL
+

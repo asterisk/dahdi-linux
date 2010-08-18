@@ -1,0 +1,47 @@
+CC=@CC@
+LD=@LD@
+HOSTCC=@HOSTCC@
+CFLAGS=@CFLAGS@
+LDFLAGS=@LDFLAGS@
+
+INSTALL=@INSTALL@
+GREP=@GREP@
+SHELL=@SHELL@
+LN=@LN@
+
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+
+bindir = @bindir@
+datarootdir = @datarootdir@
+datadir = @datadir@
+includedir = @includedir@
+infodir = @infodir@
+libdir = @libdir@
+libexecdir = @libexecdir@
+localstatedir = @localstatedir@
+mandir = @mandir@
+sbindir = @sbindir@
+sharedstatedir = @sharedstatedir@
+sysconfdir = @sysconfdir@
+
+DOWNLOAD=@DOWNLOAD@
+
+DAHDI_DEVMODE=@DAHDI_DEVMODE@
+DAHDI_DECLARATION_AFTER_STATEMENT=@DAHDI_DECLARATION_AFTER_STATEMENT@
+
+PBX_NEWT=@PBX_NEWT@
+NEWT_LIB=@NEWT_LIB@
+NEWT_INCLUDE=@NEWT_INCLUDE@
+
+PBX_USB=@PBX_USB@
+USB_LIB=@USB_LIB@
+USB_INCLUDE=@USB_INCLUDE@
+
+DAHDI_INCLUDE=@DAHDI_INCLUDE@
+
+USE_SELINUX=@USE_SELINUX@
+
+PPPD_VERSION=@PPPD_VERSION@
+
+ASCIIDOC=@ASCIIDOC@

@@ -1,0 +1,26 @@
+<category name="MENUSELECT_UTILS" displayname="Utilities">
+	<member name="fxotune" remove_on_change="fxotune fxotune.o">
+	</member>
+	<member name="fxstest" remove_on_change="fxstest fxstest.o">
+		<defaultenabled>no</defaultenabled>
+	</member>
+	<member name="sethdlc" remove_on_change="sethdlc sethdlc.o">
+		<depend>hdlc</depend>
+	</member>
+	<member name="dahdi_cfg" remove_on_change="dahdi_cfg dahdi_cfg.o">
+	</member>
+	<member name="dahdi_diag" remove_on_change="dahdi_diag dahdi_diag.o">
+		<defaultenabled>no</defaultenabled>
+	</member>
+	<member name="dahdi_monitor" remove_on_change="dahdi_monitor dahdi_monitor.o">
+	</member>
+	<member name="dahdi_scan" remove_on_change="dahdi_scan dahdi_scan.o">
+	</member>
+	<member name="dahdi_speed" remove_on_change="dahdi_speed dahdi_speed.o">
+	</member>
+	<member name="dahdi_test" remove_on_change="dahdi_test dahdi_test.o">
+	</member>
+	<member name="dahdi_tool" remove_on_change="dahdi_tool dahdi_tool.o">
+		<depend>libnewt</depend>
+	</member>
+</category>

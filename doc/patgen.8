@@ -1,0 +1,44 @@
+.TH patgen 8 "2 Dec 2009" 
+.SH NAME 
+patgen \(em Generates a Pattern for a DAHDI Clear Channel Test
+.SH SYNOPSIS 
+.B patgen 
+.I dahdi-device
+
+.SH DESCRIPTION 
+.B patgen
+Sends test data to a DAHDI channel. The channel should be of CLEAR
+signalling (e.g: B channel of a PRI line). pattest(8) is used to test
+the data at the other side.  See its manual for more information.
+
+.B patgen
+Must be able to write to the channel. Hence this cannot be used for a
+channel used by Asterisk.
+
+.SH OPTIONS
+.I dahdi-device
+.RS
+A DAHDI device. Can be either a device number or an explicit device file
+name
+.RE
+
+.SH EXAMPLE
+  patgen /dev/dahdi/5
+
+  patgen 305
+
+.SH BUGS
+Waiting for you to report them at <http://issues.asterisk.org> .
+
+.SH SEE ALSO 
+pattest(8), dahdi_cfg(8), asterisk(8). 
+
+.SH AUTHOR 
+
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> 
+Permission is granted to copy, distribute and/or modify this document under 
+the terms of the GNU General Public License, Version 2 any  
+later version published by the Free Software Foundation. 
+ 
+On Debian systems, the complete text of the GNU General Public 
+License can be found in /usr/share/common\-licenses/GPL. 

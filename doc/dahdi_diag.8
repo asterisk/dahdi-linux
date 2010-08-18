@@ -1,0 +1,52 @@
+.TH dahdi_diag 8 "2008-01-07" 
+.SH NAME 
+dahdi_diag \(em Dump DAHDI channel parameters
+.SH SYNOPSIS 
+.B dahdi_diag 
+.I channel
+
+.SH DESCRIPTION 
+.B dahdi_diag
+asks the kernel to dump parameters for DAHDI channel no.
+.I channel
+to the kernel logs. You will be able to see them using, e.g. dmesg(1).
+
+
+.SH OPTIONS
+.I channel
+.RS
+The number of the DAHDI channel whose parammeters should be dumped.
+May be any DAHDI channel (even if it is open).
+.RE
+
+.SH EXAMPLE
+
+  # /tmp/dahdi_diag 5
+  # dmesg | tail \-n 15
+  Dump of DAHDI Channel 5 (XPP_BRI_TE/00/01/1,5,2):
+
+  flags: 501 hex, writechunk: c5190948, readchunk: c5190954
+  rxgain: ccad2e80, txgain: ccad2e80, gainalloc: 0
+  span: c48a900c, sig: 80 hex, sigcap: 80 hex
+  inreadbuf: \-1, outreadbuf: 0, inwritebuf: 0, outwritebuf: \-1
+  blocksize: 160, numbufs: 4, txbufpolicy: 0, txbufpolicy: 0
+  txdisable: 0, rxdisable: 0, iomask: 0
+  curzone: c78e7000, tonezone: 0, curtone: 00000000, tonep: 0
+  digitmode: 0, txdialbuf: , dialing: 0, aftdialtimer: 0, cadpos. 0
+  confna: 0, confn: 0, confmode: 0, confmute: 0
+  ec: 00000000, echocancel: 0, deflaw: 0, xlaw: ccab5e80
+  echostate: 00, echotimer: 0, echolastupdate: 0
+  itimer: 0, otimer: 0, ringdebtimer: 0
+
+.SH SEE ALSO 
+dahdi_cfg(8), asterisk(8), dmesg(1). 
+
+.SH AUTHOR 
+
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> 
+Permission is granted to copy, distribute and/or modify this document under 
+the terms of the GNU General Public License, Version 2 any  
+later version published by the Free Software Foundation. 
+ 
+On Debian systems, the complete text of the GNU General Public 
+License can be found in /usr/share/common\-licenses/GPL. 

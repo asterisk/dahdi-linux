@@ -1,0 +1,23 @@
+#! /usr/bin/perl -w
+use strict;
+use File::Basename;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi::Hardware;
+
+my @drivers = Dahdi::Hardware->drivers;
+print join("\n", @drivers),"\n";
+__END__
+
+=head1 NAME
+
+dahdi_drivers - Show drivers required for installed dahdi devices.
+
+=head1 SYNOPSIS
+
+dahdi_drivers
+
+=head1 DESCRIPTION
+
+This script shows by default the list of drivers required for currently
+installed dahdi devices.

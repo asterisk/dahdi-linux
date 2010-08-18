@@ -1,0 +1,60 @@
+.TH "FXSTEST" "8" "9 June 2007" "asterisk" "System Manager's Manuals: Asterisk"
+
+.SH NAME
+fxstest \- Simple tests for DAHDI FXS adapters
+.SH SYNOPSIS
+
+.B fxstest /dev/dahdi/\fIN comand\fR
+
+.SH DESCRIPTION
+fxstest can be used to issue one of a number simple tests to FXS
+adapters (analog adapters intended to connect phones). 
+
+.SH OPTIONS
+All of those tests operate on a single dahdi channel which has to be an
+FXS port, and must not be in use by Asterisk or any other program.
+
+The command has two mandatory parameters.
+The first parameter is the device file to operate on. It is typically
+/dev/dahdi/NN , a device file under /dev/dahdi .
+
+The second parameter is the name of the command to run on that channel:
+
+.I stats
+.RS
+Reports voltages
+.RE
+
+.I regdump
+.RS
+Dumps ProSLIC registers
+.RE
+
+.I tones
+.RS
+Plays a series of tones
+.RE
+
+.I polarity
+.RS
+Requests channel to reverse polarity.
+.RE
+
+.I ring
+.RS
+Rings phone
+.RE
+
+.SH "SEE ALSO"
+.PP
+dahdi_tool(8), dahdi_cfg(8), dahdi_monitor(8), asterisk(8).
+.SH BUGS
+Does not allow testing channels beyond 249. Should support opening
+channels through /dev/dahdi/channel .
+.SH AUTHOR
+.PP
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> .
+Permission is granted to copy, distribute and/or modify this document 
+under the terms of the GNU General Public License, Version 2 any 
+later version published by the Free Software Foundation.
+.PP

@@ -1,0 +1,49 @@
+.TH pattest 8 "2 Dec 2009" 
+.SH NAME 
+pattest \(em Tests a Pattern for a DAHDI Clear Channel Test
+.SH SYNOPSIS 
+.B pattest 
+.I dahdi-device
+
+.SH DESCRIPTION 
+.B pattest
+Receives test data from a DAHDI channel and checks if it matches the 
+test pattern. The channel should be of CLEAR signalling (e.g: B channel 
+of a PRI line). patgen(8) is used to generate the data at the other side.  
+
+.B pattest
+Must be able to read from the channel. Hence this cannot be used for a
+channel used by Asterisk.
+
+The pattern is a simple series of values from 0 to 255. Hence it takes
+at most one sample to get in sync with the other side. If there is no
+output, all is well. Output is an error message.
+
+.SH OPTIONS
+.I dahdi-device
+.RS
+A DAHDI device. Can be either a device number or an explicit device file
+name
+.RE
+
+.SH EXAMPLE
+  pattest /dev/dahdi/5
+
+  pattest 305
+.RE
+
+.SH BUGS
+Gives way too many errors when does not get any input.
+
+.SH SEE ALSO 
+patgen(8), dahdi_cfg(8), asterisk(8). 
+
+.SH AUTHOR 
+
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> 
+Permission is granted to copy, distribute and/or modify this document under 
+the terms of the GNU General Public License, Version 2 any  
+later version published by the Free Software Foundation. 
+ 
+On Debian systems, the complete text of the GNU General Public 
+License can be found in /usr/share/common\-licenses/GPL. 

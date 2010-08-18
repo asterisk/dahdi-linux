@@ -1,0 +1,110 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi;
+use Dahdi::Span;
+use Dahdi::Xpp;
+use Dahdi::Xpp::Xbus;
+use Dahdi::Xpp::Xpd;
+
+my @xbuses = Dahdi::Xpp::xbuses;
+my @xpds = map { $_->xpds } @xbuses;
+
+foreach my $span (Dahdi::spans()) {
+	my $spanno = $span->num;
+	my $xpd = Dahdi::Xpp::xpd_of_span($span);
+	my @lines;
+	my $index = 0;
+
+	@lines = @{$xpd->lines} if defined $xpd;
+	printf "### Span %2d: %s %s\n", $span->num, $span->name, $span->description;
+	foreach my $chan ($span->chans()) {
+		my %type_map = (
+			OUT	=> 'Output',
+			IN	=> 'Input'
+			);
+		my ($type) = map { $type_map{$_} or $_ } $chan->type || ("unknown");
+		my $batt = "";
+		$batt = "(battery)" if $chan->battery;
+		my @alarms = $chan->alarms;
+		my $alarm_str = join(" ", @alarms);
+		printf "%3d %-10s %-10s %s %s %s\n",
+			$chan->num, $type, $chan->signalling, $chan->info, $batt, $alarm_str;
+		$index++;
+	}
+}
+
+__END__
+
+=head1 NAME
+
+lsdahdi - List all dahdi channels with their types and spans.
+
+=head1 SYNOPSIS
+
+lsdahdi
+
+=head1 DESCRIPTION
+
+Example output:
+
+	### Span  1: WCTDM/0 "Wildcard TDM400P REV E/F Board 1"
+	  1 FXO        FXOLS      (In use)
+	  2 FXS        FXSKS
+	  3 FXS        FXSKS
+	  4 FXS        FXSKS
+	### Span  2: XBUS-00/XPD-00 "Xorcom XPD #00/00: FXO"
+	  5 FXO        FXSKS      (In use)
+	  6 FXO        FXSKS      (In use) (no pcm)
+	  7 FXO        FXSKS      (In use) (no pcm)
+	  8 FXO        FXSKS      (In use) (no pcm)
+	  9 FXO        FXSKS      (In use) (no pcm)
+	 10 FXO        FXSKS      (In use) (no pcm)
+	 11 FXO        FXSKS      (In use) (no pcm)
+	 12 FXO        FXSKS      (In use) (no pcm)
+	### Span  3: XBUS-00/XPD-10 "Xorcom XPD #00/10: FXO"
+	 13 FXO        FXSKS      (In use) (no pcm)
+	 14 FXO        FXSKS      (In use) (no pcm)
+	 15 FXO        FXSKS      (In use) (no pcm)
+	 16 FXO        FXSKS      (In use) (no pcm)
+	 17 FXO        FXSKS      (In use) (no pcm)
+	 18 FXO        FXSKS      (In use) (no pcm)
+	 19 FXO        FXSKS      (In use) (no pcm)
+	 20 FXO        FXSKS      (In use) (no pcm)
+
+	...
+
+	### Span  6: XBUS-01/XPD-00 "Xorcom XPD #01/00: FXS"
+	 37 FXS        FXOLS      (In use)
+	 38 FXS        FXOLS      (In use) (no pcm)
+	 39 FXS        FXOLS      (In use) (no pcm)
+	 40 FXS        FXOLS      (In use) (no pcm)
+	 41 FXS        FXOLS      (In use) (no pcm)
+	 42 FXS        FXOLS      (In use) (no pcm)
+	 43 FXS        FXOLS      (In use) (no pcm)
+	 44 FXS        FXOLS      (In use) (no pcm)
+	 45 Output     FXOLS      (In use) (no pcm)
+	 46 Output     FXOLS      (In use) (no pcm)
+	 47 Input      FXOLS      (In use) (no pcm)
+	 48 Input      FXOLS      (In use) (no pcm)
+	 49 Input      FXOLS      (In use) (no pcm)
+	 50 Input      FXOLS      (In use) (no pcm)
+
+The first column is the type of the channel (port, for an analog device) 
+and the second one is the signalling (if set).
+
+=head1 FILES
+
+lsdahdi is a somewhat glorified 'cat /proc/dahdi/*' . Unlike that
+command, it sorts the spans with the proper order. It also formats the
+output slightly differently.

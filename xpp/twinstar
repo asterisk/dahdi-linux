@@ -1,0 +1,267 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+use Getopt::Std;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi;
+use Dahdi::Hardware;
+use Dahdi::Span;
+use Dahdi::Xpp;
+use Dahdi::Xpp::Xbus;
+use Dahdi::Xpp::Mpp;
+
+$Getopt::Std::STANDARD_HELP_VERSION = 1;
+$main::VERSION = '$Id$';
+
+sub HELP_MESSAGE() {
+	eval(usage());
+	return 0;
+}
+
+sub usage {
+	die "Usage: $0 {status|jump|enable-wd|disable-wd|ports}\n";
+}
+
+our ($opt_v, $opt_x);
+getopts('vx') || usage;
+@ARGV == 1 or usage;
+
+
+# Find USB bus toplevel
+my $usb_top;
+$usb_top = '/dev/bus/usb';
+$usb_top = '/proc/bus/usb' unless -d $usb_top;
+die "No USB toplevel found\n" unless -d $usb_top;
+
+sub tws_devs() {
+	my @devs;
+	foreach my $dev (Dahdi::Hardware->device_list) {
+		next unless $dev->is_astribank;
+		next unless $dev->product =~ /116./;
+		push(@devs, $dev->hardware_name);
+	}
+	return @devs;
+}
+
+sub tws_usb_devfile($) {
+	my $name = shift || die;
+	# Remove prefix
+	if($name !~ s/usb://) {
+		die "$name is not a USB name\n";
+	}
+	return "$usb_top/$name";
+}
+
+sub tws_show(@) {
+	my @usb_devs = @_;
+	my $format = "%-15s %-10s %-15s %-10s %-10s\n";
+
+	printf $format, 'DEVICE', 'PORT', 'WATCHDOG', 'POWER0', 'POWER1';
+	foreach my $dev (@usb_devs) {
+		my $mppinfo = $dev->mppinfo;
+		if(!defined $mppinfo) {
+			printf STDERR "%s: no MPP information\n", $dev->hardware_name;
+			next;
+		}
+		if(!defined $mppinfo->{TWINSTAR_PORT}) {
+			printf STDERR "%s: no TWINSTAR_PORT information\n", $dev->hardware_name;
+			next;
+		}
+		my $power = $mppinfo->twinstar_power;
+		printf $format,
+			$dev->hardware_name,
+			$mppinfo->twinstar_port,
+			($mppinfo->twinstar_watchdog) ? "on" : "off",
+			($power->[0]) ? "yes" : "no",
+			($power->[1]) ? "yes" : "no";
+	}
+}
+
+sub tws_portnum($) {
+	my $dev = shift || die "Missing dev";
+	my $mppinfo = $dev->mppinfo;
+	if(!defined $mppinfo) {
+		printf STDERR "%s: no MPP information\n", $dev->hardware_name;
+		return undef;
+	}
+	return $mppinfo->twinstar_port;
+}
+
+sub tws_showports(@) {
+	my @usb_devs = @_;
+	foreach my $dev (@usb_devs) {
+		my $mppinfo = $dev->mppinfo;
+		if(!defined $mppinfo) {
+			printf STDERR "%s: no MPP information\n", $dev->hardware_name;
+			next;
+		}
+		if(!defined $mppinfo->{TWINSTAR_PORT}) {
+			printf STDERR "%s: no TWINSTAR_PORT information\n", $dev->hardware_name;
+			next;
+		}
+		printf "%s\n", $mppinfo->{TWINSTAR_PORT};
+	}
+}
+
+sub tws_watchdog($@) {
+	my $on = shift;
+	die "tws_watchdog() on/off?" unless defined $on;
+	my @usb_devs = @_;
+
+	foreach my $dev (@usb_devs) {
+		my $mppinfo = $dev->mppinfo;
+		if(!defined $mppinfo) {
+			printf STDERR "%s: no MPP information\n", $dev->hardware_name;
+			next;
+		}
+		$mppinfo->mpp_setwatchdog($on);
+	}
+}
+
+sub tws_jump(@) {
+	my @usb_devs = @_;
+
+	foreach my $dev (@usb_devs) {
+		my $mppinfo = $dev->mppinfo;
+		if(!defined $mppinfo) {
+			printf STDERR "%s: no MPP information\n", $dev->hardware_name;
+			next;
+		}
+		eval {
+			$mppinfo->mpp_jump;
+		};
+		warn $@ if $@;
+	}
+}
+
+sub dev_list() {
+	my @devs;
+	foreach my $dev (Dahdi::Hardware->device_list) {
+		next unless $dev->is_astribank;
+		next unless $dev->product =~ /116./;
+		Dahdi::Xpp::Mpp->mpp_addinfo($dev);
+		push(@devs, $dev);
+	}
+	return @devs;
+}
+
+my @usb_devices = dev_list();
+
+if($ARGV[0] eq 'status') {
+	tws_show(@usb_devices);
+} elsif($ARGV[0] eq 'jump') {
+	tws_jump(@usb_devices);
+} elsif($ARGV[0] eq 'disable-wd') {
+	tws_watchdog(0, @usb_devices);
+} elsif($ARGV[0] eq 'enable-wd') {
+	tws_watchdog(1, @usb_devices);
+} elsif($ARGV[0] eq 'ports') {
+	tws_showports(@usb_devices);
+} else {
+	usage;
+}
+
+__END__
+
+=head1 NAME
+
+twinstar - Control the Twinstar feature of a Xorcom Astribank
+
+=head1 SYNOPSIS
+
+twinstar {status|jump|enable-wd|disable-wd|ports}
+
+=head1 DESCRIPTION
+
+B<twinstar> is a tool to control the Twinstar (dual USB port) of a
+Xorcom Astribank. There is a single and mandatory argument which is the
+command to run. That command operates on all the Astribanks connected to
+the system.
+
+Technically all the commands are implemented using Dahdi::Xpp::Mpp which
+in turn uses astribank_tool. Thus using thus tool will require root
+permissions or otherwise read/write permissions to the USB device.
+
+The twinstar may be in I<watchdog mode>, which means that it will jump
+to the remote host if it loses contact with the local host. This can
+happen if the machine is powered down or hangs or even if the xpp
+drivers are unloaded. Which is why the standard twinstar scripts put the
+Astribanks in twinstar mode on startup and remove it on normal shutdown.
+
+An Astribank will only jump to the other host (either if asked
+explicitly or by the watchdog) only if there is a different Astribank
+connected to the other port and running. Which is why all of this has no
+effect on systems that don't need this functionality.
+
+The command are:
+
+=head2 status
+
+Shows the current status of all Astribanks. Note that it only shows
+Astribanks whose current active USB port is the one connected to this
+computer.
+
+Example output:
+
+ DEVICE          PORT       WATCHDOG        POWER0     POWER1
+ usb:001/010     0          on              yes        yes
+ usb:001/011     0          on              yes        yes
+
+For each Astribank on the system that has Twinstar support we get:
+
+=over 4
+
+=item Device
+
+The address of the device. This is the bus address, e.g. the address you 
+see in lsusb / dahdi_hardware.
+
+=item Port
+
+The active USB port on the Astribank. This should be always '0' on the
+master and always 1 on the slave.
+
+=item Watchdog
+
+I<on> if the watchdog is triggered in the Atribank or I<off> otherwise.
+
+=item Power0, Power1
+
+Shows which ports of this Astribank are connected to a USB port of a
+running computer. This only shows whether or not the USB host provides
+power.
+
+=back
+
+=head2 ports
+
+Shows the same 'Port' column of the B<status> command.
+
+=head2 jump
+
+Command all the Astribanks to jump to the other port. This works
+regardless the watchdog mode is enabled or not. But requires that there
+is power on the other port.
+
+=head2 enable-wd
+
+Enables watchdog mode.
+
+=head2 disable-wd
+
+Disables watchdog mode.
+
+=head1 FILES
+
+B<twinstar> mostly uses astribank_tool which in turn mostly uses USB
+files under /dev/bus/usb .
+

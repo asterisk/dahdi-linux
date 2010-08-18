@@ -1,0 +1,10 @@
+#!/bin/sh
+cat << END
+/*
+ * version.c
+ * Automatically generated
+ */
+
+const char dahdi_tools_version[] = "DAHDI Tools Version - ${TOOLSVERSION}";
+
+END

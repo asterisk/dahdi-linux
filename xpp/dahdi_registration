@@ -1,0 +1,166 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi;
+use Dahdi::Span;
+use Dahdi::Xpp;
+use Dahdi::Xpp::Xbus;
+use Getopt::Std;
+
+sub usage {
+	die "Usage: $0 [-s sort_order] [on|off|1|0]\n";
+}
+
+my %opts;
+getopts('s:', \%opts) || usage;
+
+my $sorter;
+my $sort_order = $opts{'s'};
+if(defined $sort_order) {
+	my $sorter = Dahdi::Xpp::sorters($sort_order);
+
+	if(!defined $sorter) {
+		my @sorter_names = Dahdi::Xpp::sorters;
+		print STDERR "Unknown sort order $sort_order. Select from:\n\t";
+		print STDERR join("\n\t", @sorter_names);
+		print STDERR "\n";
+		exit 1;
+	}
+}
+
+@ARGV == 0 or @ARGV == 1 or usage;
+my $on = shift;
+my $verbose = 0;
+my $should_output = 1;
+
+if(defined($on)) {	# Translate to booleans
+	$on = uc($on);
+	$on =~ /^(ON|OFF|1|0)$/ or usage;
+	$on = ($on eq 'ON') ? 1 : 0;
+	$should_output = 0 unless $verbose;
+}
+
+sub state2str($) {
+	return (shift)?"on":"off";
+}
+
+sub myprintf {
+	printf @_ if $should_output;
+}
+
+my @spans = Dahdi::spans;
+
+foreach my $xbus (Dahdi::Xpp::xbuses($sorter)) {
+	myprintf "%-10s\t%3s-%s\t%s\n",
+		$xbus->name, $xbus->xpporder, $xbus->label, $xbus->connector;
+	next unless $xbus->status eq 'CONNECTED';
+	foreach my $xpd ($xbus->xpds()) {
+		my $prev = $xpd->dahdi_registration($on);
+		if(!defined($prev)) {			# Failure
+			printf "%s: Failed %s\n", $xpd->fqn, $!;
+			next;
+		}
+		myprintf "\t%-10s: ", $xpd->fqn;
+		if(!defined($on)) {			# Query only
+			my ($span) = grep { $_->name eq $xpd->fqn } @spans;
+			my $spanstr = ($span) ? ("Span " . $span->num) : "";
+			myprintf "%s %s\n", state2str($prev), $spanstr ;
+			next;
+		}
+		myprintf "%3s ==> %3s\n", state2str($prev), state2str($on);
+	}
+}
+myprintf "# Sorted: $sort_order\n" if defined $sort_order;
+
+__END__
+
+=head1 NAME
+
+dahdi_registration - Handle registration of Xorcom XPD modules in dahdi.
+
+=head1 SYNOPSIS
+
+dahdi_registration [-s sortorder] [on|off]
+
+=head1 DESCRIPTION
+
+Without parameters, show all connected XPDs sorted by physical connector order.
+Each one is show to be unregistered (off), or registered to a specific dahdi
+span (the span number is shown).
+
+All registerations/deregisterations are sorted by physical connector string.
+
+Span registration should generally always succeed. Span unregistration may 
+fail if channels from the span are in use by e.g. asterisk. In such a case
+you'll also see those channels as '(In use)' in the output of lsdahdi(8).
+
+=head2 Parameters
+
+off -- deregisters all XPD's from dahdi.
+
+on -- registers all XPD's to dahdi.
+
+=head2 Options
+
+=over
+
+=item -s I<sort_order>
+
+The sort order to use. 
+
+=back
+
+If the option is not used, the sort order is taken from the environment 
+variable XBUS_SORT and failing that: the hard-coded default of 
+SORT_XPPORDER.
+
+The available sorting orders are documented in Dahdi::Xpp manual.
+
+
+
+=head2 Sample Output
+
+An example of the output of dahdi_registration for some registered
+Astribanks:
+
+  $ dahdi_registration -s type
+  XBUS-01         usb:0000153     usb-0000:00:10.4-2
+	  XBUS-01/XPD-00: on Span 1
+	  XBUS-01/XPD-01: on Span 2
+  XBUS-00         usb:0000157     usb-0000:00:10.4-4
+	  XBUS-00/XPD-00: on Span 3
+	  XBUS-00/XPD-01: on Span 4
+	  XBUS-00/XPD-02: on Span 5
+	  XBUS-00/XPD-03: on Span 6
+	  XBUS-00/XPD-04: on Span 7
+	  XBUS-00/XPD-05: on Span 8
+	  XBUS-00/XPD-06: on Span 9
+	  XBUS-00/XPD-07: on Span 10
+  XBUS-02                 usb-0000:00:10.4-1
+	  XBUS-02/XPD-00: on Span 11
+	  XBUS-02/XPD-10: on Span 12
+  # Sorted: type
+
+=head1 FILES
+
+=over
+
+=item /proc/xpp/XBUS-nn/XPD-mm/dahdi_registration
+
+Reading from this file shows if if the if the specific XPD is
+registered. Writing to it 0 or 1 registers / unregisters the device.
+
+This should allow you to register / unregister a specific XPD rather
+than all of them. 
+
+=back

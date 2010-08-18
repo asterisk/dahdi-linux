@@ -1,0 +1,147 @@
+#!/bin/sh
+
+# dump_sys_state: dump some /sys and /proc files to a directory.
+# $Id$
+#
+# Written by Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+# Copyright (C) 2009, Xorcom
+#
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA
+
+# The DAHDI-perl modules will use such a dump instead of the files from
+# the real system if DAHDI_VIRT_TOP is set to the root.
+#
+#  ./build_tools/dump_sys_state my_sys_state
+#
+#  # And then later:
+#  DAHDI_VIRT_TOP="$PWD/my_sys_state" dahdi_genconf
+
+name=dahdi_sys_state_dump
+
+usage() {
+  echo "$0: dump system data for Dahdi-Perl"
+  echo "Usage: $0 [<name>]]"
+  echo ""
+  echo "<name>: name of directory/tarball to create. Default: $name"
+}
+
+output_tar() {
+  gzip -9 >$name.tar.gz
+}
+
+output_cpio() {
+  gzip -9 >$name.cpio.gz
+}
+
+output_dir() {
+  rm -rf $name
+  mkdir -p $name
+  cd $name
+  #tar xf -
+  cpio -id
+}
+
+# Give usage message on expected texts
+case $1 in 
+  help | -* ) usage; exit 1;;
+esac
+
+if [ "$1" != '' ]; then
+  name="$1"
+fi
+
+# funky permissions on procfs. Sadly rm -f does not kill them.
+if [ -d "$name" ]; then
+  chmod -R u+w "$name"
+fi
+rm -rf "$name"
+mkdir -p "$name"
+
+# delete a (potentially empty) list of files
+rm_files() {
+	xargs rm -f rm_files_non_existing_file
+}
+
+if [ -r /proc/bus/usb/devices ]; then
+	mkdir -p "$name/proc/bus/usb"
+	cp -a /proc/bus/usb/devices "$name/proc/bus/usb/"
+fi
+
+if [ -d /proc/dahdi ]; then
+	mkdir -p "$name/proc/dahdi"
+	if find /proc/dahdi -type f >/dev/null; then
+		cp -a /proc/dahdi/* "$name/proc/dahdi/" 
+	fi
+fi
+
+if [ -d /proc/xpp ]; then
+	mkdir -p "$name/proc/xpp"
+	if find /proc/xpp -type f >/dev/null; then
+		cp -a /proc/xpp/* "$name/proc/xpp/" 
+		find "$name/proc/xpp" -type f -name command | rm_files
+	fi
+fi
+
+# FIXME: the following grab tons of files from sysfs. Any way to do with
+# less information?
+pci_dev_pat='/sys/devices/pci*'
+mkdir -p "$name/sys/devices"
+cp -a $pci_dev_pat "$name/sys/devices/" 2>/dev/null
+
+for bus in astribanks xpds pci pci_express usb; do
+	if [ -d /sys/bus/$bus ]; then
+		mkdir -p "$name/sys/bus/"
+		cp -a /sys/bus/$bus "$name/sys/bus/" 2>/dev/null
+	fi
+done
+
+# Remove PCI devices of irelevan classes:
+irrelevant_devs() {
+	grep . "$name"/$pci_dev_pat/0*/class "$name"/$pci_dev_pat/0*/0*/class \
+	| perl -n -e '# Perl provides commented regexes:
+		next unless m{/class:( # The following is a list of device classes
+			# that can be safely removed:
+			0x060000 | # Host bridge
+			0x030000 | # VGA compatible controller
+			0x038000 | # Display controller
+			0x040300 | # Audio device
+			0x060401 | # PCI bridge
+			0x060100 | # ISA bridge
+			0x01018a | # IDE interface
+			0x01018f | # IDE interface
+			0x0c0500 | # SMBus
+			0x060700 | # CardBus bridge
+			0x0c0010 | # FireWire (IEEE 1394)
+			# The following are not to be removed:
+			#0x0c0300 | # USB Controller (UHCI?)
+			#0x060400 | # PCI bridge
+			#0x0c0320 | # USB Controller (EHCI?)
+			#0x020000 | # Ethernet controller
+			#0x0c0010 | # Network controller: (Wifi?)
+		)$}x;
+		# Leave out just the name of the node:
+		s{/[^/]*$}{};
+		print;
+		print "\n"
+	'
+}
+
+# FIXME: deleting those seems to remove common 'vendor' directories
+# and mess things up. Skip it for now.
+#rm -rf `irrelevant_devs`
+

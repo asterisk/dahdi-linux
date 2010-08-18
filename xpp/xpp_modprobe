@@ -1,0 +1,10 @@
+# Some debugging options for the brave of heart:
+#options dahdi debug=1
+#options wcfxo debug=1
+#options xpp debug=1 
+#options xpp_usb debug=1 
+#options xpd_fxs debug=1 
+#options xpd_fxo debug=1 
+
+# For pre-loading of card modules (e.g: xpp_fxs)
+#install xpp_usb /sbin/modprobe xpd_fxs && /sbin/modprobe --ignore-install xpp_usb

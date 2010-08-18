@@ -1,0 +1,13 @@
+# blacklist all the drivers by default in order to ensure that
+# /etc/init.d/dahdi installs them in the correct order so that the spans are
+# ordered consistently.
+
+blacklist wct4xxp
+blacklist wcte12xp
+blacklist wct1xxp
+blacklist wcte11xp
+blacklist wctdm24xxp
+blacklist wcfxo
+blacklist wctdm
+blacklist wctc4xxp
+blacklist wcb4xxp

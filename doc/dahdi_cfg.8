@@ -1,0 +1,70 @@
+.TH "DAHDI_CFG" "8" "16 Jun 2008" "" ""
+
+.SH NAME
+dahdi_cfg \- configures DAHDI kernel modules from /etc/dahdi/system.conf
+.SH SYNOPSIS
+
+.B dahdi_cfg [\-c \fICFG_FILE\fB] [\-s] [\-f] [\-t] [\-v [\-v ... ] ]
+
+.B dahdi_cfg \-h
+
+.SH DESCRIPTION
+.B dahdi_cfg 
+configures DAHDI interface cards from a config file.
+
+You generally  need to run it with a valid configurations
+in order for DAHDI modules to work properly.
+
+It must be run to configure every DAHDI span. Normally it is run from
+the DAHDI init script.
+
+.SH OPTIONS
+
+.B \-c \fICFG_FILE
+.RS
+Use an alternative configuration file instead of
+.I /etc/dahdi/system.conf
+.RE
+
+.B \-s
+.RS
+Only shutdown spans.
+.RE
+
+.B \-f
+.RS
+Always configure every channel, even if it appears not to have changed.
+.RE
+
+.B \-t
+.RS
+Test mode. Don't do anything, just report what you wanted to do.
+.RE
+
+.B \-v
+.RS
+Be more verbose. Add extra v-s for extra verbosity.
+.RE
+
+.B \-h
+.RS
+Display a brief help message.
+.RE
+
+.SH FILES
+
+.I /etc/dahdi/system.conf
+.RS
+The default location for the configuration file.
+.RE
+
+.SH SEE ALSO
+dahdi_tool(8), dahdi_monitor(8), asterisk(8).
+
+.SH AUTHOR
+This manual page was written by Santiago Ruano Rinc\['o]n 
+<santiago@unicauca.edu.co> for
+the Debian system (but may be used by others).  Permission is
+granted to copy, distribute and/or modify this document under
+the terms of the GNU General Public License, Version 2 any 
+later version published by the Free Software Foundation.

@@ -1,0 +1,168 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi;
+use Dahdi::Span;
+use Dahdi::Xpp;
+use Dahdi::Xpp::Xbus;
+
+sub usage {
+	die "Usage: $0 {on|off|bzzt} {span <number> | chan <number> | xpd <bus num> [<xpd num>] | label <label>}\n";
+}
+
+my $state = shift;
+my $selector = shift;
+usage unless defined($state) and $state =~ /^(on|off|bzzt)$/;
+usage unless defined($selector) and $selector =~ /^(span|chan|xpd|label)$/i;
+
+my $xpd;
+my @blinklist;
+my @channels;
+
+if($selector =~ /^span$/i) {
+	my $number = shift;
+	usage unless defined($number) and $number =~ /^\d+/;
+	my $span = Dahdi::Span::by_number($number);
+	die "Unkown Span $number\n" unless $span;
+	$xpd = Dahdi::Xpp::xpd_of_span($span);
+	die "Span $number is not an XPD\n" unless defined $xpd;
+	my $xpdname = $xpd->fqn;
+	my $connector = $xpd->xbus->connector;
+	die "$xpdname is not connected\n" unless defined $connector;
+	push(@blinklist, $xpd);
+	my @chans = $span->chans();
+	@channels = join(' ', map { $_->num } @chans);
+	printf "Using %s (connected via $connector): channels @channels\n", $xpd->fqn;
+} elsif($selector =~ /^chan$/i) {
+	my $channo = shift;
+	usage unless defined($channo) and $channo =~ /^\d+/;
+	my @spans = Dahdi::spans();
+	my @chans = map { $_->chans() } @spans;
+	my ($chan) = grep { $_->num eq $channo } @chans;
+	die "Channel $channo was not found\n" unless defined $chan;
+	die "Cannot blink Input ports\n" if $chan->type eq 'IN';
+	die "Cannot blink Output ports\n" if $chan->type eq 'OUT';
+	push(@blinklist, $chan);
+} elsif($selector =~ /^xpd$/i) {
+	my $busnum = shift;
+	my $xpdnum = shift;
+	my $linenum = shift;
+	usage unless defined($busnum) and $busnum =~ /^\d+/;
+	my $xbus = Dahdi::Xpp::Xbus::by_number($busnum);
+	die "Unkown XBUS number $busnum\n" unless defined $xbus;
+	if(defined $xpdnum) {
+		usage unless $xpdnum =~ /^\d+/;
+		$xpd = $xbus->get_xpd_by_number($xpdnum);
+		die "Unkown XPD number $xpdnum on XBUS number $busnum\n" unless defined $xpd;
+		if(defined $linenum) {
+			usage unless $linenum =~ /^\d+/;
+			my $lines = $xpd->lines;
+			my $l = @{$lines}[$linenum];
+			die "Bad line number $linenum on XPD $xpd->fqn\n" unless defined $l;
+			push(@blinklist, $l);
+		} else {
+			push(@blinklist, $xpd);
+		}
+	} else {
+		@blinklist = $xbus->xpds;
+		die "XBUS number $busnum has no XPDS!\n" unless @blinklist;
+	}
+} elsif($selector =~ /^label$/i) {
+	my $label = shift;
+	usage unless defined($label);
+	my $xbus = Dahdi::Xpp::Xbus::by_label($label);
+	die "Unkown XBUS label $label\n" unless defined $xbus;
+	@blinklist = $xbus->xpds;
+	die "XBUS label '$label' has no XPDS!\n" unless @blinklist;
+}
+
+if($state eq 'on') {
+	$_->blink(1) foreach (@blinklist);
+} elsif($state eq 'off') {
+	$_->blink(0) foreach (@blinklist);
+} elsif($state eq 'bzzt') {
+	$_->blink(1) foreach (@blinklist);
+	sleep 1;
+	$_->blink(0) foreach (@blinklist);
+}
+
+__END__
+
+=head1 NAME
+
+xpp_blink - Blink the leds of a specified XPD
+
+=head1 SYNOPSIS
+
+xpp_blink {on|off|bzzt} {span <number> | chan <number> | xpd <bus num> [<xpd num> [<lineno>]]}
+
+=head1 DESCRIPTION
+
+Blink all the leds of an XPD.
+
+=head2 Blink mode:
+
+=over
+
+=item on
+
+Turn on constant blink
+
+=item off
+
+Turn off blink
+
+=item bzzt
+
+Blink briefly for 1 second.
+
+=back
+
+=head2 Selector:
+
+=over
+
+=item span	
+
+Select by span number. This only work for XPD registered to dahdi.
+		
+will also print the dahdi channels of the span and the xbus/xpd this 
+span represents.
+
+=item chan
+
+Select by channel number. This only work for XPD registered to dahdi.
+
+=item xpd
+
+Select by xbus + xpd numbers. If only xbus number is given, all the
+XPDs of the selected xbus (Astribank) are blinked.
+
+=item label
+
+Select by xbus label. Affect the whole Astribank.
+
+=back
+
+=head1 EXAMPLES
+
+  $ xpp_blink bzzt span 2
+  Using XBUS-04/XPD-10 (connected via usb-0000:00:1d.7-1): channels 15 16 17 18 19 20 21 22
+
+  $ xpp_blink bzzt chan 18
+
+  $ xpp_blink on xpd 0 1 5
+
+  $ xpp_blink off xpd 0
+
+  $ xpp_blink bzzt label 'usb:00000238'

@@ -1,0 +1,196 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Getopt::Std;
+use Dahdi;
+use Dahdi::Xpp;
+use Dahdi::Config::Gen;
+use Dahdi::Config::Params;
+
+my $version = '1';	# Functionality version (integer)
+my $revision = '$Revision$';
+
+my %opts;
+
+sub set_defaults {
+	my $default_file = $ENV{GENCONF_PARAMETERS} || "/etc/dahdi/genconf_parameters";
+	my $params = Dahdi::Config::Params->new($default_file);
+	#$params->dump;
+	if($opts{v}) {
+		print "Default parameters from ", $params->{GENCONF_FILE}, "\n";
+	}
+	my $gconfig = Dahdi::Config::Gen->new($params);
+	#$gconfig->dump;
+	return $gconfig;
+}
+
+sub spans_prep($@) {
+	my $gconfig = shift || die;
+	my @spans = @_;
+	foreach my $span (@spans) {
+		if($span->is_pri) {
+			$span->pri_set_fromconfig($gconfig);
+		}
+	}
+}
+
+sub generator_list($) {
+	my $gconfig = shift || die;
+	my @genlist;
+
+	if (@ARGV) {
+		for my $gen (@ARGV) {
+			push @genlist, $gen;
+		}
+	} else {
+		# No files given. Use the defaults.
+		@genlist = ('system', 'chandahdi');
+		if($gconfig->{'pri_connection_type'} eq 'R2') {
+			push @genlist, 'unicall';
+		}
+	}
+	return @genlist;
+}
+
+sub parse_genopts($) {
+	my $optstr = shift;
+	my %genopts;
+
+	$optstr = '' unless defined $optstr;
+	foreach my $o (split(/,/, $optstr)) {
+		my ($k, $v) = split(/=/, $o, 2);
+		$v = 1 unless defined $v and $v;
+		$genopts{$k} = $v;
+	}
+	return %genopts;
+}
+
+sub generate_files($@) {
+	my $gconfig = shift || die;
+	my @spans = @_;
+	my @generators = generator_list($gconfig);
+
+	for my $gen (@generators) {
+		my ($name, $optstr) = split(/=/, $gen, 2);
+		die "Illegal name '$name'\n" unless $name =~ /^\w+$/;
+		$name =~ s/(.)(.*)/\u$1\L$2/;
+		my %genopts = parse_genopts($optstr);
+		$genopts{'freepbx'} = 'yes' if $opts{'F'};
+		if(defined $opts{'v'}) {
+			$genopts{'verbose'} = $opts{v};
+		}
+		$gconfig->run_generator($name, \%genopts, @spans);
+	}
+}
+
+getopts('vVF', \%opts) || die "$0: Bad option\n";
+if($opts{'V'}) {
+	my $revstr = $revision;
+	$revstr =~ s/[^$]*\$[^:]+:\s*//;
+	$revstr =~ s/\s*\$.*//;
+	print "$0: version=$version revision=$revstr\n";
+	exit 0;
+}
+
+my $gconfig = set_defaults;
+my @spans = Dahdi::spans();
+spans_prep($gconfig, @spans);
+generate_files($gconfig, @spans);
+
+__END__
+
+=head1 NAME
+
+dahdi_genconf - Generate configuration for dahdi channels.
+
+=head1 SYNOPSIS
+
+dahdi_genconf [options] [generator...]
+
+=head1 DESCRIPTION
+
+This script generate configuration files for Dahdi hardware.
+It uses two information sources:
+
+=over 4
+
+=item Hardware
+
+ The actual dahdi hardware is automatically detected on the host.
+
+=item /etc/dahdi/genconf_parameters
+
+A configuration file that supplements the hardware information.
+Its location may be overridden via the C<GENCONF_PARAMETERS> environment
+variable.
+
+=back
+
+The dahdi_genconf script can generate various kinds of configuration files
+as specificed by the generator arguments.  Each generator is a perl classes
+in Dahdi::Config::Gen namespace.  The generator names on the command line
+are the class names in lowercase.
+
+The following generators are currently implemented: system, chandahdi, unicall, users.
+For further documentation on each, please user perldoc on the relevant
+class. E.g: C<perldoc Dahdi::Config::Gen::Chandahdi>
+
+Each generator on the command line may be passed custom options by assigning
+a comma separated list of options to the generator name. E.g:
+
+ dahdi_genconf system chandahdi=verbose unicall
+
+=head2 Global options:
+
+=over 4
+
+=item -V
+
+Version -- print version string and exit.
+
+=item -v
+
+Verbose -- sets the C<'verbose'> option for all generators.
+
+=item -F
+
+Freepbx -- sets the C<'freepbx'> option for all generators.
+Currently, chandahdi is affected.
+
+
+=back
+
+=head2 Implementation notes:
+
+=over 4
+
+=item *
+
+F<genconf_parameters> parsing is done via C<Dahdi::Config::Params>.
+An object representing the parsed data is instanciated by:
+C<Dahdi::Config::Params-E<gt>new()>.
+The C<item()> method of this object contains all the hard coded
+defaults of the configuration directives.
+
+=item *
+
+A configuration object is instanciated by C<Dahdi::Config::Gen-E<gt>new($params)>.
+The mapping of configuration directives into semantic configuration is
+done in the constructor.
+
+=item *
+
+A single generator is run via the the C<run_generator()> method of the
+configuration object.
+
+=back

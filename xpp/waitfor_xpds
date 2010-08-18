@@ -1,0 +1,93 @@
+#! /bin/sh
+
+# waitfor_xpds: wait until all Astribanks were initialized
+# $Id$
+
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2008-2009, Xorcom
+#
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+
+
+set -e
+
+# For lab testing
+mydir=`dirname $0`
+PATH="${mydir}:${PATH}"
+
+[ -r /etc/dahdi/init.conf ] && . /etc/dahdi/init.conf
+
+ab_list() {
+	# Only check /sys info (don't use /proc anymore).
+	ab=`find /sys/bus/astribanks/devices/xbus-*/ -name waitfor_xpds 2> /dev/null || :`
+	echo $ab
+}
+
+# Any hardware?
+if ! dahdi_hardware="`which dahdi_hardware 2>/dev/null`"; then
+	echo >&2 "$0: Missing dahdi_hardware"
+	exit 0
+fi
+if ! astribank_is_starting="`which astribank_is_starting 2>/dev/null`"; then
+	echo >&2 "$0: Missing astribank_is_starting"
+	exit 0
+fi
+if [ "`$dahdi_hardware | grep xpp_usb`" != "" ]; then
+	astribank_is_starting -v -a
+fi
+if ! astribank_is_starting; then
+	exit 0
+fi
+
+# Wait for driver and first device
+echo -n 1>&2 "Astribanks detection "
+tries=10
+while [ ! -e "/sys/bus/astribanks/devices/xbus-00" ]
+do
+	if [ "$tries" -le 0 ]; then
+		echo 1>&2 "TIMEOUT"
+		exit 1
+	fi
+	echo -n 1>&2 "."
+	sleep 1
+	: $((tries-=1))
+done
+echo ""
+
+# Wait for device to stabilize and XPD's to finish initalizations
+echo 1>&2 "Astribanks initializing spans"
+while
+	if ! ab=`ab_list`; then
+		exit 1
+	fi
+	test "$oldab" != "$ab"
+do
+	oldab="$ab"
+	cat $ab
+done
+
+if [ "$XPP_HOTPLUG_DAHDI" = yes ]; then
+	if [ "$CALLED_FROM_ATRIBANK_HOOK" = '' ]; then
+		# Now we can wait until the hotplug run would remove the semaphore
+		echo -n 1>&2 "Other DAHDI initializations... "
+		astribank_is_starting -v -w 1>&2
+	fi
+else
+	# Non-hotplug -- Sequential initialization, remove semaphore
+	astribank_is_starting -v -r 1>&2
+fi

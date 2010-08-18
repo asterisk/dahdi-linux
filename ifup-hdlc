@@ -1,0 +1,39 @@
+#!/bin/sh
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+cd /etc/sysconfig/network-scripts
+. network-functions
+
+CONFIG=$1
+source_config
+
+if [ "foo$2" = "fooboot" -a "${ONBOOT}" = "no" ]
+then
+	exit
+fi
+
+if [ -z "${MODE}" ]; then
+	echo "No mode specified!"
+	exit
+fi
+
+sethdlc ${DEVICE} mode ${MODE}
+ifconfig ${DEVICE} ${IPADDR} pointopoint ${REMIP}
+route add -net ${NETWORK} netmask ${NETMASK} ${DEVICE}
+
+# this is broken! it's only here to keep compatibility with old RH sytstems
+if [ "${GATEWAY}" != "" -a "${GATEWAY}" != "none" ]
+then
+	route add default gw ${GATEWAY} metric 1 ${DEVICE}
+fi
+
+. /etc/sysconfig/network
+
+if [ "${GATEWAY}" != "" ]; then
+	if [ "${GATEWAYDEV}" = "" -o "${GATEWAYDEV}" = "${DEVICE}" ]; then
+		# set up default gateway
+		route add default gw ${GATEWAY}
+	fi
+fi
+
+/etc/sysconfig/network-scripts/ifup-post $1

@@ -1,0 +1,49 @@
+.TH dahdi_test 8 "2005-06-25" 
+.SH "NAME" 
+dahdi_test \(em Test if the DAHDI timer provides timely response
+.SH "SYNOPSIS" 
+.B dahdi_test 
+.I [ \-v ]
+
+.SH DESCRIPTION 
+.B dahdi_test
+dahdi_test runs a timing test in a loop and prints the result of each loop.
+The test is as follows:
+
+It reads 8192 bytes from the DAHDI timer device (\fI/dev/dahdi/pseudo\fR). 
+This should take exactly 8000 ms . It uses calls to
+.I gettimeofday(2) 
+before and after that read to check that indeed exactly 8000ms have passed.
+
+Values of 100% and 99.99% Are normally considered a definite 
+.I pass.
+Values of 99.98% and 99.97% are probably OK as well.
+
+.SH OPTIONS
+.B \-v
+.RS
+Be more verbose: print one line per test.
+.RE
+
+.B \-c 
+.I count
+.RS
+Run for 
+.I count
+times instead of running forever.
+.RE
+
+.SH FILES
+.B /dev/dahdi/pseudo
+.RS
+.RE
+The device file used to access the DAHDI timer.
+
+.SH SEE ALSO 
+dahdi_tool(8), dahdi_cfg(8), asterisk(8). gettimeofday(2)
+
+.SH AUTHOR 
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> 
+Permission is granted to copy, distribute and/or modify this document under 
+the terms of the GNU General Public License, Version 2 any  
+later version published by the Free Software Foundation. 

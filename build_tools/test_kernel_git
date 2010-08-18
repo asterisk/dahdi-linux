@@ -1,0 +1,80 @@
+#!/bin/sh
+
+set -e
+
+GIT_URL=git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux-2.6.git
+CONF_FILE=build_tools/git_test.conf
+
+usage() {
+	me=`basename $0`
+	echo "$me: test building Zaptel vs. kernel from git"
+	echo "Usage:"
+	echo "  $me checkout <kerneldir>  Pull a kernel version into <kerneldir>"
+	echo "  $me update                Update (pull) the kernel tree."
+	echo "  $me setver <kernel_ver>   Set the kernel version"
+	echo "  $me test                  Test-build"
+	echo ""
+	echo "  $me versions [pattern]    List available versions."
+}
+
+# Set a variable in $CONF_FILE
+# The format of CONF_FILE is assumed to be:
+# VAR=value
+# in shell syntax. "value" may be quoted.
+# "value should not contain a '|' character.
+set_var() {
+	var="$1"
+	val="$2"
+	if grep -q "^$var=" $CONF_FILE 2>/dev/null; then
+		sed -i -e "s|^$var=.*|$var=\"$val\"|" $CONF_FILE
+	else
+		echo "$var=\"$val\"" >>$CONF_FILE
+	fi
+}
+
+if [ -r "$CONF_FILE" ]; then . "$CONF_FILE"; fi
+
+if echo "$CONF_FILE" | grep -qv '^/'; then
+	# make CONF_FILE an absolute path:
+	CONF_FILE="$PWD/$CONF_FILE"
+fi
+
+command="$1"
+
+case "$command" in
+	checkout) 
+		kernel_dir="$2"
+		cd "$kernel_dir"
+		git clone $GIT_URL
+		set_var kernel_dir "$kernel_dir/linux-2.6"
+		;;
+	update)
+		cd "$kernel_dir"
+		git pull
+		;;
+	versions)
+		cd "$kernel_dir"
+		git tag -l $2 | cut -c2-
+		;;
+	setver)
+		kernel_ver="$2"
+		tag="v$kernel_ver"
+		cd "$kernel_dir"
+		git-reset --hard "$tag"
+		make defconfig prepare
+		set_var kernel_ver "$kernel_ver"
+		;;
+	test)
+		# you can pass extra parameters to the make command in
+		# two ways:
+		# 1. Set th value of MAKE_PARAMS in git_test.conf .
+		# 2. Any extra command-line parameter.
+		shift
+		make KSRC="$kernel_dir" KVERS=$kernel_ver $MAKE_PARAMS "$@"
+		;;
+	*)
+		echo "$0: no such command $command. Aborting."
+		usage
+		exit 1
+		;;
+esac

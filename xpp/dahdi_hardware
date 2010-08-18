@@ -1,0 +1,196 @@
+#! /usr/bin/perl -w
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+# $Id$
+#
+use strict;
+use File::Basename;
+use Getopt::Std;
+BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
+
+use Dahdi;
+use Dahdi::Span;
+use Dahdi::Xpp;
+use Dahdi::Xpp::Xbus;
+use Dahdi::Hardware;
+use Dahdi::Xpp::Mpp;
+
+sub usage {
+	die "Usage: $0 [-v][-x][-t]\n";
+}
+
+my %opts;
+getopts('vxt', \%opts) || usage;
+@ARGV == 0 or usage;
+
+my @spans = Dahdi::spans;
+
+sub show_xbus($) {
+	my $xbus = shift or die;
+	my @xpds = $xbus->xpds;
+	my $label = '[' . $xbus->label() . ']';
+	my $connector = ($xbus->status eq 'CONNECTED') ? $xbus->connector : "MISSING";
+	printf " LABEL=%-20s CONNECTOR=%-20s\n", $label, $connector;
+	foreach my $xpd (@xpds) {
+		my $reg = $xpd->dahdi_registration;
+		my $channels = '(' . $xpd->channels . ')';
+		my $span;
+		my $spanstr;
+		if($reg && @spans) {
+			($span) = grep { $_->name eq $xpd->fqn } @spans;
+			$spanstr = ($span) ? ("Span " . $span->num) : "";
+		} else {
+			$spanstr = "Unregistered";
+		}
+		my $master = '';
+		#$master = "XPP-SYNC" if $xpd->is_sync_master;
+		$master .= " DAHDI-SYNC" if defined($span) && $span->is_dahdi_sync_master;
+		printf "\t%-10s: %-8s %-5s %s %s\n", $xpd->fqn, $xpd->type, $channels, $spanstr, $master;
+	}
+}
+
+my %seen;
+my $format = "%-20s %-12s %4s:%4s %s\n";
+
+sub show_disconnected(%) {
+	my %seen = @_;
+
+	my $notified_lost = 0;
+	foreach my $xbus (Dahdi::Xpp::xbuses) {
+		if(!$seen{$xbus->name}) {
+			print "----------- XPP Spans with disconnected hardware -----------\n"
+				unless $notified_lost++;
+			printf($format, $xbus->name, '', '', '', "NO HARDWARE");
+			show_xbus($xbus) if $opts{'v'};
+		}
+	}
+}
+
+# FIXME: For verbose display we also need to see the XPP devices.
+# If no spans are registered, this won't happen. A brute-force
+# methood for making it happe:
+Dahdi::Xpp::xbuses if ($opts{'v'});
+
+my @devices = Dahdi::Hardware->device_list;
+foreach my $dev (@devices) {
+	my $driver = $dev->driver || "";
+	my $xbus;
+	my $loaded;
+	my $tws_port;
+	my $tws_power;
+	my $tws_watchdog;
+	my $mppinfo;
+	if($dev->is_astribank) {
+		$xbus = $dev->xbus;
+		if($opts{'v'} || $opts{'t'}) {
+			Dahdi::Xpp::Mpp->mpp_addinfo($dev);
+			$mppinfo = $dev->mppinfo;
+			if(defined $mppinfo) {
+				$tws_port = $mppinfo->{TWINSTAR_PORT};
+				$tws_power = $mppinfo->{TWINSTAR_POWER};
+				$tws_watchdog = $mppinfo->{TWINSTAR_WATCHDOG};
+			}
+		}
+	}
+	$loaded = $dev->loaded;
+	warn "driver should be '$driver' but is actually '$loaded'\n"
+		if defined($loaded) && $driver ne $loaded;
+	$driver = "$driver" . (($loaded) ? "+" : "-");
+	if(defined $tws_power && defined $tws_watchdog) {
+		my $tws_active = $tws_watchdog && $tws_power->[0] && $tws_power->[1];
+		$driver .= "[T]" if $tws_active;
+	}
+	my $description = $dev->description || "";
+	printf $format, $dev->hardware_name, $driver, $dev->vendor, $dev->product, $description;
+	if($opts{'v'} && defined $mppinfo && exists $mppinfo->{MPP_TALK}) {
+		printf " MPP: TWINSTAR_PORT=$tws_port\n" if defined $tws_port;
+		printf " MPP: TWINSTAR_WATCHDOG=$tws_watchdog\n" if defined $tws_watchdog;
+		for(my $i = 0; $i < 2; $i++) {
+			printf " MPP: TWINSTAR_POWER[%d]=%d\n",
+				$i, $tws_power->[$i] if defined $tws_power;
+		}
+	}
+	if(!defined $xbus || !$xbus) {
+		next;
+	}
+	$seen{$xbus->name} = 1;
+	show_xbus($xbus) if $opts{'v'};
+}
+
+show_disconnected(%seen) if $opts{'x'};
+
+__END__
+
+=head1 NAME
+
+dahdi_hardware - Shows Dahdi hardware devices. 
+
+=head1 SYNOPSIS
+
+dahdi_hardware [-v][-x]
+
+=head1 OPTIONS
+
+=over
+
+=item -v
+
+Verbose ouput - show spans used by each device etc. Currently only 
+implemented for the Xorcom Astribank.
+
+=item -x
+
+Show disconnected Astribank unit, if any.
+
+=back
+
+=head1 DESCRIPTION
+
+Show all dahdi hardware devices. Devices are recognized according to
+lists of PCI and USB IDs in Dahdi::Hardware::PCI.pm and 
+Dahdi::Hardware::USB.pm . For PCI it is possible to detect by
+sub-vendor and sub-product ID as well.
+
+The first output column is the connector: a bus specific field that
+shows where this device is. 
+
+The second field shows which driver should handle the device. a "-" sign
+marks that the device is not yet handled by this driver. A "+" sign
+means that the device is handled by the driver.
+
+For the Xorcom Astribank (and in the future: for other Dahdi devices)
+some further information is provided from the driver. Those extra lines
+always begin with spaces.
+
+Example output: 
+
+Without drivers loaded:
+
+  usb:001/002        xpp_usb-     e4e4:1152 Astribank-multi FPGA-firmware
+  usb:001/003        xpp_usb-     e4e4:1152 Astribank-multi FPGA-firmware
+  pci:0000:01:0b.0   wctdm-       e159:0001 Wildcard TDM400P REV H
+
+With drivers loaded, without -v:
+  usb:001/002        xpp_usb+     e4e4:1152 Astribank-multi FPGA-firmware
+  usb:001/003        xpp_usb+     e4e4:1152 Astribank-multi FPGA-firmware
+  pci:0000:01:0b.0   wctdm+       e159:0001  Wildcard TDM400P REV E/F
+
+With drivers loaded, with -v:
+  usb:001/002        xpp_usb+     e4e4:1152 Astribank-multi FPGA-firmware
+   LABEL=[usb:123] CONNECTOR=usb-0000:00:1d.7-1  
+          XBUS-00/XPD-00: FXS      Span 2 
+          XBUS-00/XPD-10: FXS      Span 3 
+          XBUS-00/XPD-20: FXS      Span 4 
+          XBUS-00/XPD-30: FXS      Span 5 
+  usb:001/003        xpp_usb+     e4e4:1152 Astribank-multi FPGA-firmware
+   LABEL=[usb:4567] CONNECTOR=usb-0000:00:1d.7-4  
+          XBUS-01/XPD-00: FXS      Span 6 XPP-SYNC
+          XBUS-01/XPD-10: FXO      Span 7 
+          XBUS-01/XPD-20: FXO      Span 8 
+          XBUS-01/XPD-30: FXO      Span 9 
+  pci:0000:01:0b.0   wctdm+       e159:0001  Wildcard TDM400P REV E/F
+

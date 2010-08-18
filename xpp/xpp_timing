@@ -1,0 +1,6 @@
+#! /bin/sh
+grep 'DRIFT:' /sys/bus/astribanks/devices/xbus-*/timing | sed \
+	-e 's,/sys/bus/astribanks/devices/,,' \
+	-e 's,/timing:,: ,' \
+	-e 's,DRIFT: ,,' \
+	-e 's/^[^:]*:/\U&/'

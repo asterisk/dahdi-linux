@@ -1,0 +1,364 @@
+#!/bin/bash
+
+# xpp_fxloader: load Xorcom Astribank (XPP) firmware
+# $Id$
+#
+# Written by Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+# Copyright (C) 2006-2009, Xorcom
+#
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+#
+# This script can be run manually or from hotplug/udev.
+#
+# Firmware files should be located in $FIRMWARE_DIR which defaults:
+# 	1. /usr/share/dahdi
+#	2. Can be overidden by setting $FIRMWARE_DIR in the environment
+#	3. Can be overidden by setting $FIRMWARE_DIR in /etc/dahdi/init.conf
+#
+# Manual Run
+# ##########
+#
+#   path/to/xpp_fxloader load
+#
+# Make sure the firmware files are in $FIRMWARE_DIR
+#
+
+set -e
+
+# Make sure fxload is in the path:
+PATH="$PATH:/usr/local/sbin:/sbin:/usr/sbin"
+export PATH
+
+me=`basename $0`
+dir=`dirname $0`
+PATH="$dir:$PATH"
+DEFAULTS="/etc/dahdi/init.conf"
+
+if [ -t 2 ]; then
+	LOGGER="logger -i -t '$me' -s"
+else
+	LOGGER="logger -i -t '$me'"
+fi
+
+debug() {
+	[ "$DEBUG" != "" ] && $LOGGER "$@"
+	return 0
+}
+
+USBFS_PREFIX=/proc/bus/usb
+DEVUSB_PREFIX=/dev/bus/usb
+USB_PREFIX=
+
+FIRMWARE_DIR="${FIRMWARE_DIR:-/usr/share/dahdi}"
+ASTRIBANK_HEXLOAD=${ASTRIBANK_HEXLOAD:-/usr/sbin/astribank_hexload}
+ASTRIBANK_TOOL=${ASTRIBANK_TOOL:-/usr/sbin/astribank_tool}
+XPP_UDEV_SLEEP_TIME="${XPP_UDEV_SLEEP_TIME:-15}"
+
+USB_FW="${USB_FW:-USB_FW.hex}"
+
+if [ -r "$DEFAULTS" ]; then
+	. "$DEFAULTS"
+fi
+
+if [ "$USB_PREFIX" = '' ]; then
+	if [ -d "$DEVUSB_PREFIX" ]; then
+		USB_PREFIX=$DEVUSB_PREFIX
+	elif [ -r "$USBFS_PREFIX/devices" ]; then
+		USB_PREFIX=$USBFS_PREFIX
+	fi
+fi
+
+# With Kernels older that 2.6.10 it seems to be possible
+# to trigger a race condition by running fxload or fpga_load 
+# immediately after the detection of the device.
+KERNEL_HAS_USB_RACE=0
+case "`uname -r`" in 2.6.[89]*) KERNEL_HAS_USB_RACE=1;; esac
+sleep_if_race() {
+  if [ "$KERNEL_HAS_USB_RACE" = '1' ]; then
+    sleep 2
+  fi
+}
+
+find_dev() {
+  v_id=$1
+  p_id=$2
+  
+  lsusb | tr -d : | awk "/ ID $v_id$p_id/{printf \"$USB_PREFIX/%s/%s \",\$2,\$4}"
+}
+
+run_fxload() {
+  sleep_if_race
+  fxload -t fx2 $* 2>&1 1>/dev/null | $LOGGER
+  status=$PIPESTATUS
+  if [ $status != 0 ]; then
+    $LOGGER "fxload failed with status $status"
+    exit 55
+  fi
+}
+
+run_astribank_hexload() {
+	debug "Running: $ASTRIBANK_HEXLOAD $*"
+	$ASTRIBANK_HEXLOAD "$@" | $LOGGER
+	status=$PIPESTATUS
+	if [ $status != 0 ]; then
+		$LOGGER "$ASTRIBANK_HEXLOAD failed with status $status"
+		exit 77
+	fi
+}
+
+run_astribank_tool() {
+	debug "Running: $ASTRIBANK_TOOL $*"
+	$ASTRIBANK_TOOL "$@" | $LOGGER
+	status=$PIPESTATUS
+	if [ $status != 0 ]; then
+		$LOGGER "$ASTRIBANK_TOOL failed with status $status"
+		exit 77
+	fi
+}
+
+load_usb_fw() {
+  v_id=$1
+  p_id=$2
+  fw=$3
+  
+  devices=`find_dev $v_id $p_id`
+  for dev in $devices
+  do
+    ver=$(awk '/\$Id:/ { print $4 }' $FIRMWARE_DIR/$fw)
+    debug "USB Firmware $FIRMWARE_DIR/$fw (Version=$ver) into $dev"
+    run_fxload -D $dev -I $FIRMWARE_DIR/$fw || exit 1
+  done
+}
+
+load_fw_device() {
+	dev=$1
+	fw=$2
+	debug "FPGA loading $fw into $dev"
+	run_astribank_hexload -D "$dev" -F "$FIRMWARE_DIR/$fw"
+	pic_files=`echo "$FIRMWARE_DIR"/PIC_TYPE_[1-4].hex`
+	debug "PIC burning into $dev: $pic_files"
+	run_astribank_hexload -D "$dev" -p $pic_files
+	run_astribank_tool -D "$dev" -n		# Do renumeration!
+	debug "PIC burning finished $pic_files"
+}
+
+#
+# Use in manual loading. Parallelize loading
+# firmwares to all of our devices
+#
+firmware_by_id() {
+  v_id=$1
+  p_id=$2
+  fw=$3
+  
+  devices=`find_dev $v_id $p_id`
+  childs=""
+  for dev in $devices
+  do
+	(
+	set -e
+
+	load_fw_device "$dev" "$fw"
+	sleep_if_race
+	) &
+	childs="$childs $!"
+	sleep 0.4
+  done
+  # Wait for specific childs to get their exit status
+  wait $childs
+}
+
+numdevs() {
+  v_ids="$1"
+  p_ids="$2"
+
+  for v in $v_ids
+  do
+    (
+      for p in $p_ids
+      do
+        find_dev $v $p
+      done
+    )
+  done | wc -w
+}
+
+wait_renumeration() {
+  num="$1"
+  v_ids="$2"
+  p_ids="$3"
+
+  while
+    n=`numdevs "$v_ids" "$p_ids"`
+    [ "$num" -gt "$n" ]
+  do
+    echo -n "."
+    sleep 1
+  done
+  echo "Got all $num devices"
+}
+
+reset_fpga() {
+  totaldevs=`numdevs e4e4 '11[3456][0123]'`
+  devices=`find_dev e4e4 '11[3456][12]'`
+  debug "Reseting devices [$totaldevs devices]"
+  for dev in $devices
+  do
+	debug "Resetting FPGA Firmware on $dev"
+	sleep_if_race
+	run_astribank_tool -D "$dev" -r full 2>&1 >/dev/null
+  done
+  if [ "$1" = 'wait' ]; then
+	  wait_renumeration $totaldevs e4e4 '11[3456][03]'
+  fi
+}
+
+usage() {
+	echo "$0: Astribank firmware loading script."
+	echo "Usage: "
+	echo "$0 load  : manual firmware loading."
+	echo "$0 usb   : manual firmware loading: USB firmware only."
+	echo "$0 help  : this text."
+}
+
+# We have a potential astribank
+astribank_is_starting -a
+
+#########################
+##
+## Manual run
+##
+
+# to run manually, pass the parameter 'xppdetect'
+case "$1" in
+udev) 
+	# Various kernel versions use different sets of variables.
+	# Here we want to make sure we have 'DEVICE' and 'PRODUCT' set
+	# up. DEVICE is now deprecated in favour of DEVNAME. It will
+	# likely to contain an invalid name if /proc/bus/usb is not
+	# mounted. So it needs further cooking.
+	DEVICE="${DEVNAME:-$DEVICE}"
+	case "$DEVICE" in /proc/*) DEVICE="/dev${DEVICE#/proc}" ;; esac
+	# PRODUCT contains 'vendor_id'/'product_id'/'version' . We
+	# currently pass it as a parameter, but might as well get it
+	# from the envirnment.
+	PRODUCT="${PRODUCT:-$2}"
+	# skip on to the rest of the script. Don't exit.
+	;;
+reset-wait)
+	reset_fpga wait
+	;;
+reset)
+	reset_fpga
+	;;
+xppdetect|load|usb)
+	numdevs=`numdevs e4e4 '11[3456][013]'`
+	$LOGGER -- "--------- FIRMWARE LOADING: ($1) [$numdevs devices]"
+
+	load_usb_fw e4e4 1130 $USB_FW
+	load_usb_fw e4e4 1140 $USB_FW
+	load_usb_fw e4e4 1150 $USB_FW
+	load_usb_fw e4e4 1160 $USB_FW
+	load_usb_fw e4e4 1163 $USB_FW
+	wait_renumeration $numdevs e4e4 '11[3456]1'
+	if [ "$1" != 'usb' ]
+	then
+		firmware_by_id e4e4 1131 FPGA_FXS.hex
+		firmware_by_id e4e4 1141 FPGA_1141.hex
+		firmware_by_id e4e4 1151 FPGA_1151.hex
+		firmware_by_id e4e4 1161 FPGA_1161.hex
+		wait_renumeration $numdevs e4e4 '11[3456]2'
+	fi
+
+	sleep 3		# Let it stabilize
+	$LOGGER -- "--------- FIRMWARE IS LOADED"
+	exit 0
+	;;
+help)
+	usage
+	exit 0
+	;;
+*)
+	if [ "$ACTION" = '' ]; then # not called from hotplug
+		echo "$0: Error: unknown command \"$1\""
+		echo ''
+		usage
+		exit 1
+	fi
+	;;
+esac
+
+#########################
+##
+## Hotplug run
+##
+
+# allow disabling automatic hotplugging:
+if [ "$XPP_HOTPLUG_DISABLED" != '' ]; then
+	$LOGGER -p kern.info "Exiting... XPP_HOTPLUG_DISABLED"
+	exit 0
+fi
+
+if [ "$ACTION" != add ]; then
+	exit 0;
+fi
+
+# This procedure is run in the background to do the actual work of loading the
+# firmware. Running it in the background allows udev to continue doing other tasks
+# and thus provide a faster startup.
+#
+# On some systems (e.g. CentOS 5) we get the relevant udev event before the device
+# file is ready. Which is why we want the background process to wait a bit first.
+udev_delayed_load() {
+	sleep 0.2
+	# Make sure the new device is writable:
+	usb_dev_writable=0
+	for i in `seq $XPP_UDEV_SLEEP_TIME`; do
+		if [ -w "$DEVICE" ]; then
+			usb_dev_writable=1;
+			break;
+		fi
+		sleep 1
+	done
+	if [ $usb_dev_writable != 1 ]; then
+		$LOGGER "Device $DEVICE not writable. Can't load firmware."
+		return;
+	fi
+
+	$LOGGER "Trying to find what to do for product $PRODUCT, device $DEVICE"
+	prod_id=`echo "$PRODUCT" | cut -d/ -f2`
+	case "$PRODUCT" in
+	e4e4/11[3456]0/*|e4e4/1163/*)
+		FIRM_USB="$FIRMWARE_DIR/$USB_FW"
+		$LOGGER "Loading firmware '$FIRM_USB' into '$DEVICE'"
+		run_fxload -D "$DEVICE" -I "$FIRM_USB"
+		;;
+	e4e4/11[3456]1/*)
+		if [ "$prod_id" = 1131 ]; then
+			FIRM_FPGA="FPGA_FXS.hex"	# Legacy
+		else
+			FIRM_FPGA="FPGA_$prod_id.hex"
+		fi
+		sleep_if_race
+		load_fw_device "$DEVICE" "$FIRM_FPGA"
+		;;
+	esac	
+}
+
+udev_delayed_load &
+

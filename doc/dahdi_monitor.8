@@ -1,0 +1,43 @@
+.TH "DAHDI_MONITOR" "8" "16 June 2008" "" ""
+
+.SH NAME
+dahdi_monitor \- checks the rx/tx levels of DAHDI channels
+.SH SYNOPSIS
+
+.B dahdi_monitor \fIchannel number\fB [\-v] [\-f \fIFILE\fB]
+
+.SH DESCRIPTION
+
+dahdi_monitor monitors a DAHDI channel. It gives you a visual
+representation of the sound strengths and makes it easy to see if
+the received or transmitted signals are too high or out of
+balance
+
+.SH OPTIONS
+The first (mandatory) parameter is the number of the channel
+to monitor.
+
+.B \-v
+.RS
+Display visual audio levels.
+.RE
+
+.B \-f \fIFILE
+.RS
+Write output to FILE
+.RE
+
+Some extra, yet undocumented, options.
+
+.SH SEE ALSO
+.PP
+dahdi_tool(8), dahdi_cfg(8), asterisk(8).
+
+.SH AUTHOR
+.PP
+This manual page was written by Santiago Ruano Rinc\['o]n 
+<santiago@unicauca.edu.co> for
+the Debian system (but may be used by others).  Permission is
+granted to copy, distribute and/or modify this document under
+the terms of the GNU General Public License, Version 2 any 
+later version published by the Free Software Foundation.
