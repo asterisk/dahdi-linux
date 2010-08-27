@@ -1,0 +1,80 @@
+#!/bin/sh
+
+# this script makes an attempt to build a proper set of rules
+# for loading the DAHDI modules and automatically running dahdi_xcfg
+#
+# it accepts two parameters:
+#   the root prefix to be used for finding/creating the files
+#   the list of module names being installed
+#
+# the process is as follows:
+#
+# the file can be located at /etc/modprobe.conf (combined with all
+# other rules), /etc/modprobe.d/dahdi (DAHDI only) or /etc/modules.d/dahdi
+# (DAHDI only)
+#
+# when the file is DAHDI rules only, then we don't preserve the existing
+# contents of the file; the system administrator can put desired options and
+# overrides in a separate file with a name that appears earlier in the sort
+# order, so there is no need to edit the file produced by this script
+#
+# when the file is combined with all other rules, then we make a backup
+# of it and remove all the old DAHDI rules we can find, replacing them with
+# new ones
+#
+# in addition, versions of module-init-tools 3.2.0 and later
+# have the ability to pass module parameters specified on the modprobe command
+# line to commands in 'install' rules, thus keeping them from being lost, so
+# we try to determine what version is installed and take advantage of that
+
+toolver=`/sbin/modprobe --version 2>/dev/null| awk '{print $3}' | cut -d. -f2 | cut -d- -f1`
+if [ ${toolver} -ge 2 ]; then
+    cmdopts=\$CMDLINE_OPTS
+fi
+if [ -d ${1}/etc/modprobe.d ]; then
+    target=${1}/etc/modprobe.d/dahdi
+elif [ -d ${1}/etc/modules.d ]; then
+    target=${1}/etc/modules.d/dahdi
+elif [ -f ${1}/etc/modprobe.conf ]; then
+    target=${1}/etc/modprobe.conf
+    combined=1
+elif [ -f ${1}/etc/conf.modules ]; then
+    target=${1}/etc/conf.modules
+    combined=1
+else
+    echo No suitable location for module rules can be found... exiting.
+    exit 1
+fi
+
+if [ -n "${combined}" ]; then
+    if [ -f ${target} ]; then
+	mv ${target} ${target}.bak
+	cat ${target}.bak | grep -v "alias char-major-250" | grep -v "alias char-major-196" > ${target}	
+    fi
+else
+    if [ -f ${target} ]; then
+	mv ${target} ${target}.bak
+    fi
+    echo "# automatically generated file; do not edit" > ${target}
+fi
+
+echo Building ${target}...
+
+for mod in ${2}; do
+    if ! grep -q "install ${mod} " ${target}; then
+	echo "install ${mod} /sbin/modprobe --ignore-install ${mod} ${cmdopts} && /sbin/ztcfg" >> ${target}
+    fi
+done
+
+if [ -z "${combined}" ]; then
+    echo "***"
+    echo "*** WARNING:"
+    echo "*** If you had custom settings in ${target},"
+    echo "*** they have been moved to ${target}.bak."
+    echo "***"
+    echo "*** In the future, do not edit ${target}, but"
+    echo "*** instead put your changes in another file"
+    echo "*** in the same directory so that they will not"
+    echo "*** be overwritten by future DAHDI updates."
+    echo "***"
+fi

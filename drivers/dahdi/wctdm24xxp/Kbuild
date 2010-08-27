@@ -1,0 +1,5 @@
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTDM24XXP) += wctdm24xxp.o
+
+EXTRA_CFLAGS += -I$(src)/.. -Wno-undef
+
+wctdm24xxp-objs := base.o xhfc.o

@@ -1,0 +1,323 @@
+#!/bin/sh
+
+LINUX_DIR=${LINUX_DIR:=.}
+TOOLS_DIR=${TOOLS_DIR:=../dahdi-tools}
+DYNAMIC_LOC="${DYNAMIC_LOC:-no}"
+DESTDIR=$PWD/live
+KVERS=${KVERS:-`uname -r`}
+XPP_SYNC=${XPP_SYNC:-auto}
+AST_SCRIPT=${AST_SCRIPT:-/etc/init.d/asterisk}
+# Use this file to pass options to modules:
+PERLLIBDIR=`perl -V:sitelib | cut -d "'" -f 2`
+EXTRA_MODS="crc_ccitt"
+
+# Manual list of modules. They will be loaded by insmod.
+# If reside in a subdir, add it explicitly.
+
+MODULES_LOAD="${MODULES_LOAD:-dahdi dahdi_echocan_mg2}"
+
+# this one *is* resolved recusively. 
+# the only reason to set a different value is if you use hpec / oslec,
+# as Zaptel depends on them.
+REMOVE_MODULES="${REMOVE_MODULES:-dahdi}" # "dahdi oslec"?
+
+if [ -r $DESTDIR/live.conf ]; then . $DESTDIR/live.conf; fi
+
+MODULES_DIR="$DESTDIR/lib/modules/$KVERS/dahdi"
+if [ ! -d "$LINUX_DIR" ]; then
+	echo >&2 "$0:dahdi-linux dir '$LINUX_DIR' does not exits.  Aborting".
+	exit 1
+fi
+
+if [ ! -d "$TOOLS_DIR" ]; then
+	echo >&2 "$0:dahdi-tools dir '$TOOLS_DIR' does not exits.  Aborting".
+	exit 1
+fi
+set -e
+LINUX_DIR_FULL=`(cd $LINUX_DIR; pwd)`
+TOOLS_DIR_FULL=`(cd $TOOLS_DIR; pwd)`
+
+# Give priority to our installed binaries:
+PATH=$DESTDIR/sbin:$DESTDIR/usr/sbin:$PATH
+export PATH
+
+# TODO: If you already use PERL5DIR, please fix this part:
+PERL5LIB="$DESTDIR/$PERLLIBDIR"
+export PERL5LIB
+
+# used in xpp_fxloader:
+FIRMWARE_DIR="$DESTDIR/usr/share/dahdi"
+export FIRMWARE_DIR
+
+ASTRIBANK_TOOL="$DESTDIR/usr/sbin/astribank_tool"
+export ASTRIBANK_TOOL
+
+ASTRIBANK_HEXLOAD="$DESTDIR/usr/sbin/astribank_hexload"
+export ASTRIBANK_HEXLOAD
+
+# make sure Astribank initialization scripts are from our tree.
+xpp_ARGS="$xpp_ARGS initdir=$FIRMWARE_DIR"
+#dahdi_ARGS="$dahdi_ARGS initdir=$FIRMWARE_DIR"
+
+if [ "$DYNAMIC_LOC" = 'yes' ]; then
+	MODULES_LOAD="$MODULES_LOAD dahdi_dynamic dahdi_dynamic_loc"
+fi
+
+# the same as xpp/utils/dahdi_drivers .
+# With the remote mode, I can't rely on files in the source directory.
+dahdi_drivers() {
+	perl -MDahdi::Hardware -e '
+		my @drivers = Dahdi::Hardware->drivers;
+		print join(" ", @drivers);
+		'
+}
+
+# Add modules for existing hardware on the system for the list of 
+# modules to load.
+#
+# As module loading is manual with insmod, some manual fixes are needed.
+set_modules_to_load() {
+	for mod in `dahdi_drivers`; do
+		case "$mod" in
+		xpp_usb) 
+			MODULES_LOAD="$MODULES_LOAD xpp/xpp xpp/xpd_fxs"
+			MODULES_LOAD="$MODULES_LOAD xpp/xpd_fxo xpp/xpd_pri" 
+			if [ -r "$MODULES_DIR/xpp/xpd_bri.ko" ]; then
+				MODULES_LOAD="$MODULES_LOAD xpp/xpd_bri"
+			fi
+			MODULES_LOAD="$MODULES_LOAD xpp/xpp_usb"
+			;;
+		wctdm24xxp | wcte12xp)
+			# FIXME: better automation of the voicebus
+			# dependency:
+			MODULES_LOAD="$MODULES_LOAD voicebus/dahdi_voicebus $mod/$mod"
+			EXTRA_MODS="$EXTRA_MODS firmware_class"
+				;;
+		wct4xxp | wcte12xp | wctc4xp | wcb4xxp)
+			MODULES_LOAD="$MODULES_LOAD $mod/$mod"
+				;;
+		wanpipe)
+			: # requires different handling
+			;;
+		*)
+			MODULES_LOAD="$MODULES_LOAD $mod"
+			;;
+		esac
+	done
+}
+
+# Initialize the Xorcom Astribank (xpp/) using perl utiliites:
+# intended to replace all the the three functions below if user has 
+# installed the dahdi-perl utilities.
+xpp_startup() {
+	# do nothing if there are no astribank devices:
+	if ! grep -q connected /proc/xpp/xbuses 2>/dev/null; then return 0; fi
+
+	echo "Waiting for Astribank devices to initialize:"
+	"$FIRMWARE_DIR/waitfor_xpds" # Asusmes a recent dahdi-tools
+	
+	# overriding locales for the above two, as perl can be noisy
+	# when locales are missing.
+	# No register all the devices if they didn't auto-register:
+	LC_ALL=C dahdi_registration on
+
+	# this one could actually be run after dahdi_cfg:
+	LC_ALL=C xpp_sync "$XPP_SYNC"
+}
+
+# recursively unload a module and its dependencies, if possible.
+# where's modprobe -r when you need it?
+# inputs: module to unload.
+# returns: the result from 
+unload_module() {
+	module="$1"
+	line=`lsmod 2>/dev/null | grep "^$1 " || :`
+	if [ "$line" = '' ]; then return; fi # module was not loaded
+
+	set -- $line
+	# $1: the original module, $2: size, $3: refcount, $4: deps list
+	mods=`echo $4 | tr , ' '`
+	ec_modules=""
+	# xpp_usb keeps the xpds below busy if an xpp hardware is
+	# connected. Hence must be removed before them:
+	case "$module" in xpd_*) mods="xpp_usb $mods";; esac
+
+	for mod in $mods; do
+		case "$mod" in
+		dahdi_echocan_*)
+			ec_modules="$mod $ec_modules"
+			;;
+		*)
+			# run in a subshell, so it won't step over our vars:
+			(unload_module $mod)
+			;;
+		esac
+	done
+	# Now that all the other dependencies are unloaded, we can unload the
+	# dahdi_echocan modules.  The drivers that register spans may keep
+	# references on the echocan modules before they are unloaded.
+	for mod in $ec_modules; do
+		(unload_module $mod)
+	done
+	rmmod $module
+}
+
+load_dynamic() {
+	if [ "$DYNAMIC_LOC" != yes ]; then return; fi
+
+	local conf_file="$DESTDIR/etc/dahdi/dynamic.conf"
+	if [ ! -r "$conf_file" ]; then
+		cat <<EOF >"$conf_file"
+dynamic=loc,1:0,5,0
+dynamic=loc,1:1,5,0
+EOF
+	fi
+	
+	dahdi_cfg -c "$conf_file"
+}
+
+unload_dynamic() {
+	if [ "$DYNAMIC_LOC" != yes ]; then return; fi
+
+	local conf_file="$DESTDIR/etc/dahdi/dynamic.conf"
+	if [ ! -r "$conf_file" ]; then return; fi
+
+	dahdi_cfg -c "$conf_file" -s || :
+}
+
+genconf() {
+	GENCONF_PARAMETERS=$DESTDIR/etc/dahdi/genconf_parameters \
+	DAHDI_CONF_FILE=$DESTDIR/etc/dahdi/system.conf \
+	DAHDI_MODS_FILE=$DESTDIR/etc/dahdi/modules \
+	CHAN_DAHDI_CHANNELS_FILE=$DESTDIR/etc/asterisk/dahdi-channels.conf \
+		dahdi_genconf
+	if [ "$DYNAMIC_LOC" = yes ]; then
+		cat "$DESTDIR/etc/dahdi/dynamic.conf" >>"$DESTDIR/etc/dahdi/system.conf"
+	fi
+	dahdi_cfg -c $DESTDIR/etc/dahdi/system.conf
+	# TODO: fxotune, hpec
+}
+
+run_asterisk() {
+	$AST_SCRIPT start
+}
+
+usage() {
+	me=`basename $0`
+	echo "$me: Run DAHDI in a test environment"
+	echo 'Version: $Id$'
+	echo ''
+	echo "Usage:                    equivalent of:"
+	echo "$me configure      ./configure"
+	echo "$me install        make install"
+	echo "$me config         make config"
+	echo "$me unload         /etc/init.d/dahdi stop"
+	echo "$me load           /etc/init.d/dahdi start"
+	echo "$me reload         /etc/init.d/dahdi restart"
+	echo "$me xpp-firm       (Reset and load xpp firmware)"
+	echo "$me genconf        dahdi_genconf; dahdi_cfg"
+	echo "$me asterisk       /etc/init.d/asterisk start"
+	echo "$me rsync TARGET   (copy filea to /tmp/live in host TARGET)"
+	echo "$me exec  COMMAND  (Run COMMAND in 'live' environment)"
+	echo ""
+	echo "dahdi-linux: $LINUX_DIR"
+	echo "dahdi-tools: $TOOLS_DIR"
+}
+
+case "$1" in
+configure)
+	shift
+	cd "$TOOLS_DIR"; ./configure --with-dahdi="$LINUX_DIR_FULL" "$@"
+	;;
+install)
+	shift
+	cd "$LINUX_DIR"; make install DESTDIR=$DESTDIR "$@"
+	cd "$TOOLS_DIR_FULL"; make install DESTDIR=$DESTDIR DYNFS=yes "$@"
+	;;
+config)
+	shift
+	cd "$TOOLS_DIR"; make config DESTDIR=$DESTDIR "$@"
+	mkdir -p $DESTDIR/etc/asterisk
+	cat >"$FIRMWARE_DIR/live-init.conf" <<EOF
+PATH="$PATH" # FIXME: add to existing \$PATH?
+export PATH
+dahdiconfdir="${DESTDIR}/etc/dahdi"
+export dahdiconfdir
+EOF
+	;;
+rsync)
+	if [ $# -ne 2 ]; then
+		echo >&2 "$0: Error: rsync requires a target parameter".
+		exit 1
+	fi
+	# copy the script itself and the installed directory to the
+	# target host:
+	rsync -ai "$0" $DESTDIR "$2:/tmp/"
+	;;
+unload)
+	# OK for Asterisk not to be running. TODO: a better test?
+	$AST_SCRIPT stop || :
+	unload_dynamic
+	for mod in $REMOVE_MODULES; do
+		unload_module $mod
+	done
+	;;
+load)
+	# TODO: Find a way to use modprobe.
+	# Or implement a way to pass arguments to modules here (yuck)
+	set_modules_to_load
+	for mod in $EXTRA_MODS; do
+		modprobe $mod || : # FIXME: Make this optional?
+	done
+	for module in $MODULES_LOAD; do
+		eval module_args="\$`basename ${module}`_ARGS"
+		insmod $MODULES_DIR/$module.ko $module_args
+	done
+	xpp_startup
+	load_dynamic
+	genconf
+	# or find a way to reuse init.d start sequence.
+
+	# TODO: A local copy of Asterisk, configured with dahdi_gnconf. 
+	# doable, but trickier.
+	run_asterisk
+	;;
+genconf)
+	genconf
+	;;
+asterisk)
+	run_asterisk
+	;;
+reload)
+	$0 unload
+	$0 load
+	;;
+exec)
+	if [ $# -lt 2 ]; then
+		# No command given: start a subshell in the environemnt
+		# of the "live" system:
+		echo >&2 "$0: Error: exec requires a command to run"
+		exit 1
+	fi
+
+	# Command given: run it:
+	shift
+	"$@"
+	;;
+xpp-firm)
+	# Still broken. Needs to be run several times.
+	# set XPP_HOTPLUG_DISABLED=yes in /etc/dahdi/init.conf
+	XPP_FIRMWARE_DIR=$FIRMWARE_DIR \
+		"$FIRMWARE_DIR/xpp_fxloader" reset
+	sleep 5
+	XPP_FIRMWARE_DIR=$FIRMWARE_DIR \
+		"$FIRMWARE_DIR/xpp_fxloader" load
+	;;
+help|'')
+	usage
+	;;
+*)
+	echo >&2 "$0: Error: incorrect command \"$1\". Aborting"
+	usage
+	exit 1
+esac

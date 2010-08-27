@@ -1,0 +1,168 @@
+#!/bin/sh
+
+# build_test - a build testing script
+#
+# Copyright (C) 2008 by Xorcom <support@xorcom.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+#
+# Setup:
+#
+# 0. Copy this script under build_tools/ and 
+#
+#     chmod +x build_tools/builder
+#
+# 1. Make sure you have git and sqlite3 installed. If the sqlite3 binary 
+#    is called differently, fix the line "SQLITE=" in the script or in 
+#    build_tools/test_build.conf .
+# 
+# 2. Run:
+#
+#   ./build_tools/test_kernel_git init /path/to/some/dir
+#
+# /path/to/some/dir must exist . This will download a recent kernel 
+# git repository to /path/to/some/dir/linux-2.6 . Use 
+# './build_tools/test_kernel_git update' to pull a fresh update there.
+# 
+# 3. Run:
+#
+#   ./build_tools/builder init
+#
+# 
+# Usage:
+#
+#   ./build_tools build
+#
+# The past results are in a sqlite database in the logs subdirectory. For 
+# a simple list of results:
+# 
+#   ./build_tools report
+#
+# You can also look at the build log for a specific build in the logs 
+# directory.
+
+BIN_DIR=`dirname $0`
+BASE_DIR=`dirname $BIN_DIR`
+SQLITE=sqlite3
+HOSTS="localhost"
+LOGS_DIR="$BASE_DIR/logs"
+DB=$LOGS_DIR/builds.db
+BUILD_SCRIPT=$BIN_DIR/test_kernel_git
+KERNELS_localhost="2.6.12 2.6.18 2.6.25"
+
+usage() {
+	me=`basename $0`
+	echo "$me: test building Zaptel/DAHDI with various kernels"
+	echo ""
+	echo "Usage: $0 command <optional parameters>"
+	echo "  init                Create results directory and database."
+	echo "  build [<kernels>]   Run the test builds. The default list: "
+	echo "                      $KERNELS_localhost"
+	echo "  report [<filter>]   Print all results [matching <filter>]"
+	echo "                      Default is to print all the resaults."
+	echo ""
+	echo "Filters:"
+	echo "   failed:          Only failed tests."
+	echo "   fail_type <type> Where fail_type matches <type>."
+	echo "   2.6*             Only builds for a matching kernel version."
+	echo "   Else:            Match a string from the build name, which "
+	echo "                    is essentially the time it started."
+	echo ""
+}
+
+set -e
+
+if [ -r $BIN_DIR/test_build.conf ]; then . $BIN_DIR/test_build.conf; fi
+
+# Runs the test script, logs the result, and fails if the test command 
+# has failed.
+build_and_check() {
+	test_name="$1"
+	test_cmd="$2"
+	log_file="$3"
+	results_str="$4"
+	fail_type=''
+
+	set +e
+	$BUILD_SCRIPT $test_cmd >$log_file 2>&1
+	rc=$?
+	set -e
+	if [ $rc != 0 ]; then
+		fail_type="$test_name"
+		echo "$results_str, $rc, '$fail_type', '$log_file');" | $SQLITE $DB
+	fi
+	return $rc
+}
+
+build_zaptel() {
+	build_name="$1"
+	host="$2"
+	kvers="$3"
+	log_base="build__${build_name}__${host}__${kvers}"
+	log_base_full="$LOGS_DIR/$log_base"
+	log_file="$log_base_full.log"
+	results_str="INSERT INTO results VALUES ('$build_name', '$host', '$kvers'"
+	# Due to 'set -e' a failed test exists the script.
+	build_and_check setver "setver $kvers" "$log_file" "$results_str"
+	build_and_check clean "test clean" "$log_file" "$results_str"
+	build_and_check build "build" "$log_file" "$results_str"
+
+	# If we got here, all was well.
+	echo "$results_str, 0, 'complete', '$log_file');" | $SQLITE $DB
+}
+
+case "$1" in
+init)
+	mkdir -p $LOGS_DIR
+	cat <<EOF | $SQLITE $DB
+CREATE TABLE runs(name TEXT PRIMARY KEY, time INTEGER DEFAULT CURRENT_TIMESTAMP, driver_ver TEXT);
+CREATE TABLE results(name TEXT, system TEXT, kvers TEXT, result INTEGER, fail_type TEXT, log TEXT);
+EOF
+	mkdir -p $LOGS_DIR
+	;;
+
+build)
+	cd $BASE_DIR
+	shift
+	
+	if [ "$*" != '' ]; then KERNELS_localhost="$*"; fi
+	driver_ver=`$BUILD_SCRIPT version_driver`
+	build_name=`date '+%Y%m%d-%H%M%si'`
+
+	echo "INSERT INTO runs (name, driver_ver) VALUES ('$build_name', '$driver_ver');" | $SQLITE $DB
+
+	for host in $HOSTS; do
+		eval kernels="\$KERNELS_$host"
+		for kvers in $kernels; do
+			build_zaptel $build_name $host $kvers
+		done
+	done
+	;;
+report)
+	case "$2" in
+	'')   where='1=1' ;;
+	failed) where='result != 0' ;;
+	fail_type) where="fail_type like \"%$3%\"" ;;
+	2.6*) where="kvers like \"$2%\"" ;;
+	*)    where="name like \"%$2%\"" ;;
+	esac
+
+	echo "select * from results where $where;" | $SQLITE $DB
+	;;
+*)
+	usage
+	echo >&2 "$0: Unknown command '$1'. Aborting."
+	exit 1
+esac

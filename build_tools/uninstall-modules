@@ -1,0 +1,64 @@
+#!/bin/sh
+
+# This script takes two arguments: a top-level module name, and a kernel version string
+#
+# It will search the entire /lib/modules directory tree for the given kernel version,
+# and find all modules that are dependent (even indirectly) on the specified module.
+# After producing that list, it will remove all those modules.
+
+base="${1}"
+deptree="${base}"
+rmlist=""
+founddep=1
+
+checkmod() {
+    SAVEIFS="${IFS}"
+    IFS=","
+    modname=`basename ${1}`
+    modname=${modname%.ko}
+    if test "${modname}" = "${base}"; then
+	rmlist="${rmlist} ${1}"
+	IFS="${SAVEIFS}"
+	return
+    fi
+    for dep in `modinfo -F depends ${1}`; do
+	for mod in ${deptree}; do
+	    if test "${dep}" = "${mod}"; then
+		addit=1
+		for checkmod in ${deptree}; do
+		    if test "${checkmod}" = "${modname}"; then
+			addit=0
+			break
+		    fi
+		done
+		if test "${addit}" = "1"; then
+		    deptree="${deptree},${modname%.ko}"
+		    rmlist="${rmlist} ${1}"
+		    founddep=1
+		fi
+	    fi
+	done
+    done
+    IFS="${SAVEIFS}"
+}
+
+
+while test "${founddep}" = "1"; do
+    founddep=0
+    find /lib/modules/${2}/misc -name \*.ko -print > /tmp/modlist.$$ 2> /dev/null
+    find /lib/modules/${2}/extra -name \*.ko -print >> /tmp/modlist.$$ 2> /dev/null
+    find /lib/modules/${2}/zaptel -name \*.ko -print >> /tmp/modlist.$$ 2> /dev/null
+    find /lib/modules/${2}/dahdi -name \*.ko -print >> /tmp/modlist.$$ 2> /dev/null
+    exec 9<&0 < /tmp/modlist.$$
+    while read mod; do
+	checkmod ${mod}
+    done
+    exec 0<&9 9<&-
+    rm /tmp/modlist.$$
+done
+
+if test -n "${rmlist}"; then
+    for mod in ${rmlist}; do
+	rm -f ${mod}
+    done
+fi

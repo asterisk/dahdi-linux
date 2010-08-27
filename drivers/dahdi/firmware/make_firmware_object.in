@@ -1,0 +1,8 @@
+#!/bin/sh -e
+
+# make an object file from a raw binary firmware file
+# arguments:
+#   1 - firmware file
+#   2 - output file
+
+objcopy -I binary ${1} -B BFDARCH -O BFDNAME ${2} --rename-section .data=.rodata,alloc,load,data,contents,readonly

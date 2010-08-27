@@ -1,0 +1,89 @@
+EXTRA_CFLAGS	=	$(XPP_LOCAL_CFLAGS)	\
+			-DDEBUG			\
+			-DPOLL_DIGITAL_INPUTS	\
+			-DDEBUG_PCMTX		\
+			-DPROTOCOL_DEBUG	\
+			-g # -DOLD_PROC
+			#
+
+WITH_BRISTUFF	:= $(shell grep -c '^[[:space:]]*\#[[:space:]]*define[[:space:]]\+CONFIG_DAHDI_BRI_DCHANS\>' $(src)/../../../include/dahdi/dahdi_config.h)
+
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPP)		+= xpp.o
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPD_FXS)		+= xpd_fxs.o
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPD_FXO)		+= xpd_fxo.o
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPD_PRI)		+= xpd_pri.o
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPD_BRI)		+= xpd_bri.o
+
+# Build only supported modules
+ifneq	(,$(filter y m,$(CONFIG_USB)))
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_XPP_USB)			+= xpp_usb.o
+endif
+ifneq	(,$(filter y m,$(CONFIG_BF537)))
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_XPP_MMAP)		+= xpp_mmap.o
+endif
+
+xpp-objs		+= xbus-core.o xbus-sysfs.o xbus-pcm.o xframe_queue.o xpp_dahdi.o xproto.o card_global.o dahdi_debug.o
+xpd_fxs-objs		+= card_fxs.o
+xpd_fxo-objs		+= card_fxo.o
+xpd_bri-objs		+= card_bri.o
+xpd_pri-objs		+= card_pri.o
+xpp_mmap-objs		+= mmapbus.o mmapdrv.o
+
+ifeq	(y,$(PARPORT_DEBUG))
+EXTRA_CFLAGS	+= -DDEBUG_SYNC_PARPORT
+obj-m		+= parport_debug.o
+endif
+
+# Handle versioning
+XPP_VERSION_STR	?= $(shell if [ -r $(obj)/.version ]; then echo "\"`cat $(obj)/.version`\""; else echo '"Unknown"'; fi)
+clean-files	+= xpp_version.h
+
+$(obj)/card_fxs.o $(obj)/card_fxo.o $(obj)/card_bri.o $(obj)/card_pri.o $(obj)/xpp_usb.o $(obj)/xpp.o: $(obj)/xpp_version.h
+
+$(obj)/xpp_version.h: FORCE
+	$(Q)echo '#define	XPP_VERSION	$(XPP_VERSION_STR)' > $@.tmp
+	$(Q)if cmp -s $@.tmp $@ ; then echo; else \
+		mv $@.tmp $@ ; \
+	fi
+	$(Q)rm -f $@.tmp
+
+# Validations:
+#  - Syntactic verification of perl scripts
+#  - Handle country table validation for init_card_2_*
+
+XPP_PROTOCOL_VERSION	:= $(shell grep XPP_PROTOCOL_VERSION $(src)/xproto.h | sed -e 's/^.*XPP_PROTOCOL_VERSION[ \t]*//')
+
+xpp_verifications		= \
+				init_card_1_$(XPP_PROTOCOL_VERSION)	\
+				init_card_2_$(XPP_PROTOCOL_VERSION)	\
+				init_card_3_$(XPP_PROTOCOL_VERSION)	\
+				init_card_4_$(XPP_PROTOCOL_VERSION)	\
+				init_fxo_modes
+
+xpp_verified			= $(foreach file, $(xpp_verifications), $(file).verified)
+
+FXO_MODES  = $(src)/../fxo_modes.h
+FXO_VERIFY = $(obj)/init_card_2_$(XPP_PROTOCOL_VERSION) -v $(obj)/init_fxo_modes
+
+hostprogs-y			:= print_fxo_modes
+always				:= $(xpp_verified)
+print_fxo_modes-objs		:= print_fxo_modes.o
+HOSTCFLAGS_print_fxo_modes.o	+= -include $(FXO_MODES)
+
+clean-files			+= print_fxo_modes init_fxo_modes $(xpp_verified)
+
+$(obj)/init_fxo_modes: $(obj)/print_fxo_modes
+	@echo '  GEN     $@'
+	$(Q)$(obj)/print_fxo_modes >$@ || (rm -f $@; exit 1)
+
+$(obj)/init_fxo_modes.verified: $(obj)/init_card_2_$(XPP_PROTOCOL_VERSION) $(obj)/init_fxo_modes
+	@echo '  CHECK   $(obj)/init_card_2_$(XPP_PROTOCOL_VERSION)'
+	$(Q)$(FXO_VERIFY) || (rm -f $@; exit 1)
+	touch $@
+
+$(obj)/init_card_%_$(XPP_PROTOCOL_VERSION).verified: $(src)/init_card_%_$(XPP_PROTOCOL_VERSION)
+	@echo '  VERIFY  $<'
+	$(Q)perl -c $< 2> $@ || (cat $@; rm -f $@; exit 1)
+
+.PHONY: FORCE
+FORCE:

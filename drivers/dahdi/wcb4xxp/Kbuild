@@ -1,0 +1,7 @@
+obj-m += wcb4xxp.o
+
+EXTRA_CFLAGS += -I$(src)/.. -Wno-undef
+
+wcb4xxp-objs := base.o
+
+$(obj)/base.o: $(src)/wcb4xxp.h

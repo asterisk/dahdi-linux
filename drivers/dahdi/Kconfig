@@ -1,0 +1,294 @@
+#
+# DAHDI configuration
+#
+
+menuconfig DAHDI
+	tristate "DAHDI support"
+	select CRC_CCITT
+	default m
+	---help---
+	  DAHDI basic infrastructure.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi.
+
+	  If unsure, say Y.
+
+config DAHDI_ECHOCAN
+       tristate "DADHI Echo Cancelers (software)"
+       depends on DAHDI
+       default DAHDI
+
+config DAHDI_ECHOCAN_MG2
+       tristate "DADHI MG2 Echo Canceler"
+       depends on DAHDI_ECHOCAN
+       default DAHDI_ECHOCAN
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_echocancel_mg2.
+
+	  If unsure, say Y.
+
+config DAHDI_ECHOCAN_KB1
+       tristate "DADHI KB1 Echo Canceler"
+       depends on DAHDI_ECHOCAN
+       default DAHDI_ECHOCAN
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_echocancel_kb1.
+
+	  If unsure, say Y.
+
+config DAHDI_ECHOCAN_SEC
+       tristate "DADHI SEC Echo Canceler"
+       depends on DAHDI_ECHOCAN
+       default DAHDI_ECHOCAN
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_echocancel_sec.
+
+	  If unsure, say Y.
+
+config DAHDI_ECHOCAN_SEC2
+       tristate "DADHI SEC2 Echo Canceler"
+       depends on DAHDI_ECHOCAN
+       default DAHDI_ECHOCAN
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_echocancel_sec2.
+
+	  If unsure, say Y.
+
+config DAHDI_ECHOCAN_HPEC
+       tristate "DADHI HPEC Echo Canceler"
+       depends on DAHDI_ECHOCAN
+       default DAHDI_ECHOCAN
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_echocancel_hpec.
+
+	  If unsure, say Y.
+
+config DAHDI_WCTDM
+	tristate "Digium Wildcard TDM400P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  This driver provides support for the Digium Wildcard TDM400P.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wctdm.
+
+	  If unsure, say Y.
+
+config DAHDI_WCT4XXP
+	tristate "Digium Wildcard dual- and quad-T1/E1/J1 Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  This driver provides support for the following Digium
+	  Wildcard products:
+
+  	  * TE205/206/207/210/211/212P (PCI/PCI-X)
+	  * TE220 (PCI-E)
+  	  * TE405/406/407/410/411/412P (PCI/PCI-X)
+	  * TE420 (PCI-E)
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wct4xxp.
+
+	  If unsure, say Y.
+
+config DAHDI_TRANSCODE
+	tristate "DAHDI transcoding support"
+	depends on DAHDI
+	default DAHDI
+	---help---
+	  DAHDI transcoding infrastructure.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_transcode.
+
+	  If unsure, say Y.
+
+config DAHDI_WCTC4XXP
+	tristate "Digium Wildcard TC400B Support"
+	depends on DAHDI_TRANSCODE && PCI
+	default DAHDI
+	---help---
+	  This driver provides support for the Digium Wildcard TC400B.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wctc4xxp.
+
+	  If unsure, say Y.
+
+config DAHDI_VOICEBUS
+	tristate "VoiceBus(tm) Interface Library"
+	depends on PCI
+	default DAHDI
+	---help---
+	   This driver provides the common interface for telephony cards that
+	   use the VoiceBus(tm) interface.  It also contains common supporting
+	   libraries for the VPMADT032 hardware echo cancelation module that
+	   is available for the VoiceBus cards.
+
+	   To compile this driver as a module, choose M here: the module will
+	   be called voicebus.
+
+	   If unsure, say Y.
+
+config DAHDI_WCTDM24XXP
+	tristate "Digium Wildcard VoiceBus analog card Support"
+	depends on DAHDI && DAHDI_VOICEBUS
+	default DAHDI
+	---help---
+	  This driver provides support for the following Digium
+	  Wildcard products:
+
+  	  * TDM410P (PCI/PCI-X)
+	  * AEX410 (PCI-E)
+  	  * TDM800P (PCI/PCI-X)
+	  * AEX800 (PCI-E)
+	  * TDM2400P (PCI/PCI-X)
+	  * AEX2400 (PCI-E)
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wctdm24xxp.
+
+	  If unsure, say Y.
+
+config DAHDI_WCTE12XP
+	tristate "Digium Wildcard VoiceBus digital card Support"
+	depends on DAHDI && DAHDI_VOICEBUS
+	default DAHDI
+	---help---
+	  This driver provides support for the following Digium
+	  Wildcard products:
+
+  	  * TE120P (PCI/PCI-X)
+	  * TE121 (PCI/PCI-X)
+  	  * TE122 (PCI-E)
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcte12xp.
+
+	  If unsure, say Y.
+
+config DAHDI_PCIRADIO
+	tristate "PCI Radio Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called pciradio.
+
+	  If unsure, say Y.
+
+config DAHDI_DUMMY
+	tristate "Dummy (no hardware) Timing Support"
+	depends on DAHDI
+	default DAHDI
+	---help---
+	  This module provides timing support for applications that
+	  use DAHDI conference mixing services, pseudo channels or
+	  for other purposes.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_dummy.
+
+	  If unsure, say Y.
+
+config DAHDI_DYNAMIC
+	tristate "Dynamic (virtual) Span Support"
+	depends on DAHDI
+	default DAHDI
+	---help---
+	  This module provides support for virtual spans, which are
+	  emulated or provided using various technologies.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_dynamic.
+
+	  If unsure, say Y.
+
+config DAHDI_DYNAMIC_ETH
+	tristate "Ethernet (TDMoE) Span Support"
+	depends on DAHDI && DAHDI_DYNAMIC
+	default DAHDI
+	---help---
+	  This module provides support for spans over Ethernet,
+	  using the TDMoE protocol.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_dynamic_eth.
+
+	  If unsure, say Y.
+
+config DAHDI_DYNAMIC_ETHMF
+	tristate "Ethernet (TDMoE) Multi-Frame Span Support"
+	depends on DAHDI && DAHDI_DYNAMIC
+	default DAHDI
+	---help---
+	  This module provides support for spans over Ethernet,
+	  using the TDMoE-Multi-Frame protocol.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_dynamic_ethmf.
+
+	  If unsure, say Y.
+
+config DAHDI_DYNAMIC_LOC
+	tristate "Local (loopback) Span Support"
+	depends on DAHDI && DAHDI_DYNAMIC
+	default DAHDI
+	---help---
+	  This module provides support for spans in the local system,
+	  primarily used for looping and monitoring other spans.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called dahdi_dynamic_loc.
+
+	  If unsure, say Y.
+
+config DAHDI_TOR2
+	tristate "Tormenta2 quad-port T1/E1 Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called tor2.
+
+	  If unsure, say Y.
+
+config DAHDI_WCFXO
+	tristate "Digium Wildcard X100P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcfxo.
+
+	  If unsure, say Y.
+
+config DAHDI_WCT1XXP
+	tristate "Digium Wildcard T100P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wct1xxp.
+
+	  If unsure, say Y.
+
+config DAHDI_WCTE11XP
+	tristate "Digium Wildcard TE110P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcte11xp.
+
+	  If unsure, say Y.
+
+source "drivers/dahdi/xpp/Kconfig"

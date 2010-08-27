@@ -1,0 +1,63 @@
+#!/bin/sh
+
+# a wrapper to kernel-doc from the kernel source tree
+#
+# Copyright (C) 2009 by Xorcom <support@xorcom.com>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+# For 'man' version: build_tools/kernel-doc -f man | man -l -
+
+files="drivers/dahdi/dahdi-base.c"
+format="html"
+kernel="/lib/modules/`uname -r`/build"
+
+usage() {
+	me=`basename $0`
+	cat <<EOF
+$me: wrapper around the kernel's kernel-doc script
+Extracts kernel-doc from $files .
+
+$me [options]
+
+Options:
+  -f --format: Alternative output format (man, text, docbook. Default: html)
+  -k --kernel: kernel source tree. Default: $kernel .
+EOF
+}
+
+options=`getopt -o f:hk: --long format:,help,kernel: -- "$@"`
+if [ $? != 0 ] ; then echo >&2 "Terminating..." ; exit 1 ; fi
+
+eval set -- "$options"
+
+while true ; do
+	case "$1" in
+		-f|--format) format="$2"; shift ;;
+		-h|--help) usage; exit 0;; 
+		-k|--kernel) kernel="$2"; shift ;;
+		--) shift ; break ;;
+	esac
+	shift;
+done
+
+if [ "$*" != '' ]; then
+	files="$*" #FIXME: spaces
+fi
+
+script="$kernel/scripts/kernel-doc"
+$script -$format $files
+
+

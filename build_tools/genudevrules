@@ -1,0 +1,40 @@
+#!/bin/sh
+
+ver=`udevinfo -V | cut -f3 -d" "`
+
+if [ -z "${ver}" ]; then
+   # Not found - try udevadm
+   ver=`udevadm info -V | cut -f3 -d" "`
+
+   if [ -z "${ver}" ]; then
+      # nobody has that old version, anyway.
+      ver=54
+   fi
+fi
+
+# udev versions prior to 055 use a single '=' for matching key values
+# udev versions 055 and later support '==' for that purpose, and versions
+# beyond 092 will probably make it mandatory
+#
+# very old versions of udev required naming rules and permissions rules to be
+# in separate files, but it's not clear at what version number that changed
+
+if [ ${ver} -gt 54 ]; then
+    match="=="
+else
+    match="="
+fi
+
+cat <<EOF
+# udev rules to generate the /dev/dahdi device files (if not yet provided 
+# by your distribution):
+KERNEL${match}"dahdictl", NAME="dahdi/ctl"
+KERNEL${match}"dahditranscode", NAME="dahdi/transcode"
+KERNEL${match}"dahditimer", NAME="dahdi/timer"
+KERNEL${match}"dahdichannel", NAME="dahdi/channel"
+KERNEL${match}"dahdipseudo", NAME="dahdi/pseudo"
+KERNEL${match}"dahdi[0-9]*", NAME="dahdi/%n"
+
+# DAHDI devices with ownership/permissions for running as non-root
+SUBSYSTEM${match}"dahdi",  OWNER="asterisk", GROUP="asterisk", MODE="0660"
+EOF

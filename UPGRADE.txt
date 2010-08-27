@@ -1,0 +1,85 @@
+=====================================================================
+=== Information for upgrading from Zaptel 1.2 or 1.4 to DAHDI 2.0 ===
+=====================================================================
+
+Upgrading from Zaptel to DAHDI is fairly straightforward; install this
+package using the installation instructions, and then reconfigure and
+rebuild Asterisk; Asterisk 1.4 releases later than 1.4.21, and all
+releases of Asterisk 1.6, will automatically use DAHDI in preference
+to Zaptel, even if Zaptel is still installed on the system.
+
+Important notes about upgrading:
+
+* The Zaptel package, which included both kernel modules and userspace
+  tools for configuring and managing the modules, has been split into
+  two packages:
+      dahdi-linux: kernel modules
+      dahdi-tools: userspace tools
+
+  In addition, there is a dahdi-linux-complete package that contains both
+  dahdi-linux and dahdi-tools for simplified installation.
+
+  Note: The dahdi-linux and dahdi-tools packages have *separate*
+  version numbers; they will not be released 'in sync', and it is
+  perfectly acceptable to use (for example) dahdi-tools 2.0.6 with
+  dahdi-linux 2.0.11. The dahdi-linux-complete package version number will
+  always include *both* of these version numbers so that you will know
+  what is included in it.
+
+Notes about the dahdi-linux package:
+
+* The primary kernel modules have changed names; the new names are:
+      zaptel.ko	     ->	     dahdi.ko
+      ztd-eth.ko     ->	     dahdi_dynamic_eth.ko
+      ztd-loc.ko     ->	     dahdi_dynamic_loc.ko
+      ztdummy.ko     ->	     dahdi_dummy.ko
+      ztdynamic.ko   ->	     dahdi_dynamic.ko
+      zttranscode.ko ->	     dahdi_transcode.ko
+
+* The kernel modules for card drivers have *not* changed names,
+  although the wcusb and torisa drivers are no longer included.
+
+* This package no longer includes the 'menuselect' utility for
+  choosing which modules to build; all modules that can be built are
+  built automatically.
+
+* It is no longer possible to select a software echo canceler at
+  compile time to build into dahdi.ko; all four included echo
+  cancelers (MG2, KB1, SEC and SEC2) are built as loadable modules,
+  and if the Digium HPEC binary object file has been placed into the
+  proper directory the HPEC module will be built as well. Any or all
+  of these modules can be loaded at the same time, and the echo
+  canceler to be used on the system's channels can be configured using
+  the dahdi_cfg tool from the dahdi-tools package.
+
+  Note: It is *mandatory* to configure an echo canceler for the
+  system's channels using dahdi_cfg unless the interface cards in use
+  have echo canceler modules available and enabled. There is *no*
+  default software echo canceler with DAHDI.
+
+Notes about the dahdi-tools package:
+
+* Many tool names have changed:
+      ztcfg      ->  dahdi_cfg
+      ztmonitor  ->  dahdi_monitor
+      ztscan     ->  dahdi_scan
+      ztspeed    ->  dahdi_speed
+      zttest     ->  dahdi_test
+      zttool     ->  dahdi_tool
+      zapconf    ->  dahdi_genconf (deprecates genzaptelconf)
+
+* The system configuration file has moved from /etc/zaptel.conf to
+  /etc/dahdi/system.conf.
+
+* The dahdi_cfg tool can now be used to select an echo canceler on a
+  channel-by-channel basis in the system configuration file; see
+  system.conf.sample for examples of how to do this.
+
+* The configuration for XPP init_card_* scripts is done now
+  in /etc/dahdi/xpp.conf and uses a simple syntax (example included).
+  For PRI modules, the 'pri_protocol' setting, determines how
+  to configure it (E1/T1).
+
+* In Astribank PRI modules, the LED behaviour represents which ports
+  are *CLOCK MASTER* (red color) and which are *CLOCK SLAVE* (green color).
+  Usually (but not always), this corresponds to the NT/TE settings in Asterisk.

@@ -1,0 +1,48 @@
+#!/bin/sh
+
+# A simple wrapper to the kernel.org script checkpatch.pl
+
+# Usage:
+# 
+#   svn diff | ./build_tools/kernel-cp -
+#   ./build_tools/kernel-cp my.diff
+#   ./build_tools/kernel-cp --file drivers/dahdi/wctdm.c
+
+mydir=`dirname $0`
+
+check_patch_dir="$mydir/cp"
+rel_path="scripts/checkpatch.pl"
+check_patch="$mydir/checkpatch.pl"
+URL='http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=blob_plain;f=scripts/checkpatch.pl;hb=HEAD'
+
+# Required files in directories in the tree
+SUBDIRS="fs ipc lib arch init scripts drivers kernel Documentation include"
+
+set -e
+
+if [ "$1" = 'download' ]; then
+	if [ -x "$check_patch" ]; then
+		exit 0
+	fi
+	
+	wget -O "$check_patch" "$URL"
+	if [ `wc -c <"$check_patch"` -lt 1000 ]; then
+		# already downloaded
+		# FIXME: redirection fails on downloading and you get a
+		# short HTML file as your "script".
+		echo >&2 "$0: Error: Download failed".
+		exit 1
+	fi
+	chmod +x "$check_patch"
+
+	exit 0
+fi
+
+if [ ! -x "$check_patch" ]; then
+	echo >&2 "Script $check_patch not found. Download it?"
+	echo >&2 ""
+	echo >&2 "  $0 download"
+	exit 1
+fi
+
+exec $check_patch --no-tree --no-signoff "$@"

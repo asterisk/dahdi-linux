@@ -1,0 +1,9 @@
+#!/bin/sh
+cat << END
+/*
+ * version.h 
+ * Automatically generated
+ */
+#define DAHDI_VERSION "${DAHDIVERSION}"
+
+END

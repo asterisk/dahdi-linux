@@ -1,0 +1,4 @@
+header-y += kernel.h
+header-y += user.h
+header-y += wctdm_user.h
+header-y += version.h

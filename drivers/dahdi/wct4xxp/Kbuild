@@ -1,0 +1,21 @@
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT4XXP) += wct4xxp.o
+
+FIRM_DIR	:= ../firmware
+
+EXTRA_CFLAGS += -I$(src)/.. $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
+
+ifeq ($(HOTPLUG_FIRMWARE),yes)
+  EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
+endif
+
+wct4xxp-objs := base.o vpm450m.o $(shell $(src)/../oct612x/octasic-helper objects ../oct612x)
+
+ifneq ($(HOTPLUG_FIRMWARE),yes)
+wct4xxp-objs += $(FIRM_DIR)/dahdi-fw-oct6114-064.o $(FIRM_DIR)/dahdi-fw-oct6114-128.o
+endif
+
+$(obj)/$(FIRM_DIR)/dahdi-fw-oct6114-064.o: $(obj)/base.o
+	$(MAKE) -C $(obj)/$(FIRM_DIR) dahdi-fw-oct6114-064.o
+
+$(obj)/$(FIRM_DIR)/dahdi-fw-oct6114-128.o: $(obj)/base.o
+	$(MAKE) -C $(obj)/$(FIRM_DIR) dahdi-fw-oct6114-128.o
