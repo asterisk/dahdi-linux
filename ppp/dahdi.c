@@ -232,7 +232,7 @@ int setdevname_dahdi(const char *cp)
 	}
     }
 
-    dahdi__copy_string(devnam, cp, sizeof(devnam));
+    dahdi_copy_string(devnam, cp, sizeof(devnam));
 
     info("Using DAHDI device '%s'\n", devnam);
 
