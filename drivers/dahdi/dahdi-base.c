@@ -5135,7 +5135,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		spin_unlock(&chan->lock);
 		spin_unlock_irqrestore(&bigzaplock, flags);
 		return(rv);
-	case DAHDI_CONFDIAG_V1: /* Intention fall-through */
+	case DAHDI_CONFDIAG_V1: /* Intentional fall-through */
 	case DAHDI_CONFDIAG:  /* output diagnostic info to console */
 		if (!(chan->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
 		get_user(j, (int __user *)data);  /* get conf # */
@@ -5936,7 +5936,7 @@ static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
 /**
  * dahdi_register() - unregister a new DAHDI span
  * @span:	the DAHDI span
- * @prefmaster:	will the new span be preffered as a master?
+ * @prefmaster:	will the new span be preferred as a master?
  *
  * Registers a span for usage with DAHDI. All the channel numbers in it
  * will get the lowest available channel numbers.
