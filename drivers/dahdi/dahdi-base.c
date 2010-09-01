@@ -1665,6 +1665,13 @@ static inline void print_debug_writebuf(struct dahdi_chan* ss, struct sk_buff *s
 #endif
 
 #ifdef CONFIG_DAHDI_NET
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
+static inline struct net_device_stats *hdlc_stats(struct net_device *dev)
+{
+	return &dev->stats;
+}
+#endif
+
 #ifdef NEW_HDLC_INTERFACE
 static int dahdi_net_open(struct net_device *dev)
 {
@@ -4134,6 +4141,15 @@ static void recalc_slaves(struct dahdi_chan *chan)
 #endif
 }
 
+#if defined(CONFIG_DAHDI_NET) && defined(HAVE_NET_DEVICE_OPS)
+static const struct net_device_ops dahdi_netdev_ops = {
+	.ndo_open       = dahdi_net_open,
+	.ndo_stop       = dahdi_net_stop,
+	.ndo_do_ioctl   = dahdi_net_ioctl,
+	.ndo_start_xmit = dahdi_xmit,
+};
+#endif
+
 static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	/* I/O CTL's for control interface */
@@ -4382,9 +4398,13 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 #endif
 					chans[ch.chan]->hdlcnetdev->netdev->irq = chans[ch.chan]->span->irq;
 					chans[ch.chan]->hdlcnetdev->netdev->tx_queue_len = 50;
+#ifdef HAVE_NET_DEVICE_OPS
+					chans[ch.chan]->hdlcnetdev->netdev->netdev_ops = &dahdi_netdev_ops;
+#else
 					chans[ch.chan]->hdlcnetdev->netdev->do_ioctl = dahdi_net_ioctl;
 					chans[ch.chan]->hdlcnetdev->netdev->open = dahdi_net_open;
 					chans[ch.chan]->hdlcnetdev->netdev->stop = dahdi_net_stop;
+#endif
 					dev_to_hdlc(chans[ch.chan]->hdlcnetdev->netdev)->attach = dahdi_net_attach;
 					dev_to_hdlc(chans[ch.chan]->hdlcnetdev->netdev)->xmit = dahdi_xmit;
 					spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
@@ -7636,8 +7656,11 @@ static inline void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int
 #ifdef CONFIG_DAHDI_PPP
 						if (!ms->do_ppp_error)
 #endif
-							skb = dev_alloc_skb(ms->readn[ms->inreadbuf]);
+							skb = dev_alloc_skb(ms->readn[ms->inreadbuf] + 2);
 						if (skb) {
+							unsigned char cisco_addr = *(ms->readbuf[ms->inreadbuf]);
+							if (cisco_addr != 0x0f && cisco_addr != 0x8f)
+								skb_reserve(skb, 2);
 							/* XXX Get rid of this memcpy XXX */
 							memcpy(skb->data, ms->readbuf[ms->inreadbuf], ms->readn[ms->inreadbuf]);
 							skb_put(skb, ms->readn[ms->inreadbuf]);
