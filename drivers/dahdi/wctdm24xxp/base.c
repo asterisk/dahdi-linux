@@ -5368,13 +5368,14 @@ module_param(forceload, int, 0600);
 MODULE_PARM_DESC(forceload, "Set to 1 in order to force an FPGA reload after power on (currently only for HA8/HB8 cards).");
 
 module_param(alawoverride, int, 0400);
-MODULE_PARM_DESC(alawoverride, "This option has been deprecated. Please use"\
+MODULE_PARM_DESC(alawoverride, "This option has been deprecated. Please use "\
 			     "the parameter \"companding\" instead");
 
 module_param(companding, charp, 0400);
-MODULE_PARM_DESC(companding, "Change the companding to \"auto\" or \"alaw\" or"\
-		" \"ulaw\". Auto (default) will set everything to ulaw unless"\
-		" a BRI module is installed. It will use alaw in that case");
+MODULE_PARM_DESC(companding, "Change the companding to \"auto\" or \"alaw\" " \
+		"or \"ulaw\". Auto (default) will set everything to ulaw " \
+		"unless a BRI module is installed. It will use alaw in that "
+		"case.");
 
 MODULE_DESCRIPTION("VoiceBus Driver for Wildcard Analog and Hybrid Cards");
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
