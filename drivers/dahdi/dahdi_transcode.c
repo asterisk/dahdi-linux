@@ -403,12 +403,6 @@ static int dahdi_tc_ioctl(struct inode *inode, struct file *file, unsigned int c
 }
 #endif
 
-static int dahdi_tc_mmap(struct file *file, struct vm_area_struct *vma)
-{
-	printk(KERN_ERR "%s: mmap interface deprecated.\n", THIS_MODULE->name);
-	return -ENOSYS;
-}
-
 static unsigned int dahdi_tc_poll(struct file *file, struct poll_table_struct *wait_table)
 {
 	int ret;
@@ -440,7 +434,6 @@ static struct file_operations __dahdi_transcode_fops = {
 	.read =    dahdi_tc_read,
 	.write =   dahdi_tc_write,
 	.poll =    dahdi_tc_poll,
-	.mmap =    dahdi_tc_mmap,
 };
 
 static struct dahdi_chardev transcode_chardev = {

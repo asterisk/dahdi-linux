@@ -8048,14 +8048,6 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table, int uni
 	return(ret);  /* return what we found */
 }
 
-static int dahdi_mmap(struct file *file, struct vm_area_struct *vm)
-{
-	int unit = UNIT(file);
-	if (unit == 250)
-		return dahdi_transcode_fops->mmap(file, vm);
-	return -ENOSYS;
-}
-
 static unsigned int dahdi_poll(struct file *file, struct poll_table_struct *wait_table)
 {
 	int unit = UNIT(file);
@@ -8613,7 +8605,6 @@ static struct file_operations dahdi_fops = {
 	.read    = dahdi_read,
 	.write   = dahdi_write,
 	.poll    = dahdi_poll,
-	.mmap    = dahdi_mmap,
 };
 
 #ifdef CONFIG_DAHDI_WATCHDOG
