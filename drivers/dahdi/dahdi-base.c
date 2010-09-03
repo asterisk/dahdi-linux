@@ -3536,9 +3536,11 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 		for (x=1; x<maxspans; x++) {
 			if (spans[x] && !spans[x]->alarms && (spans[x]->flags & DAHDI_FLAG_RUNNING)) {
 				if (master != spans[x]) {
-					module_printk(KERN_NOTICE,
-						"Master changed to %s\n",
-						spans[x]->name);
+					if (debug) {
+						module_printk(KERN_NOTICE,
+						     "Master changed to %s\n",
+						     spans[x]->name);
+					}
 				}
 				master = spans[x];
 				break;
