@@ -258,11 +258,6 @@ case "$1" in
 
 	xpp_startup
 
-	if [ ! -e /proc/dahdi/1 ]; then
-		echo "No hardware timing source found in /proc/dahdi, loading dahdi_dummy"
-		modprobe dahdi_dummy 2> /dev/null
-	fi
-
 	if [ $system = debian ]; then
 	    echo -n "Running dahdi_cfg: "
 	    $DAHDI_CFG_CMD 2> /dev/null && echo -n "done"
