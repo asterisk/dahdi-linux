@@ -51,8 +51,6 @@ Other Drivers
 - wctc4xxp: Digium hardware transcoder cards (also need dahdi_transcode)
 - dahdi_dynamic_eth: TDM over Ethernet (TDMoE) driver. Requires dahdi_dynamic
 - dahdi_dynamic_loc: Mirror a local span. Requires dahdi_dynamic
-- dahdi_dummy: A dummy driver that only provides a DAHDI timing source.
-
 
 Installation
 ------------
@@ -406,9 +404,6 @@ debug (most modules)::
   +
   Some modules have "debugging flags" bits - the value of debug is a
   bitmask and several messages are printed if some bits are set:
-  - dahdi_dummy:
-    * 1: DEBUG_GENERAL - general error messages.
-    * 2: DEBUG_TICKS - Show that the module is alive :-)
   - wctdm24xxp:
     * 1: DEBUG_CARD
     * 2: DEBUG_ECHOCAN
@@ -499,9 +494,9 @@ may be used for other uses or is simply not connected to a provider. DAHDI
 cards are also capable of providing timing from a clock on card. Cheap x100P
 clone cards are sometimes used for that purpose.
 
-If all the above fail, you can use the module dahdi_dummy to provide timing
-alone without needing any DAHDI hardware. It will work with most systems and
-kernels.
+If a hardware timing source either cannot be found or stops providing timing
+during runtime, DAHDI will automatically use the host timer in order provide
+timing.
 
 You can check the DAHDI timing source with dahdi_test, which is a small
 utility that is included with DAHDI. It runs in cycles. In each such cycle it
@@ -510,13 +505,6 @@ or you don't have the device files, it will fail immediately. If you lack a
 timing device it will hang forever in the first cycle. Otherwise it will just
 give you in each cycle the percent of how close it was. Also try running it
 with the option -v for a verbose output.
-
-To check the clock source that is built into dahdi_dummy, you can either look
-at title of its span in /proc/dahdi file for a "source:" in the description.
-Or even run:
-
-  strings dahdi.ko | grep source:
-
 
 Spans and Channels
 ~~~~~~~~~~~~~~~~~~
@@ -656,8 +644,6 @@ scripts and xpp.conf that arecovered in README.Astribank.
 
 When a span is registered, it is considered "unconfigured". Only after
 dahdi_cfg has been run to apply configuration, the span is ready to run.
-The only exception to that is 'dahdi_dummy', which does not need any
-configuration.
 
 Some of the configuration is handled by the DAHDI core. Some of it is
 handled by callbacks, which are function pointers in the `struct
