@@ -49,6 +49,7 @@
 #include <linux/init.h>
 #include <linux/errno.h>
 #include <linux/moduleparam.h>
+#include <linux/slab.h>
 
 #if defined(USE_HIGHRESTIMER)
 #include <linux/hrtimer.h>
