@@ -979,5 +979,28 @@ struct tone_zone builtin_zones[] =
 		.mfr1_level = -7,
 		.mfr2_level = -8,
 	},
+	{
+		.zone = 43,
+		.country = "mo",
+		.description = "Macao,China",
+		.ringcadence = { 1000, 4000 },
+		.tones = {
+			/* References: http://www.itu.int/ITU-T/inr/forms/files/tones-0203.pdf */
+			{ DAHDI_TONE_DIALTONE, "425" },
+			{ DAHDI_TONE_BUSY, "425/500,0/500" },
+			{ DAHDI_TONE_RINGTONE, "425/1000,0/4000" },
+			{ DAHDI_TONE_CONGESTION, "425/250,0/250" },
+			{ DAHDI_TONE_CALLWAIT, "425/200,0/600" },
+			/* RECORD TONE - not specified */
+			{ DAHDI_TONE_RECORDTONE, "1400/400,0/15000" },
+			{ DAHDI_TONE_INFO, "950/333,1400/333,1800/333,0/1000" },
+			/* STUTTER TONE - not specified */
+			{ DAHDI_TONE_STUTTER, "!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425" },
+	},
+		.dtmf_high_level = -10,
+		.dtmf_low_level = -10,
+		.mfr1_level = -10,
+		.mfr2_level = -8,
+	},
 	{ .zone = -1 }
 };
