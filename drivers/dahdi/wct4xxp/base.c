@@ -2396,7 +2396,7 @@ found:
 
 static void __t4_set_timing_source_auto(struct t4 *wc)
 {
-	int x;
+	int x, i;
 	int firstprio, secondprio;
 	firstprio = secondprio = 4;
 
@@ -2454,6 +2454,13 @@ static void __t4_set_timing_source_auto(struct t4 *wc)
 			/* Default rclk to lock with span 1 */
 			__t4_set_rclk_src(wc, 0);
 			__t4_set_sclk_src(wc, WC_SELF, 0, 0);
+		}
+
+		/* Propagate sync selection to dahdi_span struct
+		 * this is read by dahdi_tool to display the span's
+		 * master/slave sync information */
+		for (i = 0; i < wc->numspans; i++) {
+			wc->tspans[i]->span.syncsrc = wc->syncsrc + 1;
 		}
 	}
 }
