@@ -984,7 +984,6 @@ static int t1xxp_startup(struct dahdi_span *span)
 static int t1xxp_shutdown(struct dahdi_span *span)
 {
 	struct t1 *wc = container_of(span, struct t1, span);
-	t1_setreg(wc, 0x46, 0x41);	/* GCR: Interrupt on Activation/Deactivation of AIX, LOS */
 	clear_bit(DAHDI_FLAGBIT_RUNNING, &span->flags);
 	return 0;
 }

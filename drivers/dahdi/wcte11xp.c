@@ -918,7 +918,6 @@ static int t1xxp_shutdown(struct dahdi_span *span)
 	unsigned long flags;
 
 	spin_lock_irqsave(&wc->lock, flags);
-	__t1_framer_out(wc, 0x46, 0x41);	/* GCR: Interrupt on Activation/Deactivation of AIX, LOS */
 	__t1xxp_stop_dma(wc);
 	__t1xxp_disable_interrupts(wc);
 	span->flags &= ~DAHDI_FLAG_RUNNING;
