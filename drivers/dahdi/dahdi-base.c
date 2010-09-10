@@ -4223,6 +4223,11 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		return 0;
 	case DAHDI_SHUTDOWN:
 		CHECK_VALID_SPAN(j);
+
+		/* Unconfigure channels */
+		for (x = 0; x < spans[j]->channels; x++)
+			spans[j]->chans[x]->sig = 0;
+
 		if (spans[j]->ops->shutdown)
 			res =  spans[j]->ops->shutdown(spans[j]);
 		spans[j]->flags &= ~DAHDI_FLAG_RUNNING;
