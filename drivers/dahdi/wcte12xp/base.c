@@ -981,13 +981,6 @@ static int t1xxp_startup(struct dahdi_span *span)
 	return 0;
 }
 
-static int t1xxp_shutdown(struct dahdi_span *span)
-{
-	struct t1 *wc = container_of(span, struct t1, span);
-	clear_bit(DAHDI_FLAGBIT_RUNNING, &span->flags);
-	return 0;
-}
-
 static int t1xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
 {
 	struct t1 *wc = chan->pvt;
@@ -1303,16 +1296,6 @@ static int t1xxp_clear_maint(struct dahdi_span *span)
 }
 
 
-static int t1xxp_open(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
-static int t1xxp_close(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
 static int t1xxp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long data)
 {
 	struct t4_regs regs;
@@ -1557,11 +1540,8 @@ static const struct dahdi_span_ops t1_span_ops = {
 	.spanconfig = t1xxp_spanconfig,
 	.chanconfig = t1xxp_chanconfig,
 	.startup = t1xxp_startup,
-	.shutdown = t1xxp_shutdown,
 	.rbsbits = t1xxp_rbsbits,
 	.maint = t1xxp_maint,
-	.open = t1xxp_open,
-	.close = t1xxp_close,
 	.ioctl = t1xxp_ioctl,
 #ifdef VPM_SUPPORT
 	.echocan_create = t1xxp_echocan_create,
