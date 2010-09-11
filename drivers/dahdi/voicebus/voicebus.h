@@ -115,7 +115,7 @@ struct voicebus_descriptor_list {
  *
  * NORMAL:	For non-hx8 boards.  Uses idle_buffers.
  * BOOT:	For hx8 boards.  For sending single packets at a time.
- * RELAXED:	Normal operating mode for Hx8 Boards.  Does not use
+ * HX8:		Normal operating mode for Hx8 Boards.  Does not use
  *		idle_buffers.
  */
 enum voicebus_mode {
