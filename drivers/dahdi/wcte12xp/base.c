@@ -62,7 +62,6 @@ static int losalarmdebounce = 2500; /* LOS def to 2.5s AT&T TR54016*/
 static int aisalarmdebounce = 2500; /* AIS(blue) def to 2.5s AT&T TR54016*/
 static int yelalarmdebounce = 500; /* RAI(yellow) def to 0.5s AT&T devguide */
 static int t1e1override = -1;
-static int unchannelized = 0;
 static int latency = VOICEBUS_DEFAULT_LATENCY;
 static unsigned int max_latency = VOICEBUS_DEFAULT_MAXLATENCY;
 static int vpmsupport = 1;
@@ -730,8 +729,7 @@ static void t1_release(struct t1 *wc)
 static void t4_serial_setup(struct t1 *wc)
 {
 	t1_info(wc, "Setting up global serial parameters for %s\n",
-		wc->spantype == TYPE_E1 ?
-		(unchannelized ? "Unchannelized E1" : "E1") : "T1");
+		((wc->spantype == TYPE_E1) ? "E1" : "T1"));
 
 	t1_setreg(wc, 0x85, 0xe0);	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from channel 0 */
 	t1_setreg(wc, 0x08, 0x05);	/* IPC: Interrupt push/pull active low */
@@ -863,8 +861,7 @@ static void t1_configure_e1(struct t1 *wc, int lineconfig)
 
 	fmr1 = 0x46; /* FMR1: E1 mode, Automatic force resync, PCM30 mode, 8.192 Mhz backplane, no XAIS */
 	fmr2 = 0x03; /* FMR2: Auto transmit remote alarm, auto loss of multiframe recovery, no payload loopback */
-	if (unchannelized)
-		fmr2 |= 0x30;
+
 	if (lineconfig & DAHDI_CONFIG_CRC4) {
 		fmr1 |= 0x08;	/* CRC4 transmit */
 		fmr2 |= 0xc0;	/* CRC4 receive */
@@ -888,9 +885,6 @@ static void t1_configure_e1(struct t1 *wc, int lineconfig)
 		cas = 0x40;
 	}
 	t1_setreg(wc, 0x1c, fmr0);
-
-	if (unchannelized)
-		t1_setreg(wc, 0x1f, 0x40);
 
 	t1_setreg(wc, 0x37, 0xf0 /*| 0x6 */ );	/* LIM1: Clear data in case of LOS, Set receiver threshold (0.5V), No remote loop, no DRS */
 	t1_setreg(wc, 0x36, 0x08);	/* LIM0: Enable auto long haul mode, no local loop (must be after LIM1) */
@@ -917,10 +911,8 @@ static void t1_configure_e1(struct t1 *wc, int lineconfig)
 	t1_setreg(wc, 0x39, 0x15);	/* PCR: 22 "ones" clear LOS */
 	
 	t1_setreg(wc, 0x20, 0x9f);	/* XSW: Spare bits all to 1 */
-	if (unchannelized)
-		t1_setreg(wc, 0x21, 0x3c);
-	else
-		t1_setreg(wc, 0x21, 0x1c|cas);	/* XSP: E-bit set when async. AXS auto, XSIF to 1 */
+	t1_setreg(wc, 0x21, 0x1c|cas);	/* XSP: E-bit set when async. AXS
+					   auto, XSIF to 1 */
 	
 	
 	/* Generate pulse mask for E1 */
@@ -1581,10 +1573,7 @@ static int t1_software_init(struct t1 *wc)
 	wc->span.irq = pdev->irq;
 
 	if (wc->spantype == TYPE_E1) {
-		if (unchannelized)
-			wc->span.channels = 32;
-		else
-			wc->span.channels = 31;
+		wc->span.channels = 31;
 		wc->span.spantype = "E1";
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_HDB3 |
 			DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
@@ -1804,11 +1793,11 @@ static inline void t1_check_alarms(struct t1 *wc)
 		wc->flags.sendingyellow = 0;
 	}
 	/*
-	if ((c & 0x10) && !unchannelized)
+	if ((c & 0x10))
 		alarms |= DAHDI_ALARM_YELLOW;
 	*/
 
-	if ((c & 0x10) && !unchannelized) { /* receiving yellow (RAI) */
+	if (c & 0x10) { /* receiving yellow (RAI) */
 		if (wc->yelalarmcount >= (yelalarmdebounce/100))
 			alarms |= DAHDI_ALARM_YELLOW;
 		else {
