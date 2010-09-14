@@ -1334,7 +1334,7 @@ static void close_channel(struct dahdi_chan *chan)
 	chan->eventinidx = chan->eventoutidx = 0;
 	chan->flags &= ~(DAHDI_FLAG_LOOPED | DAHDI_FLAG_LINEAR | DAHDI_FLAG_PPP | DAHDI_FLAG_SIGFREEZE);
 
-	dahdi_set_law(chan,0);
+	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 
 	memset(chan->conflast, 0, sizeof(chan->conflast));
 	memset(chan->conflast1, 0, sizeof(chan->conflast1));
@@ -1549,7 +1549,7 @@ static int set_tone_zone(struct dahdi_chan *chan, int zone)
 
 static void dahdi_set_law(struct dahdi_chan *chan, int law)
 {
-	if (!law) {
+	if (DAHDI_LAW_DEFAULT == law) {
 		if (chan->deflaw)
 			law = chan->deflaw;
 		else
@@ -1587,7 +1587,7 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 		chan->readchunk = chan->sreadchunk;
 	if (!chan->writechunk)
 		chan->writechunk = chan->swritechunk;
-	dahdi_set_law(chan, 0);
+	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	close_channel(chan);
 
 	write_lock_irqsave(&chan_lock, flags);
@@ -2632,7 +2632,7 @@ static int initialize_channel(struct dahdi_chan *chan)
 	chan->txgain = defgain;
 	chan->gainalloc = 0;
 	chan->eventinidx = chan->eventoutidx = 0;
-	dahdi_set_law(chan,0);
+	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	dahdi_hangup(chan);
 
 	/* Make sure that the audio flag is cleared on a clear channel */
