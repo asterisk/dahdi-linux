@@ -1103,7 +1103,7 @@ static void dahdi_set_law(struct dahdi_chan *chan, int law);
 /* Pull a DAHDI_CHUNKSIZE piece off the queue.  Returns
    0 on success or -1 on failure.  If failed, provides
    silence */
-static int __buf_pull(struct confq *q, u_char *data, struct dahdi_chan *c, char *label)
+static int __buf_pull(struct confq *q, u_char *data, struct dahdi_chan *c)
 {
 	int oldoutbuf = q->outbuf;
 	/* Ain't nuffin to read */
@@ -1174,7 +1174,7 @@ static void __buf_munge(struct dahdi_chan *chan, u_char *old, u_char *new)
 #endif
 /* Push something onto the queue, or assume what
    is there is valid if data is NULL */
-static int __buf_push(struct confq *q, u_char *data, char *label)
+static int __buf_push(struct confq *q, u_char *data)
 {
 	int oldinbuf = q->inbuf;
 	if (q->inbuf < 0) {
@@ -8141,7 +8141,7 @@ static inline void __dahdi_real_transmit(struct dahdi_chan *chan)
 #endif
 	if (chan->confmode) {
 		/* Pull queued data off the conference */
-		__buf_pull(&chan->confout, chan->writechunk, chan, "dahdi_real_transmit");
+		__buf_pull(&chan->confout, chan->writechunk, chan);
 	} else {
 		__dahdi_transmit_chunk(chan, chan->writechunk);
 	}
@@ -8227,7 +8227,7 @@ static inline void __dahdi_real_receive(struct dahdi_chan *chan)
 #endif
 	if (chan->confmode) {
 		/* Load into queue if we have space */
-		__buf_push(&chan->confin, chan->readchunk, "dahdi_real_receive");
+		__buf_push(&chan->confin, chan->readchunk);
 	} else {
 		__dahdi_receive_chunk(chan, chan->readchunk);
 	}
@@ -8335,8 +8335,7 @@ static void process_masterspan(void)
 			data = __buf_peek(&chans[x]->confin);
 			__dahdi_receive_chunk(chans[x], data);
 			if (data) {
-				__buf_pull(&chans[x]->confin, NULL, chans[x],
-					   "confreceive");
+				__buf_pull(&chans[x]->confin, NULL, chans[x]);
 			}
 			spin_unlock(&chans[x]->lock);
 		}
@@ -8387,8 +8386,7 @@ static void process_masterspan(void)
 			data = __buf_pushpeek(&chans[x]->confout);
 			__dahdi_transmit_chunk(chans[x], data);
 			if (data)
-				__buf_push(&chans[x]->confout, NULL,
-					   "conftransmit");
+				__buf_push(&chans[x]->confout, NULL);
 			spin_unlock(&chans[x]->lock);
 		}
 	}
