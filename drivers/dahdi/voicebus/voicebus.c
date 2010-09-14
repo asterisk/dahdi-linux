@@ -243,7 +243,7 @@ vb_initialize_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *
 	int i;
 	struct voicebus_descriptor *d;
 	const u32 END_OF_RING = 0x02000000;
-	u8 cache_line_size;
+	u8 cacheline_size;
 
 	BUG_ON(!dl);
 
@@ -253,15 +253,16 @@ vb_initialize_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *
 	 * cache-line sizes that we support.
 	 *
 	 */
-	if (pci_read_config_byte(vb->pdev, 0x0c, &cache_line_size)) {
+	if (pci_read_config_byte(vb->pdev, PCI_CACHE_LINE_SIZE,
+				 &cacheline_size)) {
 		dev_err(&vb->pdev->dev, "Failed read of cache line "
 			"size from PCI configuration space.\n");
 		return -EIO;
 	}
 
-	if ((0x08 == cache_line_size) || (0x10 == cache_line_size) ||
-	    (0x20 == cache_line_size)) {
-		dl->padding = (cache_line_size*sizeof(u32)) - sizeof(*d);
+	if ((0x08 == cacheline_size) || (0x10 == cacheline_size) ||
+	    (0x20 == cacheline_size)) {
+		dl->padding = (cacheline_size*sizeof(u32)) - sizeof(*d);
 	} else {
 		dl->padding = 0;
 	}
@@ -292,7 +293,7 @@ vb_initialize_tx_descriptors(struct voicebus *vb)
 	struct voicebus_descriptor *d;
 	struct voicebus_descriptor_list *dl = &vb->txd;
 	const u32 END_OF_RING = 0x02000000;
-	u8 cache_line_size;
+	u8 cacheline_size;
 
 	WARN_ON(!dl);
 	WARN_ON((NULL == vb->idle_vbb) || (0 == vb->idle_vbb_dma_addr));
@@ -303,15 +304,16 @@ vb_initialize_tx_descriptors(struct voicebus *vb)
 	 * cache-line sizes that we support.
 	 *
 	 */
-	if (pci_read_config_byte(vb->pdev, 0x0c, &cache_line_size)) {
+	if (pci_read_config_byte(vb->pdev, PCI_CACHE_LINE_SIZE,
+				 &cacheline_size)) {
 		dev_err(&vb->pdev->dev, "Failed read of cache line "
 			"size from PCI configuration space.\n");
 		return -EIO;
 	}
 
-	if ((0x08 == cache_line_size) || (0x10 == cache_line_size) ||
-	    (0x20 == cache_line_size)) {
-		dl->padding = (cache_line_size*sizeof(u32)) - sizeof(*d);
+	if ((0x08 == cacheline_size) || (0x10 == cacheline_size) ||
+	    (0x20 == cacheline_size)) {
+		dl->padding = (cacheline_size*sizeof(u32)) - sizeof(*d);
 	} else {
 		dl->padding = 0;
 	}
@@ -637,16 +639,17 @@ vb_reset_interface(struct voicebus *vb)
 	u32 reg;
 	u32 pci_access;
 	const u32 DEFAULT_PCI_ACCESS = 0xfffc0002;
-	u8 cache_line_size;
+	u8 cacheline_size;
 	BUG_ON(in_interrupt());
 
-	if (pci_read_config_byte(vb->pdev, 0x0c, &cache_line_size)) {
+	if (pci_read_config_byte(vb->pdev, PCI_CACHE_LINE_SIZE,
+				 &cacheline_size)) {
 		dev_err(&vb->pdev->dev, "Failed read of cache line "
 			"size from PCI configuration space.\n");
 		return -EIO;
 	}
 
-	switch (cache_line_size) {
+	switch (cacheline_size) {
 	case 0x08:
 		pci_access = DEFAULT_PCI_ACCESS | (0x1 << 14);
 		break;
@@ -661,7 +664,7 @@ vb_reset_interface(struct voicebus *vb)
 			dev_warn(&vb->pdev->dev, "Host system set a cache "
 				 "size of %d which is not supported. "
 				 "Disabling memory write line and memory "
-				 "read line.\n", cache_line_size);
+				 "read line.\n", cacheline_size);
 		}
 		pci_access = 0xfe584202;
 		break;
