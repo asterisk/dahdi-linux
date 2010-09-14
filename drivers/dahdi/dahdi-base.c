@@ -58,8 +58,6 @@
 
 #define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 
-/* #define BUF_MUNGE */
-
 #include <dahdi/version.h>
 /* Grab fasthdlc with tables */
 #define FAST_HDLC_NEED_TABLES
@@ -1145,33 +1143,6 @@ static u_char *__buf_peek(struct confq *q)
 	return q->buf[q->outbuf];
 }
 
-#ifdef BUF_MUNGE
-static u_char *__buf_cpush(struct confq *q)
-{
-	int pos;
-	/* If we have no space, return where the
-	   last space that we *did* have was */
-	if (q->inbuf > -1)
-		return NULL;
-	pos = q->outbuf - 1;
-	if (pos < 0)
-		pos += DAHDI_CB_SIZE;
-	return q->buf[pos];
-}
-
-static void __buf_munge(struct dahdi_chan *chan, u_char *old, u_char *new)
-{
-	/* Run a weighted average of the old and new, in order to
-	   mask a missing sample */
-	int x;
-	int val;
-	for (x=0;x<DAHDI_CHUNKSIZE;x++) {
-		val = x * DAHDI_XLAW(new[x], chan) + (DAHDI_CHUNKSIZE - x - 1) * DAHDI_XLAW(old[x], chan);
-		val = val / (DAHDI_CHUNKSIZE - 1);
-		old[x] = DAHDI_LIN2X(val, chan);
-	}
-}
-#endif
 /* Push something onto the queue, or assume what
    is there is valid if data is NULL */
 static int __buf_push(struct confq *q, u_char *data)
