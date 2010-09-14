@@ -1325,7 +1325,8 @@ static int t1xxp_echocan_create(struct dahdi_chan *chan,
 	struct t1 *wc = chan->pvt;
 	enum adt_companding comp;
 
-	if (!vpmsupport || !wc->vpmadt032 || !test_bit(4, &wc->ctlreg))
+	if (!vpmsupport || !wc->vpmadt032 ||
+	    !test_bit(VPM150M_ACTIVE, &wc->ctlreg))
 		return -ENODEV;
 
 	*ec = wc->ec[chan->chanpos - 1];
@@ -1436,7 +1437,7 @@ static int check_and_load_vpm(struct t1 *wc)
 	if (-ENODEV == res) {
 		struct vpmadt032 *vpm = wc->vpmadt032;
 		/* There does not appear to be a VPMADT032 installed. */
-		clear_bit(4, &wc->ctlreg);
+		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
 		spin_unlock_irqrestore(&wc->reglock, flags);
@@ -1451,13 +1452,13 @@ static int check_and_load_vpm(struct t1 *wc)
 	}
 
 	if (config_vpmadt032(wc->vpmadt032, wc)) {
-		clear_bit(4, &wc->ctlreg);
+		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		wc->vpm_check = jiffies + HZ/2;
 		return -EAGAIN;
 	}
 
 	/* turn on vpm (RX audio from vpm module) */
-	set_bit(4, &wc->ctlreg);
+	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 	wc->vpm_check = jiffies + HZ*5;
 	if (vpmtsisupport) {
 		debug_printk(wc, 1, "enabling VPM TSI pin\n");
@@ -2051,15 +2052,15 @@ static void vpm_check_func(struct work_struct *work)
 	if (!test_bit(INITIALIZED, &wc->bit_flags))
 		return;
 
-	if (test_bit(4, &wc->ctlreg)) {
+	if (test_bit(VPM150M_ACTIVE, &wc->ctlreg)) {
 		res = gpakPingDsp(wc->vpmadt032->dspid, &version);
 		if (!res) {
-			set_bit(4, &wc->ctlreg);
+			set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 			wc->vpm_check = jiffies + HZ*5;
 			return;
 		}
 
-		clear_bit(4, &wc->ctlreg);
+		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		t1_info(wc, "VPMADT032 is non-responsive.  Resetting.\n");
 	}
 
@@ -2093,7 +2094,7 @@ static void vpm_check_func(struct work_struct *work)
 
 	/* Looks like the reset went ok so we can put the VPM module back in
 	 * the TDM path. */
-	set_bit(4, &wc->ctlreg);
+	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 	t1_info(wc, "VPMADT032 is reenabled.\n");
 	wc->vpm_check = jiffies + HZ*5;
 	return;
@@ -2131,7 +2132,7 @@ static void t1_handle_error(struct voicebus *vb)
 	spin_lock_irqsave(&wc->reglock, flags);
 	if (!wc->vpmadt032)
 		goto unlock_exit;
-	clear_bit(4, &wc->ctlreg);
+	clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 	queue_work(wc->vpmadt032->wq, &wc->vpm_check_work);
 
 unlock_exit:
