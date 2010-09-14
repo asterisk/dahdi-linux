@@ -3724,9 +3724,12 @@ static int t4_allocate_buffers(struct t4 *wc, int numbufs, volatile unsigned int
 	memset((void *)wc->writechunk,0x00, T4_BASE_SIZE * numbufs);
 	memset((void *)wc->readchunk,0xff, T4_BASE_SIZE * numbufs);
 
-	dev_notice(&wc->dev->dev, "DMA memory base of size %d at %p.  Read: "
-		"%p and Write %p\n", numbufs * T4_BASE_SIZE * 2,
-		wc->writechunk, wc->readchunk, wc->writechunk);
+	if (debug) {
+		dev_notice(&wc->dev->dev, "DMA memory base of size %d at " \
+			"%p.  Read: %p and Write %p\n",
+			numbufs * T4_BASE_SIZE * 2, wc->writechunk,
+			wc->readchunk, wc->writechunk);
+	}
 
 	return 0;
 }
@@ -4831,8 +4834,10 @@ static int t4_hardware_stop(struct t4 *wc)
 	t4_pci_out(wc, WC_GPIO, wc->gpio);
 	t4_pci_out(wc, WC_LEDS, 0x00000000);
 
-	dev_notice(&wc->dev->dev, "\nStopped TE%dXXP, Turned off DMA\n",
-			wc->numspans);
+	if (debug) {
+		dev_notice(&wc->dev->dev, "Stopped TE%dXXP, Turned off DMA\n",
+				wc->numspans);
+	}
 	return 0;
 }
 
