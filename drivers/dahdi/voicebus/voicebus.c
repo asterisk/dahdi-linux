@@ -1177,6 +1177,7 @@ voicebus_release(struct voicebus *vb)
 		pci_resource_len(vb->pdev, 1));
 
 	pci_iounmap(vb->pdev, vb->iobase);
+	pci_clear_mwi(vb->pdev);
 	pci_disable_device(vb->pdev);
 }
 EXPORT_SYMBOL(voicebus_release);
@@ -1783,6 +1784,12 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 			pci_resource_len(vb->pdev, 1));
 		dev_warn(&vb->pdev->dev, "No suitable DMA available.\n");
 		goto cleanup;
+	}
+
+	retval = pci_set_mwi(vb->pdev);
+	if (retval) {
+		dev_warn(&vb->pdev->dev, "Failed to set Memory-Write " \
+			 "Invalidate Command Bit..\n");
 	}
 
 	pci_set_master(vb->pdev);
