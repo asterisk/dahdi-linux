@@ -2042,29 +2042,32 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 	}
 #endif
 	maxchans = 0;
-	for (x=1;x<DAHDI_MAX_CHANNELS;x++)
-		if (chans[x]) {
-			maxchans = x + 1;
-			/* Remove anyone pointing to us as master
-			   and make them their own thing */
-			if (chans[x]->master == chan) {
-				chans[x]->master = chans[x];
+	for (x = 1; x < DAHDI_MAX_CHANNELS; x++) {
+		struct dahdi_chan *const pos = chans[x];
+		if (!pos)
+			continue;
+		maxchans = x + 1;
+		/* Remove anyone pointing to us as master
+		   and make them their own thing */
+		if (pos->master == chan)
+			pos->master = pos;
+
+		if ((pos->confna == chan->channo) &&
+		    is_monitor_mode(pos->confmode) &&
+		    ((pos->confmode & DAHDI_CONF_MODE_MASK) ==
+		      DAHDI_CONF_DIGITALMON)) {
+			/* Take them out of conference with us */
+			/* release conference resource if any */
+			if (pos->confna) {
+				dahdi_check_conf(pos->confna);
+				if (pos->span)
+					dahdi_disable_dacs(pos);
 			}
-			if ((chans[x]->confna == chan->channo) &&
-			    is_monitor_mode(chans[x]->confmode) &&
-			    ((chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_DIGITALMON)) {
-				/* Take them out of conference with us */
-				/* release conference resource if any */
-				if (chans[x]->confna) {
-					dahdi_check_conf(chans[x]->confna);
-					if (chans[x]->span)
-						dahdi_disable_dacs(chans[x]);
-				}
-				chans[x]->confna = 0;
-				chans[x]->_confn = 0;
-				chans[x]->confmode = 0;
-			}
+			pos->confna = 0;
+			pos->_confn = 0;
+			pos->confmode = 0;
 		}
+	}
 	chan->channo = -1;
 	write_unlock_irqrestore(&chan_lock, flags);
 }
