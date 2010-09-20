@@ -8209,7 +8209,6 @@ int dahdi_transmit(struct dahdi_span *span)
 	int x,y,z;
 	unsigned long flags;
 
-#if 1
 	for (x=0;x<span->channels;x++) {
 		spin_lock_irqsave(&span->chans[x]->lock, flags);
 		if (span->chans[x]->flags & DAHDI_FLAG_NOSTDTXRX) {
@@ -8271,7 +8270,6 @@ int dahdi_transmit(struct dahdi_span *span)
 			wake_up_interruptible(&span->maintq);
 		}
 	}
-#endif
 	return 0;
 }
 
