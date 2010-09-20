@@ -409,6 +409,14 @@ static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
 static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
 #endif
 
+/**
+ * is_pseudo_chan() - By definition psuedo channels are not on a span.
+ */
+static inline bool is_pseudo_chan(const struct dahdi_chan *chan)
+{
+	return (NULL == chan->span);
+}
+
 static bool valid_channo(const int channo)
 {
 	return ((channo >= DAHDI_MAX_CHANNELS) || (channo < 1)) ?
@@ -2235,7 +2243,7 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 
 	for (;;) {
 		spin_lock_irqsave(&chan->lock, flags);
-		if ((chan->curtone || chan->pdialcount) && !(chan->flags & DAHDI_FLAG_PSEUDO)) {
+		if ((chan->curtone || chan->pdialcount) && !is_pseudo_chan(chan)) {
 			chan->curtone = NULL;
 			chan->tonep = 0;
 			chan->dialing = 0;
@@ -2796,7 +2804,7 @@ static int dahdi_specchan_open(struct file *file)
 				return res;
 			}
 			spin_lock_irqsave(&chan->lock, flags);
-			if (chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(chan))
 				chan->flags |= DAHDI_FLAG_AUDIO;
 			if (chan->span) {
 				if (!try_module_get(chan->span->ops->owner))
@@ -2871,7 +2879,8 @@ static struct dahdi_chan *dahdi_alloc_pseudo(void)
 
 	pseudo->sig = DAHDI_SIG_CLEAR;
 	pseudo->sigcap = DAHDI_SIG_CLEAR;
-	pseudo->flags = DAHDI_FLAG_PSEUDO | DAHDI_FLAG_AUDIO;
+	pseudo->flags = DAHDI_FLAG_AUDIO;
+	pseudo->span = NULL; /* No span == psuedo channel */
 
 	if (dahdi_chan_reg(pseudo)) {
 		kfree(pseudo);
@@ -6497,7 +6506,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 	}
 #endif
 
-	if ((!ms->confmute && !ms->dialing) || (ms->flags & DAHDI_FLAG_PSEUDO)) {
+	if ((!ms->confmute && !ms->dialing) || (is_pseudo_chan(ms))) {
 		/* Handle conferencing on non-clear channel and non-HDLC channels */
 		struct dahdi_chan *const conf_chan = chans[ms->confna];
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
@@ -6506,9 +6515,10 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR:	/* Monitor a channel's rx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
+			if (is_pseudo_chan(ms))
+				break;
 			/* Add monitored channel */
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(conf_chan))
 				ACSS(getlin, conf_chan->getlin);
 			else
 				ACSS(getlin, conf_chan->putlin);
@@ -6518,9 +6528,10 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORTX: /* Monitor a channel's tx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
+			if (is_pseudo_chan(ms))
+				break;
 			/* Add monitored channel */
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(conf_chan))
 				ACSS(getlin, conf_chan->putlin);
 			else
 				ACSS(getlin, conf_chan->getlin);
@@ -6530,7 +6541,8 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORBOTH: /* monitor a channel's rx and tx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
+			if (is_pseudo_chan(ms))
+				break;
 			ACSS(getlin, conf_chan->putlin);
 			ACSS(getlin, conf_chan->getlin);
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
@@ -6538,14 +6550,14 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR_RX_PREECHO:	/* Monitor a channel's rx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(getlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			ACSS(getlin, is_pseudo_chan(conf_chan) ?
 			     conf_chan->readchunkpreec : conf_chan->putlin);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
@@ -6553,14 +6565,14 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR_TX_PREECHO: /* Monitor a channel's tx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(getlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			ACSS(getlin, is_pseudo_chan(conf_chan) ?
 			     conf_chan->putlin : conf_chan->readchunkpreec);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
@@ -6568,7 +6580,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORBOTH_PREECHO: /* monitor a channel's rx and tx mode */
 			  /* if a pseudo-channel, ignore */
-			if (ms->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
@@ -6608,7 +6620,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			memset(txb + 1, txb[0], DAHDI_CHUNKSIZE - 1);
 			/* fall through to normal conf mode */
 		case DAHDI_CONF_CONF:	/* Normal conference mode */
-			if (ms->flags & DAHDI_FLAG_PSEUDO) /* if pseudo-channel */
+			if (is_pseudo_chan(ms)) /* if pseudo-channel */
 			   {
 				  /* if to talk on conf */
 				if (ms->confmode & DAHDI_CONF_TALKER) {
@@ -6661,7 +6673,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			/* Real digital monitoring, but still echo cancel if desired */
 			if (!conf_chan)
 				break;
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO) {
+			if (is_pseudo_chan(conf_chan)) {
 				if (ms->ec_state) {
 					for (x=0;x<DAHDI_CHUNKSIZE;x++)
 						txb[x] = DAHDI_LIN2X(conf_chan->getlin[x], ms);
@@ -6819,7 +6831,7 @@ out in the later versions, and is put back now. */
 				}
 #endif
 			}
-		} else if (ms->curtone && !(ms->flags & DAHDI_FLAG_PSEUDO)) {
+		} else if (ms->curtone && !is_pseudo_chan(ms)) {
 			left = ms->curtone->tonesamples - ms->tonep;
 			if (left > bytes)
 				left = bytes;
@@ -7510,7 +7522,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 
 	if (ms->dialing) ms->afterdialingtimer = 50;
 	else if (ms->afterdialingtimer) ms->afterdialingtimer--;
-	if (ms->afterdialingtimer && (!(ms->flags & DAHDI_FLAG_PSEUDO))) {
+	if (ms->afterdialingtimer && !is_pseudo_chan(ms)) {
 		/* Be careful since memset is likely a macro */
 		rxb[0] = DAHDI_LIN2X(0, ms);
 		memset(&rxb[1], rxb[0], DAHDI_CHUNKSIZE - 1);  /* receive as silence if dialing */
@@ -7558,15 +7570,14 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 		}
 	}
 
-	if (!(ms->flags &  DAHDI_FLAG_PSEUDO)) {
+	if (!is_pseudo_chan(ms)) {
 		memcpy(ms->putlin, putlin, DAHDI_CHUNKSIZE * sizeof(short));
 		memcpy(ms->putraw, rxb, DAHDI_CHUNKSIZE);
 	}
 
 	/* Take the rxc, twiddle it for conferencing if appropriate and put it
 	   back */
-	if ((!ms->confmute && !ms->afterdialingtimer) ||
-	    (ms->flags & DAHDI_FLAG_PSEUDO)) {
+	if ((!ms->confmute && !ms->afterdialingtimer) || is_pseudo_chan(ms)) {
 		struct dahdi_chan *const conf_chan = chans[ms->confna];
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
 		case DAHDI_CONF_NORMAL:		/* Normal mode */
@@ -7574,9 +7585,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR:		/* Monitor a channel's rx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
+			if (!is_pseudo_chan(ms))
+				break;
 			/* Add monitored channel */
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(conf_chan))
 				ACSS(putlin, conf_chan->getlin);
 			else
 				ACSS(putlin, conf_chan->putlin);
@@ -7586,9 +7598,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORTX:	/* Monitor a channel's tx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
+			if (!is_pseudo_chan(ms))
+				break;
 			/* Add monitored channel */
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(conf_chan))
 				ACSS(putlin, conf_chan->putlin);
 			else
 				ACSS(putlin, conf_chan->getlin);
@@ -7598,7 +7611,8 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORBOTH:	/* Monitor a channel's tx and rx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
+			if (!is_pseudo_chan(ms))
+				break;
 			/* Note: Technically, saturation should be done at
 			   the end of the whole addition, but for performance
 			   reasons, we don't do that.  Besides, it only matters
@@ -7611,14 +7625,14 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR_RX_PREECHO:		/* Monitor a channel's rx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
+			if (!is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(putlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			ACSS(putlin, is_pseudo_chan(conf_chan) ?
 			     conf_chan->getlin : conf_chan->readchunkpreec);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
@@ -7626,14 +7640,14 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITOR_TX_PREECHO:	/* Monitor a channel's tx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
+			if (!is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(putlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			ACSS(putlin, is_pseudo_chan(conf_chan) ?
 			     conf_chan->readchunkpreec : conf_chan->getlin);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
@@ -7641,7 +7655,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_MONITORBOTH_PREECHO:	/* Monitor a channel's tx and rx mode */
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
+			if (!is_pseudo_chan(ms))
 				break;
 
 			if (!conf_chan->readchunkpreec)
@@ -7683,7 +7697,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
 			break;
 		case DAHDI_CONF_CONF:	/* Normal conference mode */
-			if (ms->flags & DAHDI_FLAG_PSEUDO) /* if a pseudo-channel */
+			if (is_pseudo_chan(ms)) /* if a pseudo-channel */
 			   {
 				if (ms->confmode & DAHDI_CONF_LISTENER) {
 					/* Subtract out last sample written to conf */
@@ -7734,9 +7748,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_DIGITALMON:
 			  /* if not a pseudo-channel, ignore */
-			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
+			if (!is_pseudo_chan(ms))
+				break;
 			/* Add monitored channel */
-			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+			if (is_pseudo_chan(conf_chan))
 				memcpy(rxb, conf_chan->getraw, DAHDI_CHUNKSIZE);
 			else
 				memcpy(rxb, conf_chan->putraw, DAHDI_CHUNKSIZE);
@@ -8518,8 +8533,7 @@ static void process_masterspan(void)
 
 	for (x = 1; x < maxchans; x++) {
 		chan = chans[x];
-		if (chan && chan->confmode &&
-		    !(chan->flags & DAHDI_FLAG_PSEUDO)) {
+		if (chan && chan->confmode && !is_pseudo_chan(chan)) {
 			u_char *data;
 			spin_lock(&chan->lock);
 			data = __buf_peek(&chan->confin);
@@ -8535,7 +8549,7 @@ static void process_masterspan(void)
 	/* do all the pseudo and/or conferenced channel receives (getbuf's) */
 	for (x = 1; x < maxchans; x++) {
 		chan = chans[x];
-		if (chan && (chan->flags & DAHDI_FLAG_PSEUDO)) {
+		if (chan && is_pseudo_chan(chan)) {
 			spin_lock(&chan->lock);
 			__dahdi_transmit_chunk(chan, NULL);
 			spin_unlock(&chan->lock);
@@ -8562,7 +8576,7 @@ static void process_masterspan(void)
 	/* do all the pseudo/conferenced channel transmits (putbuf's) */
 	for (x = 1; x < maxchans; x++) {
 		chan = chans[x];
-		if (chan && (chan->flags & DAHDI_FLAG_PSEUDO)) {
+		if (chan && is_pseudo_chan(chan)) {
 			unsigned char tmp[DAHDI_CHUNKSIZE];
 			spin_lock(&chan->lock);
 			__dahdi_getempty(chan, tmp);
@@ -8572,8 +8586,7 @@ static void process_masterspan(void)
 	}
 	for (x = 1; x < maxchans; x++) {
 		chan = chans[x];
-		if (chan && chan->confmode &&
-		    !(chan->flags & DAHDI_FLAG_PSEUDO)) {
+		if (chan && chan->confmode && !is_pseudo_chan(chan)) {
 			u_char *data;
 			spin_lock(&chan->lock);
 			data = __buf_pushpeek(&chan->confout);

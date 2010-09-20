@@ -685,7 +685,6 @@ enum {
 	DAHDI_FLAGBIT_ECHOCANCEL= 4,	/*!< Channel supports native echo cancellation */
 	DAHDI_FLAGBIT_HDLC	= 5,	/*!< Perform HDLC */
 	DAHDI_FLAGBIT_NETDEV	= 6,	/*!< Send to network */
-	DAHDI_FLAGBIT_PSEUDO	= 7,	/*!< Pseudo channel */
 	DAHDI_FLAGBIT_CLEAR	= 8,	/*!< Clear channel */
 	DAHDI_FLAGBIT_AUDIO	= 9,	/*!< Audio mode channel */
 	DAHDI_FLAGBIT_OPEN	= 10,	/*!< Channel is open */
@@ -734,7 +733,6 @@ struct dahdi_count {
 
 #define DAHDI_FLAG_HDLC		DAHDI_FLAG(HDLC)
 #define DAHDI_FLAG_NETDEV	DAHDI_FLAG(NETDEV)
-#define DAHDI_FLAG_PSEUDO	DAHDI_FLAG(PSEUDO)
 #define DAHDI_FLAG_CLEAR	DAHDI_FLAG(CLEAR)
 #define DAHDI_FLAG_AUDIO	DAHDI_FLAG(AUDIO)
 
