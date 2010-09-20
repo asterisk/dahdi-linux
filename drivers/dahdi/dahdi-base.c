@@ -3647,12 +3647,13 @@ static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long 
 	return 0;
 }
 
-static int dahdi_ioctl_getgains(struct file *file, unsigned long data, int unit)
+static int dahdi_ioctl_getgains(struct file *file, unsigned long data)
 {
 	int res = 0;
 	struct dahdi_gains *gain;
-	int i, j;
+	int j;
 	void __user * const user_data = (void __user *)data;
+	struct dahdi_chan *chan;
 
 	gain = kzalloc(sizeof(*gain), GFP_KERNEL);
 	if (!gain)
@@ -3662,25 +3663,27 @@ static int dahdi_ioctl_getgains(struct file *file, unsigned long data, int unit)
 		res = -EFAULT;
 		goto cleanup;
 	}
-	i = gain->chan;  /* get channel no */
-	   /* if zero, use current channel no */
-	if (!i)
-		i = unit;
-
-	  /* make sure channel number makes sense */
-	if ((i < 0) || (i > DAHDI_MAX_CHANNELS) || !chans[i]) {
+	if (!gain->chan) {
+		chan = chan_from_file(file);
+	} else {
+		if (valid_channo(gain->chan))
+			chan = chans[gain->chan];
+		else
+			chan = NULL;
+	}
+	if (chan) {
 		res = -EINVAL;
 		goto cleanup;
 	}
 
-	if (!(chans[i]->flags & DAHDI_FLAG_AUDIO)) {
+	if (!(chan->flags & DAHDI_FLAG_AUDIO)) {
 		res = -EINVAL;
 		goto cleanup;
 	}
-	gain->chan = i; /* put the span # in here */
+	gain->chan = chan->channo;
 	for (j = 0; j < 256; ++j)  {
-		gain->txgain[j] = chans[i]->txgain[j];
-		gain->rxgain[j] = chans[i]->rxgain[j];
+		gain->txgain[j] = chan->txgain[j];
+		gain->rxgain[j] = chan->rxgain[j];
 	}
 	if (copy_to_user(user_data, gain, sizeof(*gain))) {
 		res = -EFAULT;
@@ -3692,15 +3695,16 @@ cleanup:
 	return res;
 }
 
-static int dahdi_ioctl_setgains(struct file *file, unsigned long data, int unit)
+static int dahdi_ioctl_setgains(struct file *file, unsigned long data)
 {
 	int res = 0;
 	struct dahdi_gains *gain;
 	unsigned char *txgain, *rxgain;
-	int i, j;
+	int j;
 	unsigned long flags;
 	const int GAIN_TABLE_SIZE = sizeof(defgain);
 	void __user * const user_data = (void __user *)data;
+	struct dahdi_chan *chan;
 
 	gain = kzalloc(sizeof(*gain), GFP_KERNEL);
 	if (!gain)
@@ -3710,16 +3714,21 @@ static int dahdi_ioctl_setgains(struct file *file, unsigned long data, int unit)
 		res = -EFAULT;
 		goto cleanup;
 	}
-	i = gain->chan;  /* get channel no */
-	   /* if zero, use current channel no */
-	if (!i)
-		i = unit;
-	  /* make sure channel number makes sense */
-	if ((i < 0) || (i > DAHDI_MAX_CHANNELS) || !chans[i]) {
+
+	if (!gain->chan) {
+		chan = chan_from_file(file);
+	} else {
+		if (valid_channo(gain->chan))
+			chan = chans[gain->chan];
+		else
+			chan = NULL;
+	}
+
+	if (!chan) {
 		res = -EINVAL;
 		goto cleanup;
 	}
-	if (!(chans[i]->flags & DAHDI_FLAG_AUDIO)) {
+	if (!(chan->flags & DAHDI_FLAG_AUDIO)) {
 		res = -EINVAL;
 		goto cleanup;
 	}
@@ -3730,7 +3739,7 @@ static int dahdi_ioctl_setgains(struct file *file, unsigned long data, int unit)
 		goto cleanup;
 	}
 
-	gain->chan = i; /* put the span # in here */
+	gain->chan = chan->channo;
 	txgain = rxgain + GAIN_TABLE_SIZE;
 
 	for (j = 0; j < GAIN_TABLE_SIZE; ++j) {
@@ -3741,22 +3750,22 @@ static int dahdi_ioctl_setgains(struct file *file, unsigned long data, int unit)
 	if (!memcmp(rxgain, defgain, GAIN_TABLE_SIZE) &&
 	    !memcmp(txgain, defgain, GAIN_TABLE_SIZE)) {
 		kfree(rxgain);
-		spin_lock_irqsave(&chans[i]->lock, flags);
-		if (chans[i]->gainalloc)
-			kfree(chans[i]->rxgain);
-		chans[i]->gainalloc = 0;
-		chans[i]->rxgain = defgain;
-		chans[i]->txgain = defgain;
-		spin_unlock_irqrestore(&chans[i]->lock, flags);
+		spin_lock_irqsave(&chan->lock, flags);
+		if (chan->gainalloc)
+			kfree(chan->rxgain);
+		chan->gainalloc = 0;
+		chan->rxgain = defgain;
+		chan->txgain = defgain;
+		spin_unlock_irqrestore(&chan->lock, flags);
 	} else {
 		/* This is a custom gain setting */
-		spin_lock_irqsave(&chans[i]->lock, flags);
-		if (chans[i]->gainalloc)
-			kfree(chans[i]->rxgain);
-		chans[i]->gainalloc = 1;
-		chans[i]->rxgain = rxgain;
-		chans[i]->txgain = txgain;
-		spin_unlock_irqrestore(&chans[i]->lock, flags);
+		spin_lock_irqsave(&chan->lock, flags);
+		if (chan->gainalloc)
+			kfree(chan->rxgain);
+		chan->gainalloc = 1;
+		chan->rxgain = rxgain;
+		chan->txgain = txgain;
+		spin_unlock_irqrestore(&chan->lock, flags);
 	}
 
 	if (copy_to_user(user_data, gain, sizeof(*gain))) {
@@ -4014,9 +4023,11 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	case DAHDI_GETGAINS_V1: /* Intentional drop through. */
 	case DAHDI_GETGAINS:  /* get gain stuff */
-		return dahdi_ioctl_getgains(file, data, unit);
+		return dahdi_ioctl_getgains(file, data);
+
 	case DAHDI_SETGAINS:  /* set gain stuff */
-		return dahdi_ioctl_setgains(file, data, unit);
+		return dahdi_ioctl_setgains(file, data);
+
 	case DAHDI_SPANSTAT:
 		size_to_copy = sizeof(struct dahdi_spaninfo);
 		if (copy_from_user(&stack.spaninfo, user_data, size_to_copy))
