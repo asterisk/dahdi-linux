@@ -3642,8 +3642,7 @@ static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long 
 	return 0;
 }
 
-static int dahdi_ioctl_getgains(struct file *file,
-				unsigned int cmd, unsigned long data, int unit)
+static int dahdi_ioctl_getgains(struct file *file, unsigned long data, int unit)
 {
 	int res = 0;
 	struct dahdi_gains *gain;
@@ -3688,8 +3687,7 @@ cleanup:
 	return res;
 }
 
-static int dahdi_ioctl_setgains(struct file *file,
-				unsigned int cmd, unsigned long data, int unit)
+static int dahdi_ioctl_setgains(struct file *file, unsigned long data, int unit)
 {
 	int res = 0;
 	struct dahdi_gains *gain;
@@ -3766,7 +3764,7 @@ cleanup:
 	return res;
 }
 
-static int dahdi_ioctl_chandiag(struct file *file, int cmd, unsigned long data)
+static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 {
 	unsigned long flags;
 	int channo;
@@ -4011,9 +4009,9 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	case DAHDI_GETGAINS_V1: /* Intentional drop through. */
 	case DAHDI_GETGAINS:  /* get gain stuff */
-		return dahdi_ioctl_getgains(file, cmd, data, unit);
+		return dahdi_ioctl_getgains(file, data, unit);
 	case DAHDI_SETGAINS:  /* set gain stuff */
-		return dahdi_ioctl_setgains(file, cmd, data, unit);
+		return dahdi_ioctl_setgains(file, data, unit);
 	case DAHDI_SPANSTAT:
 		size_to_copy = sizeof(struct dahdi_spaninfo);
 		if (copy_from_user(&stack.spaninfo, user_data, size_to_copy))
@@ -4140,7 +4138,7 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 	case DAHDI_CHANDIAG_V1: /* Intentional drop through. */
 	case DAHDI_CHANDIAG:
-		return dahdi_ioctl_chandiag(file, cmd, data);
+		return dahdi_ioctl_chandiag(file, data);
 	default:
 		return -ENOTTY;
 	}
