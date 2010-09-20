@@ -4168,7 +4168,7 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 }
 
 static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
-			      unsigned long data, int unit)
+			      unsigned long data)
 {
 	switch (cmd) {
 		/* get channel parameters */
@@ -4825,7 +4825,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		}
 		return -ENOSYS;
 	default:
-		return dahdi_common_ioctl(file, cmd, data, 0);
+		return dahdi_common_ioctl(file, cmd, data);
 	}
 	return 0;
 }
@@ -5478,7 +5478,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		break;
 	default:
 		/* Check for common ioctl's and private ones */
-		rv = dahdi_common_ioctl(file, cmd, data, chan->channo);
+		rv = dahdi_common_ioctl(file, cmd, data);
 		/* if no span, just return with value */
 		if (!chan->span) return rv;
 		if ((rv == -ENOTTY) && chan->span->ops->ioctl)
