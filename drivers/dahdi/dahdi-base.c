@@ -2137,23 +2137,6 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 			return rv;
 	}
 	amnt = count;
-/* added */
-#if 0
-	if ((unit == 24) || (unit == 48) || (unit == 16) || (unit == 47)) {
-		int myamnt = amnt;
-		int x;
-		if (amnt > chan->readn[res])
-			myamnt = chan->readn[res];
-		module_printk(KERN_NOTICE, "dahdi_chan_read(unit: %d, inwritebuf: %d, outwritebuf: %d amnt: %d\n",
-			      unit, chan->inwritebuf, chan->outwritebuf, myamnt);
-
-		module_printk(KERN_DEBUG, "\t("); 
-		for (x = 0; x < myamnt; x++) 
-			printk((x ? " %02x" : "%02x"), (unsigned char)usrbuf[x]);
-		printk(")\n");
-	}
-#endif
-/* end addition */
 	if (chan->flags & DAHDI_FLAG_LINEAR) {
 		if (amnt > (chan->readn[res] << 1))
 			amnt = chan->readn[res] << 1;
@@ -2294,15 +2277,6 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 #ifdef CONFIG_DAHDI_DEBUG
 	module_printk(KERN_NOTICE, "dahdi_chan_write(unit: %d, res: %d, outwritebuf: %d amnt: %d\n",
 		      unit, res, chan->outwritebuf, amnt);
-#endif
-#if 0
- 	if ((unit == 24) || (unit == 48) || (unit == 16) || (unit == 47)) {
- 		int x;
- 		module_printk(KERN_NOTICE, "dahdi_chan_write/in(unit: %d, res: %d, outwritebuf: %d amnt: %d, txdisable: %d)\n",
-			      unit, res, chan->outwritebuf, amnt, chan->txdisable);
- 		module_printk(KERN_DEBUG, "\t("); for (x = 0; x < amnt; x++) module_printk(KERN_DEBUG, (x ? " %02x" : "%02x"), (unsigned char)usrbuf[x]);
- 		module_printk(KERN_DEBUG, ")\n");
- 	}
 #endif
 
 	if (amnt) {
