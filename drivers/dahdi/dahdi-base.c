@@ -6038,13 +6038,12 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 	return 0;
 }
 
-static int dahdi_prechan_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit)
+static int dahdi_prechan_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
-	struct dahdi_chan *chan = file->private_data;
 	int channo;
 	int res;
 
-	if (chan) {
+	if (file->private_data) {
 		module_printk(KERN_NOTICE, "Huh?  Prechan already has private data??\n");
 	}
 	switch(cmd) {
@@ -6056,13 +6055,8 @@ static int dahdi_prechan_ioctl(struct file *file, unsigned int cmd, unsigned lon
 			return -EINVAL;
 		file->private_data = chans[channo];
 		res = dahdi_specchan_open(file);
-		if (!res) {
-			/* Setup the pointer for future stuff */
-			chan = chans[channo];
-			file->private_data = chan;
-			/* Return success */
-			return 0;
-		}
+		if (res)
+			file->private_data = NULL;
 		return res;
 	default:
 		return -ENOSYS;
@@ -6108,11 +6102,10 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 		goto unlock_exit;
 	}
 	if (unit == 254) {
-		chan = file->private_data;
-		if (chan)
+		if (file->private_data)
 			ret = dahdi_chan_ioctl(file, cmd, data);
 		else
-			ret = dahdi_prechan_ioctl(file, cmd, data, unit);
+			ret = dahdi_prechan_ioctl(file, cmd, data);
 		goto unlock_exit;
 	}
 	if (unit == 255) {
