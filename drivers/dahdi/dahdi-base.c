@@ -4410,15 +4410,39 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	void __user * const user_data = (void __user *)data;
 	int rv;
 	struct dahdi_span *s;
-	switch(cmd) {
+	struct dahdi_chan *chan;
+
+	switch (cmd) {
 	case DAHDI_INDIRECT:
 	{
 		struct dahdi_indirect_data ind;
+		void *old;
+		static bool warned;
 
-		if (copy_from_user(&ind, user_data, sizeof(ind)))
+		if (copy_from_user(&ind, (void __user *)data, sizeof(ind)))
 			return -EFAULT;
+
 		VALID_CHANNEL(ind.chan);
-		return dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data, ind.chan);
+		chan = chans[ind.chan];
+		if (!chan)
+			return -EINVAL;
+
+		if (!warned) {
+			warned = true;
+			module_printk(KERN_WARNING, "Using deprecated " \
+				      "DAHDI_INDIRECT.  Please update " \
+				      "dahdi-tools.\n");
+		}
+
+		/* Since dahdi_chan_ioctl expects to be called on file handles
+		 * associated with channels, we'll temporarily set the
+		 * private_data pointer on the ctl file handle just for this
+		 * call. */
+		old = file->private_data;
+		file->private_data = chan;
+		res = dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data, ind.chan);
+		file->private_data = old;
+		return res;
 	}
 	case DAHDI_SPANCONFIG:
 	{
