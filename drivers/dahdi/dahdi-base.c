@@ -401,10 +401,30 @@ struct dahdi_zone {
 	struct dahdi_tone mfr2_rev_continuous[16];	/* MFR2 REV tones for this zone, continuous play */
 };
 
+#ifdef DEFINE_RWLOCK
+static DEFINE_RWLOCK(zone_lock);
+static DEFINE_RWLOCK(chan_lock);
+#else
+static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
+static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
+#endif
+
+/* Protected by chan_lock. */
 static struct dahdi_span *spans[DAHDI_MAX_SPANS];
 static struct dahdi_chan *chans[DAHDI_MAX_CHANNELS];
 
 static int maxspans = 0;
+
+static struct dahdi_span *find_span(int spanno)
+{
+	return (spanno > 0 && spanno < DAHDI_MAX_SPANS) ? spans[spanno] : NULL;
+}
+
+static inline unsigned int span_count(void)
+{
+	return maxspans;
+}
+
 static int maxchans = 0;
 static int maxconfs = 0;
 static int maxlinks = 0;
@@ -424,14 +444,6 @@ static u_char defgain[256];
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
 #define __RW_LOCK_UNLOCKED() RW_LOCK_UNLOCKED
-#endif
-
-#ifdef DEFINE_RWLOCK
-static DEFINE_RWLOCK(zone_lock);
-static DEFINE_RWLOCK(chan_lock);
-#else
-static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
-static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
 #endif
 
 static struct dahdi_zone *tone_zones[DAHDI_TONE_ZONE_MAX];
@@ -671,7 +683,9 @@ static int fill_alarm_string(char *buf, int count, int alarms)
 static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	int x, len = 0, real_count;
-	long span;
+	long spanno;
+	struct dahdi_span *s;
+
 
 	/* In Linux 2.6, page is always PROC_BLOCK_SIZE=(PAGE_SIZE-1024) bytes.
 	 * 0<count<=PROC_BLOCK_SIZE . count=1 will produce an error in
@@ -679,77 +693,81 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 	 * An ugly hack. Good way: seq_printf (seq_file.c). */
         real_count = count;
 	count = PAGE_SIZE-1024;
-	span = (long)data;
-	if (!span)
+	spanno = (long)data;
+	if (!spanno)
 		return 0;
 
-	if (spans[span]->name)
-		len += snprintf(page + len, count - len, "Span %ld: %s ",
-				span, spans[span]->name);
-	if (spans[span]->desc)
+	s = find_span(spanno);
+	if (!s)
+		return -ENODEV;
+
+	if (s->name)
+		len += snprintf(page + len, count - len, "Span %d: %s ",
+				s->spanno, s->name);
+	if (s->desc)
 		len += snprintf(page + len, count - len, "\"%s\"",
-				spans[span]->desc);
+				s->desc);
 	else
 		len += snprintf(page + len, count - len, "\"\"");
 
-	if (spans[span] == master)
+	if (s == master)
 		len += snprintf(page + len, count - len, " (MASTER)");
 
-	if (spans[span]->lineconfig) {
+	if (s->lineconfig) {
 		/* framing first */
-		if (spans[span]->lineconfig & DAHDI_CONFIG_B8ZS)
+		if (s->lineconfig & DAHDI_CONFIG_B8ZS)
 			len += snprintf(page + len, count - len, " B8ZS/");
-		else if (spans[span]->lineconfig & DAHDI_CONFIG_AMI)
+		else if (s->lineconfig & DAHDI_CONFIG_AMI)
 			len += snprintf(page + len, count - len, " AMI/");
-		else if (spans[span]->lineconfig & DAHDI_CONFIG_HDB3)
+		else if (s->lineconfig & DAHDI_CONFIG_HDB3)
 			len += snprintf(page + len, count - len, " HDB3/");
 		/* then coding */
-		if (spans[span]->lineconfig & DAHDI_CONFIG_ESF)
+		if (s->lineconfig & DAHDI_CONFIG_ESF)
 			len += snprintf(page + len, count - len, "ESF");
-		else if (spans[span]->lineconfig & DAHDI_CONFIG_D4)
+		else if (s->lineconfig & DAHDI_CONFIG_D4)
 			len += snprintf(page + len, count - len, "D4");
-		else if (spans[span]->lineconfig & DAHDI_CONFIG_CCS)
+		else if (s->lineconfig & DAHDI_CONFIG_CCS)
 			len += snprintf(page + len, count - len, "CCS");
 		/* E1's can enable CRC checking */
-		if (spans[span]->lineconfig & DAHDI_CONFIG_CRC4)
+		if (s->lineconfig & DAHDI_CONFIG_CRC4)
 			len += snprintf(page + len, count - len, "/CRC4");
 	}
 
 	len += snprintf(page + len, count - len, " ");
 
 	/* list alarms */
-	len += fill_alarm_string(page + len, count - len, spans[span]->alarms);
-	if (spans[span]->syncsrc &&
-		(spans[span]->syncsrc == spans[span]->spanno))
+	len += fill_alarm_string(page + len, count - len, s->alarms);
+	if (s->syncsrc &&
+		(s->syncsrc == s->spanno))
 		len += snprintf(page + len, count - len, "ClockSource ");
 	len += snprintf(page + len, count - len, "\n");
-	if (spans[span]->count.bpv)
+	if (s->count.bpv)
 		len += snprintf(page + len, count - len, "\tBPV count: %d\n",
-				spans[span]->count.bpv);
-	if (spans[span]->count.crc4)
+				s->count.bpv);
+	if (s->count.crc4)
 		len += snprintf(page + len, count - len,
 				"\tCRC4 error count: %d\n",
-				spans[span]->count.crc4);
-	if (spans[span]->count.ebit)
+				s->count.crc4);
+	if (s->count.ebit)
 		len += snprintf(page + len, count - len,
 				"\tE-bit error count: %d\n",
-				spans[span]->count.ebit);
-	if (spans[span]->count.fas)
+				s->count.ebit);
+	if (s->count.fas)
 		len += snprintf(page + len, count - len,
 				"\tFAS error count: %d\n",
-				spans[span]->count.fas);
-	if (spans[span]->irqmisses)
+				s->count.fas);
+	if (s->irqmisses)
 		len += snprintf(page + len, count - len,
 				"\tIRQ misses: %d\n",
-				spans[span]->irqmisses);
-	if (spans[span]->timingslips)
+				s->irqmisses);
+	if (s->timingslips)
 		len += snprintf(page + len, count - len,
 				"\tTiming slips: %d\n",
-				spans[span]->timingslips);
+				s->timingslips);
 	len += snprintf(page + len, count - len, "\n");
 
-	for (x = 0; x < spans[span]->channels; x++) {
-		struct dahdi_chan *chan = spans[span]->chans[x];
+	for (x = 0; x < s->channels; x++) {
+		struct dahdi_chan *chan = s->chans[x];
 
 		if (chan->name)
 			len += snprintf(page + len, count - len,
@@ -3533,21 +3551,20 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 		span->lastalarms = span->alarms;
 		for (x = 0; x < span->channels; x++)
 			dahdi_alarm_channel(span->chans[x], span->alarms);
+
 		/* Switch to other master if current master in alarm */
 		for (x=1; x<maxspans; x++) {
-			if (spans[x] && !spans[x]->alarms && (spans[x]->flags & DAHDI_FLAG_RUNNING)) {
-				if (master != spans[x]) {
-					if (debug) {
-						module_printk(KERN_NOTICE,
-						     "Master changed to %s\n",
-						     spans[x]->name);
-					}
+			struct dahdi_span *const s = spans[x];
+			if (s && !s->alarms && (s->flags & DAHDI_FLAG_RUNNING)) {
+				if (debug && (master != s)) {
+					module_printk(KERN_NOTICE,
+						"Master changed to %s\n",
+						s->name);
 				}
-				master = spans[x];
+				master = s;
 				break;
 			}
 		}
-
 		/* Report more detailed alarms */
 		if (debug) {
 			if (span->alarms & DAHDI_ALARM_LOS) {
@@ -3568,20 +3585,6 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 		}
 	}
 }
-
-#define VALID_SPAN(j) do { \
-	if ((j >= DAHDI_MAX_SPANS) || (j < 1)) \
-		return -EINVAL; \
-	if (!spans[j]) \
-		return -ENXIO; \
-} while(0)
-
-#define CHECK_VALID_SPAN(j) do { \
-	/* Start a given span */ \
-	if (get_user(j, (int __user *)data)) \
-		return -EFAULT; \
-	VALID_SPAN(j); \
-} while(0)
 
 #define VALID_CHANNEL(j) do { \
 	if ((j >= DAHDI_MAX_CHANNELS) || (j < 1)) \
@@ -3771,6 +3774,7 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 		struct dahdi_params param;
 	} stack;
 
+	struct dahdi_span *s;
 	struct dahdi_chan *chan;
 	unsigned long flags;
 	int i,j;
@@ -3908,55 +3912,54 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 		if (copy_from_user(&stack.spaninfo, user_data, size_to_copy))
 			return -EFAULT;
 		i = stack.spaninfo.spanno; /* get specified span number */
-		if ((i < 0) || (i >= maxspans)) return(-EINVAL);  /* if bad span no */
 		if (i == 0) {
 			/* if to figure it out for this chan */
 			if (!chans[unit])
 				return -EINVAL;
 			i = chans[unit]->span->spanno;
 		}
-		if (!spans[i])
+		s = find_span(i);
+		if (!s)
 			return -EINVAL;
 		stack.spaninfo.spanno = i; /* put the span # in here */
-		stack.spaninfo.totalspans = 0;
-		if (maxspans) stack.spaninfo.totalspans = maxspans - 1; /* put total number of spans here */
-		dahdi_copy_string(stack.spaninfo.desc, spans[i]->desc, sizeof(stack.spaninfo.desc));
-		dahdi_copy_string(stack.spaninfo.name, spans[i]->name, sizeof(stack.spaninfo.name));
-		stack.spaninfo.alarms = spans[i]->alarms;		/* get alarm status */
-		stack.spaninfo.rxlevel = spans[i]->rxlevel;	/* get rx level */
-		stack.spaninfo.txlevel = spans[i]->txlevel;	/* get tx level */
+		stack.spaninfo.totalspans = span_count();
+		dahdi_copy_string(stack.spaninfo.desc, s->desc, sizeof(stack.spaninfo.desc));
+		dahdi_copy_string(stack.spaninfo.name, s->name, sizeof(stack.spaninfo.name));
+		stack.spaninfo.alarms = s->alarms;		/* get alarm status */
+		stack.spaninfo.rxlevel = s->rxlevel;	/* get rx level */
+		stack.spaninfo.txlevel = s->txlevel;	/* get tx level */
 
-		stack.spaninfo.bpvcount = spans[i]->count.bpv;
-		stack.spaninfo.crc4count = spans[i]->count.crc4;
-		stack.spaninfo.ebitcount = spans[i]->count.ebit;
-		stack.spaninfo.fascount = spans[i]->count.fas;
-		stack.spaninfo.fecount = spans[i]->count.fe;
-		stack.spaninfo.cvcount = spans[i]->count.cv;
-		stack.spaninfo.becount = spans[i]->count.be;
-		stack.spaninfo.prbs = spans[i]->count.prbs;
-		stack.spaninfo.errsec = spans[i]->count.errsec;
+		stack.spaninfo.bpvcount = s->count.bpv;
+		stack.spaninfo.crc4count = s->count.crc4;
+		stack.spaninfo.ebitcount = s->count.ebit;
+		stack.spaninfo.fascount = s->count.fas;
+		stack.spaninfo.fecount = s->count.fe;
+		stack.spaninfo.cvcount = s->count.cv;
+		stack.spaninfo.becount = s->count.be;
+		stack.spaninfo.prbs = s->count.prbs;
+		stack.spaninfo.errsec = s->count.errsec;
 
-		stack.spaninfo.irqmisses = spans[i]->irqmisses;	/* get IRQ miss count */
-		stack.spaninfo.syncsrc = spans[i]->syncsrc;	/* get active sync source */
-		stack.spaninfo.totalchans = spans[i]->channels;
+		stack.spaninfo.irqmisses = s->irqmisses;	/* get IRQ miss count */
+		stack.spaninfo.syncsrc = s->syncsrc;	/* get active sync source */
+		stack.spaninfo.totalchans = s->channels;
 		stack.spaninfo.numchans = 0;
-		for (j = 0; j < spans[i]->channels; j++) {
-			if (spans[i]->chans[j]->sig)
+		for (j = 0; j < s->channels; j++) {
+			if (s->chans[j]->sig)
 				stack.spaninfo.numchans++;
 		}
-		stack.spaninfo.lbo = spans[i]->lbo;
-		stack.spaninfo.lineconfig = spans[i]->lineconfig;
-		stack.spaninfo.irq = spans[i]->irq;
-		stack.spaninfo.linecompat = spans[i]->linecompat;
-		dahdi_copy_string(stack.spaninfo.lboname, dahdi_lboname(spans[i]->lbo), sizeof(stack.spaninfo.lboname));
-		if (spans[i]->manufacturer)
-			dahdi_copy_string(stack.spaninfo.manufacturer, spans[i]->manufacturer,
+		stack.spaninfo.lbo = s->lbo;
+		stack.spaninfo.lineconfig = s->lineconfig;
+		stack.spaninfo.irq = s->irq;
+		stack.spaninfo.linecompat = s->linecompat;
+		dahdi_copy_string(stack.spaninfo.lboname, dahdi_lboname(s->lbo), sizeof(stack.spaninfo.lboname));
+		if (s->manufacturer)
+			dahdi_copy_string(stack.spaninfo.manufacturer, s->manufacturer,
 				sizeof(stack.spaninfo.manufacturer));
-		if (spans[i]->devicetype)
-			dahdi_copy_string(stack.spaninfo.devicetype, spans[i]->devicetype, sizeof(stack.spaninfo.devicetype));
-		dahdi_copy_string(stack.spaninfo.location, spans[i]->location, sizeof(stack.spaninfo.location));
-		if (spans[i]->spantype)
-			dahdi_copy_string(stack.spaninfo.spantype, spans[i]->spantype, sizeof(stack.spaninfo.spantype));
+		if (s->devicetype)
+			dahdi_copy_string(stack.spaninfo.devicetype, s->devicetype, sizeof(stack.spaninfo.devicetype));
+		dahdi_copy_string(stack.spaninfo.location, s->location, sizeof(stack.spaninfo.location));
+		if (s->spantype)
+			dahdi_copy_string(stack.spaninfo.spantype, s->spantype, sizeof(stack.spaninfo.spantype));
 
 		if (copy_to_user(user_data, &stack.spaninfo, size_to_copy))
 			return -EFAULT;
@@ -3968,62 +3971,60 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 				   size_to_copy))
 			return -EFAULT;
 		i = stack.spaninfo_v1.spanno; /* get specified span number */
-		if ((i < 0) || (i >= maxspans))
-			return -EINVAL;  /* if bad span no */
 		if (i == 0) {
 			/* if to figure it out for this chan */
 			if (!chans[unit])
 				return -EINVAL;
 			i = chans[unit]->span->spanno;
 		}
-		if (!spans[i])
+		s = find_span(i);
+		if (!s)
 			return -EINVAL;
 		stack.spaninfo_v1.spanno = i; /* put the span # in here */
 		stack.spaninfo_v1.totalspans = 0;
-		if (maxspans) /* put total number of spans here */
-			stack.spaninfo_v1.totalspans = maxspans - 1;
+		stack.spaninfo_v1.totalspans = span_count();
 		dahdi_copy_string(stack.spaninfo_v1.desc,
-				  spans[i]->desc,
+				  s->desc,
 				  sizeof(stack.spaninfo_v1.desc));
 		dahdi_copy_string(stack.spaninfo_v1.name,
-				  spans[i]->name,
+				  s->name,
 				  sizeof(stack.spaninfo_v1.name));
-		stack.spaninfo_v1.alarms = spans[i]->alarms;
-		stack.spaninfo_v1.bpvcount = spans[i]->count.bpv;
-		stack.spaninfo_v1.rxlevel = spans[i]->rxlevel;
-		stack.spaninfo_v1.txlevel = spans[i]->txlevel;
-		stack.spaninfo_v1.crc4count = spans[i]->count.crc4;
-		stack.spaninfo_v1.ebitcount = spans[i]->count.ebit;
-		stack.spaninfo_v1.fascount = spans[i]->count.fas;
-		stack.spaninfo_v1.irqmisses = spans[i]->irqmisses;
-		stack.spaninfo_v1.syncsrc = spans[i]->syncsrc;
-		stack.spaninfo_v1.totalchans = spans[i]->channels;
+		stack.spaninfo_v1.alarms = s->alarms;
+		stack.spaninfo_v1.bpvcount = s->count.bpv;
+		stack.spaninfo_v1.rxlevel = s->rxlevel;
+		stack.spaninfo_v1.txlevel = s->txlevel;
+		stack.spaninfo_v1.crc4count = s->count.crc4;
+		stack.spaninfo_v1.ebitcount = s->count.ebit;
+		stack.spaninfo_v1.fascount = s->count.fas;
+		stack.spaninfo_v1.irqmisses = s->irqmisses;
+		stack.spaninfo_v1.syncsrc = s->syncsrc;
+		stack.spaninfo_v1.totalchans = s->channels;
 		stack.spaninfo_v1.numchans = 0;
-		for (j = 0; j < spans[i]->channels; j++) {
-			if (spans[i]->chans[j]->sig)
+		for (j = 0; j < s->channels; j++) {
+			if (s->chans[j]->sig)
 				stack.spaninfo_v1.numchans++;
 		}
-		stack.spaninfo_v1.lbo = spans[i]->lbo;
-		stack.spaninfo_v1.lineconfig = spans[i]->lineconfig;
-		stack.spaninfo_v1.irq = spans[i]->irq;
-		stack.spaninfo_v1.linecompat = spans[i]->linecompat;
+		stack.spaninfo_v1.lbo = s->lbo;
+		stack.spaninfo_v1.lineconfig = s->lineconfig;
+		stack.spaninfo_v1.irq = s->irq;
+		stack.spaninfo_v1.linecompat = s->linecompat;
 		dahdi_copy_string(stack.spaninfo_v1.lboname,
-				  dahdi_lboname(spans[i]->lbo),
+				  dahdi_lboname(s->lbo),
 				  sizeof(stack.spaninfo_v1.lboname));
-		if (spans[i]->manufacturer)
+		if (s->manufacturer)
 			dahdi_copy_string(stack.spaninfo_v1.manufacturer,
-				spans[i]->manufacturer,
+				s->manufacturer,
 				sizeof(stack.spaninfo_v1.manufacturer));
-		if (spans[i]->devicetype)
+		if (s->devicetype)
 			dahdi_copy_string(stack.spaninfo_v1.devicetype,
-					  spans[i]->devicetype,
+					  s->devicetype,
 					  sizeof(stack.spaninfo_v1.devicetype));
 		dahdi_copy_string(stack.spaninfo_v1.location,
-				  spans[i]->location,
+				  s->location,
 				  sizeof(stack.spaninfo_v1.location));
-		if (spans[i]->spantype)
+		if (s->spantype)
 			dahdi_copy_string(stack.spaninfo_v1.spantype,
-					  spans[i]->spantype,
+					  s->spantype,
 					  sizeof(stack.spaninfo_v1.spantype));
 
 		if (copy_to_user((__user struct dahdi_spaninfo_v1 *) data,
@@ -4164,6 +4165,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	unsigned long flags;
 	void __user * const user_data = (void __user *)data;
 	int rv;
+	struct dahdi_span *s;
 	switch(cmd) {
 	case DAHDI_INDIRECT:
 	{
@@ -4177,40 +4179,49 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	case DAHDI_SPANCONFIG:
 	{
 		struct dahdi_lineconfig lc;
+		struct dahdi_span *s;
 
 		if (copy_from_user(&lc, user_data, sizeof(lc)))
 			return -EFAULT;
-		VALID_SPAN(lc.span);
-		if ((lc.lineconfig & 0x1ff0 & spans[lc.span]->linecompat) !=
+		s = find_span(lc.span);
+		if (!s)
+			return -ENXIO;
+		if ((lc.lineconfig & 0x1ff0 & s->linecompat) !=
 		    (lc.lineconfig & 0x1ff0))
 			return -EINVAL;
-		if (spans[lc.span]->ops->spanconfig) {
-			spans[lc.span]->lineconfig = lc.lineconfig;
-			spans[lc.span]->lbo = lc.lbo;
-			spans[lc.span]->txlevel = lc.lbo;
-			spans[lc.span]->rxlevel = 0;
+		if (s->ops->spanconfig) {
+			s->lineconfig = lc.lineconfig;
+			s->lbo = lc.lbo;
+			s->txlevel = lc.lbo;
+			s->rxlevel = 0;
 
-			return spans[lc.span]->ops->spanconfig(spans[lc.span], &lc);
+			return s->ops->spanconfig(s, &lc);
 		}
 		return 0;
 	}
 	case DAHDI_STARTUP:
-		CHECK_VALID_SPAN(j);
-		if (spans[j]->flags & DAHDI_FLAG_RUNNING)
+		if (get_user(j, (int __user *)data))
+			return -EFAULT;
+		s = find_span(j);
+		if (!s)
+			return -ENXIO;
+
+		if (s->flags & DAHDI_FLAG_RUNNING)
 			return 0;
 
-		if (spans[j]->ops->startup)
-			res = spans[j]->ops->startup(spans[j]);
+		if (s->ops->startup)
+			res = s->ops->startup(s);
 
 		if (!res) {
 			/* Mark as running and hangup any channels */
-			spans[j]->flags |= DAHDI_FLAG_RUNNING;
-			for (x=0;x<spans[j]->channels;x++) {
-				y = dahdi_q_sig(spans[j]->chans[x]) & 0xff;
-				if (y >= 0) spans[j]->chans[x]->rxsig = (unsigned char)y;
-				spin_lock_irqsave(&spans[j]->chans[x]->lock, flags);
-				dahdi_hangup(spans[j]->chans[x]);
-				spin_unlock_irqrestore(&spans[j]->chans[x]->lock, flags);
+			s->flags |= DAHDI_FLAG_RUNNING;
+			for (x = 0; x < s->channels; x++) {
+				y = dahdi_q_sig(s->chans[x]) & 0xff;
+				if (y >= 0)
+					s->chans[x]->rxsig = (unsigned char)y;
+				spin_lock_irqsave(&s->chans[x]->lock, flags);
+				dahdi_hangup(s->chans[x]);
+				spin_unlock_irqrestore(&s->chans[x]->lock, flags);
 				/*
 				 * Set the rxhooksig back to
 				 * DAHDI_RXSIG_INITIAL so that new events are
@@ -4218,20 +4229,24 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				 * received hook state.
 				 * 
 				 */
-				spans[j]->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
+				s->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
 			}
 		}
 		return 0;
 	case DAHDI_SHUTDOWN:
-		CHECK_VALID_SPAN(j);
+		if (get_user(j, (int __user *)data))
+			return -EFAULT;
+		s = find_span(j);
+		if (!s)
+			return -ENXIO;
 
 		/* Unconfigure channels */
-		for (x = 0; x < spans[j]->channels; x++)
-			spans[j]->chans[x]->sig = 0;
+		for (x = 0; x < s->channels; x++)
+			s->chans[x]->sig = 0;
 
-		if (spans[j]->ops->shutdown)
-			res =  spans[j]->ops->shutdown(spans[j]);
-		spans[j]->flags &= ~DAHDI_FLAG_RUNNING;
+		if (s->ops->shutdown)
+			res =  s->ops->shutdown(s);
+		s->flags &= ~DAHDI_FLAG_RUNNING;
 		return 0;
 	case DAHDI_ATTACH_ECHOCAN:
 	{
@@ -4590,16 +4605,16 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		  /* get struct from user */
 		if (copy_from_user(&maint, user_data, sizeof(maint)))
 			return -EFAULT;
-		/* must be valid span number */
-		if ((maint.spanno < 1) || (maint.spanno > DAHDI_MAX_SPANS) || (!spans[maint.spanno]))
+		s = find_span(maint.spanno);
+		if (!s)
 			return -EINVAL;
-		if (!spans[maint.spanno]->ops->maint)
+		if (!s->ops->maint)
 			return -ENOSYS;
-		spin_lock_irqsave(&spans[maint.spanno]->lock, flags);
+		spin_lock_irqsave(&s->lock, flags);
 		  /* save current maint state */
-		i = spans[maint.spanno]->maintstat;
+		i = s->maintstat;
 		  /* set maint mode */
-		spans[maint.spanno]->maintstat = maint.command;
+		s->maintstat = maint.command;
 		switch(maint.command) {
 		case DAHDI_MAINT_NONE:
 		case DAHDI_MAINT_LOCALLOOP:
@@ -4608,23 +4623,23 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			/* if same, ignore it */
 			if (i == maint.command)
 				break;
-			rv = spans[maint.spanno]->ops->maint(spans[maint.spanno], maint.command);
-			spin_unlock_irqrestore(&spans[maint.spanno]->lock, flags);
+			rv = s->ops->maint(s, maint.command);
+			spin_unlock_irqrestore(&s->lock, flags);
 			if (rv)
 				return rv;
-			spin_lock_irqsave(&spans[maint.spanno]->lock, flags);
+			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-			spans[maint.spanno]->mainttimer = DAHDI_LOOPCODE_TIME * DAHDI_CHUNKSIZE;
-			rv = spans[maint.spanno]->ops->maint(spans[maint.spanno], maint.command);
-			spin_unlock_irqrestore(&spans[maint.spanno]->lock, flags);
+			s->mainttimer = DAHDI_LOOPCODE_TIME * DAHDI_CHUNKSIZE;
+			rv = s->ops->maint(s, maint.command);
+			spin_unlock_irqrestore(&s->lock, flags);
 			if (rv)
 				return rv;
-			rv = schluffen(&spans[maint.spanno]->maintq);
+			rv = schluffen(&s->maintq);
 			if (rv)
 				return rv;
-			spin_lock_irqsave(&spans[maint.spanno]->lock, flags);
+			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
 		case DAHDI_MAINT_MULTI_DEFECT:
@@ -4639,26 +4654,23 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			   maintenance functions, unless the driver is
 			   already in a maint state */
 			if(!i)
-				spans[maint.spanno]->maintstat = 0;
+				s->maintstat = 0;
 
-			rv = spans[maint.spanno]->ops->maint(spans[maint.spanno],
-							     maint.command);
-			spin_unlock_irqrestore(&spans[maint.spanno]->lock,
-					       flags);
+			rv = s->ops->maint(s, maint.command);
+			spin_unlock_irqrestore(&s->lock, flags);
 			if (rv)
 				return rv;
-			spin_lock_irqsave(&spans[maint.spanno]->lock, flags);
+			spin_lock_irqsave(&s->lock, flags);
 			break;
 		default:
-			spin_unlock_irqrestore(&spans[maint.spanno]->lock,
-					       flags);
+			spin_unlock_irqrestore(&s->lock, flags);
 			module_printk(KERN_NOTICE,
 				      "Unknown maintenance event: %d\n",
 				      maint.command);
 			return -ENOSYS;
 		}
-		dahdi_alarm_notify(spans[maint.spanno]);  /* process alarm-related events */
-		spin_unlock_irqrestore(&spans[maint.spanno]->lock, flags);
+		dahdi_alarm_notify(s);  /* process alarm-related events */
+		spin_unlock_irqrestore(&s->lock, flags);
 		break;
 	}
 	case DAHDI_DYNAMIC_CREATE:
@@ -8652,27 +8664,28 @@ static void watchdog_check(unsigned long ignored)
 
 	local_irq_save(flags);
 	for (x=0;x<maxspans;x++) {
-		if (spans[x] && (spans[x]->flags & DAHDI_FLAG_RUNNING)) {
-			if (spans[x]->watchcounter == DAHDI_WATCHDOG_INIT) {
+		s = spans[x];
+		if (s && (s->flags & DAHDI_FLAG_RUNNING)) {
+			if (s->watchcounter == DAHDI_WATCHDOG_INIT) {
 				/* Whoops, dead card */
-				if ((spans[x]->watchstate == DAHDI_WATCHSTATE_OK) ||
-					(spans[x]->watchstate == DAHDI_WATCHSTATE_UNKNOWN)) {
-					spans[x]->watchstate = DAHDI_WATCHSTATE_RECOVERING;
-					if (spans[x]->watchdog) {
-						module_printk(KERN_NOTICE, "Kicking span %s\n", spans[x]->name);
-						spans[x]->watchdog(spans[x], DAHDI_WATCHDOG_NOINTS);
+				if ((s->watchstate == DAHDI_WATCHSTATE_OK) ||
+					(s->watchstate == DAHDI_WATCHSTATE_UNKNOWN)) {
+					s->watchstate = DAHDI_WATCHSTATE_RECOVERING;
+					if (s->watchdog) {
+						module_printk(KERN_NOTICE, "Kicking span %s\n", s->name);
+						s->watchdog(spans[x], DAHDI_WATCHDOG_NOINTS);
 					} else {
-						module_printk(KERN_NOTICE, "Span %s is dead with no revival\n", spans[x]->name);
-						spans[x]->watchstate = DAHDI_WATCHSTATE_FAILED;
+						module_printk(KERN_NOTICE, "Span %s is dead with no revival\n", s->name);
+						s->watchstate = DAHDI_WATCHSTATE_FAILED;
 					}
 				}
 			} else {
-				if ((spans[x]->watchstate != DAHDI_WATCHSTATE_OK) &&
-					(spans[x]->watchstate != DAHDI_WATCHSTATE_UNKNOWN))
-						module_printk(KERN_NOTICE, "Span %s is alive!\n", spans[x]->name);
-				spans[x]->watchstate = DAHDI_WATCHSTATE_OK;
+				if ((s->watchstate != DAHDI_WATCHSTATE_OK) &&
+					(s->watchstate != DAHDI_WATCHSTATE_UNKNOWN))
+						module_printk(KERN_NOTICE, "Span %s is alive!\n", s->name);
+				s->watchstate = DAHDI_WATCHSTATE_OK;
 			}
-			spans[x]->watchcounter = DAHDI_WATCHDOG_INIT;
+			s->watchcounter = DAHDI_WATCHDOG_INIT;
 		}
 	}
 	local_irq_restore(flags);
