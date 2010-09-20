@@ -3766,6 +3766,73 @@ cleanup:
 	return res;
 }
 
+static int dahdi_ioctl_chandiag(struct file *file, int cmd, unsigned long data)
+{
+	unsigned long flags;
+	int channo;
+	/* there really is no need to initialize this structure because when it is used it has
+	 * already been completely overwritten, but apparently the compiler cannot figure that
+	 * out and warns about uninitialized usage... so initialize it.
+	 */
+	struct dahdi_echocan_state ec_state = { .ops = NULL, };
+	struct dahdi_chan *chan;
+	struct dahdi_chan *temp;
+
+	/* get channel number from user */
+	get_user(channo, (int __user *)data);
+
+	VALID_CHANNEL(channo);
+	chan = chans[channo];
+	if (!chan)
+		return -EINVAL;
+
+	temp = kmalloc(sizeof(*chan), GFP_KERNEL);
+	if (!temp)
+		return -ENOMEM;
+
+	/* lock channel */
+	spin_lock_irqsave(&chan->lock, flags);
+	/* make static copy of channel */
+	*temp = *chan;
+	if (temp->ec_state)
+		ec_state = *temp->ec_state;
+
+	/* release it. */
+	spin_unlock_irqrestore(&chan->lock, flags);
+
+	module_printk(KERN_INFO, "Dump of DAHDI Channel %d (%s,%d,%d):\n\n",
+		      channo, temp->name, temp->channo, temp->chanpos);
+	module_printk(KERN_INFO, "flags: %x hex, writechunk: %p, readchunk: %p\n",
+		      (unsigned int) temp->flags, temp->writechunk, temp->readchunk);
+	module_printk(KERN_INFO, "rxgain: %p, txgain: %p, gainalloc: %d\n",
+		      temp->rxgain, temp->txgain, temp->gainalloc);
+	module_printk(KERN_INFO, "span: %p, sig: %x hex, sigcap: %x hex\n",
+		      temp->span, temp->sig, temp->sigcap);
+	module_printk(KERN_INFO, "inreadbuf: %d, outreadbuf: %d, inwritebuf: %d, outwritebuf: %d\n",
+		      temp->inreadbuf, temp->outreadbuf, temp->inwritebuf, temp->outwritebuf);
+	module_printk(KERN_INFO, "blocksize: %d, numbufs: %d, txbufpolicy: %d, txbufpolicy: %d\n",
+		      temp->blocksize, temp->numbufs, temp->txbufpolicy, temp->rxbufpolicy);
+	module_printk(KERN_INFO, "txdisable: %d, rxdisable: %d, iomask: %d\n",
+		      temp->txdisable, temp->rxdisable, temp->iomask);
+	module_printk(KERN_INFO, "curzone: %p, tonezone: %d, curtone: %p, tonep: %d\n",
+		      temp->curzone, temp->tonezone, temp->curtone, temp->tonep);
+	module_printk(KERN_INFO, "digitmode: %d, txdialbuf: %s, dialing: %d, aftdialtimer: %d, cadpos. %d\n",
+		      temp->digitmode, temp->txdialbuf, temp->dialing,
+		      temp->afterdialingtimer, temp->cadencepos);
+	module_printk(KERN_INFO, "confna: %d, confn: %d, confmode: %d, confmute: %d\n",
+		      temp->confna, temp->_confn, temp->confmode, temp->confmute);
+	module_printk(KERN_INFO, "ec: %p, deflaw: %d, xlaw: %p\n",
+		      temp->ec_state, temp->deflaw, temp->xlaw);
+	if (temp->ec_state) {
+		module_printk(KERN_INFO, "echostate: %02x, echotimer: %d, echolastupdate: %d\n",
+			      ec_state.status.mode, ec_state.status.pretrain_timer, ec_state.status.last_train_tap);
+	}
+	module_printk(KERN_INFO, "itimer: %d, otimer: %d, ringdebtimer: %d\n\n",
+		      temp->itimer, temp->otimer, temp->ringdebtimer);
+	kfree(temp);
+	return 0;
+}
+
 static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit)
 {
 	union {
@@ -3776,7 +3843,6 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	struct dahdi_span *s;
 	struct dahdi_chan *chan;
-	unsigned long flags;
 	int i,j;
 	int return_master = 0;
 	size_t size_to_copy;
@@ -4033,68 +4099,7 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 	case DAHDI_CHANDIAG_V1: /* Intentional drop through. */
 	case DAHDI_CHANDIAG:
-	{
-		/* there really is no need to initialize this structure because when it is used it has
-		 * already been completely overwritten, but apparently the compiler cannot figure that
-		 * out and warns about uninitialized usage... so initialize it.
-		 */
-		struct dahdi_echocan_state ec_state = { .ops = NULL, };
-
-		/* get channel number from user */
-		get_user(j, (int __user *)data);
-		/* make sure its a valid channel number */
-		if ((j < 1) || (j >= maxchans))
-			return -EINVAL;
-		/* if channel not mapped, not there */
-		if (!chans[j])
-			return -EINVAL;
-
-		chan = kmalloc(sizeof(*chan), GFP_KERNEL);
-		if (!chan)
-			return -ENOMEM;
-
-		/* lock channel */
-		spin_lock_irqsave(&chans[j]->lock, flags);
-		/* make static copy of channel */
-		*chan = *chans[j];
-		if (chan->ec_state) {
-			ec_state = *chan->ec_state;
-		}
-		/* release it. */
-		spin_unlock_irqrestore(&chans[j]->lock, flags);
-
-		module_printk(KERN_INFO, "Dump of DAHDI Channel %d (%s,%d,%d):\n\n",j,
-			      chan->name, chan->channo, chan->chanpos);
-		module_printk(KERN_INFO, "flags: %x hex, writechunk: %p, readchunk: %p\n",
-			      (unsigned int) chan->flags, chan->writechunk, chan->readchunk);
-		module_printk(KERN_INFO, "rxgain: %p, txgain: %p, gainalloc: %d\n",
-			      chan->rxgain, chan->txgain, chan->gainalloc);
-		module_printk(KERN_INFO, "span: %p, sig: %x hex, sigcap: %x hex\n",
-			      chan->span, chan->sig, chan->sigcap);
-		module_printk(KERN_INFO, "inreadbuf: %d, outreadbuf: %d, inwritebuf: %d, outwritebuf: %d\n",
-			      chan->inreadbuf, chan->outreadbuf, chan->inwritebuf, chan->outwritebuf);
-		module_printk(KERN_INFO, "blocksize: %d, numbufs: %d, txbufpolicy: %d, txbufpolicy: %d\n",
-			      chan->blocksize, chan->numbufs, chan->txbufpolicy, chan->rxbufpolicy);
-		module_printk(KERN_INFO, "txdisable: %d, rxdisable: %d, iomask: %d\n",
-			      chan->txdisable, chan->rxdisable, chan->iomask);
-		module_printk(KERN_INFO, "curzone: %p, tonezone: %d, curtone: %p, tonep: %d\n",
-			      chan->curzone, chan->tonezone, chan->curtone, chan->tonep);
-		module_printk(KERN_INFO, "digitmode: %d, txdialbuf: %s, dialing: %d, aftdialtimer: %d, cadpos. %d\n",
-			      chan->digitmode, chan->txdialbuf, chan->dialing,
-			      chan->afterdialingtimer, chan->cadencepos);
-		module_printk(KERN_INFO, "confna: %d, confn: %d, confmode: %d, confmute: %d\n",
-			      chan->confna, chan->_confn, chan->confmode, chan->confmute);
-		module_printk(KERN_INFO, "ec: %p, deflaw: %d, xlaw: %p\n",
-			      chan->ec_state, chan->deflaw, chan->xlaw);
-		if (chan->ec_state) {
-			module_printk(KERN_INFO, "echostate: %02x, echotimer: %d, echolastupdate: %d\n",
-				      ec_state.status.mode, ec_state.status.pretrain_timer, ec_state.status.last_train_tap);
-		}
-		module_printk(KERN_INFO, "itimer: %d, otimer: %d, ringdebtimer: %d\n\n",
-			      chan->itimer, chan->otimer, chan->ringdebtimer);
-		kfree(chan);
-		break;
-	}
+		return dahdi_ioctl_chandiag(file, cmd, data);
 	default:
 		return -ENOTTY;
 	}
