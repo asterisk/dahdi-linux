@@ -2823,19 +2823,21 @@ static int dahdi_specchan_open(struct file *file)
 	return res;
 }
 
-static int dahdi_specchan_release(struct file *file, int unit)
+static int dahdi_specchan_release(struct file *file)
 {
 	int res=0;
 	unsigned long flags;
-	struct dahdi_chan *const chan = chans[unit];
+	struct dahdi_chan *chan = chan_from_file(file);
 
 	if (chan) {
 		/* Chan lock protects contents against potentially non atomic accesses.
 		 * So if the pointer setting is not atomic, we should protect */
 		spin_lock_irqsave(&chan->lock, flags);
 		chan->file = NULL;
+		file->private_data = NULL;
 		spin_unlock_irqrestore(&chan->lock, flags);
 		close_channel(chan);
+		clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
 		if (chan->span) {
 			struct module *owner = chan->span->ops->owner;
 
@@ -2843,9 +2845,6 @@ static int dahdi_specchan_release(struct file *file, int unit)
 				res = chan->span->ops->close(chan);
 			module_put(owner);
 		}
-		/* The channel might be destroyed by low-level driver span->close() */
-		if (chans[unit])
-			clear_bit(DAHDI_FLAGBIT_OPEN, &chans[unit]->flags);
 	} else
 		res = -ENXIO;
 	return res;
@@ -3488,12 +3487,12 @@ static int dahdi_release(struct inode *inode, struct file *file)
 		if (!chan)
 			return dahdi_chan_release(file);
 		else
-			return dahdi_specchan_release(file, chan->channo);
+			return dahdi_specchan_release(file);
 	}
 	if (unit == 255) {
 		chan = file->private_data;
 		if (chan) {
-			res = dahdi_specchan_release(file, chan->channo);
+			res = dahdi_specchan_release(file);
 			dahdi_free_pseudo(chan);
 		} else {
 			module_printk(KERN_NOTICE, "Pseudo release and no private data??\n");
@@ -3501,7 +3500,7 @@ static int dahdi_release(struct inode *inode, struct file *file)
 		}
 		return res;
 	}
-	return dahdi_specchan_release(file, unit);
+	return dahdi_specchan_release(file);
 }
 
 #if 0
