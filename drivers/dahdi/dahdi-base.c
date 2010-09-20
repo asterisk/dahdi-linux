@@ -5145,9 +5145,9 @@ static int dahdi_ioctl_getconf(struct file *file, unsigned long data)
 
 static int
 dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
-			  unsigned long data, int unit)
+			  unsigned long data)
 {
-	struct dahdi_chan *chan = chans[unit];
+	struct dahdi_chan *chan = chan_from_file(file);
 	union {
 		struct dahdi_bufferinfo bi;
 		struct dahdi_ring_cadence cad;
@@ -5379,8 +5379,8 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		return dahdi_ioctl_confdiag(file, data);
 
 	case DAHDI_CHANNO:  /* get channel number of stream */
-		/* return unit/channel number */
-		put_user(unit, (int __user *)data);
+		/* return channel number */
+		put_user(chan->channo, (int __user *)data);
 		break;
 	case DAHDI_SETLAW:
 		get_user(j, (int __user *)data);
@@ -5438,7 +5438,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		break;
 	default:
 		/* Check for common ioctl's and private ones */
-		rv = dahdi_common_ioctl(file, cmd, data, unit);
+		rv = dahdi_common_ioctl(file, cmd, data, chan->channo);
 		/* if no span, just return with value */
 		if (!chan->span) return rv;
 		if ((rv == -ENOTTY) && chan->span->ops->ioctl)
@@ -6033,7 +6033,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 		break;
 #endif
 	default:
-		return dahdi_chanandpseudo_ioctl(file, cmd, data, chan->channo);
+		return dahdi_chanandpseudo_ioctl(file, cmd, data);
 	}
 	return 0;
 }
@@ -6072,7 +6072,6 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 #endif
 {
 	int unit = UNIT(file);
-	struct dahdi_chan *chan;
 	struct dahdi_timer *timer;
 	int ret;
 
@@ -6109,13 +6108,12 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 		goto unlock_exit;
 	}
 	if (unit == 255) {
-		chan = file->private_data;
-		if (!chan) {
+		if (!file->private_data) {
 			module_printk(KERN_NOTICE, "No pseudo channel structure to read?\n");
 			ret = -EINVAL;
 			goto unlock_exit;
 		}
-		ret = dahdi_chanandpseudo_ioctl(file, cmd, data, chan->channo);
+		ret = dahdi_chanandpseudo_ioctl(file, cmd, data);
 		goto unlock_exit;
 	}
 
