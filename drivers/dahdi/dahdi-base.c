@@ -8716,9 +8716,10 @@ int dahdi_receive(struct dahdi_span *span)
 	span->watchcounter--;
 #endif
 	for (x=0;x<span->channels;x++) {
-		if (span->chans[x]->master == span->chans[x]) {
-			spin_lock_irqsave(&span->chans[x]->lock, flags);
-			if (span->chans[x]->nextslave) {
+		struct dahdi_chan *const chan = span->chans[x];
+		if (chan->master == chan) {
+			spin_lock_irqsave(&chan->lock, flags);
+			if (chan->nextslave) {
 				/* Must process each slave at the same time */
 				u_char data[DAHDI_CHUNKSIZE];
 				int pos = 0;
@@ -8728,8 +8729,8 @@ int dahdi_receive(struct dahdi_span *span)
 					do {
 						data[pos++] = span->chans[z]->readchunk[y];
 						if (pos == DAHDI_CHUNKSIZE) {
-							if(!(span->chans[x]->flags & DAHDI_FLAG_NOSTDTXRX))
-								__dahdi_receive_chunk(span->chans[x], data);
+							if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
+								__dahdi_receive_chunk(chan, data);
 							pos = 0;
 						}
 						z=span->chans[z]->nextslave;
@@ -8737,57 +8738,56 @@ int dahdi_receive(struct dahdi_span *span)
 				}
 			} else {
 				/* Process a normal channel */
-				if (!(span->chans[x]->flags & DAHDI_FLAG_NOSTDTXRX))
-					__dahdi_real_receive(span->chans[x]);
+				if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
+					__dahdi_real_receive(chan);
 			}
-			if (span->chans[x]->itimer) {
-				span->chans[x]->itimer -= DAHDI_CHUNKSIZE;
-				if (span->chans[x]->itimer <= 0) {
-					rbs_itimer_expire(span->chans[x]);
-				}
+			if (chan->itimer) {
+				chan->itimer -= DAHDI_CHUNKSIZE;
+				if (chan->itimer <= 0)
+					rbs_itimer_expire(chan);
 			}
-			if (span->chans[x]->ringdebtimer)
-				span->chans[x]->ringdebtimer--;
-			if (span->chans[x]->sig & __DAHDI_SIG_FXS) {
-				if (span->chans[x]->rxhooksig == DAHDI_RXSIG_RING)
-					span->chans[x]->ringtrailer = DAHDI_RINGTRAILER;
-				else if (span->chans[x]->ringtrailer) {
-					span->chans[x]->ringtrailer-= DAHDI_CHUNKSIZE;
+			if (chan->ringdebtimer)
+				chan->ringdebtimer--;
+			if (chan->sig & __DAHDI_SIG_FXS) {
+				if (chan->rxhooksig == DAHDI_RXSIG_RING)
+					chan->ringtrailer = DAHDI_RINGTRAILER;
+				else if (chan->ringtrailer) {
+					chan->ringtrailer -= DAHDI_CHUNKSIZE;
 					/* See if RING trailer is expired */
-					if (!span->chans[x]->ringtrailer && !span->chans[x]->ringdebtimer)
-						__qevent(span->chans[x],DAHDI_EVENT_RINGOFFHOOK);
+					if (!chan->ringtrailer && !chan->ringdebtimer)
+						__qevent(chan, DAHDI_EVENT_RINGOFFHOOK);
 				}
 			}
-			if (span->chans[x]->pulsetimer)
+			if (chan->pulsetimer)
 			{
-				span->chans[x]->pulsetimer--;
-				if (span->chans[x]->pulsetimer <= 0)
+				chan->pulsetimer--;
+				if (chan->pulsetimer <= 0)
 				{
-					if (span->chans[x]->pulsecount)
+					if (chan->pulsecount)
 					{
-						if (span->chans[x]->pulsecount > 12) {
+						if (chan->pulsecount > 12) {
 
 							module_printk(KERN_NOTICE, "Got pulse digit %d on %s???\n",
-						    span->chans[x]->pulsecount,
-							span->chans[x]->name);
-						} else if (span->chans[x]->pulsecount > 11) {
-							__qevent(span->chans[x], DAHDI_EVENT_PULSEDIGIT | '#');
-						} else if (span->chans[x]->pulsecount > 10) {
-							__qevent(span->chans[x], DAHDI_EVENT_PULSEDIGIT | '*');
-						} else if (span->chans[x]->pulsecount > 9) {
-							__qevent(span->chans[x], DAHDI_EVENT_PULSEDIGIT | '0');
+						    chan->pulsecount,
+							chan->name);
+						} else if (chan->pulsecount > 11) {
+							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '#');
+						} else if (chan->pulsecount > 10) {
+							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '*');
+						} else if (chan->pulsecount > 9) {
+							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '0');
 						} else {
-							__qevent(span->chans[x], DAHDI_EVENT_PULSEDIGIT | ('0' +
-								span->chans[x]->pulsecount));
+							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | ('0' +
+								chan->pulsecount));
 						}
-						span->chans[x]->pulsecount = 0;
+						chan->pulsecount = 0;
 					}
 				}
 			}
 #ifdef BUFFER_DEBUG
-			span->chans[x]->statcount -= DAHDI_CHUNKSIZE;
+			chan->statcount -= DAHDI_CHUNKSIZE;
 #endif
-			spin_unlock_irqrestore(&span->chans[x]->lock, flags);
+			spin_unlock_irqrestore(&chan->lock, flags);
 		}
 	}
 
