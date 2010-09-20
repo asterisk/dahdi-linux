@@ -6494,6 +6494,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 
 	if ((!ms->confmute && !ms->dialing) || (ms->flags & DAHDI_FLAG_PSEUDO)) {
 		/* Handle conferencing on non-clear channel and non-HDLC channels */
+		struct dahdi_chan *const conf_chan = chans[ms->confna];
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
 		case DAHDI_CONF_NORMAL:
 			/* Do nuffin */
@@ -6502,11 +6503,11 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			  /* if a pseudo-channel, ignore */
 			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
 			/* Add monitored channel */
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
-				ACSS(getlin, chans[ms->confna]->getlin);
-			} else {
-				ACSS(getlin, chans[ms->confna]->putlin);
-			}
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+				ACSS(getlin, conf_chan->getlin);
+			else
+				ACSS(getlin, conf_chan->putlin);
+
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 			break;
@@ -6514,11 +6515,10 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			  /* if a pseudo-channel, ignore */
 			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
 			/* Add monitored channel */
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
-				ACSS(getlin, chans[ms->confna]->putlin);
-			} else {
-				ACSS(getlin, chans[ms->confna]->getlin);
-			}
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+				ACSS(getlin, conf_chan->putlin);
+			else
+				ACSS(getlin, conf_chan->getlin);
 
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
@@ -6526,8 +6526,8 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 		case DAHDI_CONF_MONITORBOTH: /* monitor a channel's rx and tx mode */
 			  /* if a pseudo-channel, ignore */
 			if (ms->flags & DAHDI_FLAG_PSEUDO) break;
-			ACSS(getlin, chans[ms->confna]->putlin);
-			ACSS(getlin, chans[ms->confna]->getlin);
+			ACSS(getlin, conf_chan->putlin);
+			ACSS(getlin, conf_chan->getlin);
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 			break;
@@ -6536,12 +6536,12 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (ms->flags & DAHDI_FLAG_PSEUDO)
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(getlin, chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO ?
-			     chans[ms->confna]->readchunkpreec : chans[ms->confna]->putlin);
+			ACSS(getlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			     conf_chan->readchunkpreec : conf_chan->putlin);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 
@@ -6551,12 +6551,12 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (ms->flags & DAHDI_FLAG_PSEUDO)
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(getlin, chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO ?
-			     chans[ms->confna]->putlin : chans[ms->confna]->readchunkpreec);
+			ACSS(getlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			     conf_chan->putlin : conf_chan->readchunkpreec);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 
@@ -6566,11 +6566,11 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (ms->flags & DAHDI_FLAG_PSEUDO)
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
-			ACSS(getlin, chans[ms->confna]->putlin);
-			ACSS(getlin, chans[ms->confna]->readchunkpreec);
+			ACSS(getlin, conf_chan->putlin);
+			ACSS(getlin, conf_chan->readchunkpreec);
 
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
@@ -6654,21 +6654,22 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			break;
 		case DAHDI_CONF_DIGITALMON:
 			/* Real digital monitoring, but still echo cancel if desired */
-			if (!chans[ms->confna])
+			if (!conf_chan)
 				break;
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO) {
 				if (ms->ec_state) {
 					for (x=0;x<DAHDI_CHUNKSIZE;x++)
-						txb[x] = DAHDI_LIN2X(chans[ms->confna]->getlin[x], ms);
+						txb[x] = DAHDI_LIN2X(conf_chan->getlin[x], ms);
 				} else {
-					memcpy(txb, chans[ms->confna]->getraw, DAHDI_CHUNKSIZE);
+					memcpy(txb, conf_chan->getraw, DAHDI_CHUNKSIZE);
 				}
 			} else {
 				if (ms->ec_state) {
-					for (x=0;x<DAHDI_CHUNKSIZE;x++)
-						txb[x] = DAHDI_LIN2X(chans[ms->confna]->putlin[x], ms);
+					for (x = 0; x < DAHDI_CHUNKSIZE; x++)
+						txb[x] = DAHDI_LIN2X(conf_chan->putlin[x], ms);
 				} else {
-					memcpy(txb, chans[ms->confna]->putraw, DAHDI_CHUNKSIZE);
+					memcpy(txb, conf_chan->putraw,
+					       DAHDI_CHUNKSIZE);
 				}
 			}
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
@@ -7561,6 +7562,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 	   back */
 	if ((!ms->confmute && !ms->afterdialingtimer) ||
 	    (ms->flags & DAHDI_FLAG_PSEUDO)) {
+		struct dahdi_chan *const conf_chan = chans[ms->confna];
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
 		case DAHDI_CONF_NORMAL:		/* Normal mode */
 			/* Do nothing.  rx goes output */
@@ -7569,11 +7571,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			  /* if not a pseudo-channel, ignore */
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
 			/* Add monitored channel */
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
-				ACSS(putlin, chans[ms->confna]->getlin);
-			} else {
-				ACSS(putlin, chans[ms->confna]->putlin);
-			}
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+				ACSS(putlin, conf_chan->getlin);
+			else
+				ACSS(putlin, conf_chan->putlin);
 			/* Convert back */
 			for(x=0;x<DAHDI_CHUNKSIZE;x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
@@ -7582,11 +7583,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			  /* if not a pseudo-channel, ignore */
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
 			/* Add monitored channel */
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
-				ACSS(putlin, chans[ms->confna]->putlin);
-			} else {
-				ACSS(putlin, chans[ms->confna]->getlin);
-			}
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+				ACSS(putlin, conf_chan->putlin);
+			else
+				ACSS(putlin, conf_chan->getlin);
 			/* Convert back */
 			for(x=0;x<DAHDI_CHUNKSIZE;x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
@@ -7598,8 +7598,8 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			   the end of the whole addition, but for performance
 			   reasons, we don't do that.  Besides, it only matters
 			   when you're so loud you're clipping anyway */
-			ACSS(putlin, chans[ms->confna]->getlin);
-			ACSS(putlin, chans[ms->confna]->putlin);
+			ACSS(putlin, conf_chan->getlin);
+			ACSS(putlin, conf_chan->putlin);
 			/* Convert back */
 			for(x=0;x<DAHDI_CHUNKSIZE;x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
@@ -7609,12 +7609,12 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(putlin, chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO ?
-			     chans[ms->confna]->getlin : chans[ms->confna]->readchunkpreec);
+			ACSS(putlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			     conf_chan->getlin : conf_chan->readchunkpreec);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
 
@@ -7624,12 +7624,12 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Add monitored channel */
-			ACSS(putlin, chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO ?
-			     chans[ms->confna]->readchunkpreec : chans[ms->confna]->getlin);
+			ACSS(putlin, conf_chan->flags & DAHDI_FLAG_PSEUDO ?
+			     conf_chan->readchunkpreec : conf_chan->getlin);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
 
@@ -7639,15 +7639,15 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO))
 				break;
 
-			if (!chans[ms->confna]->readchunkpreec)
+			if (!conf_chan->readchunkpreec)
 				break;
 
 			/* Note: Technically, saturation should be done at
 			   the end of the whole addition, but for performance
 			   reasons, we don't do that.  Besides, it only matters
 			   when you're so loud you're clipping anyway */
-			ACSS(putlin, chans[ms->confna]->getlin);
-			ACSS(putlin, chans[ms->confna]->readchunkpreec);
+			ACSS(putlin, conf_chan->getlin);
+			ACSS(putlin, conf_chan->readchunkpreec);
 			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 				rxb[x] = DAHDI_LIN2X(putlin[x], ms);
 
@@ -7731,11 +7731,10 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			  /* if not a pseudo-channel, ignore */
 			if (!(ms->flags & DAHDI_FLAG_PSEUDO)) break;
 			/* Add monitored channel */
-			if (chans[ms->confna]->flags & DAHDI_FLAG_PSEUDO) {
-				memcpy(rxb, chans[ms->confna]->getraw, DAHDI_CHUNKSIZE);
-			} else {
-				memcpy(rxb, chans[ms->confna]->putraw, DAHDI_CHUNKSIZE);
-			}
+			if (conf_chan->flags & DAHDI_FLAG_PSEUDO)
+				memcpy(rxb, conf_chan->getraw, DAHDI_CHUNKSIZE);
+			else
+				memcpy(rxb, conf_chan->putraw, DAHDI_CHUNKSIZE);
 			break;
 		}
 	}
