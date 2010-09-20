@@ -1,7 +1,7 @@
 #
 # Makefile for DAHDI Linux kernel modules
 #
-# Copyright (C) 2001-2009 Digium, Inc.
+# Copyright (C) 2001-2010 Digium, Inc.
 #
 #
 
