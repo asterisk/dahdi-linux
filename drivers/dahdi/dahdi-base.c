@@ -151,7 +151,7 @@ EXPORT_SYMBOL(dahdi_unregister_echocan_factory);
 EXPORT_SYMBOL(dahdi_set_hpec_ioctl);
 
 #ifdef CONFIG_PROC_FS
-static struct proc_dir_entry *proc_entries[DAHDI_MAX_SPANS];
+static struct proc_dir_entry *root_proc_entry;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
@@ -6026,8 +6026,9 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 	{
 		char tempfile[17];
 		snprintf(tempfile, sizeof(tempfile), "dahdi/%d", span->spanno);
-		proc_entries[span->spanno] = create_proc_read_entry(tempfile, 0444,
-				NULL, dahdi_proc_read, (int *) (long) span->spanno);
+		span->proc_entry = create_proc_read_entry(tempfile, 0444,
+					NULL, dahdi_proc_read,
+					(int *) (long) span->spanno);
 	}
 #endif
 
@@ -8729,7 +8730,7 @@ static int __init dahdi_init(void)
 	int res = 0;
 
 #ifdef CONFIG_PROC_FS
-	proc_entries[0] = proc_mkdir("dahdi", NULL);
+	root_proc_entry = proc_mkdir("dahdi", NULL);
 #endif
 
 	if ((res = register_chrdev(DAHDI_MAJOR, "dahdi", &dahdi_fops))) {

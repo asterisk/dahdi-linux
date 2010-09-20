@@ -871,6 +871,10 @@ struct dahdi_span {
 	int watchcounter;
 	int watchstate;
 #endif	
+
+#ifdef CONFIG_PROC_FS
+	struct proc_dir_entry *proc_entry;
+#endif
 };
 
 struct dahdi_transcoder_channel {
