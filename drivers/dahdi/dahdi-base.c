@@ -233,7 +233,6 @@ static sumtype *conf_sums;
 static sumtype *conf_sums_prev;
 
 static struct dahdi_span *master;
-static struct file_operations dahdi_fops;
 struct file_operations *dahdi_transcode_fops = NULL;
 
 static struct {
@@ -2122,7 +2121,7 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 }
 
 static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
-			       size_t count)
+			       size_t count, loff_t *ppos)
 {
 	struct dahdi_chan *chan = file->private_data;
 	int amnt;
@@ -2241,7 +2240,7 @@ static int num_filled_bufs(struct dahdi_chan *chan)
 }
 
 static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
-				size_t count)
+				size_t count, loff_t *ppos)
 {
 	unsigned long flags;
 	struct dahdi_chan *chan = file->private_data;
@@ -2805,6 +2804,8 @@ static int dahdi_timer_release(struct file *file)
 	return 0;
 }
 
+static const struct file_operations dahdi_chan_fops;
+
 static int dahdi_specchan_open(struct file *file)
 {
 	int res = 0;
@@ -2838,6 +2839,10 @@ static int dahdi_specchan_open(struct file *file)
 			if (!res) {
 				chan->file = file;
 				file->private_data = chan;
+				/* Since we know we're a channel now, we can
+				 * update the f_op pointer and bypass a few of
+				 * the checks on the minor number. */
+				file->f_op = &dahdi_chan_fops;
 				spin_unlock_irqrestore(&chan->lock, flags);
 			} else {
 				spin_unlock_irqrestore(&chan->lock, flags);
@@ -3002,69 +3007,6 @@ static int dahdi_open(struct file *file)
 	return res;
 }
 #endif
-
-static ssize_t dahdi_read(struct file *file, char __user *usrbuf, size_t count, loff_t *ppos)
-{
-	int unit = UNIT(file);
-	struct dahdi_chan *chan;
-
-	/* Can't read from control */
-	if (!unit) {
-		return -EINVAL;
-	}
-
-	if (unit == 253)
-		return -EINVAL;
-
-	if (unit == 254) {
-		chan = file->private_data;
-		if (!chan)
-			return -EINVAL;
-		return dahdi_chan_read(file, usrbuf, count);
-	}
-
-	if (unit == 255) {
-		chan = file->private_data;
-		if (!chan) {
-			module_printk(KERN_NOTICE, "No pseudo channel structure to read?\n");
-			return -EINVAL;
-		}
-		return dahdi_chan_read(file, usrbuf, count);
-	}
-	if (count < 0)
-		return -EINVAL;
-
-	return dahdi_chan_read(file, usrbuf, count);
-}
-
-static ssize_t dahdi_write(struct file *file, const char __user *usrbuf, size_t count, loff_t *ppos)
-{
-	int unit = UNIT(file);
-	struct dahdi_chan *chan;
-	/* Can't read from control */
-	if (!unit)
-		return -EINVAL;
-	if (count < 0)
-		return -EINVAL;
-	if (unit == 253)
-		return -EINVAL;
-	if (unit == 254) {
-		chan = file->private_data;
-		if (!chan)
-			return -EINVAL;
-		return dahdi_chan_write(file, usrbuf, count);
-	}
-	if (unit == 255) {
-		chan = file->private_data;
-		if (!chan) {
-			module_printk(KERN_NOTICE, "No pseudo channel structure to read?\n");
-			return -EINVAL;
-		}
-		return dahdi_chan_write(file, usrbuf, count);
-	}
-	return dahdi_chan_write(file, usrbuf, count);
-
-}
 
 static int dahdi_set_default_zone(int defzone)
 {
@@ -8325,30 +8267,14 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 
 static unsigned int dahdi_poll(struct file *file, struct poll_table_struct *wait_table)
 {
-	int unit = UNIT(file);
+	const int unit = UNIT(file);
 
-	if (!unit)
-		return -EINVAL;
-
-	if (unit == 250)
-		return dahdi_transcode_fops->poll(file, wait_table);
-
-	if (unit == 253)
+	if (likely(unit == 253))
 		return dahdi_timer_poll(file, wait_table);
 
-	if (unit == 254) {
-		if (!file->private_data)
-			return -EINVAL;
-		return dahdi_chan_poll(file, wait_table);
-	}
-	if (unit == 255) {
-		if (!file->private_data) {
-			module_printk(KERN_NOTICE, "No pseudo channel structure to read?\n");
-			return -EINVAL;
-		}
-		return dahdi_chan_poll(file, wait_table);
-	}
-	return dahdi_chan_poll(file, wait_table);
+	/* transcoders and channels should have updated their file_operations
+	 * before poll is ever called. */
+	return -EINVAL;
 }
 
 static void __dahdi_transmit_chunk(struct dahdi_chan *chan, unsigned char *buf)
@@ -8868,7 +8794,7 @@ MODULE_VERSION(DAHDI_VERSION);
 module_param(debug, int, 0644);
 module_param(deftaps, int, 0644);
 
-static struct file_operations dahdi_fops = {
+static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,
 	.open    = dahdi_open,
 	.release = dahdi_release,
@@ -8880,9 +8806,24 @@ static struct file_operations dahdi_fops = {
 #else
 	.ioctl   = dahdi_ioctl,
 #endif
-	.read    = dahdi_read,
-	.write   = dahdi_write,
 	.poll    = dahdi_poll,
+};
+
+static const struct file_operations dahdi_chan_fops = {
+	.owner   = THIS_MODULE,
+	.open    = dahdi_open,
+	.release = dahdi_release,
+#ifdef HAVE_UNLOCKED_IOCTL
+	.unlocked_ioctl  = dahdi_ioctl,
+#ifdef HAVE_COMPAT_IOCTL
+	.compat_ioctl = dahdi_ioctl_compat,
+#endif
+#else
+	.ioctl   = dahdi_ioctl,
+#endif
+	.read    = dahdi_chan_read,
+	.write   = dahdi_chan_write,
+	.poll    = dahdi_chan_poll,
 };
 
 #ifdef CONFIG_DAHDI_WATCHDOG
