@@ -309,7 +309,7 @@ static struct dahdi_dialparams global_dialparams = {
 	.mfr2_tonelen = DEFAULT_MFR2_LENGTH,
 };
 
-static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit);
+static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data);
 
 #if defined(CONFIG_DAHDI_MMX) || defined(ECHO_CAN_FP)
 #if (defined(CONFIG_X86) && !defined(CONFIG_X86_64)) || defined(CONFIG_I386)
@@ -409,11 +409,30 @@ static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
 static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
 #endif
 
+static bool valid_channo(const int channo)
+{
+	return ((channo >= DAHDI_MAX_CHANNELS) || (channo < 1)) ?
+			false : true;
+}
+
+#define VALID_CHANNEL(j) do { \
+	if (!valid_channo(j)) \
+		return -EINVAL; \
+	if (!chans[j]) \
+		return -ENXIO; \
+} while (0)
+
 /* Protected by chan_lock. */
 static struct dahdi_span *spans[DAHDI_MAX_SPANS];
 static struct dahdi_chan *chans[DAHDI_MAX_CHANNELS];
 
 static int maxspans = 0;
+
+static struct dahdi_chan *chan_from_file(struct file *file)
+{
+	return (file->private_data) ? file->private_data :
+			((valid_channo(UNIT(file))) ? chans[UNIT(file)] : NULL);
+}
 
 static struct dahdi_span *find_span(int spanno)
 {
@@ -3606,13 +3625,6 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 	}
 }
 
-#define VALID_CHANNEL(j) do { \
-	if ((j >= DAHDI_MAX_CHANNELS) || (j < 1)) \
-		return -EINVAL; \
-	if (!chans[j]) \
-		return -ENXIO; \
-} while(0)
-
 static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long data, struct dahdi_timer *timer)
 {
 	int j;
@@ -4460,7 +4472,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		 * call. */
 		old = file->private_data;
 		file->private_data = chan;
-		res = dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data, ind.chan);
+		res = dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data);
 		file->private_data = old;
 		return res;
 	}
@@ -5649,18 +5661,19 @@ static void set_echocan_fax_mode(struct dahdi_chan *chan, unsigned int channo, c
 	}
 }
 
-static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit)
+static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
-	struct dahdi_chan *chan = chans[unit];
+	struct dahdi_chan *const chan = chan_from_file(file);
 	unsigned long flags;
 	int j, rv;
 	int ret;
 	int oldconf;
 	void *rxgain=NULL;
 
-	WARN_ON(!chan->master);
 	if (!chan)
 		return -ENOSYS;
+
+	WARN_ON(!chan->master);
 
 	switch(cmd) {
 	case DAHDI_SETSIGFREEZE:
@@ -6036,7 +6049,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 		break;
 #endif
 	default:
-		return dahdi_chanandpseudo_ioctl(file, cmd, data, unit);
+		return dahdi_chanandpseudo_ioctl(file, cmd, data, chan->channo);
 	}
 	return 0;
 }
@@ -6112,7 +6125,7 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 	if (unit == 254) {
 		chan = file->private_data;
 		if (chan)
-			ret = dahdi_chan_ioctl(file, cmd, data, chan->channo);
+			ret = dahdi_chan_ioctl(file, cmd, data);
 		else
 			ret = dahdi_prechan_ioctl(file, cmd, data, unit);
 		goto unlock_exit;
@@ -6133,7 +6146,7 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 		goto unlock_exit;
 	}
 
-	ret = dahdi_chan_ioctl(file, cmd, data, unit);
+	ret = dahdi_chan_ioctl(file, cmd, data);
 
 unlock_exit:
 #ifdef HAVE_UNLOCKED_IOCTL
