@@ -1312,6 +1312,15 @@ static void release_echocan(const struct dahdi_echocan_factory *ec)
 		module_put(ec->owner);
 }
 
+/**
+ * is_gain_allocated() - True if gain tables were dynamically allocated.
+ * @chan:  The channel to check.
+ */
+static inline bool is_gain_allocated(const struct dahdi_chan *chan)
+{
+	return (chan->rxgain && (chan->rxgain != defgain));
+}
+
 /* 
  * close_channel - close the channel, resetting any channel variables
  * @chan: the dahdi_chan to close
@@ -1323,7 +1332,7 @@ static void release_echocan(const struct dahdi_echocan_factory *ec)
 static void close_channel(struct dahdi_chan *chan)
 {
 	unsigned long flags;
-	void *rxgain = NULL;
+	const void *rxgain = NULL;
 	struct dahdi_echocan_state *ec_state;
 	const struct dahdi_echocan_factory *ec_current;
 	int oldconf;
@@ -1384,12 +1393,11 @@ static void close_channel(struct dahdi_chan *chan)
 	chan->gotgs = 0;
 	reset_conf(chan);
 
-	if (chan->gainalloc && chan->rxgain)
+	if (is_gain_allocated(chan))
 		rxgain = chan->rxgain;
 
 	chan->rxgain = defgain;
 	chan->txgain = defgain;
-	chan->gainalloc = 0;
 	chan->eventinidx = chan->eventoutidx = 0;
 	chan->flags &= ~(DAHDI_FLAG_LOOPED | DAHDI_FLAG_LINEAR | DAHDI_FLAG_PPP | DAHDI_FLAG_SIGFREEZE);
 
@@ -1646,6 +1654,9 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 		chan->readchunk = chan->sreadchunk;
 	if (!chan->writechunk)
 		chan->writechunk = chan->swritechunk;
+	chan->rxgain = NULL;
+	chan->txgain = NULL;
+	dahdi_set_law(chan, 0);
 	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	close_channel(chan);
 
@@ -2624,7 +2635,7 @@ static int initialize_channel(struct dahdi_chan *chan)
 {
 	int res;
 	unsigned long flags;
-	void *rxgain=NULL;
+	const void *rxgain = NULL;
 	struct dahdi_echocan_state *ec_state;
 	const struct dahdi_echocan_factory *ec_current;
 
@@ -2705,11 +2716,10 @@ static int initialize_channel(struct dahdi_chan *chan)
 	chan->curtone = NULL;
 	chan->tonep = 0;
 	chan->pdialcount = 0;
-	if (chan->gainalloc && chan->rxgain)
+	if (is_gain_allocated(chan))
 		rxgain = chan->rxgain;
 	chan->rxgain = defgain;
 	chan->txgain = defgain;
-	chan->gainalloc = 0;
 	chan->eventinidx = chan->eventoutidx = 0;
 	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	dahdi_hangup(chan);
@@ -3776,18 +3786,16 @@ static int dahdi_ioctl_setgains(struct file *file, unsigned long data)
 	    !memcmp(txgain, defgain, GAIN_TABLE_SIZE)) {
 		kfree(rxgain);
 		spin_lock_irqsave(&chan->lock, flags);
-		if (chan->gainalloc)
+		if (is_gain_allocated(chan))
 			kfree(chan->rxgain);
-		chan->gainalloc = 0;
 		chan->rxgain = defgain;
 		chan->txgain = defgain;
 		spin_unlock_irqrestore(&chan->lock, flags);
 	} else {
 		/* This is a custom gain setting */
 		spin_lock_irqsave(&chan->lock, flags);
-		if (chan->gainalloc)
+		if (is_gain_allocated(chan))
 			kfree(chan->rxgain);
-		chan->gainalloc = 1;
 		chan->rxgain = rxgain;
 		chan->txgain = txgain;
 		spin_unlock_irqrestore(&chan->lock, flags);
@@ -3841,7 +3849,7 @@ static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 	module_printk(KERN_INFO, "flags: %x hex, writechunk: %p, readchunk: %p\n",
 		      (unsigned int) temp->flags, temp->writechunk, temp->readchunk);
 	module_printk(KERN_INFO, "rxgain: %p, txgain: %p, gainalloc: %d\n",
-		      temp->rxgain, temp->txgain, temp->gainalloc);
+		      temp->rxgain, temp->txgain, is_gain_allocated(temp));
 	module_printk(KERN_INFO, "span: %p, sig: %x hex, sigcap: %x hex\n",
 		      temp->span, temp->sig, temp->sigcap);
 	module_printk(KERN_INFO, "inreadbuf: %d, outreadbuf: %d, inwritebuf: %d, outwritebuf: %d\n",
@@ -5685,7 +5693,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 	int j, rv;
 	int ret;
 	int oldconf;
-	void *rxgain=NULL;
+	const void *rxgain = NULL;
 
 	if (!chan)
 		return -ENOSYS;
@@ -5747,14 +5755,13 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 			chan->ec_current = NULL;
 			/* release conference resource, if any to release */
 			reset_conf(chan);
-			if (chan->gainalloc && chan->rxgain)
+			if (is_gain_allocated(chan))
 				rxgain = chan->rxgain;
 			else
 				rxgain = NULL;
 
 			chan->rxgain = defgain;
 			chan->txgain = defgain;
-			chan->gainalloc = 0;
 			spin_unlock_irqrestore(&chan->lock, flags);
 
 			if (ec_state) {
@@ -5806,11 +5813,10 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 					ec_current = chan->ec_current;
 					chan->ec_current = NULL;
 					/* Make sure there's no gain */
-					if (chan->gainalloc)
+					if (is_gain_allocated(chan))
 						kfree(chan->rxgain);
 					chan->rxgain = defgain;
 					chan->txgain = defgain;
-					chan->gainalloc = 0;
 					chan->flags &= ~DAHDI_FLAG_AUDIO;
 					chan->flags |= (DAHDI_FLAG_PPP | DAHDI_FLAG_HDLC | DAHDI_FLAG_FCS);
 

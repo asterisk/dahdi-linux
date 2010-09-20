@@ -425,12 +425,9 @@ struct dahdi_chan {
 	short *readchunkpreec;
 
 	/*! Pointer to tx and rx gain tables */
-	u_char *rxgain;
-	u_char *txgain;
+	const u_char *rxgain;
+	const u_char *txgain;
 	
-	/*! Whether or not we have allocated gains or are using the default */
-	int gainalloc;
-
 	/* Specified by driver, readable by DAHDI */
 	void *pvt;			/*!< Private channel data */
 	struct file *file;	/*!< File structure */
