@@ -1985,6 +1985,26 @@ static struct ppp_channel_ops ztppp_ops =
 
 #endif
 
+/**
+ * is_monitor_mode() - True if the confmode indicates that one channel is monitoring another.
+ *
+ */
+static bool is_monitor_mode(int confmode)
+{
+	confmode &= DAHDI_CONF_MODE_MASK;
+	if ((confmode == DAHDI_CONF_MONITOR) ||
+	    (confmode == DAHDI_CONF_MONITORTX) ||
+	    (confmode == DAHDI_CONF_MONITORBOTH) ||
+	    (confmode == DAHDI_CONF_MONITOR_RX_PREECHO) ||
+	    (confmode == DAHDI_CONF_MONITOR_TX_PREECHO) ||
+	    (confmode == DAHDI_CONF_MONITORBOTH_PREECHO)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+
 static void dahdi_chan_unreg(struct dahdi_chan *chan)
 {
 	int x;
@@ -2031,13 +2051,8 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 				chans[x]->master = chans[x];
 			}
 			if ((chans[x]->confna == chan->channo) &&
-				((chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORTX ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORBOTH ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_RX_PREECHO ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_TX_PREECHO ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORBOTH_PREECHO ||
-				(chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_DIGITALMON)) {
+			    is_monitor_mode(chans[x]->confmode) &&
+			    ((chans[x]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_DIGITALMON)) {
 				/* Take them out of conference with us */
 				/* release conference resource if any */
 				if (chans[x]->confna) {
@@ -4834,25 +4849,6 @@ static int ioctl_dahdi_dial(struct dahdi_chan *chan, unsigned long data)
 	return rv;
 }
 
-/**
- * is_monitor_mode() - true if dahdi_confinfo is putting chan in monitor mode
- *
- */
-static bool is_monitor_mode(const struct dahdi_confinfo *conf)
-{
-	const int confmode = conf->confmode & DAHDI_CONF_MODE_MASK;
-	if ((confmode == DAHDI_CONF_MONITOR) ||
-	    (confmode == DAHDI_CONF_MONITORTX) ||
-	    (confmode == DAHDI_CONF_MONITORBOTH) ||
-	    (confmode == DAHDI_CONF_MONITOR_RX_PREECHO) ||
-	    (confmode == DAHDI_CONF_MONITOR_TX_PREECHO) ||
-	    (confmode == DAHDI_CONF_MONITORBOTH_PREECHO)) {
-		return true;
-	} else {
-		return false;
-	}
-}
-
 static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 {
 	struct dahdi_confinfo conf;
@@ -4881,7 +4877,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	if (!(chan->flags & DAHDI_FLAG_AUDIO))
 		return -EINVAL;
 
-	if (is_monitor_mode(&conf)) {
+	if (is_monitor_mode(conf.confmode)) {
 		/* Monitor mode -- it's a channel */
 		if ((conf.confno < 0) || (conf.confno >= DAHDI_MAX_CHANNELS) ||
 		    !chans[conf.confno])
