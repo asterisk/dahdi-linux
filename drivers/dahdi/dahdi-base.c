@@ -3833,141 +3833,182 @@ static int dahdi_ioctl_chandiag(struct file *file, int cmd, unsigned long data)
 	return 0;
 }
 
+/**
+ * dahdi_ioctl_getparams() - Get channel parameters.
+ *
+ */
+static int dahdi_ioctl_getparams(struct file *file, unsigned long data)
+{
+	size_t size_to_copy;
+	struct dahdi_params param;
+	bool return_master = false;
+	struct dahdi_chan *chan;
+	int j;
+	size_to_copy = sizeof(struct dahdi_params);
+	if (copy_from_user(&param, (void __user *)data, size_to_copy))
+		return -EFAULT;
+
+	/* check to see if the caller wants to receive our master channel
+	 * number */
+	if (param.channo & DAHDI_GET_PARAMS_RETURN_MASTER) {
+		return_master = true;
+		param.channo &= ~DAHDI_GET_PARAMS_RETURN_MASTER;
+	}
+
+	/* Pick the right channo's */
+	chan = file->private_data;
+	if (!param.channo || chan) {
+		param.channo = chan->channo;
+	} else {
+		/* Check validity of channel */
+		VALID_CHANNEL(param.channo);
+		chan = chans[param.channo];
+	}
+	if (!chan)
+		return -EINVAL;
+
+	/* point to relevant structure */
+	param.sigtype = chan->sig;  /* get signalling type */
+	/* return non-zero if rx not in idle state */
+	if (chan->span) {
+		j = dahdi_q_sig(chan);
+		if (j >= 0) { /* if returned with success */
+			param.rxisoffhook = ((chan->rxsig & (j >> 8)) !=
+							(j & 0xff));
+		} else {
+			const int sig = chan->rxhooksig;
+			param.rxisoffhook = ((sig != DAHDI_RXSIG_ONHOOK) &&
+				(sig != DAHDI_RXSIG_INITIAL));
+		}
+	} else if ((chan->txstate == DAHDI_TXSTATE_KEWL) ||
+		   (chan->txstate == DAHDI_TXSTATE_AFTERKEWL)) {
+		param.rxisoffhook = 1;
+	} else {
+		param.rxisoffhook = 0;
+	}
+
+	if (chan->span &&
+	    chan->span->ops->rbsbits && !(chan->sig & DAHDI_SIG_CLEAR)) {
+		param.rxbits = chan->rxsig;
+		param.txbits = chan->txsig;
+		param.idlebits = chan->idlebits;
+	} else {
+		param.rxbits = -1;
+		param.txbits = -1;
+		param.idlebits = 0;
+	}
+	if (chan->span &&
+	    (chan->span->ops->rbsbits || chan->span->ops->hooksig) &&
+	    !(chan->sig & DAHDI_SIG_CLEAR)) {
+		param.rxhooksig = chan->rxhooksig;
+		param.txhooksig = chan->txhooksig;
+	} else {
+		param.rxhooksig = -1;
+		param.txhooksig = -1;
+	}
+	param.prewinktime = chan->prewinktime;
+	param.preflashtime = chan->preflashtime;
+	param.winktime = chan->winktime;
+	param.flashtime = chan->flashtime;
+	param.starttime = chan->starttime;
+	param.rxwinktime = chan->rxwinktime;
+	param.rxflashtime = chan->rxflashtime;
+	param.debouncetime = chan->debouncetime;
+	param.channo = chan->channo;
+	param.chan_alarms = chan->chan_alarms;
+
+	/* if requested, put the master channel number in the top 16 bits of
+	 * the result */
+	if (return_master)
+		param.channo |= chan->master->channo << 16;
+
+	param.pulsemaketime = chan->pulsemaketime;
+	param.pulsebreaktime = chan->pulsebreaktime;
+	param.pulseaftertime = chan->pulseaftertime;
+	param.spanno = (chan->span) ? chan->span->spanno : 0;
+	dahdi_copy_string(param.name, chan->name, sizeof(param.name));
+	param.chanpos = chan->chanpos;
+	param.sigcap = chan->sigcap;
+	/* Return current law */
+	if (chan->xlaw == __dahdi_alaw)
+		param.curlaw = DAHDI_LAW_ALAW;
+	else
+		param.curlaw = DAHDI_LAW_MULAW;
+
+	if (copy_to_user((void __user *)data, &param, size_to_copy))
+		return -EFAULT;
+
+	return 0;
+}
+
+/**
+ * dahdi_ioctl_setparams() - Set channel parameters.
+ *
+ */
+static int dahdi_ioctl_setparams(struct file *file, unsigned long data)
+{
+	struct dahdi_params param;
+	struct dahdi_chan *chan;
+
+	if (copy_from_user(&param, (void __user *)data, sizeof(param)))
+		return -EFAULT;
+
+	param.chan_alarms = 0; /* be explicit about the above */
+
+	/* Pick the right channo's */
+	chan = file->private_data;
+	if (!param.channo || chan) {
+		param.channo = chan->channo;
+	} else {
+		/* Check validity of channel */
+		VALID_CHANNEL(param.channo);
+		chan = chans[param.channo];
+	}
+
+	if (!chan)
+		return -EINVAL;
+
+	/* point to relevant structure */
+	/* NOTE: sigtype is *not* included in this */
+	  /* get timing paramters */
+	chan->prewinktime = param.prewinktime;
+	chan->preflashtime = param.preflashtime;
+	chan->winktime = param.winktime;
+	chan->flashtime = param.flashtime;
+	chan->starttime = param.starttime;
+	/* Update ringtime if not using a tone zone */
+	if (!chan->curzone)
+		chan->ringcadence[0] = chan->starttime;
+	chan->rxwinktime = param.rxwinktime;
+	chan->rxflashtime = param.rxflashtime;
+	chan->debouncetime = param.debouncetime;
+	chan->pulsemaketime = param.pulsemaketime;
+	chan->pulsebreaktime = param.pulsebreaktime;
+	chan->pulseaftertime = param.pulseaftertime;
+	return 0;
+}
+
 static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit)
 {
 	union {
 		struct dahdi_spaninfo_v1 spaninfo_v1;
 		struct dahdi_spaninfo spaninfo;
-		struct dahdi_params param;
 	} stack;
 
 	struct dahdi_span *s;
-	struct dahdi_chan *chan;
 	int i,j;
-	int return_master = 0;
 	size_t size_to_copy;
 	void __user * const user_data = (void __user *)data;
 
-	switch(cmd) {
+	switch (cmd) {
 		/* get channel parameters */
 	case DAHDI_GET_PARAMS_V1: /* Intentional drop through. */
 	case DAHDI_GET_PARAMS:
-		size_to_copy = sizeof(struct dahdi_params);
-		if (copy_from_user(&stack.param, user_data, size_to_copy))
-			return -EFAULT;
+		return dahdi_ioctl_getparams(file, data);
 
-		/* check to see if the caller wants to receive our master channel number */
-		if (stack.param.channo & DAHDI_GET_PARAMS_RETURN_MASTER) {
-			return_master = 1;
-			stack.param.channo &= ~DAHDI_GET_PARAMS_RETURN_MASTER;
-		}
-
-		/* Pick the right channo's */
-		if (!stack.param.channo || unit) {
-			stack.param.channo = unit;
-		}
-		/* Check validity of channel */
-		VALID_CHANNEL(stack.param.channo);
-		chan = chans[stack.param.channo];
-
-		/* point to relevant structure */
-		stack.param.sigtype = chan->sig;  /* get signalling type */
-		/* return non-zero if rx not in idle state */
-		if (chan->span) {
-			j = dahdi_q_sig(chan);
-			if (j >= 0) { /* if returned with success */
-				stack.param.rxisoffhook = ((chan->rxsig & (j >> 8)) != (j & 0xff));
-			} else {
-				stack.param.rxisoffhook = ((chan->rxhooksig != DAHDI_RXSIG_ONHOOK) &&
-					(chan->rxhooksig != DAHDI_RXSIG_INITIAL));
-			}
-		} else if ((chan->txstate == DAHDI_TXSTATE_KEWL) || (chan->txstate == DAHDI_TXSTATE_AFTERKEWL))
-			stack.param.rxisoffhook = 1;
-		else
-			stack.param.rxisoffhook = 0;
-		if (chan->span && chan->span->ops->rbsbits && !(chan->sig & DAHDI_SIG_CLEAR)) {
-			stack.param.rxbits = chan->rxsig;
-			stack.param.txbits = chan->txsig;
-			stack.param.idlebits = chan->idlebits;
-		} else {
-			stack.param.rxbits = -1;
-			stack.param.txbits = -1;
-			stack.param.idlebits = 0;
-		}
-		if (chan->span && (chan->span->ops->rbsbits || chan->span->ops->hooksig) &&
-			!(chan->sig & DAHDI_SIG_CLEAR)) {
-			stack.param.rxhooksig = chan->rxhooksig;
-			stack.param.txhooksig = chan->txhooksig;
-		} else {
-			stack.param.rxhooksig = -1;
-			stack.param.txhooksig = -1;
-		}
-		stack.param.prewinktime = chan->prewinktime;
-		stack.param.preflashtime = chan->preflashtime;
-		stack.param.winktime = chan->winktime;
-		stack.param.flashtime = chan->flashtime;
-		stack.param.starttime = chan->starttime;
-		stack.param.rxwinktime = chan->rxwinktime;
-		stack.param.rxflashtime = chan->rxflashtime;
-		stack.param.debouncetime = chan->debouncetime;
-		stack.param.channo = chan->channo;
-		stack.param.chan_alarms = chan->chan_alarms;
-
-		/* if requested, put the master channel number in the top 16 bits of the result */
-		if (return_master)
-			stack.param.channo |= chan->master->channo << 16;
-
-		stack.param.pulsemaketime = chan->pulsemaketime;
-		stack.param.pulsebreaktime = chan->pulsebreaktime;
-		stack.param.pulseaftertime = chan->pulseaftertime;
-		if (chan->span) stack.param.spanno = chan->span->spanno;
-			else stack.param.spanno = 0;
-		dahdi_copy_string(stack.param.name, chan->name, sizeof(stack.param.name));
-		stack.param.chanpos = chan->chanpos;
-		stack.param.sigcap = chan->sigcap;
-		/* Return current law */
-		if (chan->xlaw == __dahdi_alaw)
-			stack.param.curlaw = DAHDI_LAW_ALAW;
-		else
-			stack.param.curlaw = DAHDI_LAW_MULAW;
-
-		if (copy_to_user(user_data, &stack.param, size_to_copy))
-			return -EFAULT;
-
-		break;
-		/* set channel parameters */
 	case DAHDI_SET_PARAMS:
-		if (copy_from_user(&stack.param, user_data,
-				   sizeof(struct dahdi_params)))
-			return -EFAULT;
+		return dahdi_ioctl_setparams(file, data);
 
-		stack.param.chan_alarms = 0; /* be explicit about the above */
-
-		/* Pick the right channo's */
-		if (!stack.param.channo || unit) {
-			stack.param.channo = unit;
-		}
-		/* Check validity of channel */
-		VALID_CHANNEL(stack.param.channo);
-		chan = chans[stack.param.channo];
-		  /* point to relevant structure */
-		/* NOTE: sigtype is *not* included in this */
-		  /* get timing stack.paramters */
-		chan->prewinktime = stack.param.prewinktime;
-		chan->preflashtime = stack.param.preflashtime;
-		chan->winktime = stack.param.winktime;
-		chan->flashtime = stack.param.flashtime;
-		chan->starttime = stack.param.starttime;
-		/* Update ringtime if not using a tone zone */
-		if (!chan->curzone)
-			chan->ringcadence[0] = chan->starttime;
-		chan->rxwinktime = stack.param.rxwinktime;
-		chan->rxflashtime = stack.param.rxflashtime;
-		chan->debouncetime = stack.param.debouncetime;
-		chan->pulsemaketime = stack.param.pulsemaketime;
-		chan->pulsebreaktime = stack.param.pulsebreaktime;
-		chan->pulseaftertime = stack.param.pulseaftertime;
-		break;
 	case DAHDI_GETGAINS_V1: /* Intentional drop through. */
 	case DAHDI_GETGAINS:  /* get gain stuff */
 		return dahdi_ioctl_getgains(file, cmd, data, unit);
