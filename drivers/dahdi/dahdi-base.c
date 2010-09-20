@@ -8427,22 +8427,22 @@ int dahdi_transmit(struct dahdi_span *span)
 	unsigned long flags;
 
 	for (x=0;x<span->channels;x++) {
-		spin_lock_irqsave(&span->chans[x]->lock, flags);
-		if (span->chans[x]->flags & DAHDI_FLAG_NOSTDTXRX) {
-			spin_unlock_irqrestore(&span->chans[x]->lock, flags);
+		struct dahdi_chan *const chan = span->chans[x];
+		spin_lock_irqsave(&chan->lock, flags);
+		if (chan->flags & DAHDI_FLAG_NOSTDTXRX) {
+			spin_unlock_irqrestore(&chan->lock, flags);
 			continue;
 		}
-		if (span->chans[x] == span->chans[x]->master) {
-			if (span->chans[x]->otimer) {
-				span->chans[x]->otimer -= DAHDI_CHUNKSIZE;
-				if (span->chans[x]->otimer <= 0) {
-					__rbs_otimer_expire(span->chans[x]);
-				}
+		if (chan == chan->master) {
+			if (chan->otimer) {
+				chan->otimer -= DAHDI_CHUNKSIZE;
+				if (chan->otimer <= 0)
+					__rbs_otimer_expire(chan);
 			}
-			if (span->chans[x]->flags & DAHDI_FLAG_AUDIO) {
-				__dahdi_real_transmit(span->chans[x]);
+			if (chan->flags & DAHDI_FLAG_AUDIO) {
+				__dahdi_real_transmit(chan);
 			} else {
-				if (span->chans[x]->nextslave) {
+				if (chan->nextslave) {
 					u_char data[DAHDI_CHUNKSIZE];
 					int pos=DAHDI_CHUNKSIZE;
 					/* Process master/slaves one way */
@@ -8452,7 +8452,7 @@ int dahdi_transmit(struct dahdi_span *span)
 						do {
 							if (pos==DAHDI_CHUNKSIZE) {
 								/* Get next chunk */
-								__dahdi_transmit_chunk(span->chans[x], data);
+								__dahdi_transmit_chunk(chan, data);
 								pos = 0;
 							}
 							span->chans[z]->writechunk[y] = data[pos++];
@@ -8461,21 +8461,21 @@ int dahdi_transmit(struct dahdi_span *span)
 					}
 				} else {
 					/* Process independents elsewise */
-					__dahdi_real_transmit(span->chans[x]);
+					__dahdi_real_transmit(chan);
 				}
 			}
-			if (span->chans[x]->sig == DAHDI_SIG_DACS_RBS) {
-				if (chans[span->chans[x]->confna]) {
+			if (chan->sig == DAHDI_SIG_DACS_RBS) {
+				struct dahdi_chan *const conf =
+							chans[chan->confna];
+				if (conf && (chan->txsig != conf->rxsig)) {
 				    	/* Just set bits for our destination */
-					if (span->chans[x]->txsig != chans[span->chans[x]->confna]->rxsig) {
-						span->chans[x]->txsig = chans[span->chans[x]->confna]->rxsig;
-						span->ops->rbsbits(span->chans[x], chans[span->chans[x]->confna]->rxsig);
-					}
+					chan->txsig = conf->rxsig;
+					span->ops->rbsbits(chan, conf->rxsig);
 				}
 			}
 
 		}
-		spin_unlock_irqrestore(&span->chans[x]->lock, flags);
+		spin_unlock_irqrestore(&chan->lock, flags);
 	}
 	if (span->mainttimer) {
 		span->mainttimer -= DAHDI_CHUNKSIZE;
