@@ -2275,8 +2275,8 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 	}
 
 #ifdef CONFIG_DAHDI_DEBUG
-	module_printk(KERN_NOTICE, "dahdi_chan_write(unit: %d, res: %d, outwritebuf: %d amnt: %d\n",
-		      unit, res, chan->outwritebuf, amnt);
+	module_printk(KERN_NOTICE, "dahdi_chan_write(chan: %d, res: %d, outwritebuf: %d amnt: %d\n",
+		      chan->channo, res, chan->outwritebuf, amnt);
 #endif
 
 	if (amnt) {
