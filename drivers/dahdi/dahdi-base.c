@@ -4463,7 +4463,6 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	int res = 0;
 	int x,y;
 	unsigned long flags;
-	void __user * const user_data = (void __user *)data;
 	int rv;
 	struct dahdi_span *s;
 	struct dahdi_chan *chan;
@@ -4505,7 +4504,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		struct dahdi_lineconfig lc;
 		struct dahdi_span *s;
 
-		if (copy_from_user(&lc, user_data, sizeof(lc)))
+		if (copy_from_user(&lc, (void __user *)data, sizeof(lc)))
 			return -EFAULT;
 		s = find_span(lc.span);
 		if (!s)
@@ -4577,7 +4576,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		struct dahdi_attach_echocan ae;
 		const struct dahdi_echocan_factory *new = NULL, *old;
 
-		if (copy_from_user(&ae, user_data, sizeof(ae)))
+		if (copy_from_user(&ae, (void __user *)data, sizeof(ae)))
 			return -EFAULT;
 
 		VALID_CHANNEL(ae.chan);
@@ -4607,7 +4606,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	{
 		struct dahdi_sfconfig sf;
 
-		if (copy_from_user(&sf, user_data, sizeof(sf)))
+		if (copy_from_user(&sf, (void __user *)data, sizeof(sf)))
 			return -EFAULT;
 		VALID_CHANNEL(sf.chan);
 		if (chans[sf.chan]->sig != DAHDI_SIG_SF) return -EINVAL;
@@ -4647,7 +4646,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	{
 		struct dahdi_dialparams tdp;
 
-		if (copy_from_user(&tdp, user_data, sizeof(tdp)))
+		if (copy_from_user(&tdp, (void __user *)data, sizeof(tdp)))
 			return -EFAULT;
 
 		if ((tdp.dtmf_tonelen >= 10) && (tdp.dtmf_tonelen <= 4000)) {
@@ -4698,7 +4697,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		struct dahdi_dialparams tdp;
 
 		tdp = global_dialparams;
-		if (copy_to_user(user_data, &tdp, sizeof(tdp)))
+		if (copy_to_user((void __user *)data, &tdp, sizeof(tdp)))
 			return -EFAULT;
 		break;
 	}
@@ -4726,7 +4725,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			}
 		}
 		read_unlock(&ecfactory_list_lock);
-		if (copy_to_user(user_data, &vi, sizeof(vi)))
+		if (copy_to_user((void __user *)data, &vi, sizeof(vi)))
 			return -EFAULT;
 		break;
 	}
@@ -4734,7 +4733,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	{
 		struct dahdi_maintinfo maint;
 		  /* get struct from user */
-		if (copy_from_user(&maint, user_data, sizeof(maint)))
+		if (copy_from_user(&maint, (void __user *)data, sizeof(maint)))
 			return -EFAULT;
 		s = find_span(maint.spanno);
 		if (!s)
