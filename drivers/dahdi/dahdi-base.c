@@ -8543,6 +8543,9 @@ static void process_masterspan(void)
 	unsigned long flags;
 	int x, y, z;
 	struct dahdi_chan *chan;
+	struct pseudo_chan *pseudo;
+	struct dahdi_span *s;
+	u_char *data;
 
 #ifdef CONFIG_DAHDI_CORE_TIMER
 	/* We increment the calls since start here, so that if we switch over
@@ -8562,10 +8565,14 @@ static void process_masterspan(void)
 	if (dahdi_dynamic_ioctl)
 		dahdi_dynamic_ioctl(0, 0);
 
-	for (x = 1; x < maxchans; x++) {
-		chan = chans[x];
-		if (chan && chan->confmode && !is_pseudo_chan(chan)) {
-			u_char *data;
+	for (y = 1; y < maxspans; ++y) {
+		s = spans[y];
+		if (!s)
+			continue;
+		for (x = 0; x < s->channels; x++) {
+			chan = s->chans[x];
+			if (!chan->confmode)
+				continue;
 			spin_lock(&chan->lock);
 			data = __buf_peek(&chan->confin);
 			__dahdi_receive_chunk(chan, data);
@@ -8575,17 +8582,17 @@ static void process_masterspan(void)
 			spin_unlock(&chan->lock);
 		}
 	}
+
 	/* This is the master channel, so make things switch over */
 	rotate_sums();
+
 	/* do all the pseudo and/or conferenced channel receives (getbuf's) */
-	for (x = 1; x < maxchans; x++) {
-		chan = chans[x];
-		if (chan && is_pseudo_chan(chan)) {
-			spin_lock(&chan->lock);
-			__dahdi_transmit_chunk(chan, NULL);
-			spin_unlock(&chan->lock);
-		}
+	list_for_each_entry(pseudo, &pseudo_chans, node) {
+		spin_lock(&pseudo->chan.lock);
+		__dahdi_transmit_chunk(&pseudo->chan, NULL);
+		spin_unlock(&pseudo->chan.lock);
 	}
+
 	if (maxlinks) {
 #ifdef CONFIG_DAHDI_MMX
 		dahdi_kernel_fpu_begin();
@@ -8604,21 +8611,24 @@ static void process_masterspan(void)
 		dahdi_kernel_fpu_end();
 #endif
 	}
+
 	/* do all the pseudo/conferenced channel transmits (putbuf's) */
-	for (x = 1; x < maxchans; x++) {
-		chan = chans[x];
-		if (chan && is_pseudo_chan(chan)) {
-			unsigned char tmp[DAHDI_CHUNKSIZE];
-			spin_lock(&chan->lock);
-			__dahdi_getempty(chan, tmp);
-			__dahdi_receive_chunk(chan, tmp);
-			spin_unlock(&chan->lock);
-		}
+	list_for_each_entry(pseudo, &pseudo_chans, node) {
+		unsigned char tmp[DAHDI_CHUNKSIZE];
+		spin_lock(&pseudo->chan.lock);
+		__dahdi_getempty(&pseudo->chan, tmp);
+		__dahdi_receive_chunk(&pseudo->chan, tmp);
+		spin_unlock(&pseudo->chan.lock);
 	}
-	for (x = 1; x < maxchans; x++) {
-		chan = chans[x];
-		if (chan && chan->confmode && !is_pseudo_chan(chan)) {
-			u_char *data;
+
+	for (y = 1; y < maxspans; ++y) {
+		s = spans[y];
+		if (!s)
+			continue;
+		for (x = 0; x < s->channels; x++) {
+			chan = s->chans[x];
+			if (!chan->confmode)
+				continue;
 			spin_lock(&chan->lock);
 			data = __buf_pushpeek(&chan->confout);
 			__dahdi_transmit_chunk(chan, data);
@@ -8626,14 +8636,11 @@ static void process_masterspan(void)
 				__buf_push(&chan->confout, NULL);
 			spin_unlock(&chan->lock);
 		}
-	}
 #ifdef	DAHDI_SYNC_TICK
-	for (x = 0; x < maxspans; x++) {
-		struct dahdi_span *const s = spans[x];
-		if (s && s->ops->sync_tick)
+		if (s->ops->sync_tick)
 			s->ops->sync_tick(s, s == master);
-	}
 #endif
+	}
 	read_unlock(&chan_lock);
 	spin_unlock_irqrestore(&bigzaplock, flags);
 }
