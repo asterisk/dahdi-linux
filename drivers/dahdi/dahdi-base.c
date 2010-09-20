@@ -4159,14 +4159,214 @@ static const struct net_device_ops dahdi_netdev_ops = {
 };
 #endif
 
+static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
+{
+	int res = 0;
+	int y;
+	struct dahdi_chanconfig ch;
+	struct dahdi_chan *newmaster;
+	struct dahdi_chan *chan;
+	unsigned long flags;
+	int sigcap;
+
+	if (copy_from_user(&ch, (void __user *)data, sizeof(ch)))
+		return -EFAULT;
+	VALID_CHANNEL(ch.chan);
+	if (ch.sigtype == DAHDI_SIG_SLAVE) {
+		/* We have to use the master's sigtype */
+		if ((ch.master < 1) || (ch.master >= DAHDI_MAX_CHANNELS))
+			return -EINVAL;
+		if (!chans[ch.master])
+			return -EINVAL;
+		ch.sigtype = chans[ch.master]->sig;
+		newmaster = chans[ch.master];
+	} else if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
+		newmaster = chans[ch.chan];
+		if ((ch.idlebits < 1) || (ch.idlebits >= DAHDI_MAX_CHANNELS))
+			return -EINVAL;
+		if (!chans[ch.idlebits])
+			return -EINVAL;
+	} else {
+		newmaster = chans[ch.chan];
+	}
+	chan = chans[ch.chan];
+	spin_lock_irqsave(&chan->lock, flags);
+#ifdef CONFIG_DAHDI_NET
+	if (chan->flags & DAHDI_FLAG_NETDEV) {
+		if (ztchan_to_dev(chan)->flags & IFF_UP) {
+			spin_unlock_irqrestore(&chan->lock, flags);
+			module_printk(KERN_WARNING, "Can't switch HDLC net mode on channel %s, since current interface is up\n", chan->name);
+			return -EBUSY;
+		}
+		spin_unlock_irqrestore(&chan->lock, flags);
+		unregister_hdlc_device(chan->hdlcnetdev->netdev);
+		spin_lock_irqsave(&chan->lock, flags);
+		free_netdev(chan->hdlcnetdev->netdev);
+		kfree(chan->hdlcnetdev);
+		chan->hdlcnetdev = NULL;
+		chan->flags &= ~DAHDI_FLAG_NETDEV;
+	}
+#else
+	if (ch.sigtype == DAHDI_SIG_HDLCNET) {
+		spin_unlock_irqrestore(&chan->lock, flags);
+		module_printk(KERN_WARNING, "DAHDI networking not supported by this build.\n");
+		return -ENOSYS;
+	}
+#endif
+	sigcap = chan->sigcap;
+	/* If they support clear channel, then they support the HDLC and such through
+	   us.  */
+	if (sigcap & DAHDI_SIG_CLEAR)
+		sigcap |= (DAHDI_SIG_HDLCRAW | DAHDI_SIG_HDLCFCS | DAHDI_SIG_HDLCNET | DAHDI_SIG_DACS);
+
+	if ((sigcap & ch.sigtype) != ch.sigtype)
+		res = -EINVAL;
+
+	if (chan->master != chan) {
+		struct dahdi_chan *oldmaster = chan->master;
+
+		/* Clear the master channel */
+		chan->master = chan;
+		chan->nextslave = 0;
+		/* Unlink this channel from the master's channel list */
+		recalc_slaves(oldmaster);
+	}
+
+	if (!res) {
+		chan->sig = ch.sigtype;
+		if (chan->sig == DAHDI_SIG_CAS)
+			chan->idlebits = ch.idlebits;
+		else
+			chan->idlebits = 0;
+		if ((ch.sigtype & DAHDI_SIG_CLEAR) == DAHDI_SIG_CLEAR) {
+			/* Set clear channel flag if appropriate */
+			chan->flags &= ~DAHDI_FLAG_AUDIO;
+			chan->flags |= DAHDI_FLAG_CLEAR;
+		} else {
+			/* Set audio flag and not clear channel otherwise */
+			chan->flags |= DAHDI_FLAG_AUDIO;
+			chan->flags &= ~DAHDI_FLAG_CLEAR;
+		}
+		if ((ch.sigtype & DAHDI_SIG_HDLCRAW) == DAHDI_SIG_HDLCRAW) {
+			/* Set the HDLC flag */
+			chan->flags |= DAHDI_FLAG_HDLC;
+		} else {
+			/* Clear the HDLC flag */
+			chan->flags &= ~DAHDI_FLAG_HDLC;
+		}
+		if ((ch.sigtype & DAHDI_SIG_HDLCFCS) == DAHDI_SIG_HDLCFCS) {
+			/* Set FCS to be calculated if appropriate */
+			chan->flags |= DAHDI_FLAG_FCS;
+		} else {
+			/* Clear FCS flag */
+			chan->flags &= ~DAHDI_FLAG_FCS;
+		}
+		if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
+			/* Setup conference properly */
+			chan->confmode = DAHDI_CONF_DIGITALMON;
+			chan->confna = ch.idlebits;
+			res = dahdi_chan_dacs(chan,
+					      chans[ch.idlebits]);
+		} else {
+			dahdi_disable_dacs(chan);
+		}
+		chan->master = newmaster;
+		/* Note new slave if we are not our own master */
+		if (newmaster != chan) {
+			recalc_slaves(chan->master);
+		}
+		if ((ch.sigtype & DAHDI_SIG_HARDHDLC) == DAHDI_SIG_HARDHDLC) {
+			chan->flags &= ~DAHDI_FLAG_FCS;
+			chan->flags &= ~DAHDI_FLAG_HDLC;
+			chan->flags |= DAHDI_FLAG_NOSTDTXRX;
+		} else {
+			chan->flags &= ~DAHDI_FLAG_NOSTDTXRX;
+		}
+
+		if ((ch.sigtype & DAHDI_SIG_MTP2) == DAHDI_SIG_MTP2)
+			chan->flags |= DAHDI_FLAG_MTP2;
+		else
+			chan->flags &= ~DAHDI_FLAG_MTP2;
+	}
+
+	if (!res && chan->span->ops->chanconfig)
+		res = chan->span->ops->chanconfig(chan, ch.sigtype);
+
+#ifdef CONFIG_DAHDI_NET
+	if (!res &&
+	    (newmaster == chan) &&
+	    (chan->sig == DAHDI_SIG_HDLCNET)) {
+		chan->hdlcnetdev = dahdi_hdlc_alloc();
+		if (chan->hdlcnetdev) {
+/*				struct hdlc_device *hdlc = chan->hdlcnetdev;
+			struct net_device *d = hdlc_to_dev(hdlc); mmm...get it right later --byg */
+
+			chan->hdlcnetdev->netdev = alloc_hdlcdev(chan->hdlcnetdev);
+			if (chan->hdlcnetdev->netdev) {
+				chan->hdlcnetdev->chan = chan;
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 23)
+				SET_MODULE_OWNER(chan->hdlcnetdev->netdev);
+#endif
+				chan->hdlcnetdev->netdev->irq = chan->span->irq;
+				chan->hdlcnetdev->netdev->tx_queue_len = 50;
+#ifdef HAVE_NET_DEVICE_OPS
+				chan->hdlcnetdev->netdev->netdev_ops = &dahdi_netdev_ops;
+#else
+				chan->hdlcnetdev->netdev->do_ioctl = dahdi_net_ioctl;
+				chan->hdlcnetdev->netdev->open = dahdi_net_open;
+				chan->hdlcnetdev->netdev->stop = dahdi_net_stop;
+#endif
+				dev_to_hdlc(chan->hdlcnetdev->netdev)->attach = dahdi_net_attach;
+				dev_to_hdlc(chan->hdlcnetdev->netdev)->xmit = dahdi_xmit;
+				spin_unlock_irqrestore(&chan->lock, flags);
+				/* Briefly restore interrupts while we register the device */
+				res = dahdi_register_hdlc_device(chan->hdlcnetdev->netdev, ch.netdev_name);
+				spin_lock_irqsave(&chan->lock, flags);
+			} else {
+				module_printk(KERN_NOTICE, "Unable to allocate hdlc: *shrug*\n");
+				res = -1;
+			}
+			if (!res)
+				chan->flags |= DAHDI_FLAG_NETDEV;
+		} else {
+			module_printk(KERN_NOTICE, "Unable to allocate netdev: out of memory\n");
+			res = -1;
+		}
+	}
+#endif
+	if ((chan->sig == DAHDI_SIG_HDLCNET) &&
+	    (chan == newmaster) &&
+	    !(chan->flags & DAHDI_FLAG_NETDEV))
+		module_printk(KERN_NOTICE, "Unable to register HDLC device for channel %s\n", chan->name);
+	if (!res) {
+		/* Setup default law */
+		chan->deflaw = ch.deflaw;
+		/* Copy back any modified settings */
+		spin_unlock_irqrestore(&chan->lock, flags);
+		if (copy_to_user((void __user *)data, &ch, sizeof(ch)))
+			return -EFAULT;
+		spin_lock_irqsave(&chan->lock, flags);
+		/* And hangup */
+		dahdi_hangup(chan);
+		y = dahdi_q_sig(chan) & 0xff;
+		if (y >= 0)
+			chan->rxsig = (unsigned char) y;
+		chan->rxhooksig = DAHDI_RXSIG_INITIAL;
+	}
+#ifdef CONFIG_DAHDI_DEBUG
+	module_printk(KERN_NOTICE, "Configured channel %s, flags %04lx, sig %04x\n", chan->name, chan->flags, chan->sig);
+#endif
+	spin_unlock_irqrestore(&chan->lock, flags);
+
+	return res;
+}
+
 static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	/* I/O CTL's for control interface */
 	int i,j;
-	int sigcap;
 	int res = 0;
 	int x,y;
-	struct dahdi_chan *newmaster;
 	unsigned long flags;
 	void __user * const user_data = (void __user *)data;
 	int rv;
@@ -4282,201 +4482,8 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		break;
 	}
 	case DAHDI_CHANCONFIG:
-	{
-		struct dahdi_chanconfig ch;
+		return dahdi_ioctl_chanconfig(file, data);
 
-		if (copy_from_user(&ch, user_data, sizeof(ch)))
-			return -EFAULT;
-		VALID_CHANNEL(ch.chan);
-		if (ch.sigtype == DAHDI_SIG_SLAVE) {
-			/* We have to use the master's sigtype */
-			if ((ch.master < 1) || (ch.master >= DAHDI_MAX_CHANNELS))
-				return -EINVAL;
-			if (!chans[ch.master])
-				return -EINVAL;
-			ch.sigtype = chans[ch.master]->sig;
-			newmaster = chans[ch.master];
-		} else if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
-			newmaster = chans[ch.chan];
-			if ((ch.idlebits < 1) || (ch.idlebits >= DAHDI_MAX_CHANNELS))
-				return -EINVAL;
-			if (!chans[ch.idlebits])
-				return -EINVAL;
-		} else {
-			newmaster = chans[ch.chan];
-		}
-		spin_lock_irqsave(&chans[ch.chan]->lock, flags);
-#ifdef CONFIG_DAHDI_NET
-		if (chans[ch.chan]->flags & DAHDI_FLAG_NETDEV) {
-			if (ztchan_to_dev(chans[ch.chan])->flags & IFF_UP) {
-				spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-				module_printk(KERN_WARNING, "Can't switch HDLC net mode on channel %s, since current interface is up\n", chans[ch.chan]->name);
-				return -EBUSY;
-			}
-			spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-			unregister_hdlc_device(chans[ch.chan]->hdlcnetdev->netdev);
-			spin_lock_irqsave(&chans[ch.chan]->lock, flags);
-			free_netdev(chans[ch.chan]->hdlcnetdev->netdev);
-			kfree(chans[ch.chan]->hdlcnetdev);
-			chans[ch.chan]->hdlcnetdev = NULL;
-			chans[ch.chan]->flags &= ~DAHDI_FLAG_NETDEV;
-		}
-#else
-		if (ch.sigtype == DAHDI_SIG_HDLCNET) {
-			spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-			module_printk(KERN_WARNING, "DAHDI networking not supported by this build.\n");
-			return -ENOSYS;
-		}
-#endif
-		sigcap = chans[ch.chan]->sigcap;
-		/* If they support clear channel, then they support the HDLC and such through
-		   us.  */
-		if (sigcap & DAHDI_SIG_CLEAR)
-			sigcap |= (DAHDI_SIG_HDLCRAW | DAHDI_SIG_HDLCFCS | DAHDI_SIG_HDLCNET | DAHDI_SIG_DACS);
-
-		if ((sigcap & ch.sigtype) != ch.sigtype)
-			res = -EINVAL;
-
-		if (chans[ch.chan]->master != chans[ch.chan]) {
-			struct dahdi_chan *oldmaster = chans[ch.chan]->master;
-
-			/* Clear the master channel */
-			chans[ch.chan]->master = chans[ch.chan];
-			chans[ch.chan]->nextslave = 0;
-			/* Unlink this channel from the master's channel list */
-			recalc_slaves(oldmaster);
-		}
-
-		if (!res) {
-			chans[ch.chan]->sig = ch.sigtype;
-			if (chans[ch.chan]->sig == DAHDI_SIG_CAS)
-				chans[ch.chan]->idlebits = ch.idlebits;
-			else
-				chans[ch.chan]->idlebits = 0;
-			if ((ch.sigtype & DAHDI_SIG_CLEAR) == DAHDI_SIG_CLEAR) {
-				/* Set clear channel flag if appropriate */
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_AUDIO;
-				chans[ch.chan]->flags |= DAHDI_FLAG_CLEAR;
-			} else {
-				/* Set audio flag and not clear channel otherwise */
-				chans[ch.chan]->flags |= DAHDI_FLAG_AUDIO;
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_CLEAR;
-			}
-			if ((ch.sigtype & DAHDI_SIG_HDLCRAW) == DAHDI_SIG_HDLCRAW) {
-				/* Set the HDLC flag */
-				chans[ch.chan]->flags |= DAHDI_FLAG_HDLC;
-			} else {
-				/* Clear the HDLC flag */
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_HDLC;
-			}
-			if ((ch.sigtype & DAHDI_SIG_HDLCFCS) == DAHDI_SIG_HDLCFCS) {
-				/* Set FCS to be calculated if appropriate */
-				chans[ch.chan]->flags |= DAHDI_FLAG_FCS;
-			} else {
-				/* Clear FCS flag */
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_FCS;
-			}
-			if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
-				/* Setup conference properly */
-				chans[ch.chan]->confmode = DAHDI_CONF_DIGITALMON;
-				chans[ch.chan]->confna = ch.idlebits;
-				res = dahdi_chan_dacs(chans[ch.chan],
-						      chans[ch.idlebits]);
-			} else {
-				dahdi_disable_dacs(chans[ch.chan]);
-			}
-			chans[ch.chan]->master = newmaster;
-			/* Note new slave if we are not our own master */
-			if (newmaster != chans[ch.chan]) {
-				recalc_slaves(chans[ch.chan]->master);
-			}
-			if ((ch.sigtype & DAHDI_SIG_HARDHDLC) == DAHDI_SIG_HARDHDLC) {
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_FCS;
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_HDLC;
-				chans[ch.chan]->flags |= DAHDI_FLAG_NOSTDTXRX;
-			} else {
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_NOSTDTXRX;
-			}
-
-			if ((ch.sigtype & DAHDI_SIG_MTP2) == DAHDI_SIG_MTP2)
-				chans[ch.chan]->flags |= DAHDI_FLAG_MTP2;
-			else
-				chans[ch.chan]->flags &= ~DAHDI_FLAG_MTP2;
-		}
-
-		if (!res && chans[ch.chan]->span->ops->chanconfig) {
-			res = chans[ch.chan]->span->ops->chanconfig(chans[ch.chan],
-							       ch.sigtype);
-		}
-
-#ifdef CONFIG_DAHDI_NET
-		if (!res &&
-		    (newmaster == chans[ch.chan]) &&
-		    (chans[ch.chan]->sig == DAHDI_SIG_HDLCNET)) {
-			chans[ch.chan]->hdlcnetdev = dahdi_hdlc_alloc();
-			if (chans[ch.chan]->hdlcnetdev) {
-/*				struct hdlc_device *hdlc = chans[ch.chan]->hdlcnetdev;
-				struct net_device *d = hdlc_to_dev(hdlc); mmm...get it right later --byg */
-
-				chans[ch.chan]->hdlcnetdev->netdev = alloc_hdlcdev(chans[ch.chan]->hdlcnetdev);
-				if (chans[ch.chan]->hdlcnetdev->netdev) {
-					chans[ch.chan]->hdlcnetdev->chan = chans[ch.chan];
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23)
-					SET_MODULE_OWNER(chans[ch.chan]->hdlcnetdev->netdev);
-#endif
-					chans[ch.chan]->hdlcnetdev->netdev->irq = chans[ch.chan]->span->irq;
-					chans[ch.chan]->hdlcnetdev->netdev->tx_queue_len = 50;
-#ifdef HAVE_NET_DEVICE_OPS
-					chans[ch.chan]->hdlcnetdev->netdev->netdev_ops = &dahdi_netdev_ops;
-#else
-					chans[ch.chan]->hdlcnetdev->netdev->do_ioctl = dahdi_net_ioctl;
-					chans[ch.chan]->hdlcnetdev->netdev->open = dahdi_net_open;
-					chans[ch.chan]->hdlcnetdev->netdev->stop = dahdi_net_stop;
-#endif
-					dev_to_hdlc(chans[ch.chan]->hdlcnetdev->netdev)->attach = dahdi_net_attach;
-					dev_to_hdlc(chans[ch.chan]->hdlcnetdev->netdev)->xmit = dahdi_xmit;
-					spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-					/* Briefly restore interrupts while we register the device */
-					res = dahdi_register_hdlc_device(chans[ch.chan]->hdlcnetdev->netdev, ch.netdev_name);
-					spin_lock_irqsave(&chans[ch.chan]->lock, flags);
-				} else {
-					module_printk(KERN_NOTICE, "Unable to allocate hdlc: *shrug*\n");
-					res = -1;
-				}
-				if (!res)
-					chans[ch.chan]->flags |= DAHDI_FLAG_NETDEV;
-			} else {
-				module_printk(KERN_NOTICE, "Unable to allocate netdev: out of memory\n");
-				res = -1;
-			}
-		}
-#endif
-		if ((chans[ch.chan]->sig == DAHDI_SIG_HDLCNET) &&
-		    (chans[ch.chan] == newmaster) &&
-		    !(chans[ch.chan]->flags & DAHDI_FLAG_NETDEV))
-			module_printk(KERN_NOTICE, "Unable to register HDLC device for channel %s\n", chans[ch.chan]->name);
-		if (!res) {
-			/* Setup default law */
-			chans[ch.chan]->deflaw = ch.deflaw;
-			/* Copy back any modified settings */
-			spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-			if (copy_to_user(user_data, &ch, sizeof(ch)))
-				return -EFAULT;
-			spin_lock_irqsave(&chans[ch.chan]->lock, flags);
-			/* And hangup */
-			dahdi_hangup(chans[ch.chan]);
-			y = dahdi_q_sig(chans[ch.chan]) & 0xff;
-			if (y >= 0)
-				chans[ch.chan]->rxsig = (unsigned char) y;
-			chans[ch.chan]->rxhooksig = DAHDI_RXSIG_INITIAL;
-		}
-#ifdef CONFIG_DAHDI_DEBUG
-		module_printk(KERN_NOTICE, "Configured channel %s, flags %04lx, sig %04x\n", chans[ch.chan]->name, chans[ch.chan]->flags, chans[ch.chan]->sig);
-#endif
-		spin_unlock_irqrestore(&chans[ch.chan]->lock, flags);
-
-		return res;
-	}
 	case DAHDI_SFCONFIG:
 	{
 		struct dahdi_sfconfig sf;
