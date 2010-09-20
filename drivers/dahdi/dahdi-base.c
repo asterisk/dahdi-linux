@@ -4769,6 +4769,320 @@ static int ioctl_dahdi_dial(struct dahdi_chan *chan, unsigned long data)
 	return rv;
 }
 
+/**
+ * is_monitor_mode() - true if dahdi_confinfo is putting chan in monitor mode
+ *
+ */
+static bool is_monitor_mode(const struct dahdi_confinfo *conf)
+{
+	const int confmode = conf->confmode & DAHDI_CONF_MODE_MASK;
+	if ((confmode == DAHDI_CONF_MONITOR) ||
+	    (confmode == DAHDI_CONF_MONITORTX) ||
+	    (confmode == DAHDI_CONF_MONITORBOTH) ||
+	    (confmode == DAHDI_CONF_MONITOR_RX_PREECHO) ||
+	    (confmode == DAHDI_CONF_MONITOR_TX_PREECHO) ||
+	    (confmode == DAHDI_CONF_MONITORBOTH_PREECHO)) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
+{
+	struct dahdi_confinfo conf;
+	struct dahdi_chan *chan;
+	unsigned long flags;
+	unsigned int confmode;
+	int j;
+
+	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
+		return -EFAULT;
+
+	confmode = conf.confmode & DAHDI_CONF_MODE_MASK;
+
+	if (conf.chan) {
+		VALID_CHANNEL(conf.chan);
+		chan = chans[conf.chan];
+	} else {
+		if (file->private_data) {
+			chan = file->private_data;
+		} else {
+			VALID_CHANNEL(UNIT(file));
+			chan = chans[UNIT(file)];
+		}
+	}
+
+	if (!(chan->flags & DAHDI_FLAG_AUDIO))
+		return -EINVAL;
+
+	if (is_monitor_mode(&conf)) {
+		/* Monitor mode -- it's a channel */
+		if ((conf.confno < 0) || (conf.confno >= DAHDI_MAX_CHANNELS) ||
+		    !chans[conf.confno])
+			return -EINVAL;
+	} else {
+		/* make sure conf number makes sense, too */
+		if ((conf.confno < -1) || (conf.confno > DAHDI_MAX_CONF))
+			return -EINVAL;
+	}
+
+	/* if taking off of any conf, must have 0 mode */
+	if ((!conf.confno) && conf.confmode)
+		return -EINVAL;
+	/* likewise if 0 mode must have no conf */
+	if ((!conf.confmode) && conf.confno)
+		return -EINVAL;
+	conf.chan = chan->channo;  /* return with real channel # */
+	spin_lock_irqsave(&bigzaplock, flags);
+	spin_lock(&chan->lock);
+	if (conf.confno == -1)
+		conf.confno = dahdi_first_empty_conference();
+	if ((conf.confno < 1) && (conf.confmode)) {
+		/* No more empty conferences */
+		spin_unlock(&chan->lock);
+		spin_unlock_irqrestore(&bigzaplock, flags);
+		return -EBUSY;
+	}
+	  /* if changing confs, clear last added info */
+	if (conf.confno != chan->confna) {
+		memset(chan->conflast, 0, DAHDI_MAX_CHUNKSIZE);
+		memset(chan->conflast1, 0, DAHDI_MAX_CHUNKSIZE);
+		memset(chan->conflast2, 0, DAHDI_MAX_CHUNKSIZE);
+	}
+	j = chan->confna;  /* save old conference number */
+	chan->confna = conf.confno;   /* set conference number */
+	chan->confmode = conf.confmode;  /* set conference mode */
+	chan->_confn = 0;		     /* Clear confn */
+	dahdi_check_conf(j);
+	dahdi_check_conf(conf.confno);
+	if (chan->span && chan->span->ops->dacs) {
+		if ((confmode == DAHDI_CONF_DIGITALMON) &&
+		    (chan->txgain == defgain) &&
+		    (chan->rxgain == defgain) &&
+		    (chans[conf.confno]->txgain == defgain) &&
+		    (chans[conf.confno]->rxgain == defgain)) {
+			dahdi_chan_dacs(chan, chans[conf.confno]);
+		} else {
+			dahdi_disable_dacs(chan);
+		}
+	}
+	/* if we are going onto a conf */
+	if (conf.confno &&
+	    (confmode == DAHDI_CONF_CONF ||
+	     confmode == DAHDI_CONF_CONFANN ||
+	     confmode == DAHDI_CONF_CONFMON ||
+	     confmode == DAHDI_CONF_CONFANNMON ||
+	     confmode == DAHDI_CONF_REALANDPSEUDO)) {
+		/* Get alias */
+		chan->_confn = dahdi_get_conf_alias(conf.confno);
+	}
+
+	if (chans[conf.confno]) {
+		if ((confmode == DAHDI_CONF_MONITOR_RX_PREECHO) ||
+		    (confmode == DAHDI_CONF_MONITOR_TX_PREECHO) ||
+		    (confmode == DAHDI_CONF_MONITORBOTH_PREECHO)) {
+			void *temp = kmalloc(sizeof(*chan->readchunkpreec) *
+					     DAHDI_CHUNKSIZE, GFP_ATOMIC);
+			chans[conf.confno]->readchunkpreec = temp;
+		} else {
+			kfree(chans[conf.confno]->readchunkpreec);
+			chans[conf.confno]->readchunkpreec = NULL;
+		}
+	}
+
+	spin_unlock(&chan->lock);
+	spin_unlock_irqrestore(&bigzaplock, flags);
+	if (copy_to_user((void __user *)data, &conf, sizeof(conf)))
+		return -EFAULT;
+	return 0;
+}
+
+static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
+{
+	struct dahdi_chan *chan;
+	struct dahdi_confinfo conf;
+	unsigned long flags;
+	int res = 0;
+	int i;
+
+	if (file->private_data) {
+		chan = file->private_data;
+	} else {
+		VALID_CHANNEL(UNIT(file));
+		chan = chans[UNIT(file)];
+	}
+
+	if (!(chan->flags & DAHDI_FLAG_AUDIO))
+		return -EINVAL;
+	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
+		return -EFAULT;
+	/* check sanity of arguments */
+	if ((conf.chan < 0) || (conf.chan > DAHDI_MAX_CONF))
+		return -EINVAL;
+	if ((conf.confno < 0) || (conf.confno > DAHDI_MAX_CONF))
+		return -EINVAL;
+	/* cant listen to self!! */
+	if (conf.chan && (conf.chan == conf.confno))
+		return -EINVAL;
+
+	spin_lock_irqsave(&bigzaplock, flags);
+	spin_lock(&chan->lock);
+
+	/* if to clear all links */
+	if ((!conf.chan) && (!conf.confno)) {
+		/* clear all the links */
+		memset(conf_links, 0, sizeof(conf_links));
+		recalc_maxlinks();
+		spin_unlock(&chan->lock);
+		spin_unlock_irqrestore(&bigzaplock, flags);
+		return 0;
+	}
+	/* look for already existant specified combination */
+	for (i = 1; i <= DAHDI_MAX_CONF; i++) {
+		/* if found, exit */
+		if ((conf_links[i].src == conf.chan) &&
+		    (conf_links[i].dst == conf.confno))
+			break;
+	}
+	if (i <= DAHDI_MAX_CONF) { /* if found */
+		if (!conf.confmode) { /* if to remove link */
+			conf_links[i].src = 0;
+			conf_links[i].dst = 0;
+		} else { /* if to add and already there, error */
+			res = -EEXIST;
+		}
+	} else { /* if not found */
+		if (conf.confmode) { /* if to add link */
+			/* look for empty location */
+			for (i = 1; i <= DAHDI_MAX_CONF; i++) {
+				/* if empty, exit loop */
+				if ((!conf_links[i].src) &&
+				    (!conf_links[i].dst))
+					break;
+			}
+			/* if empty spot found */
+			if (i <= DAHDI_MAX_CONF) {
+				conf_links[i].src = conf.chan;
+				conf_links[i].dst = conf.confno;
+			} else { /* if no empties -- error */
+				res = -ENOSPC;
+			 }
+		} else { /* if to remove, and not found -- error */
+			res = -ENOENT;
+		}
+	}
+	recalc_maxlinks();
+	spin_unlock(&chan->lock);
+	spin_unlock_irqrestore(&bigzaplock, flags);
+	return res;
+}
+
+/**
+ * dahdi_ioctl_confdiag() - Output debug info about conferences to console.
+ *
+ * This is a pure debugging aide since the only result is to the console.
+ *
+ * TODO: Does anyone use this anymore?  Should it be hidden behind a debug
+ * compile time option?
+ */
+static int dahdi_ioctl_confdiag(struct file *file, unsigned long data)
+{
+	struct dahdi_chan *chan;
+	int rv;
+	int i;
+	int j;
+	int c;
+	int k;
+
+	if (file->private_data) {
+		chan = file->private_data;
+	} else {
+		VALID_CHANNEL(UNIT(file));
+		chan = chans[UNIT(file)];
+	}
+
+	if (!(chan->flags & DAHDI_FLAG_AUDIO))
+		return -EINVAL;
+
+	get_user(j, (int __user *)data);  /* get conf # */
+
+	/* loop thru the interesting ones */
+	for (i = ((j) ? j : 1); i <= ((j) ? j : DAHDI_MAX_CONF); i++) {
+		c = 0;
+		for (k = 1; k < DAHDI_MAX_CHANNELS; k++) {
+			struct dahdi_chan *const pos = chans[k];
+			/* skip if no pointer */
+			if (!pos)
+				continue;
+			/* skip if not in this conf */
+			if (pos->confna != i)
+				continue;
+			if (!c) {
+				module_printk(KERN_NOTICE,
+					      "Conf #%d:\n", i);
+			}
+			c = 1;
+			module_printk(KERN_NOTICE, "chan %d, mode %x\n",
+				      k, pos->confmode);
+		}
+		rv = 0;
+		for (k = 1; k <= DAHDI_MAX_CONF; k++) {
+			if (conf_links[k].dst == i) {
+				if (!c) {
+					c = 1;
+					module_printk(KERN_NOTICE,
+						      "Conf #%d:\n", i);
+				}
+				if (!rv) {
+					rv = 1;
+					module_printk(KERN_NOTICE,
+						      "Snooping on:\n");
+				}
+				module_printk(KERN_NOTICE, "conf %d\n",
+					      conf_links[k].src);
+			}
+		}
+		if (c)
+			module_printk(KERN_NOTICE, "\n");
+	}
+	return 0;
+}
+
+static int dahdi_ioctl_getconf(struct file *file, unsigned long data)
+{
+	struct dahdi_confinfo conf;
+	struct dahdi_chan *chan;
+
+	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
+		return -EFAULT;
+
+	if (!conf.chan) {
+		/* If 0, use the current channel. */
+		if (file->private_data) {
+			chan = file->private_data;
+		} else {
+			VALID_CHANNEL(UNIT(file));
+			chan = chans[UNIT(file)];
+		}
+	} else {
+		VALID_CHANNEL(conf.chan);
+		chan = chans[conf.chan];
+	}
+	if (!chan)
+		return -EINVAL;
+
+	if (!(chan->flags & DAHDI_FLAG_AUDIO))
+		return -EINVAL;
+	conf.chan = chan->channo;  /* get channel number */
+	conf.confno = chan->confna;  /* get conference number */
+	conf.confmode = chan->confmode; /* get conference mode */
+	if (copy_to_user((void __user *)data, &conf, sizeof(conf)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static int
 dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 			  unsigned long data, int unit)
@@ -4776,12 +5090,11 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 	struct dahdi_chan *chan = chans[unit];
 	union {
 		struct dahdi_bufferinfo bi;
-		struct dahdi_confinfo conf;
 		struct dahdi_ring_cadence cad;
 	} stack;
 	unsigned long flags;
-	int i, j, k, rv;
-	int ret, c;
+	int i, j, rv;
+	int ret;
 	void __user * const user_data = (void __user *)data;
 
 	if (!chan)
@@ -4992,214 +5305,19 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		return rv;
 	case DAHDI_GETCONF_V1: /* intentional drop through */
 	case DAHDI_GETCONF:  /* get conf stuff */
-		if (copy_from_user(&stack.conf, user_data, sizeof(stack.conf)))
-			return -EFAULT;
-		i = stack.conf.chan;  /* get channel no */
-		   /* if zero, use current channel no */
-		if (!i) i = chan->channo;
-		  /* make sure channel number makes sense */
-		if ((i < 0) || (i > DAHDI_MAX_CONF) || (!chans[i])) return(-EINVAL);
-		if (!(chans[i]->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
-		stack.conf.chan = i;  /* get channel number */
-		stack.conf.confno = chans[i]->confna;  /* get conference number */
-		stack.conf.confmode = chans[i]->confmode; /* get conference mode */
-		if (copy_to_user(user_data, &stack.conf, sizeof(stack.conf)))
-			return -EFAULT;
-		break;
+		return dahdi_ioctl_getconf(file, data);
+
 	case DAHDI_SETCONF_V1: /* Intentional fall through. */
 	case DAHDI_SETCONF:  /* set conf stuff */
-		if (copy_from_user(&stack.conf, user_data, sizeof(stack.conf)))
-			return -EFAULT;
-		i = stack.conf.chan;  /* get channel no */
-		   /* if zero, use current channel no */
-		if (!i) i = chan->channo;
-		  /* make sure channel number makes sense */
-		if ((i < 1) || (i > DAHDI_MAX_CHANNELS) || (!chans[i])) return(-EINVAL);
-		if (!(chans[i]->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
-		if ((stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORTX ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORBOTH ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_RX_PREECHO ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_TX_PREECHO ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORBOTH_PREECHO) {
-			/* Monitor mode -- it's a channel */
-			if ((stack.conf.confno < 0) || (stack.conf.confno >= DAHDI_MAX_CHANNELS) || !chans[stack.conf.confno]) return(-EINVAL);
-		} else {
-			  /* make sure conf number makes sense, too */
-			if ((stack.conf.confno < -1) || (stack.conf.confno > DAHDI_MAX_CONF)) return(-EINVAL);
-		}
+		return dahdi_ioctl_setconf(file, data);
 
-		  /* if taking off of any conf, must have 0 mode */
-		if ((!stack.conf.confno) && stack.conf.confmode) return(-EINVAL);
-		  /* likewise if 0 mode must have no conf */
-		if ((!stack.conf.confmode) && stack.conf.confno) return (-EINVAL);
-		stack.conf.chan = i;  /* return with real channel # */
-		spin_lock_irqsave(&bigzaplock, flags);
-		spin_lock(&chan->lock);
-		if (stack.conf.confno == -1)
-			stack.conf.confno = dahdi_first_empty_conference();
-		if ((stack.conf.confno < 1) && (stack.conf.confmode)) {
-			/* No more empty conferences */
-			spin_unlock(&chan->lock);
-			spin_unlock_irqrestore(&bigzaplock, flags);
-			return -EBUSY;
-		}
-		  /* if changing confs, clear last added info */
-		if (stack.conf.confno != chans[i]->confna) {
-			memset(chans[i]->conflast, 0, DAHDI_MAX_CHUNKSIZE);
-			memset(chans[i]->conflast1, 0, DAHDI_MAX_CHUNKSIZE);
-			memset(chans[i]->conflast2, 0, DAHDI_MAX_CHUNKSIZE);
-		}
-		j = chans[i]->confna;  /* save old conference number */
-		chans[i]->confna = stack.conf.confno;   /* set conference number */
-		chans[i]->confmode = stack.conf.confmode;  /* set conference mode */
-		chans[i]->_confn = 0;		     /* Clear confn */
-		dahdi_check_conf(j);
-		dahdi_check_conf(stack.conf.confno);
-		if (chans[i]->span && chans[i]->span->ops->dacs) {
-			if (((stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_DIGITALMON) &&
-			    chans[i]->txgain == defgain &&
-			    chans[i]->rxgain == defgain &&
-			    chans[stack.conf.confno]->txgain == defgain &&
-			    chans[stack.conf.confno]->rxgain == defgain) {
-				dahdi_chan_dacs(chans[i], chans[stack.conf.confno]);
-			} else {
-				dahdi_disable_dacs(chans[i]);
-			}
-		}
-		/* if we are going onto a conf */
-		if (stack.conf.confno &&
-			((stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONF ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFANN ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFMON ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFANNMON ||
-			(stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_REALANDPSEUDO)) {
-			/* Get alias */
-			chans[i]->_confn = dahdi_get_conf_alias(stack.conf.confno);
-		}
-
-		if (chans[stack.conf.confno]) {
-			if ((stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_RX_PREECHO ||
-			    (stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITOR_TX_PREECHO ||
-			    (stack.conf.confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_MONITORBOTH_PREECHO)
-				chans[stack.conf.confno]->readchunkpreec = kmalloc(sizeof(*chans[stack.conf.confno]->readchunkpreec) * DAHDI_CHUNKSIZE, GFP_ATOMIC);
-			else {
-				if (chans[stack.conf.confno]->readchunkpreec) {
-					kfree(chans[stack.conf.confno]->readchunkpreec);
-					chans[stack.conf.confno]->readchunkpreec = NULL;
-				}
-			}
-		}
-
-		spin_unlock(&chan->lock);
-		spin_unlock_irqrestore(&bigzaplock, flags);
-		if (copy_to_user(user_data, &stack.conf, sizeof(stack.conf)))
-			return -EFAULT;
-		break;
 	case DAHDI_CONFLINK:  /* do conf link stuff */
-		if (!(chan->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
-		if (copy_from_user(&stack.conf, user_data, sizeof(stack.conf)))
-			return -EFAULT;
-		  /* check sanity of arguments */
-		if ((stack.conf.chan < 0) || (stack.conf.chan > DAHDI_MAX_CONF)) return(-EINVAL);
-		if ((stack.conf.confno < 0) || (stack.conf.confno > DAHDI_MAX_CONF)) return(-EINVAL);
-		  /* cant listen to self!! */
-		if (stack.conf.chan && (stack.conf.chan == stack.conf.confno)) return(-EINVAL);
-		spin_lock_irqsave(&bigzaplock, flags);
-		spin_lock(&chan->lock);
-		  /* if to clear all links */
-		if ((!stack.conf.chan) && (!stack.conf.confno))
-		   {
-			   /* clear all the links */
-			memset(conf_links,0,sizeof(conf_links));
-			recalc_maxlinks();
-			spin_unlock(&chan->lock);
-			spin_unlock_irqrestore(&bigzaplock, flags);
-			break;
-		   }
-		rv = 0;  /* clear return value */
-		/* look for already existant specified combination */
-		for(i = 1; i <= DAHDI_MAX_CONF; i++)
-		   {
-			  /* if found, exit */
-			if ((conf_links[i].src == stack.conf.chan) &&
-				(conf_links[i].dst == stack.conf.confno)) break;
-		   }
-		if (i <= DAHDI_MAX_CONF) /* if found */
-		   {
-			if (!stack.conf.confmode) /* if to remove link */
-			   {
-				conf_links[i].src = conf_links[i].dst = 0;
-			   }
-			else /* if to add and already there, error */
-			   {
-				rv = -EEXIST;
-			   }
-		   }
-		else  /* if not found */
-		   {
-			if (stack.conf.confmode) /* if to add link */
-			   {
-				/* look for empty location */
-				for(i = 1; i <= DAHDI_MAX_CONF; i++)
-				   {
-					  /* if empty, exit loop */
-					if ((!conf_links[i].src) &&
-						 (!conf_links[i].dst)) break;
-				   }
-				   /* if empty spot found */
-				if (i <= DAHDI_MAX_CONF)
-				   {
-					conf_links[i].src = stack.conf.chan;
-					conf_links[i].dst = stack.conf.confno;
-				   }
-				else /* if no empties -- error */
-				   {
-					rv = -ENOSPC;
-				   }
-			   }
-			else /* if to remove, and not found -- error */
-			   {
-				rv = -ENOENT;
-			   }
-		   }
-		recalc_maxlinks();
-		spin_unlock(&chan->lock);
-		spin_unlock_irqrestore(&bigzaplock, flags);
-		return(rv);
+		return dahdi_ioctl_conflink(file, data);
+
 	case DAHDI_CONFDIAG_V1: /* Intentional fall-through */
 	case DAHDI_CONFDIAG:  /* output diagnostic info to console */
-		if (!(chan->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
-		get_user(j, (int __user *)data);  /* get conf # */
- 		  /* loop thru the interesting ones */
-		for(i = ((j) ? j : 1); i <= ((j) ? j : DAHDI_MAX_CONF); i++)
-		   {
-			c = 0;
-			for(k = 1; k < DAHDI_MAX_CHANNELS; k++)
-			   {
-				  /* skip if no pointer */
-				if (!chans[k]) continue;
-				  /* skip if not in this conf */
-				if (chans[k]->confna != i) continue;
-				if (!c) module_printk(KERN_NOTICE, "Conf #%d:\n",i);
-				c = 1;
-				module_printk(KERN_NOTICE, "chan %d, mode %x\n", k,chans[k]->confmode);
-			   }
-			rv = 0;
-			for(k = 1; k <= DAHDI_MAX_CONF; k++)
-			   {
-				if (conf_links[k].dst == i)
-				   {
-					if (!c) module_printk(KERN_NOTICE, "Conf #%d:\n",i);
-					c = 1;
-					if (!rv) module_printk(KERN_NOTICE, "Snooping on:\n");
-					rv = 1;
-					module_printk(KERN_NOTICE, "conf %d\n",conf_links[k].src);
-				   }
-			   }
-			if (c) module_printk(KERN_NOTICE, "\n");
-		   }
-		break;
+		return dahdi_ioctl_confdiag(file, data);
+
 	case DAHDI_CHANNO:  /* get channel number of stream */
 		/* return unit/channel number */
 		put_user(unit, (int __user *)data);
