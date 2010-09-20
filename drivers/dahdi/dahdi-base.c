@@ -922,12 +922,14 @@ static void dahdi_check_conf(int x)
 		return;
 
 	for (y = 0; y < maxchans; y++) {
-		if (chans[y] && (chans[y]->confna == x) &&
-				((chans[y]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONF ||
-				(chans[y]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFANN ||
-				(chans[y]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFMON ||
-				(chans[y]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_CONFANNMON ||
-				(chans[y]->confmode & DAHDI_CONF_MODE_MASK) == DAHDI_CONF_REALANDPSEUDO)) {
+		struct dahdi_chan *const chan = chans[y];
+		const int confmode = chan->confmode & DAHDI_CONF_MODE_MASK;
+		if (chan && (chan->confna == x) &&
+		    (confmode == DAHDI_CONF_CONF ||
+		     confmode == DAHDI_CONF_CONFANN ||
+		     confmode == DAHDI_CONF_CONFMON ||
+		     confmode == DAHDI_CONF_CONFANNMON ||
+		     confmode == DAHDI_CONF_REALANDPSEUDO)) {
 			return;
 		}
 	}
