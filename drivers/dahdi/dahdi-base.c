@@ -409,6 +409,19 @@ static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
 static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
 #endif
 
+struct pseudo_chan {
+	struct dahdi_chan chan;
+	struct list_head node;
+};
+
+static inline struct pseudo_chan *chan_to_pseudo(struct dahdi_chan *chan)
+{
+	return container_of(chan, struct pseudo_chan, chan);
+}
+
+/* This is protected by the chan_lock. */
+static LIST_HEAD(pseudo_chans);
+
 /**
  * is_pseudo_chan() - By definition psuedo channels are not on a span.
  */
@@ -2867,7 +2880,8 @@ static int can_open_timer(void)
 
 static struct dahdi_chan *dahdi_alloc_pseudo(void)
 {
-	struct dahdi_chan *pseudo;
+	struct pseudo_chan *pseudo;
+	unsigned long flags;
 
 	/* Don't allow /dev/dahdi/pseudo to open if there is not a timing
 	 * source. */
@@ -2877,27 +2891,44 @@ static struct dahdi_chan *dahdi_alloc_pseudo(void)
 	if (!(pseudo = kzalloc(sizeof(*pseudo), GFP_KERNEL)))
 		return NULL;
 
-	pseudo->sig = DAHDI_SIG_CLEAR;
-	pseudo->sigcap = DAHDI_SIG_CLEAR;
-	pseudo->flags = DAHDI_FLAG_AUDIO;
-	pseudo->span = NULL; /* No span == psuedo channel */
+	INIT_LIST_HEAD(&pseudo->node);
 
-	if (dahdi_chan_reg(pseudo)) {
+	pseudo->chan.sig = DAHDI_SIG_CLEAR;
+	pseudo->chan.sigcap = DAHDI_SIG_CLEAR;
+	pseudo->chan.flags = DAHDI_FLAG_AUDIO;
+	pseudo->chan.span = NULL; /* No span == psuedo channel */
+
+	if (dahdi_chan_reg(&pseudo->chan)) {
 		kfree(pseudo);
-		pseudo = NULL;
-	} else {
-		snprintf(pseudo->name, sizeof(pseudo->name)-1,"Pseudo/%d", pseudo->channo); 
+		return NULL;
 	}
 
-	return pseudo;
+	write_lock_irqsave(&chan_lock, flags);
+	list_add_tail(&pseudo->node, &pseudo_chans);
+	write_unlock_irqrestore(&chan_lock, flags);
+
+	snprintf(pseudo->chan.name, sizeof(pseudo->chan.name)-1,
+		 "Pseudo/%d", pseudo->chan.channo);
+
+	return &pseudo->chan;
 }
 
-static void dahdi_free_pseudo(struct dahdi_chan *pseudo)
+static void dahdi_free_pseudo(struct dahdi_chan *chan)
 {
-	if (pseudo) {
-		dahdi_chan_unreg(pseudo);
-		kfree(pseudo);
-	}
+	struct pseudo_chan *pseudo;
+	unsigned long flags;
+
+	if (!chan)
+		return;
+
+	pseudo = chan_to_pseudo(chan);
+
+	write_lock_irqsave(&chan_lock, flags);
+	list_del(&pseudo->node);
+	write_unlock_irqrestore(&chan_lock, flags);
+
+	dahdi_chan_unreg(chan);
+	kfree(pseudo);
 }
 
 static int dahdi_open(struct inode *inode, struct file *file)
