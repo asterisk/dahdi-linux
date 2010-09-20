@@ -132,9 +132,6 @@ struct t1 {
 	struct vpmadt032 *vpmadt032;
 	unsigned long vpm_check;
 	struct work_struct vpm_check_work;
-	unsigned long dtmfactive;
-	unsigned long dtmfmask;
-	unsigned long dtmfmutemask;
 
 	spinlock_t cmd_list_lock;
 	struct list_head pending_cmds;
