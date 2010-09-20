@@ -4000,18 +4000,176 @@ static int dahdi_ioctl_setparams(struct file *file, unsigned long data)
 	return 0;
 }
 
-static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit)
+/**
+ * dahdi_ioctl_spanstat() - Return statistics for a span.
+ *
+ */
+static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 {
-	union {
-		struct dahdi_spaninfo_v1 spaninfo_v1;
-		struct dahdi_spaninfo spaninfo;
-	} stack;
-
+	struct dahdi_spaninfo spaninfo;
 	struct dahdi_span *s;
-	int i,j;
+	int j;
 	size_t size_to_copy;
-	void __user * const user_data = (void __user *)data;
 
+	size_to_copy = sizeof(struct dahdi_spaninfo);
+	if (copy_from_user(&spaninfo, (void __user *)data, size_to_copy))
+		return -EFAULT;
+	if (!spaninfo.spanno) {
+		struct dahdi_chan *const chan = chan_from_file(file);
+		if (!chan)
+			return -EINVAL;
+
+		s = chan->span;
+	} else {
+		s = find_span(spaninfo.spanno);
+	}
+	if (!s)
+		return -EINVAL;
+
+	spaninfo.spanno = s->spanno; /* put the span # in here */
+	spaninfo.totalspans = span_count();
+	dahdi_copy_string(spaninfo.desc, s->desc, sizeof(spaninfo.desc));
+	dahdi_copy_string(spaninfo.name, s->name, sizeof(spaninfo.name));
+	spaninfo.alarms = s->alarms;		/* get alarm status */
+	spaninfo.rxlevel = s->rxlevel;	/* get rx level */
+	spaninfo.txlevel = s->txlevel;	/* get tx level */
+
+	spaninfo.bpvcount = s->count.bpv;
+	spaninfo.crc4count = s->count.crc4;
+	spaninfo.ebitcount = s->count.ebit;
+	spaninfo.fascount = s->count.fas;
+	spaninfo.fecount = s->count.fe;
+	spaninfo.cvcount = s->count.cv;
+	spaninfo.becount = s->count.be;
+	spaninfo.prbs = s->count.prbs;
+	spaninfo.errsec = s->count.errsec;
+
+	spaninfo.irqmisses = s->irqmisses;	/* get IRQ miss count */
+	spaninfo.syncsrc = s->syncsrc;	/* get active sync source */
+	spaninfo.totalchans = s->channels;
+	spaninfo.numchans = 0;
+	for (j = 0; j < s->channels; j++) {
+		if (s->chans[j]->sig)
+			spaninfo.numchans++;
+	}
+	spaninfo.lbo = s->lbo;
+	spaninfo.lineconfig = s->lineconfig;
+	spaninfo.irq = s->irq;
+	spaninfo.linecompat = s->linecompat;
+	dahdi_copy_string(spaninfo.lboname, dahdi_lboname(s->lbo),
+			  sizeof(spaninfo.lboname));
+	if (s->manufacturer) {
+		dahdi_copy_string(spaninfo.manufacturer, s->manufacturer,
+				  sizeof(spaninfo.manufacturer));
+	}
+	if (s->devicetype) {
+		dahdi_copy_string(spaninfo.devicetype, s->devicetype,
+				  sizeof(spaninfo.devicetype));
+	}
+	dahdi_copy_string(spaninfo.location, s->location,
+			  sizeof(spaninfo.location));
+	if (s->spantype) {
+		dahdi_copy_string(spaninfo.spantype, s->spantype,
+				  sizeof(spaninfo.spantype));
+	}
+
+	if (copy_to_user((void __user *)data, &spaninfo, size_to_copy))
+		return -EFAULT;
+	return 0;
+}
+
+/**
+ * dahdi_ioctl_spanstat_v1() - Return statistics for a span in a legacy format.
+ *
+ */
+static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
+{
+	struct dahdi_spaninfo_v1 spaninfo_v1;
+	struct dahdi_span *s;
+	int j;
+
+	if (copy_from_user(&spaninfo_v1, (void __user *)data,
+			   sizeof(spaninfo_v1))) {
+		return -EFAULT;
+	}
+
+	if (!spaninfo_v1.spanno) {
+		struct dahdi_chan *const chan = chan_from_file(file);
+		if (!chan)
+			return -EINVAL;
+
+		s = chan->span;
+	} else {
+		s = find_span(spaninfo_v1.spanno);
+	}
+
+	if (!s)
+		return -EINVAL;
+
+	spaninfo_v1.spanno = s->spanno; /* put the span # in here */
+	spaninfo_v1.totalspans = 0;
+	spaninfo_v1.totalspans = span_count();
+	dahdi_copy_string(spaninfo_v1.desc,
+			  s->desc,
+			  sizeof(spaninfo_v1.desc));
+	dahdi_copy_string(spaninfo_v1.name,
+			  s->name,
+			  sizeof(spaninfo_v1.name));
+	spaninfo_v1.alarms = s->alarms;
+	spaninfo_v1.bpvcount = s->count.bpv;
+	spaninfo_v1.rxlevel = s->rxlevel;
+	spaninfo_v1.txlevel = s->txlevel;
+	spaninfo_v1.crc4count = s->count.crc4;
+	spaninfo_v1.ebitcount = s->count.ebit;
+	spaninfo_v1.fascount = s->count.fas;
+	spaninfo_v1.irqmisses = s->irqmisses;
+	spaninfo_v1.syncsrc = s->syncsrc;
+	spaninfo_v1.totalchans = s->channels;
+	spaninfo_v1.numchans = 0;
+	for (j = 0; j < s->channels; j++) {
+		if (s->chans[j]->sig)
+			spaninfo_v1.numchans++;
+	}
+	spaninfo_v1.lbo = s->lbo;
+	spaninfo_v1.lineconfig = s->lineconfig;
+	spaninfo_v1.irq = s->irq;
+	spaninfo_v1.linecompat = s->linecompat;
+	dahdi_copy_string(spaninfo_v1.lboname,
+			  dahdi_lboname(s->lbo),
+			  sizeof(spaninfo_v1.lboname));
+
+	if (s->manufacturer) {
+		dahdi_copy_string(spaninfo_v1.manufacturer,
+			s->manufacturer,
+			sizeof(spaninfo_v1.manufacturer));
+	}
+
+	if (s->devicetype) {
+		dahdi_copy_string(spaninfo_v1.devicetype,
+				  s->devicetype,
+				  sizeof(spaninfo_v1.devicetype));
+	}
+
+	dahdi_copy_string(spaninfo_v1.location,
+			  s->location,
+			  sizeof(spaninfo_v1.location));
+
+	if (s->spantype) {
+		dahdi_copy_string(spaninfo_v1.spantype,
+				  s->spantype,
+				  sizeof(spaninfo_v1.spantype));
+	}
+
+	if (copy_to_user((void __user *)data, &spaninfo_v1,
+			 sizeof(spaninfo_v1))) {
+		return -EFAULT;
+	}
+	return 0;
+}
+
+static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
+			      unsigned long data, int unit)
+{
 	switch (cmd) {
 		/* get channel parameters */
 	case DAHDI_GET_PARAMS_V1: /* Intentional drop through. */
@@ -4029,129 +4187,11 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd, unsigned long
 		return dahdi_ioctl_setgains(file, data);
 
 	case DAHDI_SPANSTAT:
-		size_to_copy = sizeof(struct dahdi_spaninfo);
-		if (copy_from_user(&stack.spaninfo, user_data, size_to_copy))
-			return -EFAULT;
-		i = stack.spaninfo.spanno; /* get specified span number */
-		if (i == 0) {
-			/* if to figure it out for this chan */
-			if (!chans[unit])
-				return -EINVAL;
-			i = chans[unit]->span->spanno;
-		}
-		s = find_span(i);
-		if (!s)
-			return -EINVAL;
-		stack.spaninfo.spanno = i; /* put the span # in here */
-		stack.spaninfo.totalspans = span_count();
-		dahdi_copy_string(stack.spaninfo.desc, s->desc, sizeof(stack.spaninfo.desc));
-		dahdi_copy_string(stack.spaninfo.name, s->name, sizeof(stack.spaninfo.name));
-		stack.spaninfo.alarms = s->alarms;		/* get alarm status */
-		stack.spaninfo.rxlevel = s->rxlevel;	/* get rx level */
-		stack.spaninfo.txlevel = s->txlevel;	/* get tx level */
+		return dahdi_ioctl_spanstat(file, data);
 
-		stack.spaninfo.bpvcount = s->count.bpv;
-		stack.spaninfo.crc4count = s->count.crc4;
-		stack.spaninfo.ebitcount = s->count.ebit;
-		stack.spaninfo.fascount = s->count.fas;
-		stack.spaninfo.fecount = s->count.fe;
-		stack.spaninfo.cvcount = s->count.cv;
-		stack.spaninfo.becount = s->count.be;
-		stack.spaninfo.prbs = s->count.prbs;
-		stack.spaninfo.errsec = s->count.errsec;
-
-		stack.spaninfo.irqmisses = s->irqmisses;	/* get IRQ miss count */
-		stack.spaninfo.syncsrc = s->syncsrc;	/* get active sync source */
-		stack.spaninfo.totalchans = s->channels;
-		stack.spaninfo.numchans = 0;
-		for (j = 0; j < s->channels; j++) {
-			if (s->chans[j]->sig)
-				stack.spaninfo.numchans++;
-		}
-		stack.spaninfo.lbo = s->lbo;
-		stack.spaninfo.lineconfig = s->lineconfig;
-		stack.spaninfo.irq = s->irq;
-		stack.spaninfo.linecompat = s->linecompat;
-		dahdi_copy_string(stack.spaninfo.lboname, dahdi_lboname(s->lbo), sizeof(stack.spaninfo.lboname));
-		if (s->manufacturer)
-			dahdi_copy_string(stack.spaninfo.manufacturer, s->manufacturer,
-				sizeof(stack.spaninfo.manufacturer));
-		if (s->devicetype)
-			dahdi_copy_string(stack.spaninfo.devicetype, s->devicetype, sizeof(stack.spaninfo.devicetype));
-		dahdi_copy_string(stack.spaninfo.location, s->location, sizeof(stack.spaninfo.location));
-		if (s->spantype)
-			dahdi_copy_string(stack.spaninfo.spantype, s->spantype, sizeof(stack.spaninfo.spantype));
-
-		if (copy_to_user(user_data, &stack.spaninfo, size_to_copy))
-			return -EFAULT;
-		break;
 	case DAHDI_SPANSTAT_V1:
-		size_to_copy = sizeof(struct dahdi_spaninfo_v1);
-		if (copy_from_user(&stack.spaninfo_v1,
-				   (__user struct dahdi_spaninfo_v1 *) data,
-				   size_to_copy))
-			return -EFAULT;
-		i = stack.spaninfo_v1.spanno; /* get specified span number */
-		if (i == 0) {
-			/* if to figure it out for this chan */
-			if (!chans[unit])
-				return -EINVAL;
-			i = chans[unit]->span->spanno;
-		}
-		s = find_span(i);
-		if (!s)
-			return -EINVAL;
-		stack.spaninfo_v1.spanno = i; /* put the span # in here */
-		stack.spaninfo_v1.totalspans = 0;
-		stack.spaninfo_v1.totalspans = span_count();
-		dahdi_copy_string(stack.spaninfo_v1.desc,
-				  s->desc,
-				  sizeof(stack.spaninfo_v1.desc));
-		dahdi_copy_string(stack.spaninfo_v1.name,
-				  s->name,
-				  sizeof(stack.spaninfo_v1.name));
-		stack.spaninfo_v1.alarms = s->alarms;
-		stack.spaninfo_v1.bpvcount = s->count.bpv;
-		stack.spaninfo_v1.rxlevel = s->rxlevel;
-		stack.spaninfo_v1.txlevel = s->txlevel;
-		stack.spaninfo_v1.crc4count = s->count.crc4;
-		stack.spaninfo_v1.ebitcount = s->count.ebit;
-		stack.spaninfo_v1.fascount = s->count.fas;
-		stack.spaninfo_v1.irqmisses = s->irqmisses;
-		stack.spaninfo_v1.syncsrc = s->syncsrc;
-		stack.spaninfo_v1.totalchans = s->channels;
-		stack.spaninfo_v1.numchans = 0;
-		for (j = 0; j < s->channels; j++) {
-			if (s->chans[j]->sig)
-				stack.spaninfo_v1.numchans++;
-		}
-		stack.spaninfo_v1.lbo = s->lbo;
-		stack.spaninfo_v1.lineconfig = s->lineconfig;
-		stack.spaninfo_v1.irq = s->irq;
-		stack.spaninfo_v1.linecompat = s->linecompat;
-		dahdi_copy_string(stack.spaninfo_v1.lboname,
-				  dahdi_lboname(s->lbo),
-				  sizeof(stack.spaninfo_v1.lboname));
-		if (s->manufacturer)
-			dahdi_copy_string(stack.spaninfo_v1.manufacturer,
-				s->manufacturer,
-				sizeof(stack.spaninfo_v1.manufacturer));
-		if (s->devicetype)
-			dahdi_copy_string(stack.spaninfo_v1.devicetype,
-					  s->devicetype,
-					  sizeof(stack.spaninfo_v1.devicetype));
-		dahdi_copy_string(stack.spaninfo_v1.location,
-				  s->location,
-				  sizeof(stack.spaninfo_v1.location));
-		if (s->spantype)
-			dahdi_copy_string(stack.spaninfo_v1.spantype,
-					  s->spantype,
-					  sizeof(stack.spaninfo_v1.spantype));
+		return dahdi_ioctl_spanstat_v1(file, data);
 
-		if (copy_to_user((__user struct dahdi_spaninfo_v1 *) data,
-				 &stack.spaninfo_v1, size_to_copy))
-			return -EFAULT;
-		break;
 	case DAHDI_CHANDIAG_V1: /* Intentional drop through. */
 	case DAHDI_CHANDIAG:
 		return dahdi_ioctl_chandiag(file, data);
