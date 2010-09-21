@@ -89,7 +89,7 @@
 /* #define CONFIG_OLD_HDLC_API */
 
 /*
- * Uncomment for Generic PPP support (i.e. ZapRAS)
+ * Uncomment for Generic PPP support (i.e. DAHDIRAS)
  */
 
 #if defined(CONFIG_PPP) || defined(CONFIG_PPP_MODULE)
