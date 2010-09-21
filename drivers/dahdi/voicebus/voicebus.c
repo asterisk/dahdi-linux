@@ -720,11 +720,7 @@ vb_submit_rxb(struct voicebus *vb, struct vbb *vbb)
 	return 0;
 }
 
-/**
- * voicebus_transmit - Queue a buffer on the hardware descriptor ring.
- *
- */
-int voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
+static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 {
 	struct voicebus_descriptor *d;
 	struct voicebus_descriptor_list *dl = &vb->txd;
@@ -748,6 +744,17 @@ int voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	atomic_inc(&dl->count);
 	return 0;
+}
+
+/**
+ * voicebus_transmit - Queue a buffer on the hardware descriptor ring.
+ *
+ */
+int voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
+{
+	int res = __voicebus_transmit(vb, vbb);
+	__vb_setctl(vb, 0x0008, 0x00000000);
+	return res;
 }
 EXPORT_SYMBOL(voicebus_transmit);
 
@@ -813,8 +820,9 @@ static void setup_descriptors(struct voicebus *vb)
 		while (!list_empty(&buffers)) {
 			vbb = list_entry(buffers.next, struct vbb, entry);
 			list_del_init(&vbb->entry);
-			voicebus_transmit(vb, vbb);
+			__voicebus_transmit(vb, vbb);
 		}
+		__vb_setctl(vb, 0x0008, 0x00000000);
 		vb_enable_deferred(vb);
 	}
 
@@ -1284,8 +1292,9 @@ static void vb_tasklet_boot(unsigned long data)
 	while (!list_empty(&buffers)) {
 		vbb = list_entry(buffers.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		voicebus_transmit(vb, vbb);
+		__voicebus_transmit(vb, vbb);
 	}
+	__vb_setctl(vb, 0x0008, 0x00000000);
 
 	/* If there may still be buffers in the descriptor rings, reschedule
 	 * ourself to run again.  We essentially yield here to allow any other
@@ -1359,8 +1368,9 @@ static void vb_tasklet_hx8(unsigned long data)
 	while (!list_empty(&buffers)) {
 		vbb = list_entry(buffers.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		voicebus_transmit(vb, vbb);
+		__voicebus_transmit(vb, vbb);
 	}
+	__vb_setctl(vb, 0x0008, 0x00000000);
 
 	/* Print any messages about soft latency bumps after we fix the transmit
 	 * descriptor ring. Otherwise it's possible to take so much time
@@ -1504,8 +1514,9 @@ static void vb_tasklet_normal(unsigned long data)
 	while (!list_empty(&buffers)) {
 		vbb = list_entry(buffers.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		voicebus_transmit(vb, vbb);
+		__voicebus_transmit(vb, vbb);
 	}
+	__vb_setctl(vb, 0x0008, 0x00000000);
 
 	/* Print any messages about soft latency bumps after we fix the transmit
 	 * descriptor ring. Otherwise it's possible to take so much time
