@@ -75,10 +75,6 @@
 #endif
 #endif
 
-#if defined(CONFIG_PPP) || defined(CONFIG_PPP_MODULE)
-#define CONFIG_DAHDI_PPP
-#endif
-
 /*
  * Uncomment CONFIG_DAHDI_NET to enable SyncPPP, CiscoHDLC, and Frame Relay
  * support.
@@ -95,7 +91,11 @@
 /*
  * Uncomment for Generic PPP support (i.e. ZapRAS)
  */
+
+#if defined(CONFIG_PPP) || defined(CONFIG_PPP_MODULE)
 /* #define CONFIG_DAHDI_PPP */
+#endif
+
 /*
  * Uncomment to enable "watchdog" to monitor if interfaces
  * stop taking interrupts or otherwise misbehave
