@@ -82,6 +82,7 @@ struct voicebus;
 struct vbb {
 	u8 data[VOICEBUS_SFRAME_SIZE];
 	struct list_head entry;
+	dma_addr_t dma_addr;
 };
 
 struct voicebus_operations {
@@ -157,6 +158,7 @@ struct voicebus {
 	unsigned int		max_latency;
 	struct list_head	tx_complete;
 	struct list_head	free_rx;
+	struct dma_pool		*pool;
 
 #ifdef VOICEBUS_NET_DEBUG
 	struct sk_buff_head captured_packets;
@@ -169,12 +171,6 @@ struct voicebus {
 	atomic_t rx_seqnum;
 #endif
 };
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-extern kmem_cache_t *voicebus_vbb_cache;
-#else
-extern struct kmem_cache *voicebus_vbb_cache;
-#endif
 
 int __voicebus_init(struct voicebus *vb, const char *board_name,
 		    enum voicebus_mode mode);

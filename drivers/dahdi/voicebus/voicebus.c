@@ -199,13 +199,6 @@ EXPORT_SYMBOL(dahdi_fifo_alloc);
 #endif /* CONFIG_VOICEBUS_ECREFERENCE */
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-kmem_cache_t *voicebus_vbb_cache;
-#else
-struct kmem_cache *voicebus_vbb_cache;
-#endif
-EXPORT_SYMBOL(voicebus_vbb_cache);
-
 /* In memory structure shared by the host and the adapter. */
 struct voicebus_descriptor {
 	volatile __le32 des0;
@@ -480,16 +473,15 @@ vb_cleanup_tx_descriptors(struct voicebus *vb)
 	while (!list_empty(&vb->tx_complete)) {
 		vbb = list_entry(vb->tx_complete.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		kmem_cache_free(voicebus_vbb_cache, vbb);
+		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 	}
 
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = vb_descriptor(dl, i);
 		if (d->buffer1 && (d->buffer1 != vb->idle_vbb_dma_addr)) {
 			WARN_ON(!dl->pending[i]);
-			dma_unmap_single(&vb->pdev->dev, d->buffer1,
-					 VOICEBUS_SFRAME_SIZE, DMA_TO_DEVICE);
-			kmem_cache_free(voicebus_vbb_cache, dl->pending[i]);
+			vbb = dl->pending[i];
+			dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 		}
 		if (NORMAL == vb->mode) {
 			d->des1 |= 0x80000000;
@@ -519,8 +511,6 @@ static void vb_cleanup_rx_descriptors(struct voicebus *vb)
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = vb_descriptor(dl, i);
 		if (d->buffer1) {
-			dma_unmap_single(&vb->pdev->dev, d->buffer1,
-					 VOICEBUS_SFRAME_SIZE, DMA_FROM_DEVICE);
 			d->buffer1 = 0;
 			BUG_ON(!dl->pending[i]);
 			vbb = dl->pending[i];
@@ -560,7 +550,7 @@ vb_free_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *dl)
 	while (!list_empty(&vb->free_rx)) {
 		vbb = list_entry(vb->free_rx.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		kmem_cache_free(voicebus_vbb_cache, vbb);
+		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 	}
 }
 
@@ -713,8 +703,7 @@ vb_submit_rxb(struct voicebus *vb, struct vbb *vbb)
 
 	dl->pending[tail] = vbb;
 	dl->tail = (++tail) & DRING_MASK;
-	d->buffer1 = dma_map_single(&vb->pdev->dev, vbb->data,
-				    sizeof(vbb->data), DMA_FROM_DEVICE);
+	d->buffer1 = vbb->dma_addr;
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	atomic_inc(&dl->count);
 	return 0;
@@ -730,7 +719,7 @@ static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 	if (unlikely((d->buffer1 != vb->idle_vbb_dma_addr) && d->buffer1)) {
 		if (printk_ratelimit())
 			dev_warn(&vb->pdev->dev, "Dropping tx buffer buffer\n");
-		kmem_cache_free(voicebus_vbb_cache, vbb);
+		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 		/* Schedule the underrun handler to run here, since we'll need
 		 * to cleanup as best we can. */
 		schedule_work(&vb->underrun_work);
@@ -738,8 +727,7 @@ static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 	}
 
 	dl->pending[dl->tail] = vbb;
-	d->buffer1 = dma_map_single(&vb->pdev->dev, vbb->data,
-				    sizeof(vbb->data), DMA_TO_DEVICE);
+	d->buffer1 = vbb->dma_addr;
 	dl->tail = (dl->tail + 1) & DRING_MASK;
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	atomic_inc(&dl->count);
@@ -774,6 +762,7 @@ static void setup_descriptors(struct voicebus *vb)
 {
 	int i;
 	struct vbb *vbb;
+	dma_addr_t dma_addr;
 	LIST_HEAD(buffers);
 
 	might_sleep();
@@ -787,7 +776,10 @@ static void setup_descriptors(struct voicebus *vb)
 
 	for (i = 0; i < DRING_SIZE; ++i) {
 		if (list_empty(&vb->free_rx)) {
-			vbb = kmem_cache_alloc(voicebus_vbb_cache, GFP_KERNEL);
+			vbb = dma_pool_alloc(vb->pool, GFP_KERNEL,
+					     &dma_addr);
+			if (vbb)
+				vbb->dma_addr = dma_addr;
 		} else {
 			vbb = list_entry(vb->free_rx.next, struct vbb, entry);
 			list_del(&vbb->entry);
@@ -807,11 +799,13 @@ static void setup_descriptors(struct voicebus *vb)
 
 	if (BOOT != vb->mode) {
 		for (i = 0; i < vb->min_tx_buffer_count; ++i) {
-			vbb = kmem_cache_alloc(voicebus_vbb_cache, GFP_KERNEL);
+			vbb = dma_pool_alloc(vb->pool, GFP_KERNEL,
+					     &dma_addr);
 			if (unlikely(NULL == vbb))
 				BUG_ON(1);
-			else
-				list_add_tail(&vbb->entry, &buffers);
+
+			vbb->dma_addr = dma_addr;
+			list_add_tail(&vbb->entry, &buffers);
 		}
 
 		handle_transmit(vb, &buffers);
@@ -929,9 +923,6 @@ vb_get_completed_txb(struct voicebus *vb)
 	if (OWNED(d) || !d->buffer1 || (d->buffer1 == vb->idle_vbb_dma_addr))
 		return NULL;
 
-	dma_unmap_single(&vb->pdev->dev, d->buffer1,
-			 sizeof(vbb->data), DMA_TO_DEVICE);
-
 	vbb = dl->pending[head];
 	if (NORMAL == vb->mode) {
 		d->buffer1 = vb->idle_vbb_dma_addr;
@@ -960,8 +951,6 @@ vb_get_completed_rxb(struct voicebus *vb, u32 *des0)
 	if ((0 == d->buffer1) || OWNED(d))
 		return NULL;
 
-	dma_unmap_single(&vb->pdev->dev, d->buffer1,
-			 sizeof(vbb->data), DMA_FROM_DEVICE);
 	vbb = dl->pending[head];
 	dl->head = (++head) & DRING_MASK;
 	d->buffer1 = 0;
@@ -1190,6 +1179,7 @@ voicebus_release(struct voicebus *vb)
 	pci_iounmap(vb->pdev, vb->iobase);
 	pci_clear_mwi(vb->pdev);
 	pci_disable_device(vb->pdev);
+	dma_pool_destroy(vb->pool);
 }
 EXPORT_SYMBOL(voicebus_release);
 
@@ -1226,10 +1216,13 @@ vb_increase_latency(struct voicebus *vb, unsigned int increase,
 	/* Set the minimum latency in case we're restarted...we don't want to
 	 * wait for the buffer to grow to this depth again in that case. */
 	for (i = 0; i < increase; ++i) {
-		vbb = kmem_cache_alloc(voicebus_vbb_cache, GFP_ATOMIC);
+		dma_addr_t dma_addr;
+		vbb = dma_pool_alloc(vb->pool, GFP_ATOMIC, &dma_addr);
 		WARN_ON(NULL == vbb);
-		if (likely(NULL != vbb))
+		if (likely(NULL != vbb)) {
+			vbb->dma_addr = dma_addr;
 			list_add_tail(&vbb->entry, &local);
+		}
 	}
 
 	handle_transmit(vb, &local);
@@ -1573,7 +1566,7 @@ tx_error_exit:
 	while (!list_empty(&buffers)) {
 		vbb = list_entry(buffers.next, struct vbb, entry);
 		list_del(&vbb->entry);
-		kmem_cache_free(voicebus_vbb_cache, vbb);
+		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 	}
 	return;
 }
@@ -1785,6 +1778,13 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 		goto cleanup;
 	}
 
+	vb->pool = dma_pool_create(board_name, &vb->pdev->dev,
+				   sizeof(struct vbb), 64, 0);
+	if (!vb->pool) {
+		retval = -ENOMEM;
+		goto cleanup;
+	}
+
 	vb->idle_vbb = dma_alloc_coherent(&vb->pdev->dev, VOICEBUS_SFRAME_SIZE,
 					  &vb->idle_vbb_dma_addr, GFP_KERNEL);
 
@@ -1837,6 +1837,8 @@ cleanup:
 
 	tasklet_kill(&vb->tasklet);
 
+	if (vb->pool)
+		dma_pool_destroy(vb->pool);
 	/* Cleanup memory and software resources. */
 	if (vb->txd.desc)
 		vb_free_descriptors(vb, &vb->txd);
@@ -1957,37 +1959,6 @@ static int __init voicebus_module_init(void)
 {
 	int res;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 23)
-	voicebus_vbb_cache = kmem_cache_create(THIS_MODULE->name,
-					 sizeof(struct vbb), 0,
-#if defined(CONFIG_SLUB) && (LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 22))
-					 SLAB_HWCACHE_ALIGN |
-					 SLAB_STORE_USER, NULL,
-					 NULL);
-#else
-					 SLAB_HWCACHE_ALIGN, NULL,
-					 NULL);
-#endif
-#else
-#if (defined(CONFIG_SLAB) && defined(CONFIG_SLAB_DEBUG)) || \
-    (defined(CONFIG_SLUB) && defined(CONFIG_SLUB_DEBUG))
-	voicebus_vbb_cache = kmem_cache_create(THIS_MODULE->name,
-					 sizeof(struct vbb), 0,
-					 SLAB_HWCACHE_ALIGN | SLAB_STORE_USER |
-					 SLAB_POISON | SLAB_DEBUG_FREE, NULL);
-#else
-	voicebus_vbb_cache = kmem_cache_create(THIS_MODULE->name,
-					 sizeof(struct vbb), 0,
-					 SLAB_HWCACHE_ALIGN, NULL);
-#endif
-#endif
-
-	if (NULL == voicebus_vbb_cache) {
-		printk(KERN_ERR "%s: Failed to allocate buffer cache.\n",
-		       THIS_MODULE->name);
-		return -ENOMEM;
-	}
-
 	/* This registration with dahdi.ko will fail since the span is not
 	 * defined, but it will make sure that this module is a dependency of
 	 * dahdi.ko, so that when it is being unloded, this module will be
@@ -2002,7 +1973,6 @@ static int __init voicebus_module_init(void)
 
 static void __exit voicebus_module_cleanup(void)
 {
-	kmem_cache_destroy(voicebus_vbb_cache);
 	WARN_ON(!list_empty(&binary_loader_list));
 }
 

@@ -2223,7 +2223,7 @@ static void handle_hx8_transmit(struct voicebus *vb, struct list_head *buffers)
 
 	list_for_each_entry_safe(vbb, n, buffers, entry) {
 		list_del(&vbb->entry);
-		kmem_cache_free(voicebus_vbb_cache, vbb);
+		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 	}
 }
 
@@ -4408,6 +4408,7 @@ static int hx8_send_command(struct wctdm *wc, const u8 *command,
 	struct sframe_packet *frame;
 	const int MAX_COMMAND_LENGTH = 264 + 4;
 	unsigned long flags;
+	dma_addr_t dma_addr;
 
 	might_sleep();
 
@@ -4420,11 +4421,12 @@ static int hx8_send_command(struct wctdm *wc, const u8 *command,
 	if (count > MAX_COMMAND_LENGTH)
 		return -EINVAL;
 
-	vbb = kmem_cache_alloc(voicebus_vbb_cache, GFP_KERNEL);
+	vbb = dma_pool_alloc(wc->vb.pool, GFP_KERNEL, &dma_addr);
 	WARN_ON(!vbb);
 	if (!vbb)
 		return -ENOMEM;
-		
+
+	vbb->dma_addr = dma_addr;
 	memset(vbb->data, 0, SFRAME_SIZE);
 	memcpy(&vbb->data[EFRAME_SIZE + EFRAME_GAP], command, count);
 
