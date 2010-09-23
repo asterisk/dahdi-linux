@@ -272,8 +272,8 @@ struct t4;
 
 struct t4_span {
 	struct t4 *owner;
-	unsigned int *writechunk;					/* Double-word aligned write memory */
-	unsigned int *readchunk;					/* Double-word aligned read memory */
+	u32 *writechunk;	/* Double-word aligned write memory */
+	u32 *readchunk;		/* Double-word aligned read memory */
 	int spantype;		/* card type, T1 or E1 or J1 */
 	int sync;
 	int psync;
@@ -345,8 +345,8 @@ struct t4 {
 	int e1recover;			/* E1 recovery timer */
 	spinlock_t reglock;		/* lock register access */
 	int spansstarted;		/* number of spans started */
-	volatile unsigned int *writechunk;					/* Double-word aligned write memory */
-	volatile unsigned int *readchunk;					/* Double-word aligned read memory */
+	u32 *writechunk;		/* Double-word aligned write memory */
+	u32 *readchunk;			/* Double-word aligned read memory */
 	unsigned short canary;
 #ifdef ENABLE_WORKQUEUES
 	atomic_t worklist;
@@ -362,7 +362,7 @@ struct t4 {
 	dma_addr_t	writedma;
 	unsigned long memaddr;		/* Base address of card */
 	unsigned long memlen;
-	__iomem volatile unsigned int *membase;	/* Base address of card */
+	void __iomem	*membase;	/* Base address of card */
 
 	/* Add this for our softlockup protector */
 	unsigned int oct_rw_count;
@@ -532,14 +532,14 @@ static struct t4 *cards[MAX_T4_CARDS];
 
 static inline unsigned int __t4_pci_in(struct t4 *wc, const unsigned int addr)
 {
-	unsigned int res = readl(&wc->membase[addr]);
+	unsigned int res = readl(wc->membase + (addr * sizeof(u32)));
 	return res;
 }
 
 static inline void __t4_pci_out(struct t4 *wc, const unsigned int addr, const unsigned int value)
 {
 	unsigned int tmp;
-	writel(value, &wc->membase[addr]);
+	writel(value, wc->membase + (addr * sizeof(u32)));
 	if (pedanticpci) {
 		tmp = __t4_pci_in(wc, WC_VERSION);
 		if ((tmp & 0xffff0000) != 0xc01a0000)
@@ -2795,7 +2795,7 @@ static inline void e1_check(struct t4 *wc, int span, int val)
 
 static void t4_receiveprep(struct t4 *wc, int irq)
 {
-	volatile unsigned int *readchunk;
+	unsigned int *readchunk;
 	int dbl = 0;
 	int x,y,z;
 	unsigned int tmp;
@@ -2955,7 +2955,7 @@ static void t4_prep_gen2(struct t4 *wc)
 #ifdef SUPPORT_GEN1
 static void t4_transmitprep(struct t4 *wc, int irq)
 {
-	volatile unsigned int *writechunk;
+	u32 *writechunk;
 	int x,y,z;
 	unsigned int tmp;
 	int offset=0;
@@ -3702,14 +3702,15 @@ DAHDI_IRQ_HANDLER(t4_interrupt)
 }
 #endif
 
-static int t4_allocate_buffers(struct t4 *wc, int numbufs, volatile unsigned int **oldalloc, dma_addr_t *oldwritedma)
+static int t4_allocate_buffers(struct t4 *wc, int numbufs,
+			       void **oldalloc, dma_addr_t *oldwritedma)
 {
-	volatile unsigned int *alloc;
+	void *alloc;
 	dma_addr_t writedma;
 
-	alloc =
-		/* 32 channels, Double-buffer, Read/Write, 4 spans */
-		(unsigned int *)pci_alloc_consistent(wc->dev, numbufs * T4_BASE_SIZE * 2, &writedma);
+	/* 32 channels, Double-buffer, Read/Write, 4 spans */
+	alloc = pci_alloc_consistent(wc->dev, numbufs * T4_BASE_SIZE * 2,
+				     &writedma);
 
 	if (!alloc) {
 		dev_notice(&wc->dev->dev, "wct%dxxp: Unable to allocate "
@@ -3734,8 +3735,8 @@ static int t4_allocate_buffers(struct t4 *wc, int numbufs, volatile unsigned int
 	wc->numbufs = numbufs;
 	
 	/* Initialize Write/Buffers to all blank data */
-	memset((void *)wc->writechunk,0x00, T4_BASE_SIZE * numbufs);
-	memset((void *)wc->readchunk,0xff, T4_BASE_SIZE * numbufs);
+	memset(wc->writechunk, 0x00, T4_BASE_SIZE * numbufs);
+	memset(wc->readchunk, 0xff, T4_BASE_SIZE * numbufs);
 
 	if (debug) {
 		dev_notice(&wc->dev->dev, "DMA memory base of size %d at " \
@@ -3750,7 +3751,7 @@ static int t4_allocate_buffers(struct t4 *wc, int numbufs, volatile unsigned int
 static void t4_increase_latency(struct t4 *wc, int newlatency)
 {
 	unsigned long flags;
-	volatile unsigned int *oldalloc;
+	void *oldalloc;
 	dma_addr_t oldaddr;
 	int oldbufs;
 
@@ -3787,7 +3788,8 @@ static void t4_increase_latency(struct t4 *wc, int newlatency)
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	pci_free_consistent(wc->dev, T4_BASE_SIZE * oldbufs * 2, (void *)oldalloc, oldaddr);
+	pci_free_consistent(wc->dev, T4_BASE_SIZE * oldbufs * 2,
+			    oldalloc, oldaddr);
 
 	dev_info(&wc->dev->dev, "Increased latency to %d\n", newlatency);
 
@@ -4900,7 +4902,8 @@ static void __devexit t4_remove_one(struct pci_dev *pdev)
 	pci_release_regions(pdev);		
 	
 	/* Immediately free resources */
-	pci_free_consistent(pdev, T4_BASE_SIZE * wc->numbufs * 2, (void *)wc->writechunk, wc->writedma);
+	pci_free_consistent(pdev, T4_BASE_SIZE * wc->numbufs * 2,
+			    wc->writechunk, wc->writedma);
 	
 	order_index[wc->order]--;
 	
