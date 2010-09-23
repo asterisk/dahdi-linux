@@ -1771,8 +1771,6 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 		goto cleanup;
 	}
 
-	/* \todo This driver should be modified to use the memory mapped I/O
-	   as opposed to IO space for portability and performance. */
 	if (0 == (pci_resource_flags(vb->pdev, 0)&IORESOURCE_IO)) {
 		dev_err(&vb->pdev->dev, "BAR0 is not IO Memory.\n");
 		retval = -EIO;
