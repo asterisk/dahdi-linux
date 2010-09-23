@@ -3006,6 +3006,19 @@ static void t4_transmitprep(struct t4 *wc, int irq)
 }
 #endif
 
+static void t4_dahdi_rbsbits(struct dahdi_chan *const chan, int rxs)
+{
+	if ((debug & DEBUG_RBS) && printk_ratelimit()) {
+		const struct t4_span *tspan = container_of(chan->span,
+							   struct t4_span,
+							   span);
+		const struct t4 *const wc = tspan->owner;
+		dev_notice(&wc->dev->dev, "Detected sigbits change on " \
+			   "channel %s to %04x\n", chan->name, rxs);
+	}
+	dahdi_rbsbits(chan, rxs);
+}
+
 static void t4_check_sigbits(struct t4 *wc, int span)
 {
 	int a,i,rxs;
@@ -3024,12 +3037,12 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 			rxs = (a & 0xf);
 			if (!(ts->span.chans[i+16]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i+16]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i+16], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i+16], rxs);
 			}
 			rxs = (a >> 4) & 0xf;
 			if (!(ts->span.chans[i]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i], rxs);
 			}
 		}
 	} else if (ts->span.lineconfig & DAHDI_CONFIG_D4) {
@@ -3039,22 +3052,22 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 			rxs = (a & 0x3) << 2;
 			if (!(ts->span.chans[i+3]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i+3]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i+3], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i+3], rxs);
 			}
 			rxs = (a & 0xc);
 			if (!(ts->span.chans[i+2]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i+2]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i+2], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i+2], rxs);
 			}
 			rxs = (a >> 2) & 0xc;
 			if (!(ts->span.chans[i+1]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i+1]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i+1], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i+1], rxs);
 			}
 			rxs = (a >> 4) & 0xc;
 			if (!(ts->span.chans[i]->sig & DAHDI_SIG_CLEAR)) {
 				if (ts->span.chans[i]->rxsig != rxs)
-					dahdi_rbsbits(ts->span.chans[i], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i], rxs);
 			}
 		}
 	} else {
@@ -3065,14 +3078,14 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 			if (!(ts->span.chans[i+1]->sig & DAHDI_SIG_CLEAR)) {
 				/* XXX Not really reset on every trans! XXX */
 				if (ts->span.chans[i+1]->rxsig != rxs) {
-					dahdi_rbsbits(ts->span.chans[i+1], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i+1], rxs);
 				}
 			}
 			rxs = (a >> 4) & 0xf;
 			if (!(ts->span.chans[i]->sig & DAHDI_SIG_CLEAR)) {
 				/* XXX Not really reset on every trans! XXX */
 				if (ts->span.chans[i]->rxsig != rxs) {
-					dahdi_rbsbits(ts->span.chans[i], rxs);
+					t4_dahdi_rbsbits(ts->span.chans[i], rxs);
 				}
 			}
 		}
