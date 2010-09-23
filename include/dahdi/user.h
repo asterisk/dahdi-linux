@@ -933,7 +933,7 @@ struct dahdi_sfconfig {
 #define DAHDI_ECHOTRAIN			_IOW(DAHDI_CODE, 50, int)
 
 /*
- * Set on hook transfer for n number of ms -- implemnted by low level driver
+ * Set on hook transfer for n number of ms -- implemented by low level driver
  */
 #define DAHDI_ONHOOKTRANSFER		_IOW(DAHDI_CODE, 51, int)
 
