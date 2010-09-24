@@ -376,7 +376,6 @@ struct dahdi_timer {
 static LIST_HEAD(dahdi_timers);
 
 static DEFINE_SPINLOCK(dahdi_timer_lock);
-static DEFINE_SPINLOCK(bigzaplock);
 
 struct dahdi_zone {
 	atomic_t refcount;
@@ -398,11 +397,11 @@ struct dahdi_zone {
 
 #ifdef DEFINE_RWLOCK
 static DEFINE_RWLOCK(zone_lock);
-static DEFINE_RWLOCK(chan_lock);
 #else
 static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
-static rwlock_t chan_lock = RW_LOCK_UNLOCKED;
 #endif
+
+static DEFINE_SPINLOCK(chan_lock);
 
 struct pseudo_chan {
 	struct dahdi_chan chan;
@@ -1655,7 +1654,7 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	close_channel(chan);
 
-	write_lock_irqsave(&chan_lock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	for (x = 1; x < DAHDI_MAX_CHANNELS; x++) {
 		if (chans[x])
 			continue;
@@ -1669,7 +1668,7 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 		set_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags);
 		break;
 	}
-	write_unlock_irqrestore(&chan_lock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 	if (DAHDI_MAX_CHANNELS == x) {
 		module_printk(KERN_ERR, "No more channels available\n");
 		return -ENOMEM;
@@ -2075,7 +2074,7 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 		chan->hdlcnetdev = NULL;
 	}
 #endif
-	write_lock_irqsave(&chan_lock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags)) {
 		chans[chan->channo] = NULL;
 		clear_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags);
@@ -2113,7 +2112,7 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 		}
 	}
 	chan->channo = -1;
-	write_unlock_irqrestore(&chan_lock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 }
 
 static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
@@ -2914,9 +2913,9 @@ static struct dahdi_chan *dahdi_alloc_pseudo(void)
 		return NULL;
 	}
 
-	write_lock_irqsave(&chan_lock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	list_add_tail(&pseudo->node, &pseudo_chans);
-	write_unlock_irqrestore(&chan_lock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 
 	snprintf(pseudo->chan.name, sizeof(pseudo->chan.name)-1,
 		 "Pseudo/%d", pseudo->chan.channo);
@@ -2934,9 +2933,9 @@ static void dahdi_free_pseudo(struct dahdi_chan *chan)
 
 	pseudo = chan_to_pseudo(chan);
 
-	write_lock_irqsave(&chan_lock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	list_del(&pseudo->node);
-	write_unlock_irqrestore(&chan_lock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 
 	dahdi_chan_unreg(chan);
 	kfree(pseudo);
@@ -4864,14 +4863,14 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	if ((!conf.confmode) && conf.confno)
 		return -EINVAL;
 	conf.chan = chan->channo;  /* return with real channel # */
-	spin_lock_irqsave(&bigzaplock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	spin_lock(&chan->lock);
 	if (conf.confno == -1)
 		conf.confno = dahdi_first_empty_conference();
 	if ((conf.confno < 1) && (conf.confmode)) {
 		/* No more empty conferences */
 		spin_unlock(&chan->lock);
-		spin_unlock_irqrestore(&bigzaplock, flags);
+		spin_unlock_irqrestore(&chan_lock, flags);
 		return -EBUSY;
 	}
 	  /* if changing confs, clear last added info */
@@ -4922,7 +4921,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	}
 
 	spin_unlock(&chan->lock);
-	spin_unlock_irqrestore(&bigzaplock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 	if (copy_to_user((void __user *)data, &conf, sizeof(conf)))
 		return -EFAULT;
 	return 0;
@@ -4952,7 +4951,7 @@ static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
 	if (conf.chan && (conf.chan == conf.confno))
 		return -EINVAL;
 
-	spin_lock_irqsave(&bigzaplock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	spin_lock(&chan->lock);
 
 	/* if to clear all links */
@@ -4961,7 +4960,7 @@ static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
 		memset(conf_links, 0, sizeof(conf_links));
 		recalc_maxlinks();
 		spin_unlock(&chan->lock);
-		spin_unlock_irqrestore(&bigzaplock, flags);
+		spin_unlock_irqrestore(&chan_lock, flags);
 		return 0;
 	}
 	/* look for already existant specified combination */
@@ -5000,7 +4999,7 @@ static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
 	}
 	recalc_maxlinks();
 	spin_unlock(&chan->lock);
-	spin_unlock_irqrestore(&bigzaplock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 	return res;
 }
 
@@ -5289,9 +5288,9 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 	case DAHDI_CONFMUTE:  /* set confmute flag */
 		get_user(j, (int __user *)data);  /* get conf # */
 		if (!(chan->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
-		spin_lock_irqsave(&bigzaplock, flags);
+		spin_lock_irqsave(&chan_lock, flags);
 		chan->confmute = j;
-		spin_unlock_irqrestore(&bigzaplock, flags);
+		spin_unlock_irqrestore(&chan_lock, flags);
 		break;
 	case DAHDI_GETCONFMUTE:  /* get confmute flag */
 		if (!(chan->flags & DAHDI_FLAG_AUDIO)) return (-EINVAL);
@@ -8455,10 +8454,10 @@ static void process_masterspan(void)
 	 * to be called (1000 / (DAHDI_CHUNKSIZE / 8)) times per second. */
 	atomic_inc(&core_timer.count);
 #endif
-	/* Hold the big zap lock for the duration of major
+	/* Hold the chan_lock for the duration of major
 	   activities which touch all sorts of channels */
-	spin_lock_irqsave(&bigzaplock, flags);
-	read_lock(&chan_lock);
+	spin_lock_irqsave(&chan_lock, flags);
+
 	/* Process any timers */
 	process_timers();
 	/* If we have dynamic stuff, call the ioctl with 0,0 parameters to
@@ -8542,8 +8541,7 @@ static void process_masterspan(void)
 			s->ops->sync_tick(s, s == master);
 #endif
 	}
-	read_unlock(&chan_lock);
-	spin_unlock_irqrestore(&bigzaplock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 }
 
 #ifndef CONFIG_DAHDI_CORE_TIMER
