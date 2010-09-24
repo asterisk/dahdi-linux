@@ -2997,18 +2997,6 @@ static int dahdi_open(struct inode *inode, struct file *file)
 	return dahdi_specchan_open(file);
 }
 
-#if 0
-static int dahdi_open(struct file *file)
-{
-	int res;
-	unsigned long flags;
-	spin_lock_irqsave(&bigzaplock, flags);
-	res = __dahdi_open(file);
-	spin_unlock_irqrestore(&bigzaplock, flags);
-	return res;
-}
-#endif
-
 static int dahdi_set_default_zone(int defzone)
 {
 	if ((defzone < 0) || (defzone >= DAHDI_TONE_ZONE_MAX))
@@ -3493,20 +3481,6 @@ static int dahdi_release(struct inode *inode, struct file *file)
 	}
 	return dahdi_specchan_release(file);
 }
-
-#if 0
-static int dahdi_release(struct inode *inode, struct file *file)
-{
-	/* Lock the big zap lock when handling a release */
-	unsigned long flags;
-	int res;
-	spin_lock_irqsave(&bigzaplock, flags);
-	res = __dahdi_release(file);
-	spin_unlock_irqrestore(&bigzaplock, flags);
-	return res;
-}
-#endif
-
 
 /**
  * dahdi_alarm_channel() - notify userspace channel is (not) in alarm
@@ -5949,10 +5923,6 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-#if 0
-				rv = schluffen(&chan->txstateq);
-				if (rv) return rv;
-#endif
 				break;
 			case DAHDI_WINK:
 				spin_lock_irqsave(&chan->lock, flags);
@@ -7369,9 +7339,6 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
 				if ((ss->ec_state->status.mode == ECHO_MODE_TRAINING) &&
 				    (ss->ec_state->ops->echocan_traintap)) {
 					if (ss->ec_state->ops->echocan_traintap(ss->ec_state, ss->ec_state->status.last_train_tap++, rxlin)) {
-#if 0
-						module_printk(KERN_NOTICE, "Finished training (%d taps trained)!\n", ss->ec_state->status.last_train_tap);
-#endif
 						ss->ec_state->status.mode = ECHO_MODE_ACTIVE;
 					}
 				}
@@ -7993,10 +7960,6 @@ that the waitqueue is empty. */
 						/* Notify the receiver... */
 						__qevent(ss->master, abort);
 					}
-#if 0
-				module_printk(KERN_NOTICE, "torintr_receive: Aborted %d bytes of frame on %d\n", amt, ss->master);
-#endif
-
 			}
 		} else /* No place to receive -- drop on the floor */
 			break;
