@@ -60,8 +60,8 @@ elif [ -d .git ]; then
     SVN_REV=`git log --pretty=full -1 | grep -F "git-svn-id:" | sed -e "s/.*\@\([^\s]*\)\s.*/\1/g"`
     if [ -z "$SVN_REV" ]; then
         VERSION=`git describe --long --always --tags --dirty=M 2> /dev/null`
-        if [[ $? -ne 0 ]]; then
-            if [[ "`git ls-files -m | wc -l`" != "0" ]]; then
+        if [ $? -ne 0 ]; then
+            if [ "`git ls-files -m | wc -l`" != "0" ]; then
                 MODIFIED="M"
             fi
             # Some older versions of git do not support all the above
@@ -74,7 +74,7 @@ elif [ -d .git ]; then
         BRANCH=0
         TEAM=0
 
-        if [[ "`git ls-files -m | wc -l`" != "0" ]]; then
+        if [ "`git ls-files -m | wc -l`" != "0" ]; then
             MODIFIED="M"
         fi
 
