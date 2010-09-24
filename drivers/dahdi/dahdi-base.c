@@ -8162,11 +8162,12 @@ int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int
 
 static void process_timers(void)
 {
-	unsigned long flags;
 	struct dahdi_timer *cur;
 
-	spin_lock_irqsave(&dahdi_timer_lock, flags);
+	if (list_empty(&dahdi_timers))
+		return;
 
+	spin_lock(&dahdi_timer_lock);
 	list_for_each_entry(cur, &dahdi_timers, list) {
 		if (cur->ms) {
 			cur->pos -= DAHDI_CHUNKSIZE;
@@ -8177,8 +8178,7 @@ static void process_timers(void)
 			}
 		}
 	}
-
-	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+	spin_unlock(&dahdi_timer_lock);
 }
 
 static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct *wait_table)
