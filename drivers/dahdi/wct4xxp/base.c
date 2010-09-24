@@ -2225,11 +2225,7 @@ static void t4_serial_setup(struct t4 *wc, int unit)
 static int syncsrc = 0;
 static int syncnum = 0 /* -1 */;
 static int syncspan = 0;
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(synclock);
-#else
-static spinlock_t synclock = SPIN_LOCK_UNLOCKED;
-#endif
 
 static void __t4_set_rclk_src(struct t4 *wc, int span)
 {

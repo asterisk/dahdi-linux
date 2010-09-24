@@ -55,8 +55,8 @@ static struct xpp_ticker	dahdi_ticker;
  * I.e: one of our AB or dahdi_ticker
  */
 static struct xpp_ticker	*ref_ticker = NULL;
-static spinlock_t		ref_ticker_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t		elect_syncer_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(ref_ticker_lock);
+static DEFINE_SPINLOCK(elect_syncer_lock);
 static bool			force_dahdi_sync = 0;	/* from /sys/bus/astribanks/drivers/xppdrv/sync */
 static xbus_t			*global_ticker;
 static struct xpp_ticker	global_ticks_series;

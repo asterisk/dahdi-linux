@@ -68,7 +68,7 @@ struct counter {
 
 static xbus_t *global_xbus;
 static bool tx_ready = 1;
-static spinlock_t tx_ready_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(tx_ready_lock);
 static struct xframe_queue txpool;
 static unsigned int pcm_in_pool_count;
 static bool disconnecting;

@@ -78,7 +78,7 @@ static void transport_init(xbus_t *xbus, struct xbus_ops *ops, ushort max_send_s
 static void transport_destroy(xbus_t *xbus);
 
 /* Data structures */
-static spinlock_t		xbuses_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(xbuses_lock);
 #ifdef	CONFIG_PROC_FS
 static struct proc_dir_entry	*proc_xbuses = NULL;
 #endif
@@ -405,7 +405,7 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 	return (xpacket_t *)(frm->packets + newlen - len);
 }
 
-static spinlock_t serialize_dump_xframe = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(serialize_dump_xframe);
 
 static void do_hexdump(const char msg[], byte *data, uint16_t len)
 {

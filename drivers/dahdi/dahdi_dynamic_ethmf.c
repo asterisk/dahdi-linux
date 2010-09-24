@@ -129,11 +129,7 @@ struct ztdeth {
 /**
  * Lock for adding and removing items in ethmf_list
  */
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(ethmf_lock);
-#else
-static spinlock_t ethmf_lock = SPIN_LOCK_UNLOCKED;
-#endif
 
 /**
  * The active list of all running spans
@@ -401,7 +397,7 @@ static int ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
 	unsigned char addr[ETH_ALEN];
 	int spans_ready = 0, index = 0;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	static spinlock_t lock = SPIN_LOCK_UNLOCKED;
+	static DEFINE_SPINLOCK(lock);
 	unsigned long flags;
 #endif
 

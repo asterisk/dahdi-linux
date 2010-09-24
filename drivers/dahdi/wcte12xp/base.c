@@ -87,7 +87,6 @@ static const struct dahdi_echocan_ops vpm150m_ec_ops = {
 };
 
 static struct t1 *ifaces[WC_MAX_IFACES];
-spinlock_t ifacelock = SPIN_LOCK_UNLOCKED;
 
 struct t1_desc {
 	const char *name;

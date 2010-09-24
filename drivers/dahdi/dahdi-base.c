@@ -375,13 +375,8 @@ struct dahdi_timer {
 
 static LIST_HEAD(zaptimers);
 
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(zaptimerlock);
 static DEFINE_SPINLOCK(bigzaplock);
-#else
-static spinlock_t zaptimerlock = SPIN_LOCK_UNLOCKED;
-static spinlock_t bigzaplock = SPIN_LOCK_UNLOCKED;
-#endif
 
 struct dahdi_zone {
 	atomic_t refcount;

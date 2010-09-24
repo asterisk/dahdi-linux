@@ -36,7 +36,7 @@ static int		parport_toggles[8];	/* 8 bit flip-flop */
 void flip_parport_bit(unsigned char bitnum)
 {
 	static unsigned char	last_value;
-	spinlock_t	lock = SPIN_LOCK_UNLOCKED;
+	DEFINE_SPINLOCK(lock);
 	unsigned long	flags;
 	unsigned char	mask;
 	unsigned char	value;

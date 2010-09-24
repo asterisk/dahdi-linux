@@ -242,7 +242,7 @@ struct xusb {
 
 };
 
-static	spinlock_t	xusb_lock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(xusb_lock);
 static xusb_t *xusb_array[MAX_BUSES] = {};
 static unsigned bus_count = 0;
 

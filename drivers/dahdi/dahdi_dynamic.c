@@ -113,13 +113,8 @@ struct dahdi_dynamic {
 	struct list_head list;
 };
 
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(dspan_lock);
 static DEFINE_SPINLOCK(driver_lock);
-#else
-static spinlock_t dspan_lock = SPIN_LOCK_UNLOCKED;
-static spinlock_t driver_lock = SPIN_LOCK_UNLOCKED;
-#endif
 
 static LIST_HEAD(dspan_list);
 static LIST_HEAD(driver_list);
