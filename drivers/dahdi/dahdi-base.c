@@ -7337,9 +7337,6 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
 {
 	short rxlin, txlin;
 	int x;
-	unsigned long flags;
-
-	spin_lock_irqsave(&ss->lock, flags);
 
 	if (ss->readchunkpreec) {
 		/* Save a copy of the audio before the echo can has its way with it */
@@ -7405,7 +7402,6 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
 		dahdi_kernel_fpu_end();
 #endif
 	}
-	spin_unlock_irqrestore(&ss->lock, flags);
 }
 
 /**
@@ -7421,7 +7417,10 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
  */
 void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk, const unsigned char *txchunk)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&ss->lock, flags);
 	__dahdi_ec_chunk(ss, rxchunk, txchunk);
+	spin_unlock_irqrestore(&ss->lock, flags);
 }
 
 /**
@@ -7435,10 +7434,16 @@ void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk, const unsigne
 void dahdi_ec_span(struct dahdi_span *span)
 {
 	int x;
+	unsigned long flags;
+	local_irq_save(flags);
 	for (x = 0; x < span->channels; x++) {
-		if (span->chans[x]->ec_current)
+		if (span->chans[x]->ec_current) {
+			spin_lock(&span->chans[x]->lock);
 			__dahdi_ec_chunk(span->chans[x], span->chans[x]->readchunk, span->chans[x]->writechunk);
+			spin_unlock(&span->chans[x]->lock);
+		}
 	}
+	local_irq_restore(flags);
 }
 
 /* return 0 if nothing detected, 1 if lack of tone, 2 if presence of tone */
@@ -8406,11 +8411,13 @@ int dahdi_transmit(struct dahdi_span *span)
 	int x,y,z;
 	unsigned long flags;
 
+	local_irq_save(flags);
+
 	for (x=0;x<span->channels;x++) {
 		struct dahdi_chan *const chan = span->chans[x];
-		spin_lock_irqsave(&chan->lock, flags);
+		spin_lock(&chan->lock);
 		if (chan->flags & DAHDI_FLAG_NOSTDTXRX) {
-			spin_unlock_irqrestore(&chan->lock, flags);
+			spin_unlock(&chan->lock);
 			continue;
 		}
 		if (chan == chan->master) {
@@ -8455,8 +8462,11 @@ int dahdi_transmit(struct dahdi_span *span)
 			}
 
 		}
-		spin_unlock_irqrestore(&chan->lock, flags);
+		spin_unlock(&chan->lock);
 	}
+
+	local_irq_restore(flags);
+
 	if (span->mainttimer) {
 		span->mainttimer -= DAHDI_CHUNKSIZE;
 		if (span->mainttimer <= 0) {
@@ -8700,10 +8710,12 @@ int dahdi_receive(struct dahdi_span *span)
 #ifdef CONFIG_DAHDI_WATCHDOG
 	span->watchcounter--;
 #endif
+	local_irq_save(flags);
+
 	for (x=0;x<span->channels;x++) {
 		struct dahdi_chan *const chan = span->chans[x];
 		if (chan->master == chan) {
-			spin_lock_irqsave(&chan->lock, flags);
+			spin_lock(&chan->lock);
 			if (chan->nextslave) {
 				/* Must process each slave at the same time */
 				u_char data[DAHDI_CHUNKSIZE];
@@ -8772,9 +8784,11 @@ int dahdi_receive(struct dahdi_span *span)
 #ifdef BUFFER_DEBUG
 			chan->statcount -= DAHDI_CHUNKSIZE;
 #endif
-			spin_unlock_irqrestore(&chan->lock, flags);
+			spin_unlock(&chan->lock);
 		}
 	}
+
+	local_irq_restore(flags);
 
 	if (span == master)
 		process_masterspan();
