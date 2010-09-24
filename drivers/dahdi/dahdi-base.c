@@ -245,6 +245,7 @@ static struct {
 static struct core_timer {
 	struct timer_list timer;
 	struct timespec start_interval;
+	unsigned long interval;
 	atomic_t count;
 	atomic_t shutdown;
 	atomic_t last_count;
@@ -8493,7 +8494,7 @@ static void process_masterspan(void)
 	/* We increment the calls since start here, so that if we switch over
 	 * to the core timer, we know how many times we need to call
 	 * process_masterspan in order to catch up since this function needs
-	 * to be called 1000 times per second. */
+	 * to be called (1000 / (DAHDI_CHUNKSIZE / 8)) times per second. */
 	atomic_inc(&core_timer.count);
 #endif
 	/* Hold the big zap lock for the duration of major
@@ -8619,14 +8620,19 @@ static unsigned long core_diff_ms(struct timespec *t0, struct timespec *t1)
 	return ms;
 }
 
+static inline unsigned long msecs_processed(const struct core_timer *const ct)
+{
+	return atomic_read(&ct->count) * DAHDI_MSECS_PER_CHUNK;
+}
+
 static void coretimer_func(unsigned long param)
 {
 	unsigned long ms_since_start;
 	struct timespec now;
 	const unsigned long MAX_INTERVAL = 100000L;
-	const unsigned long FOURMS_INTERVAL = max(HZ/250, 1);
 	const unsigned long ONESEC_INTERVAL = HZ;
-	const unsigned long MS_LIMIT = 3000;
+	const long MS_LIMIT = 3000;
+	long difference;
 
 	now = current_kernel_time();
 
@@ -8637,8 +8643,10 @@ static void coretimer_func(unsigned long param)
 		 * dahdi_receive, and therefore the core of dahdi needs to
 		 * perform the master span processing itself. */
 
-		if (!atomic_read(&core_timer.shutdown))
-			mod_timer(&core_timer.timer, jiffies + FOURMS_INTERVAL);
+		if (!atomic_read(&core_timer.shutdown)) {
+			mod_timer(&core_timer.timer, jiffies +
+				  core_timer.interval);
+		}
 
 		ms_since_start = core_diff_ms(&core_timer.start_interval, &now);
 
@@ -8649,16 +8657,19 @@ static void coretimer_func(unsigned long param)
 		 * not hang the system here.
 		 *
 		 */
-		if (unlikely((ms_since_start - atomic_read(&core_timer.count)) > MS_LIMIT)) {
-			if (printk_ratelimit())
-				module_printk(KERN_INFO, "Detected time shift.\n");
+		difference = ms_since_start - msecs_processed(&core_timer);
+		if (unlikely(difference >  MS_LIMIT)) {
+			if (printk_ratelimit()) {
+				module_printk(KERN_INFO,
+					      "Detected time shift.");
+			}
 			atomic_set(&core_timer.count, 0);
 			atomic_set(&core_timer.last_count, 0);
 			core_timer.start_interval = now;
 			return;
 		}
 
-		while (ms_since_start > atomic_read(&core_timer.count))
+		while (ms_since_start > msecs_processed(&core_timer))
 			process_masterspan();
 
 		if (ms_since_start > MAX_INTERVAL) {
@@ -8690,6 +8701,9 @@ static void coretimer_init(void)
 	core_timer.timer.expires = jiffies + HZ;
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
+	core_timer.interval = max(msecs_to_jiffies(DAHDI_MSECS_PER_CHUNK), 1UL);
+	if (core_timer.interval < (HZ/250))
+		core_timer.interval = (HZ/250);
 	add_timer(&core_timer.timer);
 }
 

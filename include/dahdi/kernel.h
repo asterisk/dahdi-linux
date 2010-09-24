@@ -100,6 +100,8 @@
 #define DAHDI_MAX_CHUNKSIZE 	 DAHDI_CHUNKSIZE
 #define DAHDI_CB_SIZE		 2
 
+#define DAHDI_MSECS_PER_CHUNK	(DAHDI_CHUNKSIZE/8)
+
 #define RING_DEBOUNCE_TIME	2000	/*!< 2000 ms ring debounce time */
 
 typedef struct
