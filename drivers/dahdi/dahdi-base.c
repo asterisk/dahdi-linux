@@ -373,9 +373,9 @@ struct dahdi_timer {
 	wait_queue_head_t sel;
 };
 
-static LIST_HEAD(zaptimers);
+static LIST_HEAD(dahdi_timers);
 
-static DEFINE_SPINLOCK(zaptimerlock);
+static DEFINE_SPINLOCK(dahdi_timer_lock);
 static DEFINE_SPINLOCK(bigzaplock);
 
 struct dahdi_zone {
@@ -2764,9 +2764,9 @@ static int dahdi_timing_open(struct file *file)
 	INIT_LIST_HEAD(&t->list);
 	file->private_data = t;
 
-	spin_lock_irqsave(&zaptimerlock, flags);
-	list_add(&t->list, &zaptimers);
-	spin_unlock_irqrestore(&zaptimerlock, flags);
+	spin_lock_irqsave(&dahdi_timer_lock, flags);
+	list_add(&t->list, &dahdi_timers);
+	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 
 	return 0;
 }
@@ -2779,16 +2779,16 @@ static int dahdi_timer_release(struct file *file)
 	if (!(t = file->private_data))
 		return 0;
 
-	spin_lock_irqsave(&zaptimerlock, flags);
+	spin_lock_irqsave(&dahdi_timer_lock, flags);
 
-	list_for_each_entry_safe(cur, next, &zaptimers, list) {
+	list_for_each_entry_safe(cur, next, &dahdi_timers, list) {
 		if (t == cur) {
 			list_del(&cur->list);
 			break;
 		}
 	}
 
-	spin_unlock_irqrestore(&zaptimerlock, flags);
+	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 
 	if (!cur) {
 		module_printk(KERN_NOTICE, "Timer: Not on list??\n");
@@ -3567,39 +3567,39 @@ static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		get_user(j, (int __user *)data);
 		if (j < 0)
 			j = 0;
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		timer->ms = timer->pos = j;
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	case DAHDI_TIMERACK:
 		get_user(j, (int __user *)data);
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		if ((j < 1) || (j > timer->tripped))
 			j = timer->tripped;
 		timer->tripped -= j;
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	case DAHDI_GETEVENT:  /* Get event on queue */
 		j = DAHDI_EVENT_NONE;
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		  /* set up for no event */
 		if (timer->tripped)
 			j = DAHDI_EVENT_TIMER_EXPIRED;
 		if (timer->ping)
 			j = DAHDI_EVENT_TIMER_PING;
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		put_user(j, (int __user *)data);
 		break;
 	case DAHDI_TIMERPING:
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		timer->ping = 1;
 		wake_up_interruptible(&timer->sel);
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	case DAHDI_TIMERPONG:
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		timer->ping = 0;
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	default:
 		return -ENOTTY;
@@ -8165,9 +8165,9 @@ static void process_timers(void)
 	unsigned long flags;
 	struct dahdi_timer *cur;
 
-	spin_lock_irqsave(&zaptimerlock, flags);
+	spin_lock_irqsave(&dahdi_timer_lock, flags);
 
-	list_for_each_entry(cur, &zaptimers, list) {
+	list_for_each_entry(cur, &dahdi_timers, list) {
 		if (cur->ms) {
 			cur->pos -= DAHDI_CHUNKSIZE;
 			if (cur->pos <= 0) {
@@ -8178,7 +8178,7 @@ static void process_timers(void)
 		}
 	}
 
-	spin_unlock_irqrestore(&zaptimerlock, flags);
+	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 }
 
 static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct *wait_table)
@@ -8188,10 +8188,10 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 	int ret = 0;
 	if (timer) {
 		poll_wait(file, &timer->sel, wait_table);
-		spin_lock_irqsave(&zaptimerlock, flags);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		if (timer->tripped || timer->ping)
 			ret |= POLLPRI;
-		spin_unlock_irqrestore(&zaptimerlock, flags);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 	} else
 		ret = -EINVAL;
 	return ret;
