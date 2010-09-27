@@ -3000,7 +3000,7 @@ static void __exit b4xx_exit(void)
 
 module_param(debug, int, S_IRUGO | S_IWUSR);
 module_param(spanfilter, int, S_IRUGO | S_IWUSR);
-#ifdef LOOKBACK_SUPPORTED
+#ifdef LOOPBACK_SUPPORTED
 module_param(loopback, int, S_IRUGO | S_IWUSR);
 #endif
 module_param(milliwatt, int, S_IRUGO | S_IWUSR);
@@ -3014,7 +3014,7 @@ module_param(companding, charp, S_IRUGO);
 
 MODULE_PARM_DESC(debug, "bitmap: 1=general 2=dtmf 4=regops 8=fops 16=ec 32=st state 64=hdlc 128=alarm");
 MODULE_PARM_DESC(spanfilter, "debug filter for spans. bitmap: 1=port 1, 2=port 2, 4=port 3, 8=port 4");
-#ifdef LOOKBACK_SUPPORTED
+#ifdef LOOPBACK_SUPPORTED
 MODULE_PARM_DESC(loopback, "TODO: bitmap: 1=loop back S/T port 2=loop back DAHDI");
 #endif
 MODULE_PARM_DESC(milliwatt, "1=replace outgoing S/T data with mu-law milliwatt");
