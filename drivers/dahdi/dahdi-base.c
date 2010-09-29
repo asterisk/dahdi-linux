@@ -7261,7 +7261,7 @@ static void process_echocan_events(struct dahdi_chan *chan)
 {
 	union dahdi_echocan_events events = chan->ec_state->events;
 
-	if (events.CED_tx_detected) {
+	if (events.bit.CED_tx_detected) {
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_TX_CED_DETECTED);
 		if (chan->ec_state) {
 			if (chan->ec_state->status.mode == ECHO_MODE_ACTIVE)
@@ -7271,7 +7271,7 @@ static void process_echocan_events(struct dahdi_chan *chan)
 		}
 	}
 
-	if (events.CED_rx_detected) {
+	if (events.bit.CED_rx_detected) {
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_RX_CED_DETECTED);
 		if (chan->ec_state) {
 			if (chan->ec_state->status.mode == ECHO_MODE_ACTIVE)
@@ -7281,18 +7281,18 @@ static void process_echocan_events(struct dahdi_chan *chan)
 		}
 	}
 
-	if (events.CNG_tx_detected)
+	if (events.bit.CNG_tx_detected)
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_TX_CNG_DETECTED);
 
-	if (events.CNG_rx_detected)
+	if (events.bit.CNG_rx_detected)
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_RX_CNG_DETECTED);
 
-	if (events.NLP_auto_disabled) {
+	if (events.bit.NLP_auto_disabled) {
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_EC_NLP_DISABLED);
 		chan->ec_state->status.mode = ECHO_MODE_FAX;
 	}
 
-	if (events.NLP_auto_enabled) {
+	if (events.bit.NLP_auto_enabled) {
 		dahdi_qevent_nolock(chan, DAHDI_EVENT_EC_NLP_ENABLED);
 		chan->ec_state->status.mode = ECHO_MODE_ACTIVE;
 	}

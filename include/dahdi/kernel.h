@@ -377,7 +377,7 @@ struct dahdi_echocan_state {
 			/*! The echocan enabled its NLP automatically.
 			 */
 			u32 NLP_auto_enabled:1;
-		};
+		} bit;
 	} events;
 };
 
