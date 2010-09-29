@@ -266,7 +266,7 @@ static inline short get_cc_s(echo_can_cb_s *cb, int pos)
 
 static inline void init_cc(struct ec_pvt *pvt, int N, int maxy, int maxu)
 {
-	void *ptr = pvt;
+	char *ptr = (char *) pvt;
 	unsigned long tmp;
 
 	/* Double-word align past end of state */
@@ -281,9 +281,9 @@ static inline void init_cc(struct ec_pvt *pvt, int N, int maxy, int maxu)
 	pvt->beta2_i = DEFAULT_BETA1_I;
   
 	/* Allocate coefficient memory */
-	pvt->a_i = ptr;
+	pvt->a_i = (int *) ptr;
 	ptr += (sizeof(int) * pvt->N_d);
-	pvt->a_s = ptr;
+	pvt->a_s = (short *) ptr;
 	ptr += (sizeof(short) * pvt->N_d);
 
 	/* Reset Y circular buffer (short version) */

@@ -3067,7 +3067,7 @@ static int ioctl_load_zone(unsigned long data)
 		return -ENOMEM;
 	}
 
-	ptr += sizeof(*z);
+	ptr = (char *) ptr + sizeof(*z);
 	space -= sizeof(*z);
 
 	dahdi_copy_string(z->name, work->th.name, sizeof(z->name));
@@ -3109,7 +3109,7 @@ static int ioctl_load_zone(unsigned long data)
 			t = work->samples[x] = ptr;
 
 			space -= sizeof(*t);
-			ptr += sizeof(*t);
+			ptr = (char *) ptr + sizeof(*t);
 
 			/* Remember which sample is work->next */
 			work->next[x] = work->td.next;
