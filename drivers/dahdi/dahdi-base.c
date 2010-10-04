@@ -3624,7 +3624,7 @@ static int dahdi_ioctl_getgains(struct file *file, unsigned long data)
 	}
 	chan = (!gain->chan) ? chan_from_file(file) :
 			       chan_from_num(gain->chan);
-	if (chan) {
+	if (!chan) {
 		res = -EINVAL;
 		goto cleanup;
 	}
