@@ -99,6 +99,8 @@ AST_C_DEFINE_CHECK([DAHDI23], [DAHDI_CONFIG_NTTE], [dahdi/user.h])
 AST_EXT_LIB_CHECK([NEWT], [newt], [newtBell], [newt.h])
 AST_EXT_LIB_CHECK([USB], [usb], [usb_init], [usb.h])
 
+AC_CHECK_FUNCS([semtimedop])
+
 PBX_HDLC=0
 AC_MSG_CHECKING([for GENERIC_HDLC_VERSION version 4 in linux/hdlc.h])
 AC_COMPILE_IFELSE(

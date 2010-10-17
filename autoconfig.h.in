@@ -3,6 +3,12 @@
 /* Define if your system has the DAHDI headers. */
 #undef HAVE_DAHDI
 
+/* Define if your system has the DAHDI23 headers. */
+#undef HAVE_DAHDI23
+
+/* Define DAHDI23 headers version */
+#undef HAVE_DAHDI23_VERSION
+
 /* Define DAHDI headers version */
 #undef HAVE_DAHDI_VERSION
 
@@ -20,6 +26,9 @@
 
 /* Define to indicate the ${NEWT_DESCRIP} library version */
 #undef HAVE_NEWT_VERSION
+
+/* Define to 1 if you have the `semtimedop' function. */
+#undef HAVE_SEMTIMEDOP
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
@@ -62,6 +71,9 @@
 
 /* Define to the one symbol short name of this package. */
 #undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION

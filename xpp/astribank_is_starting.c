@@ -15,6 +15,10 @@ static int		debug;
 static int		verbose;
 static int		timeout_seconds = 60;
 
+/* If libc provides no timeout variant: try to do without it: */
+#ifndef HAVE_SEMTIMEDEOP
+#define  semtimedop(sem, ops, n, timeout)    semop(sem, ops, n)
+#endif
 
 static void usage(void)
 {
