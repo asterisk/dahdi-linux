@@ -119,6 +119,7 @@ my %pci_ids = (
 	'1397:16b8/1397:e998'	=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'OpenVox B800P' },
 	'1397:08b4/1397:b566'	=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'BeroNet BN2S0' },
 	'1397:08b4/1397:b560'	=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'BeroNet BN4S0' },
+	'1397:08b4/1397:b762'	=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'BeroNet BN4S0 PCI-E card' },
 	'1397:16b8/1397:b562'	=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'BeroNet BN8S0' },
 	'1397:08b4'		=> { DRIVER => 'qozap', DESCRIPTION => 'Generic Cologne ISDN card' },
 	'1397:16b8'		=> { DRIVER => 'qozap', DESCRIPTION => 'Generic OctoBRI ISDN card' },
