@@ -2096,9 +2096,9 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 			pos->master = pos;
 
 		if ((pos->confna == chan->channo) &&
-		    is_monitor_mode(pos->confmode) &&
+		    (is_monitor_mode(pos->confmode) ||
 		    ((pos->confmode & DAHDI_CONF_MODE_MASK) ==
-		      DAHDI_CONF_DIGITALMON)) {
+		      DAHDI_CONF_DIGITALMON))) {
 			/* Take them out of conference with us */
 			/* release conference resource if any */
 			if (pos->confna) {
