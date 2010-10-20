@@ -1912,10 +1912,10 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 
 	packets_received = atomic_read(&cpvt->stats.packets_received);
 	packets_sent = atomic_read(&cpvt->stats.packets_sent);
-		
+
 	if ((packets_sent - packets_received) > 5) {
-		DTE_DEBUG(DTE_DEBUG_GENERAL, "%s channel %d sent %d packets " 
-			"and received %d packets.\n", (cpvt->encoder) ? 
+		DTE_DEBUG(DTE_DEBUG_GENERAL, "%s channel %d sent %d packets "
+			"and received %d packets.\n", (cpvt->encoder) ?
 			"encoder" : "decoder", cpvt->chan_out_num,
 			packets_sent, packets_received);
 	}
