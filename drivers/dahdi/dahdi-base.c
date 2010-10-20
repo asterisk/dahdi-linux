@@ -93,9 +93,9 @@
 #include <asm/i387.h>
 #endif
 
-#define hdlc_to_ztchan(h) (((struct dahdi_hdlc *)(h))->chan)
-#define dev_to_ztchan(h) (((struct dahdi_hdlc *)(dev_to_hdlc(h)->priv))->chan)
-#define ztchan_to_dev(h) ((h)->hdlcnetdev->netdev)
+#define hdlc_to_chan(h) (((struct dahdi_hdlc *)(h))->chan)
+#define netdev_to_chan(h) (((struct dahdi_hdlc *)(dev_to_hdlc(h)->priv))->chan)
+#define chan_to_netdev(h) ((h)->hdlcnetdev->netdev)
 
 /* macro-oni for determining a unit (channel) number */
 #define	UNIT(file) MINOR(file->f_dentry->d_inode->i_rdev)
@@ -1711,7 +1711,7 @@ static inline struct net_device_stats *hdlc_stats(struct net_device *dev)
 static int dahdi_net_open(struct net_device *dev)
 {
 	int res = hdlc_open(dev);
-	struct dahdi_chan *ms = dev_to_ztchan(dev);
+	struct dahdi_chan *ms = netdev_to_chan(dev);
 
 /*	if (!dev->hard_start_xmit) return res; is this really necessary? --byg */
 	if (res) /* this is necessary to avoid kernel panic when UNSPEC link encap, proven --byg */
@@ -1719,7 +1719,7 @@ static int dahdi_net_open(struct net_device *dev)
 #else
 static int dahdi_net_open(hdlc_device *hdlc)
 {
-	struct dahdi_chan *ms = hdlc_to_ztchan(hdlc);
+	struct dahdi_chan *ms = hdlc_to_chan(hdlc);
 	int res;
 #endif
 	if (!ms) {
@@ -1745,7 +1745,7 @@ static int dahdi_net_open(hdlc_device *hdlc)
 	fasthdlc_init(&ms->txhdlc, (ms->flags & DAHDI_FLAG_HDLC56) ? FASTHDLC_MODE_56 : FASTHDLC_MODE_64);
 	ms->infcs = PPP_INITFCS;
 
-	netif_start_queue(ztchan_to_dev(ms));
+	netif_start_queue(chan_to_netdev(ms));
 
 #ifdef CONFIG_DAHDI_DEBUG
 	module_printk(KERN_NOTICE, "DAHDINET: Opened channel %d name %s\n", ms->channo, ms->name);
@@ -1781,7 +1781,7 @@ static int dahdi_net_stop(struct net_device *dev)
 static void dahdi_net_close(hdlc_device *hdlc)
 {
 #endif
-	struct dahdi_chan *ms = hdlc_to_ztchan(hdlc);
+	struct dahdi_chan *ms = hdlc_to_chan(hdlc);
 	if (!ms) {
 #ifdef NEW_HDLC_INTERFACE
 		module_printk(KERN_NOTICE, "dahdi_net_stop: nothing??\n");
@@ -1801,7 +1801,7 @@ static void dahdi_net_close(hdlc_device *hdlc)
 #endif
 	}
 	/* Not much to do here.  Just deallocate the buffers */
-        netif_stop_queue(ztchan_to_dev(ms));
+        netif_stop_queue(chan_to_netdev(ms));
 	dahdi_reallocbufs(ms, 0, 0);
 	hdlc_close(dev);
 #ifdef NEW_HDLC_INTERFACE
@@ -1850,14 +1850,14 @@ static struct dahdi_hdlc *dahdi_hdlc_alloc(void)
 static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	/* FIXME: this construction seems to be not very optimal for me but I could find nothing better at the moment (Friday, 10PM :( )  --byg */
-/*	struct dahdi_chan *ss = hdlc_to_ztchan(list_entry(dev, struct dahdi_hdlc, netdev.netdev));*/
-	struct dahdi_chan *ss = dev_to_ztchan(dev);
+/*	struct dahdi_chan *ss = hdlc_to_chan(list_entry(dev, struct dahdi_hdlc, netdev.netdev));*/
+	struct dahdi_chan *ss = netdev_to_chan(dev);
 	struct net_device_stats *stats = hdlc_stats(dev);
 
 #else
 static int dahdi_xmit(hdlc_device *hdlc, struct sk_buff *skb)
 {
-	struct dahdi_chan *ss = hdlc_to_ztchan(hdlc);
+	struct dahdi_chan *ss = hdlc_to_chan(hdlc);
 	struct net_device *dev = &ss->hdlcnetdev->netdev.netdev;
 	struct net_device_stats *stats = &ss->hdlcnetdev->netdev.stats;
 #endif
@@ -1896,7 +1896,7 @@ static int dahdi_xmit(hdlc_device *hdlc, struct sk_buff *skb)
 			/* Whoops, no more space.  */
 		    ss->inwritebuf = -1;
 
-		    netif_stop_queue(ztchan_to_dev(ss));
+		    netif_stop_queue(chan_to_netdev(ss));
 		}
 		if (ss->outwritebuf < 0) {
 			/* Let the interrupt handler know there's
@@ -4235,7 +4235,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 	spin_lock_irqsave(&chan->lock, flags);
 #ifdef CONFIG_DAHDI_NET
 	if (dahdi_have_netdev(chan)) {
-		if (ztchan_to_dev(chan)->flags & IFF_UP) {
+		if (chan_to_netdev(chan)->flags & IFF_UP) {
 			spin_unlock_irqrestore(&chan->lock, flags);
 			module_printk(KERN_WARNING, "Can't switch HDLC net mode on channel %s, since current interface is up\n", chan->name);
 			return -EBUSY;
@@ -6782,7 +6782,7 @@ out in the later versions, and is put back now. */
 					fasthdlc_tx_frame_nocheck(&ms->txhdlc);
 #ifdef CONFIG_DAHDI_NET
 				if (dahdi_have_netdev(ms))
-					netif_wake_queue(ztchan_to_dev(ms));
+					netif_wake_queue(chan_to_netdev(ms));
 #endif
 #ifdef CONFIG_DAHDI_PPP
 				if (ms->flags & DAHDI_FLAG_PPP) {
@@ -7983,9 +7983,10 @@ that the waitqueue is empty. */
 #else
 			skb_reset_mac_header(skb);
 #endif
-			skb->dev = ztchan_to_dev(ms);
+			skb->dev = chan_to_netdev(ms);
 #ifdef DAHDI_HDLC_TYPE_TRANS
-			skb->protocol = hdlc_type_trans(skb, ztchan_to_dev(ms));
+			skb->protocol = hdlc_type_trans(skb,
+							chan_to_netdev(ms));
 #else
 			skb->protocol = htons (ETH_P_HDLC);
 #endif
