@@ -3018,10 +3018,6 @@ wctc4xxp_create_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt,
 		complicated = temp;
 	}
 
-	DTE_DEBUG(DTE_DEBUG_CHANNEL_SETUP,
-	   "DTE is using the following channels encoder_channel: " \
-	   "%d decoder_channel: %d\n", encoder_channel, decoder_channel);
-
 	BUG_ON(encoder_timeslot/2 >= wc->numchannels);
 	BUG_ON(decoder_timeslot/2 >= wc->numchannels);
 	encoder_pvt = wc->uencode->channels[encoder_timeslot/2].pvt;
@@ -3039,6 +3035,10 @@ wctc4xxp_create_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt,
 	if (send_create_channel_cmd(wc, cmd, decoder_timeslot,
 		&decoder_channel))
 		goto error_exit;
+
+	DTE_DEBUG(DTE_DEBUG_CHANNEL_SETUP,
+	   "DTE is using the following channels encoder_channel: " \
+	   "%d decoder_channel: %d\n", encoder_channel, decoder_channel);
 
 	length = (DTE_FORMAT_G729A == complicated) ? G729_LENGTH :
 		(DTE_FORMAT_G723_1 == complicated) ? G723_LENGTH : 0;
