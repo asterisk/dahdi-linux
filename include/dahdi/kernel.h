@@ -692,7 +692,9 @@ enum {
 	DAHDI_FLAGBIT_MFDECODE	= 3,	/*!< Channel supports native MFr2 decode */
 	DAHDI_FLAGBIT_ECHOCANCEL= 4,	/*!< Channel supports native echo cancellation */
 	DAHDI_FLAGBIT_HDLC	= 5,	/*!< Perform HDLC */
+#ifdef CONFIG_DAHDI_NET
 	DAHDI_FLAGBIT_NETDEV	= 6,	/*!< Send to network */
+#endif
 	DAHDI_FLAGBIT_CLEAR	= 8,	/*!< Clear channel */
 	DAHDI_FLAGBIT_AUDIO	= 9,	/*!< Audio mode channel */
 	DAHDI_FLAGBIT_OPEN	= 10,	/*!< Channel is open */
@@ -707,6 +709,20 @@ enum {
 	DAHDI_FLAGBIT_MTP2	= 19,	/*!< Repeats last message in buffer and also discards repeating messages sent to us */
 	DAHDI_FLAGBIT_HDLC56	= 20,	/*!< Sets the given channel (if in HDLC mode) to use 56K HDLC instead of 64K  */
 };
+
+#ifdef CONFIG_DAHDI_NET
+/**
+ * have_netdev() - Return true if a channel has an associated network device.
+ * @chan:	   Then channel to check.
+ *
+ */
+static inline int dahdi_have_netdev(const struct dahdi_chan *chan)
+{
+	return test_bit(DAHDI_FLAGBIT_NETDEV, &chan->flags);
+}
+#else
+static inline int dahdi_have_netdev(const struct dahdi_chan *chan) { return 0; }
+#endif
 
 struct dahdi_count {
 	__u32 fe;		/*!< Framing error counter */
@@ -740,7 +756,7 @@ struct dahdi_count {
 #define DAHDI_FLAG_ECHOCANCEL	DAHDI_FLAG(ECHOCANCEL)
 
 #define DAHDI_FLAG_HDLC		DAHDI_FLAG(HDLC)
-#define DAHDI_FLAG_NETDEV	DAHDI_FLAG(NETDEV)
+/* #define DAHDI_FLAG_NETDEV	DAHDI_FLAG(NETDEV) */
 #define DAHDI_FLAG_CLEAR	DAHDI_FLAG(CLEAR)
 #define DAHDI_FLAG_AUDIO	DAHDI_FLAG(AUDIO)
 

@@ -1397,7 +1397,7 @@ DAHDI_IRQ_HANDLER(tor2_intr)
 			/* go thru all chans, and count # open */
 			for (n = 0, k = 0; k < tor->tspans[i].dahdi_span.channels; k++) {
 				if (((tor->chans[i][k])->flags & DAHDI_FLAG_OPEN) ||
-				    ((tor->chans[i][k])->flags & DAHDI_FLAG_NETDEV))
+				    dahdi_have_netdev(tor->chans[i][k]))
 					n++;
 			}
 			/* if none open, set alarm condition */

@@ -1723,7 +1723,7 @@ static inline void t1_check_alarms(struct t1 *wc)
 	if (wc->span.lineconfig & DAHDI_CONFIG_NOTOPEN) {
 		for (x=0,j=0;x < wc->span.channels;x++)
 			if ((wc->span.chans[x]->flags & DAHDI_FLAG_OPEN) ||
-			    (wc->span.chans[x]->flags & DAHDI_FLAG_NETDEV))
+			    dahdi_have_netdev(wc->span.chans[x]))
 				j++;
 		if (!j)
 			alarms |= DAHDI_ALARM_NOTOPEN;

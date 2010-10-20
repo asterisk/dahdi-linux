@@ -1730,7 +1730,7 @@ static int dahdi_net_open(hdlc_device *hdlc)
 		module_printk(KERN_NOTICE, "%s is already open!\n", ms->name);
 		return -EBUSY;
 	}
-	if (!(ms->flags & DAHDI_FLAG_NETDEV)) {
+	if (!dahdi_have_netdev(ms)) {
 		module_printk(KERN_NOTICE, "%s is not a net device!\n", ms->name);
 		return -EINVAL;
 	}
@@ -1791,7 +1791,7 @@ static void dahdi_net_close(hdlc_device *hdlc)
 		return;
 #endif
 	}
-	if (!(ms->flags & DAHDI_FLAG_NETDEV)) {
+	if (!dahdi_have_netdev(ms)) {
 #ifdef NEW_HDLC_INTERFACE
 		module_printk(KERN_NOTICE, "dahdi_net_stop: %s is not a net device!\n", ms->name);
 		return 0;
@@ -2067,7 +2067,7 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 	release_echocan(chan->ec_factory);
 
 #ifdef CONFIG_DAHDI_NET
-	if (chan->flags & DAHDI_FLAG_NETDEV) {
+	if (dahdi_have_netdev(chan)) {
 		unregister_hdlc_device(chan->hdlcnetdev->netdev);
 		free_netdev(chan->hdlcnetdev->netdev);
 		kfree(chan->hdlcnetdev);
@@ -2823,7 +2823,7 @@ static int dahdi_specchan_open(struct file *file)
 
 	if (chan && chan->sig) {
 		/* Make sure we're not already open, a net device, or a slave device */
-		if (chan->flags & DAHDI_FLAG_NETDEV)
+		if (dahdi_have_netdev(chan))
 			res = -EBUSY;
 		else if (chan->master != chan)
 			res = -EBUSY;
@@ -4234,7 +4234,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 	}
 	spin_lock_irqsave(&chan->lock, flags);
 #ifdef CONFIG_DAHDI_NET
-	if (chan->flags & DAHDI_FLAG_NETDEV) {
+	if (dahdi_have_netdev(chan)) {
 		if (ztchan_to_dev(chan)->flags & IFF_UP) {
 			spin_unlock_irqrestore(&chan->lock, flags);
 			module_printk(KERN_WARNING, "Can't switch HDLC net mode on channel %s, since current interface is up\n", chan->name);
@@ -4246,7 +4246,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 		free_netdev(chan->hdlcnetdev->netdev);
 		kfree(chan->hdlcnetdev);
 		chan->hdlcnetdev = NULL;
-		chan->flags &= ~DAHDI_FLAG_NETDEV;
+		clear_bit(DAHDI_FLAGBIT_NETDEV, &chan->flags);
 	}
 #else
 	if (ch.sigtype == DAHDI_SIG_HDLCNET) {
@@ -4368,7 +4368,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 				res = -1;
 			}
 			if (!res)
-				chan->flags |= DAHDI_FLAG_NETDEV;
+				set_bit(DAHDI_FLAGBIT_NETDEV, &chan->flags);
 		} else {
 			module_printk(KERN_NOTICE, "Unable to allocate netdev: out of memory\n");
 			res = -1;
@@ -4377,7 +4377,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 #endif
 	if ((chan->sig == DAHDI_SIG_HDLCNET) &&
 	    (chan == newmaster) &&
-	    !(chan->flags & DAHDI_FLAG_NETDEV))
+	    !dahdi_have_netdev(chan))
 		module_printk(KERN_NOTICE, "Unable to register HDLC device for channel %s\n", chan->name);
 	if (!res) {
 		/* Setup default law */
@@ -6770,7 +6770,8 @@ in the read or iomux call, etc). That is why the write and iomux calls start
 with an infinite loop that gets broken out of upon an active condition,
 otherwise keeps sleeping and looking. The part in this code got "optimized"
 out in the later versions, and is put back now. */
-				if (!(ms->flags & (DAHDI_FLAG_NETDEV | DAHDI_FLAG_PPP))) {
+				if (!(ms->flags & DAHDI_FLAG_PPP) ||
+				    !dahdi_have_netdev(ms)) {
 					wake_up_interruptible(&ms->writebufq);
 					wake_up_interruptible(&ms->sel);
 					if (ms->iomask & DAHDI_IOMUX_WRITE)
@@ -6780,7 +6781,7 @@ out in the later versions, and is put back now. */
 				if (ms->flags & DAHDI_FLAG_HDLC)
 					fasthdlc_tx_frame_nocheck(&ms->txhdlc);
 #ifdef CONFIG_DAHDI_NET
-				if (ms->flags & DAHDI_FLAG_NETDEV)
+				if (dahdi_have_netdev(ms))
 					netif_wake_queue(ztchan_to_dev(ms));
 #endif
 #ifdef CONFIG_DAHDI_PPP
@@ -7819,7 +7820,8 @@ static inline void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int
 				module_printk(KERN_NOTICE, "EOF, len is %d\n", ms->readn[ms->inreadbuf]);
 #endif
 #if defined(CONFIG_DAHDI_NET) || defined(CONFIG_DAHDI_PPP)
-				if (ms->flags & (DAHDI_FLAG_NETDEV | DAHDI_FLAG_PPP)) {
+				if ((ms->flags & DAHDI_FLAG_PPP) ||
+				    dahdi_have_netdev(ms)) {
 #ifdef CONFIG_DAHDI_NET
 #endif /* CONFIG_DAHDI_NET */
 					/* Our network receiver logic is MUCH
@@ -7841,7 +7843,7 @@ static inline void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int
 							memcpy(skb->data, ms->readbuf[ms->inreadbuf], ms->readn[ms->inreadbuf]);
 							skb_put(skb, ms->readn[ms->inreadbuf]);
 #ifdef CONFIG_DAHDI_NET
-							if (ms->flags & DAHDI_FLAG_NETDEV) {
+							if (dahdi_have_netdev(ms)) {
 								struct net_device_stats *stats = hdlc_stats(ms->hdlcnetdev->netdev);
 								stats->rx_packets++;
 								stats->rx_bytes += ms->readn[ms->inreadbuf];
@@ -7850,7 +7852,7 @@ static inline void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int
 
 						} else {
 #ifdef CONFIG_DAHDI_NET
-							if (ms->flags & DAHDI_FLAG_NETDEV) {
+							if (dahdi_have_netdev(ms)) {
 								struct net_device_stats *stats = hdlc_stats(ms->hdlcnetdev->netdev);
 								stats->rx_dropped++;
 							}
@@ -7948,7 +7950,7 @@ that the waitqueue is empty. */
 				ms->infcs = PPP_INITFCS;
 
 #ifdef CONFIG_DAHDI_NET
-				if (ms->flags & DAHDI_FLAG_NETDEV) {
+				if (dahdi_have_netdev(ms)) {
 					struct net_device_stats *stats = hdlc_stats(ms->hdlcnetdev->netdev);
 					stats->rx_errors++;
 					if (abort == DAHDI_EVENT_OVERRUN)
@@ -7973,7 +7975,7 @@ that the waitqueue is empty. */
 		} else /* No place to receive -- drop on the floor */
 			break;
 #ifdef CONFIG_DAHDI_NET
-		if (skb && (ms->flags & DAHDI_FLAG_NETDEV))
+		if (skb && dahdi_have_netdev(ms))
 #ifdef NEW_HDLC_INTERFACE
 		{
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
@@ -8157,7 +8159,8 @@ int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int
 			if (ss->inwritebuf < 0)
 				ss->inwritebuf = oldbuf;
 
-			if (!(ss->flags & (DAHDI_FLAG_NETDEV | DAHDI_FLAG_PPP))) {
+			if (!(ss->flags & DAHDI_FLAG_PPP) ||
+			    !dahdi_have_netdev(ss)) {
 				wake_up_interruptible(&ss->writebufq);
 				wake_up_interruptible(&ss->sel);
 				if ((ss->iomask & DAHDI_IOMUX_WRITE) && (res >= 0))

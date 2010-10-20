@@ -3158,7 +3158,7 @@ static void t4_check_alarms(struct t4 *wc, int span)
 	if (ts->span.lineconfig & DAHDI_CONFIG_NOTOPEN) {
 		for (x=0,j=0;x < ts->span.channels;x++)
 			if ((ts->span.chans[x]->flags & DAHDI_FLAG_OPEN) ||
-			    (ts->span.chans[x]->flags & DAHDI_FLAG_NETDEV))
+			    dahdi_have_netdev(ts->span.chans[x]))
 				j++;
 		if (!j)
 			alarms |= DAHDI_ALARM_NOTOPEN;
