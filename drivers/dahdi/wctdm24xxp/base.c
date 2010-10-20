@@ -503,7 +503,7 @@ static inline bool is_good_frame(const u8 *sframe)
         return a != b;
 }
 
-static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk, int whichframe)
+static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk)
 {
 	unsigned long flags;
 	struct vpmadt032_cmd *curcmd = NULL;
@@ -983,7 +983,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechun
 			}
 #endif			
 		} else if (wc->vpmadt032) {
-			cmd_dequeue_vpmadt032(wc, writechunk, x);
+			cmd_dequeue_vpmadt032(wc, writechunk);
 		}
 
 		if (x < DAHDI_CHUNKSIZE - 1) {

@@ -393,7 +393,7 @@ static int config_vpmadt032(struct vpmadt032 *vpm, struct t1 *wc)
 #define debug_printk(wc, lvl, fmt, args...) if (debug >= (lvl)) do { \
 	t1_info((wc), fmt , ## args); } while (0)
 
-static void cmd_dequeue_vpmadt032(struct t1 *wc, unsigned char *writechunk, int whichframe)
+static void cmd_dequeue_vpmadt032(struct t1 *wc, unsigned char *writechunk)
 {
 	struct vpmadt032_cmd *cmd;
 	struct vpmadt032 *vpm = wc->vpmadt032;
@@ -1901,7 +1901,7 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *writechunk)
 #ifdef VPM_SUPPORT
 		spin_lock_irqsave(&wc->reglock, flags);
 		if (wc->vpmadt032)
-			cmd_dequeue_vpmadt032(wc, writechunk, x);
+			cmd_dequeue_vpmadt032(wc, writechunk);
 		spin_unlock_irqrestore(&wc->reglock, flags);
 #endif
 
