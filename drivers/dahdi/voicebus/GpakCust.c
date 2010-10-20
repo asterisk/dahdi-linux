@@ -759,7 +759,13 @@ void vpmadt032_get_default_parameters(struct GpakEcanParms *p)
 	p->EcanTapLength = 1024;
 	p->EcanNlpType = DEFAULT_NLPTYPE;
 	p->EcanAdaptEnable = 1;
+
+#ifdef CONFIG_DAHDI_NO_ECHOCAN_DISABLE
+	p->EcanG165DetEnable = 0;
+#else
 	p->EcanG165DetEnable = 1;
+#endif
+
 	p->EcanDblTalkThresh = 6;
 	p->EcanMaxDoubleTalkThres = 40;
 	p->EcanNlpThreshold = DEFAULT_NLPTHRESH;
