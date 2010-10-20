@@ -43,6 +43,10 @@ static int echo_can_create(struct dahdi_chan *chan, struct dahdi_echocanparams *
 static void echo_can_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 static void echo_can_process(struct dahdi_echocan_state *ec, short *isig, const short *iref, u32 size);
 static int echo_can_traintap(struct dahdi_echocan_state *ec, int pos, short val);
+#ifdef CONFIG_DAHDI_ECHOCAN_PROCESS_TX
+static void echo_can_hpf_tx(struct dahdi_echocan_state *ec,
+			    short *tx, u32 size);
+#endif
 
 static const struct dahdi_echocan_factory my_factory = {
 	.name = "OSLEC",
@@ -55,6 +59,9 @@ static const struct dahdi_echocan_ops my_ops = {
 	.echocan_free = echo_can_free,
 	.echocan_process = echo_can_process,
 	.echocan_traintap = echo_can_traintap,
+#ifdef CONFIG_DAHDI_ECHOCAN_PROCESS_TX
+	.echocan_process_tx = echo_can_hpf_tx,
+#endif
 };
 
 struct ec_pvt {
@@ -117,6 +124,21 @@ static int echo_can_traintap(struct dahdi_echocan_state *ec, int pos, short val)
 {
 	return 1;
 }
+
+#ifdef CONFIG_DAHDI_ECHOCAN_PROCESS_TX
+static void echo_can_hpf_tx(struct dahdi_echocan_state *ec, short *tx, u32 size)
+{
+	struct ec_pvt *pvt = dahdi_to_pvt(ec);
+	u32 SampleNum;
+
+	for (SampleNum = 0; SampleNum < size; SampleNum++, tx++) {
+		short iCleanSample;
+
+		iCleanSample = oslec_hpf_tx(pvt->oslec, *tx);
+		*tx = iCleanSample;
+	}
+}
+#endif
 
 static int __init mod_init(void)
 {
