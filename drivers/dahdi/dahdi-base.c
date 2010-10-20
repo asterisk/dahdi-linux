@@ -951,8 +951,11 @@ static void dahdi_check_conf(int x)
 
 	for (y = 0; y < maxchans; y++) {
 		struct dahdi_chan *const chan = chan_from_num(y);
-		const int confmode = chan->confmode & DAHDI_CONF_MODE_MASK;
-		if (chan && (chan->confna == x) &&
+		int confmode;
+		if (!chan)
+			continue;
+		confmode = chan->confmode & DAHDI_CONF_MODE_MASK;
+		if ((chan->confna == x) &&
 		    (confmode == DAHDI_CONF_CONF ||
 		     confmode == DAHDI_CONF_CONFANN ||
 		     confmode == DAHDI_CONF_CONFMON ||
