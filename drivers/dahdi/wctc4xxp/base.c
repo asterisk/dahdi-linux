@@ -1139,9 +1139,12 @@ send_create_channel_cmd(struct wcdte *wc, struct tcb *cmd, u16 timeslot,
 		return res;
 
 	if (0x0000 != response_header(cmd)->params[0]) {
-		/* The DTE failed to create the channel. */
-		/* TODO put some debug information here. */
-		WARN_ON(1);
+		if (printk_ratelimit()) {
+			dev_warn(&wc->pdev->dev,
+				 "Failed to create channel in timeslot " \
+				 "%d.  Response from DTE was (%04x).\n",
+				 timeslot, response_header(cmd)->params[0]);
+		}
 		free_cmd(cmd->response);
 		cmd->response = NULL;
 		return -EIO;
