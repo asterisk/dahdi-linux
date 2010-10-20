@@ -87,9 +87,9 @@
 #endif
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 /* also added in RHEL kernels with the OpenInfiniband backport: */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,9) || !defined(DEFINE_SPINLOCK)
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9) || !defined(DEFINE_SPINLOCK)
 typedef	unsigned gfp_t;		/* Added in 2.6.14 */
 #endif
 #endif
