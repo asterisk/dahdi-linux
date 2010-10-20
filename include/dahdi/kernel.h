@@ -257,6 +257,15 @@ struct dahdi_echocan_ops {
 	 * \return Nothing.
 	 */
 	void (*echocan_NLP_toggle)(struct dahdi_echocan_state *ec, unsigned int enable);
+
+#ifdef CONFIG_DAHDI_ECHOCAN_PROCESS_TX
+	/*! \brief Process an array of TX audio samples.
+	 *
+	 * \return Nothing.
+	 */
+	void (*echocan_process_tx)(struct dahdi_echocan_state *ec,
+				   short *tx, u32 size);
+#endif
 };
 
 /*! A factory for creating instances of software echo cancelers to be used on DAHDI channels. */

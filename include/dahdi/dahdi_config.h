@@ -126,6 +126,13 @@
  */
 /* #define CONFIG_DAHDI_NO_ECHOCAN_DISABLE */
 
+/*
+ * Define if you would like to allow software echocans to process the tx audio
+ * in addition to the rx audio.  Used for things like DC removal.
+ *
+ */
+/* #define CONFIG_DAHDI_ECHOCAN_PROCESS_TX */
+
 /* 
  * Uncomment if you happen have an early TDM400P Rev H which 
  * sometimes forgets its PCI ID to have wcfxs match essentially all
