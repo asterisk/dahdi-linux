@@ -65,10 +65,6 @@
 #include <dahdi/kernel.h>
 #include "ecdis.h"
 
-#ifndef CONFIG_OLD_HDLC_API
-#define NEW_HDLC_INTERFACE
-#endif
-
 #ifdef CONFIG_DAHDI_PPP
 #include <linux/netdevice.h>
 #include <linux/if.h>
@@ -1707,7 +1703,6 @@ static inline struct net_device_stats *hdlc_stats(struct net_device *dev)
 }
 #endif
 
-#ifdef NEW_HDLC_INTERFACE
 static int dahdi_net_open(struct net_device *dev)
 {
 	int res = hdlc_open(dev);
@@ -1716,12 +1711,7 @@ static int dahdi_net_open(struct net_device *dev)
 /*	if (!dev->hard_start_xmit) return res; is this really necessary? --byg */
 	if (res) /* this is necessary to avoid kernel panic when UNSPEC link encap, proven --byg */
 		return res;
-#else
-static int dahdi_net_open(hdlc_device *hdlc)
-{
-	struct dahdi_chan *ms = hdlc_to_chan(hdlc);
-	int res;
-#endif
+
 	if (!ms) {
 		module_printk(KERN_NOTICE, "dahdi_net_open: nothing??\n");
 		return -EINVAL;
@@ -1771,47 +1761,27 @@ static int dahdi_register_hdlc_device(struct net_device *dev, const char *dev_na
 	return 0;
 }
 
-#ifdef NEW_HDLC_INTERFACE
 static int dahdi_net_stop(struct net_device *dev)
 {
-    hdlc_device *h = dev_to_hdlc(dev);
-    struct dahdi_hdlc *hdlc = h->priv;
+	hdlc_device *h = dev_to_hdlc(dev);
+	struct dahdi_hdlc *hdlc = h->priv;
 
-#else
-static void dahdi_net_close(hdlc_device *hdlc)
-{
-#endif
 	struct dahdi_chan *ms = hdlc_to_chan(hdlc);
 	if (!ms) {
-#ifdef NEW_HDLC_INTERFACE
 		module_printk(KERN_NOTICE, "dahdi_net_stop: nothing??\n");
 		return 0;
-#else
-		module_printk(KERN_NOTICE, "dahdi_net_close: nothing??\n");
-		return;
-#endif
 	}
 	if (!dahdi_have_netdev(ms)) {
-#ifdef NEW_HDLC_INTERFACE
 		module_printk(KERN_NOTICE, "dahdi_net_stop: %s is not a net device!\n", ms->name);
 		return 0;
-#else
-		module_printk(KERN_NOTICE, "dahdi_net_close: %s is not a net device!\n", ms->name);
-		return;
-#endif
 	}
 	/* Not much to do here.  Just deallocate the buffers */
-        netif_stop_queue(chan_to_netdev(ms));
+	netif_stop_queue(chan_to_netdev(ms));
 	dahdi_reallocbufs(ms, 0, 0);
 	hdlc_close(dev);
-#ifdef NEW_HDLC_INTERFACE
 	return 0;
-#else
-	return;
-#endif
 }
 
-#ifdef NEW_HDLC_INTERFACE
 /* kernel 2.4.20+ has introduced attach function, dunno what to do,
  just copy sources from dscc4 to be sure and ready for further mastering,
  NOOP right now (i.e. really a stub)  --byg */
@@ -1839,28 +1809,20 @@ static int dahdi_net_attach(struct net_device *dev, unsigned short encoding,
         dpriv->parity = parity;*/
         return 0;
 }
-#endif
 
 static struct dahdi_hdlc *dahdi_hdlc_alloc(void)
 {
 	return kzalloc(sizeof(struct dahdi_hdlc), GFP_KERNEL);
 }
 
-#ifdef NEW_HDLC_INTERFACE
 static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	/* FIXME: this construction seems to be not very optimal for me but I could find nothing better at the moment (Friday, 10PM :( )  --byg */
-/*	struct dahdi_chan *ss = hdlc_to_chan(list_entry(dev, struct dahdi_hdlc, netdev.netdev));*/
+	/* FIXME: this construction seems to be not very optimal for me but I
+	 * could find nothing better at the moment (Friday, 10PM :( )  --byg
+	 * */
 	struct dahdi_chan *ss = netdev_to_chan(dev);
 	struct net_device_stats *stats = hdlc_stats(dev);
 
-#else
-static int dahdi_xmit(hdlc_device *hdlc, struct sk_buff *skb)
-{
-	struct dahdi_chan *ss = hdlc_to_chan(hdlc);
-	struct net_device *dev = &ss->hdlcnetdev->netdev.netdev;
-	struct net_device_stats *stats = &ss->hdlcnetdev->netdev.stats;
-#endif
 	int retval = 1;
 	int x,oldbuf;
 	unsigned int fcs;
@@ -1915,17 +1877,10 @@ static int dahdi_xmit(hdlc_device *hdlc, struct sk_buff *skb)
 	return retval;
 }
 
-#ifdef NEW_HDLC_INTERFACE
 static int dahdi_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	return hdlc_ioctl(dev, ifr, cmd);
 }
-#else
-static int dahdi_net_ioctl(hdlc_device *hdlc, struct ifreq *ifr, int cmd)
-{
-	return -EIO;
-}
-#endif
 
 #endif
 
@@ -7976,7 +7931,6 @@ that the waitqueue is empty. */
 			break;
 #ifdef CONFIG_DAHDI_NET
 		if (skb && dahdi_have_netdev(ms))
-#ifdef NEW_HDLC_INTERFACE
 		{
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
 			skb->mac.raw = skb->data;
@@ -7992,9 +7946,6 @@ that the waitqueue is empty. */
 #endif
 			netif_rx(skb);
 		}
-#else
-			hdlc_netif_rx(&ms->hdlcnetdev->netdev, skb);
-#endif
 #endif
 #ifdef CONFIG_DAHDI_PPP
 		if (skb && (ms->flags & DAHDI_FLAG_PPP)) {

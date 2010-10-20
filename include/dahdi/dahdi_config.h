@@ -82,13 +82,6 @@
 /* #define CONFIG_DAHDI_NET */
 
 /*
- * Uncomment CONFIG_OLD_HDLC_API if your are compiling with CONFIG_DAHDI_NET
- * defined and you are using the old kernel HDLC interface (or if you get
- * an error about ETH_P_HDLC while compiling).
- */
-/* #define CONFIG_OLD_HDLC_API */
-
-/*
  * Uncomment for Generic PPP support (i.e. DAHDIRAS)
  */
 
