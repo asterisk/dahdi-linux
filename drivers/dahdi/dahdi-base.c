@@ -4819,7 +4819,8 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	if (!(chan->flags & DAHDI_FLAG_AUDIO))
 		return -EINVAL;
 
-	if (is_monitor_mode(conf.confmode)) {
+	if ((DAHDI_CONF_DIGITALMON == confmode) ||
+	    is_monitor_mode(conf.confmode)) {
 		conf_chan = chan_from_num(conf.confno);
 		if (!conf_chan)
 			return -EINVAL;
