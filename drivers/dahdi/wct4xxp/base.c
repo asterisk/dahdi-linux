@@ -3119,7 +3119,7 @@ static void t4_check_alarms(struct t4 *wc, int span)
 				__t4_framer_out(wc, span, 0x20, 0x9f | 0x20);	/* LIM0: Force RAI High */
 				ts->spanflags |= FLAG_NMF;
 				dev_notice(&wc->dev->dev,
-					"NMF workaround on!\n");
+					"Lost crc4-multiframe alignment\n");
 			}
 			__t4_framer_out(wc, span, 0x1e, 0xc3);	/* Reset to CRC4 mode */
 			__t4_framer_out(wc, span, 0x1c, 0xf2);	/* Force Resync */
@@ -3129,7 +3129,7 @@ static void t4_check_alarms(struct t4 *wc, int span)
 				__t4_framer_out(wc, span, 0x20, 0x9f);	/* LIM0: Clear forced RAI */
 				ts->spanflags &= ~FLAG_NMF;
 				dev_notice(&wc->dev->dev,
-					"NMF workaround off!\n");
+					"Obtained crc4-multiframe alignment\n");
 			}
 		}
 	} else {
