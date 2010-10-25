@@ -95,11 +95,13 @@ int main(int argc, char *argv[])
 				strcat(alarms, "YEL/");
 			if (s.alarms & DAHDI_ALARM_RED) {
 				strcat(alarms, "RED/");
+
+/* Extended alarm feature test. Allows compilation with
+ * versions of dahdi-linux prior to 2.4
+ */
 #ifdef DAHDI_ALARM_LFA
 				if (s.alarms & DAHDI_ALARM_LFA)
 					strcat(alarms, "LFA/");
-				if (s.alarms & DAHDI_ALARM_LMFA)
-					strcat(alarms, "LMFA/");
 #endif /* ifdef DAHDI_ALARM_LFA */
 			}
 			if (s.alarms & DAHDI_ALARM_LOOPBACK)
@@ -115,10 +117,35 @@ int main(int argc, char *argv[])
 				alarms[strlen(alarms)-1]='\0';
 			}
 		} else {
-			if (s.numchans)
-				strcpy(alarms, "OK");
-			else
+			if (s.numchans) {
+#ifdef DAHDI_ALARM_LFA
+				/* If we continuously receive framing errors
+				 * but our span is still in service, and we
+				 * are configured for E1 & crc4. We've lost
+				 * crc4-multiframe alignment
+				 */
+				if ((s.linecompat & DAHDI_CONFIG_CRC4) &&
+				    (s.fecount > 0)) {
+					struct dahdi_spaninfo t;
+					memset(&t, 0, sizeof(t));
+					t.spanno = x;
+					sleep(1);
+					if (ioctl(ctl, DAHDI_SPANSTAT, &t))
+						continue;
+
+					/* Test fecount at two separate time
+					 * intervals, if they differ, throw LMFA
+					 */
+					if ((t.fecount > s.fecount) &&
+						!t.alarms) {
+						strcat(alarms, "LMFA/");
+					}
+				}
+#endif /* ifdef DAHDI_ALARM_LFA */
+				strcat(alarms, "OK");
+			} else {
 				strcpy(alarms, "UNCONFIGURED");
+			}
 		}
 
 		fprintf(stdout, "[%d]\n", x);
