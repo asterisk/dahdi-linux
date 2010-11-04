@@ -4941,67 +4941,76 @@ static int dahdi_ioctl_getconf(struct file *file, unsigned long data)
 /**
  * dahdi_ioctl_iomux() - Wait for *something* to happen.
  *
+ * This is now basically like the wait_event_interruptible function, but with
+ * a much more involved wait condition.
  */
 static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 {
 	struct dahdi_chan *const chan = chan_from_file(file);
 	unsigned long flags;
 	int ret;
+	DEFINE_WAIT(wait);
 
 	if (!chan)
 		return -EINVAL;
 
-	get_user(chan->iomask, (int __user *)data);  /* save mask */
-	if (!chan->iomask)return(-EINVAL);  /* cant wait for nothing */
-	for(;;)  /* loop forever */
-	   {
-		  /* has to have SOME mask */
-		ret = 0;  /* start with empty return value */
+	get_user(chan->iomask, (int __user *)data);
+	if (!chan->iomask)
+		return -EINVAL;
+
+	while (1) {
+
+		ret = 0;
+		prepare_to_wait(&chan->eventbufq, &wait, TASK_INTERRUPTIBLE);
+
 		spin_lock_irqsave(&chan->lock, flags);
-		  /* if looking for read */
-		if (chan->iomask & DAHDI_IOMUX_READ)
-		   {
+		/* if looking for read */
+		if (chan->iomask & DAHDI_IOMUX_READ) {
 			/* if read available */
 			if ((chan->outreadbuf > -1)  && !chan->rxdisable)
 				ret |= DAHDI_IOMUX_READ;
-		   }
-		  /* if looking for write avail */
-		if (chan->iomask & DAHDI_IOMUX_WRITE)
-		   {
+		}
+
+		/* if looking for write avail */
+		if (chan->iomask & DAHDI_IOMUX_WRITE) {
 			if (chan->inwritebuf > -1)
 				ret |= DAHDI_IOMUX_WRITE;
-		   }
-		  /* if looking for write empty */
-		if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY)
-		   {
-			  /* if everything empty -- be sure the transmitter is enabled */
+		}
+		/* if looking for write empty */
+		if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY) {
+			/* if everything empty -- be sure the transmitter is
+			 * enabled */
 			chan->txdisable = 0;
 			if (chan->outwritebuf < 0)
 				ret |= DAHDI_IOMUX_WRITEEMPTY;
-		   }
-		  /* if looking for signalling event */
-		if (chan->iomask & DAHDI_IOMUX_SIGEVENT)
-		   {
-			  /* if event */
+		}
+		/* if looking for signalling event */
+		if (chan->iomask & DAHDI_IOMUX_SIGEVENT) {
+			/* if event */
 			if (chan->eventinidx != chan->eventoutidx)
 				ret |= DAHDI_IOMUX_SIGEVENT;
-		   }
+		}
 		spin_unlock_irqrestore(&chan->lock, flags);
-		  /* if something to return, or not to wait */
-		if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT))
-		   {
-			  /* set return value */
+
+		/* if something to return, or not to wait */
+		if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT)) {
+			/* set return value */
 			put_user(ret, (int __user *)data);
 			break; /* get out of loop */
-		   }
+		}
 
-		interruptible_sleep_on(&chan->eventbufq);
-		if (signal_pending(current))
-			return -ERESTARTSYS;
-	   }
-	  /* clear IO MUX mask */
+		if (!signal_pending(current)) {
+			schedule();
+			continue;
+		}
+
+		ret = -ERESTARTSYS;
+		break;
+	}
+
+	finish_wait(&chan->eventbufq, &wait);
 	chan->iomask = 0;
-	return 0;
+	return ret;
 }
 
 static int
