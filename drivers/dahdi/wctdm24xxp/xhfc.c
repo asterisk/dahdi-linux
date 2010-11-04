@@ -2576,8 +2576,8 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	}
 
 	spin_lock_init(&b4->reglock);
-	init_MUTEX(&b4->regsem);
-	init_MUTEX(&b4->fifosem);
+	sema_init(&b4->regsem, 1);
+	sema_init(&b4->fifosem, 1);
 
 	for (x = 0; x < 4; x++) {
 		fasthdlc_init(&b4->spans[x].rxhdlc, FASTHDLC_MODE_16);

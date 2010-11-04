@@ -3443,7 +3443,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -EIO;
 	}
 
-	init_MUTEX(&wc->chansem);
+	sema_init(&wc->chansem, 1);
 	spin_lock_init(&wc->reglock);
 	spin_lock_init(&wc->cmd_list_lock);
 	spin_lock_init(&wc->rx_list_lock);

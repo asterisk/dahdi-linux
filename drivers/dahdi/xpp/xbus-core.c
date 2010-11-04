@@ -1165,7 +1165,7 @@ static void worker_init(xbus_t *xbus)
 	INIT_LIST_HEAD(&worker->card_list);
 	init_waitqueue_head(&worker->wait_for_xpd_initialization);
 	worker->wq = NULL;
-	init_MUTEX(&xbus->worker.running_initialization);
+	sema_init(&xbus->worker.running_initialization, 1);
 }
 
 /*

@@ -1291,6 +1291,11 @@ wait_for_completion_timeout(struct completion *x, unsigned long timeout)
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED
 #endif
 
+#ifndef DEFINE_SEMAPHORE
+#define DEFINE_SEMAPHORE(name) \
+	struct semaphore name = __SEMAPHORE_INITIALIZER(name, 1)
+#endif
+
 #ifndef DMA_BIT_MASK
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
