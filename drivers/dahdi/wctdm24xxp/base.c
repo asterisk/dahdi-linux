@@ -296,19 +296,6 @@ static inline int CMD_BYTE(int card, int bit, int altcs)
 			+ ((card) >> 2) + (altcs) + ((altcs) ? -21 : 0));
 }
 
-/* sleep in user space until woken up. Equivilant of tsleep() in BSD */
-int schluffen(wait_queue_head_t *q)
-{
-	DECLARE_WAITQUEUE(wait, current);
-	add_wait_queue(q, &wait);
-	current->state = TASK_INTERRUPTIBLE;
-	if (!signal_pending(current)) schedule();
-	current->state = TASK_RUNNING;
-	remove_wait_queue(q, &wait);
-	if (signal_pending(current)) return -ERESTARTSYS;
-	return(0);
-}
-
 static inline int empty_slot(struct wctdm *wc, int card)
 {
 	int x;
@@ -1007,7 +994,6 @@ static inline int wctdm_setreg_full(struct wctdm *wc, int card, int addr, int va
 {
 	unsigned long flags;
 	int hit=0;
-	int ret;
 
 	/* QRV and BRI cards are only addressed at their first "port" */
 	if ((card & 0x03) && ((wc->modtype[card] ==  MOD_TYPE_QRV) ||
@@ -1024,8 +1010,9 @@ static inline int wctdm_setreg_full(struct wctdm *wc, int card, int addr, int va
 		if (inisr)
 			break;
 		if (hit < 0) {
-			if ((ret = schluffen(&wc->regq)))
-				return ret;
+			interruptible_sleep_on(&wc->regq);
+			if (signal_pending(current))
+				return -ERESTARTSYS;
 		}
 	} while (hit < 0);
 	return (hit > -1) ? 0 : -1;
@@ -1059,8 +1046,9 @@ inline int wctdm_getreg(struct wctdm *wc, int card, int addr)
 		}
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		if (hit < 0) {
-			if ((ret = schluffen(&wc->regq)))
-				return ret;
+			interruptible_sleep_on(&wc->regq);
+			if (signal_pending(current))
+				return -ERESTARTSYS;
 		}
 	} while (hit < 0);
 	do {
@@ -1072,8 +1060,9 @@ inline int wctdm_getreg(struct wctdm *wc, int card, int addr)
 		}
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		if (hit > -1) {
-			if ((ret = schluffen(&wc->regq)))
-				return ret;
+			interruptible_sleep_on(&wc->regq);
+			if (signal_pending(current))
+				return -ERESTARTSYS;
 		}
 	} while (hit > -1);
 	return ret;
@@ -4004,7 +3993,7 @@ static int wctdm_vpm_init(struct wctdm *wc)
 		}
 
 		for (i=0;i<30;i++) 
-			schluffen(&wc->regq);
+			interruptible_sleep_on(&wc->regq);
 
 		/* Put in bypass mode */
 		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
@@ -4240,7 +4229,7 @@ static int wctdm_identify_modules(struct wctdm *wc)
 
 /* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI commands in the appropriate mode(s). */
 	for (x = 0; x < 10; x++)
-		schluffen(&wc->regq);
+		interruptible_sleep_on(&wc->regq);
 
 /* Now that all the cards have been reset, we can stop checking them all if there aren't as many */
 	spin_lock_irqsave(&wc->reglock, flags);
@@ -4306,8 +4295,8 @@ retry:
 					wc->modtype[x] = MOD_TYPE_FXSINIT;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
-					schluffen(&wc->regq);
-					schluffen(&wc->regq);
+					interruptible_sleep_on(&wc->regq);
+					interruptible_sleep_on(&wc->regq);
 
 					spin_lock_irqsave(&wc->reglock, flags);
 					wc->modtype[x] = MOD_TYPE_FXS;

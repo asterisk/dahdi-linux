@@ -2641,7 +2641,7 @@ int wctdm_init_b400m(struct wctdm *wc, int card)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		for (i = 0; i < 10; i++)
-			schluffen(&wc->regq);
+			interruptible_sleep_on(&wc->regq);
 
 		if (b400m_probe(wc, card) != 0) {
 			spin_lock_irqsave(&wc->reglock, flags);

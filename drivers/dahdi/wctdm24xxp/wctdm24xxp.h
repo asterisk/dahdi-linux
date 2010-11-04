@@ -204,7 +204,7 @@ struct wctdm {
 	signed short txgain[NUM_MODULES];
 
 	spinlock_t reglock;			/* held when accessing anything affecting the module array */
-	wait_queue_head_t regq;			/* for schluffen() */
+	wait_queue_head_t regq;
 
 	union {
 		struct fxo {
@@ -286,7 +286,6 @@ struct wctdm {
 /* Atomic flag bits for checkflag field */
 #define WCTDM_CHECK_TIMING	0
 
-int schluffen(wait_queue_head_t *q);
 void wait_just_a_bit(int foo);
 int wctdm_getreg(struct wctdm *wc, int card, int addr);
 int wctdm_setreg(struct wctdm *wc, int card, int addr, int val);
