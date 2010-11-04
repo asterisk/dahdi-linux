@@ -4938,6 +4938,72 @@ static int dahdi_ioctl_getconf(struct file *file, unsigned long data)
 	return 0;
 }
 
+/**
+ * dahdi_ioctl_iomux() - Wait for *something* to happen.
+ *
+ */
+static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
+{
+	struct dahdi_chan *const chan = chan_from_file(file);
+	unsigned long flags;
+	int ret;
+
+	if (!chan)
+		return -EINVAL;
+
+	get_user(chan->iomask, (int __user *)data);  /* save mask */
+	if (!chan->iomask)return(-EINVAL);  /* cant wait for nothing */
+	for(;;)  /* loop forever */
+	   {
+		  /* has to have SOME mask */
+		ret = 0;  /* start with empty return value */
+		spin_lock_irqsave(&chan->lock, flags);
+		  /* if looking for read */
+		if (chan->iomask & DAHDI_IOMUX_READ)
+		   {
+			/* if read available */
+			if ((chan->outreadbuf > -1)  && !chan->rxdisable)
+				ret |= DAHDI_IOMUX_READ;
+		   }
+		  /* if looking for write avail */
+		if (chan->iomask & DAHDI_IOMUX_WRITE)
+		   {
+			if (chan->inwritebuf > -1)
+				ret |= DAHDI_IOMUX_WRITE;
+		   }
+		  /* if looking for write empty */
+		if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY)
+		   {
+			  /* if everything empty -- be sure the transmitter is enabled */
+			chan->txdisable = 0;
+			if (chan->outwritebuf < 0)
+				ret |= DAHDI_IOMUX_WRITEEMPTY;
+		   }
+		  /* if looking for signalling event */
+		if (chan->iomask & DAHDI_IOMUX_SIGEVENT)
+		   {
+			  /* if event */
+			if (chan->eventinidx != chan->eventoutidx)
+				ret |= DAHDI_IOMUX_SIGEVENT;
+		   }
+		spin_unlock_irqrestore(&chan->lock, flags);
+		  /* if something to return, or not to wait */
+		if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT))
+		   {
+			  /* set return value */
+			put_user(ret, (int __user *)data);
+			break; /* get out of loop */
+		   }
+
+		interruptible_sleep_on(&chan->eventbufq);
+		if (signal_pending(current))
+			return -ERESTARTSYS;
+	   }
+	  /* clear IO MUX mask */
+	chan->iomask = 0;
+	return 0;
+}
+
 static int
 dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 			  unsigned long data)
@@ -4949,7 +5015,6 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 	} stack;
 	unsigned long flags;
 	int i, j, rv;
-	int ret;
 	void __user * const user_data = (void __user *)data;
 
 	if (!chan)
@@ -5066,57 +5131,8 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		   }
 		break;
 	case DAHDI_IOMUX: /* wait for something to happen */
-		get_user(chan->iomask, (int __user *)data);  /* save mask */
-		if (!chan->iomask) return(-EINVAL);  /* cant wait for nothing */
-		for(;;)  /* loop forever */
-		   {
-			  /* has to have SOME mask */
-			ret = 0;  /* start with empty return value */
-			spin_lock_irqsave(&chan->lock, flags);
-			  /* if looking for read */
-			if (chan->iomask & DAHDI_IOMUX_READ)
-			   {
-				/* if read available */
-				if ((chan->outreadbuf > -1)  && !chan->rxdisable)
-					ret |= DAHDI_IOMUX_READ;
-			   }
-			  /* if looking for write avail */
-			if (chan->iomask & DAHDI_IOMUX_WRITE)
-			   {
-				if (chan->inwritebuf > -1)
-					ret |= DAHDI_IOMUX_WRITE;
-			   }
-			  /* if looking for write empty */
-			if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY)
-			   {
-				  /* if everything empty -- be sure the transmitter is enabled */
-				chan->txdisable = 0;
-				if (chan->outwritebuf < 0)
-					ret |= DAHDI_IOMUX_WRITEEMPTY;
-			   }
-			  /* if looking for signalling event */
-			if (chan->iomask & DAHDI_IOMUX_SIGEVENT)
-			   {
-				  /* if event */
-				if (chan->eventinidx != chan->eventoutidx)
-					ret |= DAHDI_IOMUX_SIGEVENT;
-			   }
-			spin_unlock_irqrestore(&chan->lock, flags);
-			  /* if something to return, or not to wait */
-			if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT))
-			   {
-				  /* set return value */
-				put_user(ret, (int __user *)data);
-				break; /* get out of loop */
-			   }
+		return dahdi_ioctl_iomux(file, data);
 
-			interruptible_sleep_on(&chan->eventbufq);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
-		   }
-		  /* clear IO MUX mask */
-		chan->iomask = 0;
-		break;
 	case DAHDI_GETEVENT:  /* Get event on queue */
 		  /* set up for no event */
 		j = DAHDI_EVENT_NONE;
