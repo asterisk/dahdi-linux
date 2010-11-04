@@ -24,6 +24,7 @@
 #include <linux/pci.h>
 #include <linux/ppp_defs.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 
 #define FAST_HDLC_NEED_TABLES
 #include <dahdi/kernel.h>
@@ -785,7 +786,7 @@ static void hfc_reset(struct b400m *b4)
 	b400m_setreg(b4, R_CIRM, V_SRES);
 	flush_hw();
 
-	wait_just_a_bit(HZ/10);
+	msleep(100);
 
 	b400m_setreg(b4, R_CIRM, 0x00);
 	flush_hw();
@@ -2711,7 +2712,7 @@ void wctdm_unload_b400m(struct wctdm *wc, int card)
 	if (b4) {
 		b4->inited = 0;
 
-		wait_just_a_bit(HZ/10);
+		msleep(100);
 
 		/* TODO: wait for tdm24xx driver to unregister the spans */
 		/* 	do { ... } while(not_unregistered); */

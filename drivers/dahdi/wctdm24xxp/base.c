@@ -2476,14 +2476,6 @@ static int wctdm_proslic_calibrate(struct wctdm *wc, int card)
 	return 0;
 }
 
-void wait_just_a_bit(int foo)
-{
-	long newjiffies;
-	newjiffies = jiffies + foo;
-	while (jiffies < newjiffies)
-		;
-}
-
 /*********************************************************************
  * Set the hwgain on the analog modules
  *
@@ -2619,22 +2611,19 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	spin_lock_irqsave(&wc->reglock, flags);
 	wc->modtype[card] = MOD_TYPE_NONE;
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	/* Wait just a bit */
-	wait_just_a_bit(HZ/10);
+	msleep(100);
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	wc->modtype[card] = MOD_TYPE_FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	wait_just_a_bit(HZ/10);
+	msleep(100);
 
 	if (!sane && wctdm_voicedaa_insane(wc, card))
 		return -2;
 
 	/* Software reset */
 	wctdm_setreg(wc, card, 1, 0x80);
-
-	/* Wait just a bit */
-	wait_just_a_bit(HZ/10);
+	msleep(100);
 
 	/* Set On-hook speed, Ringer impedence, and ringer threshold */
 	reg16 |= (fxo_modes[_opermode].ohs << 6);
@@ -2671,7 +2660,7 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	newjiffies = jiffies;
 	newjiffies += 2 * HZ;
 	while ((jiffies < newjiffies) && !(wctdm_getreg(wc, card, 11) & 0xf0))
-		wait_just_a_bit(HZ/10);
+		msleep(100);
 
 	if (!(wctdm_getreg(wc, card, 11) & 0xf0)) {
 		dev_notice(&wc->vb.pdev->dev, "VoiceDAA did not bring up ISO link properly!\n");
@@ -2730,7 +2719,7 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	wc->modtype[card] = MOD_TYPE_FXS;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	wait_just_a_bit(HZ/10);
+	msleep(100);
 
 	/* Sanity check the ProSLIC */
 	if (!sane && wctdm_proslic_insane(wc, card))

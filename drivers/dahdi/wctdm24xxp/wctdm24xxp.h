@@ -285,7 +285,6 @@ struct wctdm {
 /* Atomic flag bits for checkflag field */
 #define WCTDM_CHECK_TIMING	0
 
-void wait_just_a_bit(int foo);
 int wctdm_getreg(struct wctdm *wc, int card, int addr);
 int wctdm_setreg(struct wctdm *wc, int card, int addr, int val);
 
