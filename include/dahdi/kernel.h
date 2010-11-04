@@ -1060,7 +1060,7 @@ int dahdi_transcoder_alert(struct dahdi_transcoder_channel *ztc);
 int dahdi_unregister(struct dahdi_span *span);
 
 /*! \brief Gives a name to an LBO */
-char *dahdi_lboname(int lbo);
+const char *dahdi_lboname(int lbo);
 
 /*! \brief Tell DAHDI about changes in received rbs bits */
 void dahdi_rbsbits(struct dahdi_chan *chan, int bits);

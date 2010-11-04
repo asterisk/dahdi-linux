@@ -96,18 +96,6 @@
 /* macro-oni for determining a unit (channel) number */
 #define	UNIT(file) MINOR(file->f_dentry->d_inode->i_rdev)
 
-/* names of tx level settings */
-static char *dahdi_txlevelnames[] = {
-"0 db (CSU)/0-133 feet (DSX-1)",
-"133-266 feet (DSX-1)",
-"266-399 feet (DSX-1)",
-"399-533 feet (DSX-1)",
-"533-655 feet (DSX-1)",
-"-7.5db (CSU)",
-"-15db (CSU)",
-"-22.5db (CSU)"
-} ;
-
 EXPORT_SYMBOL(dahdi_transcode_fops);
 EXPORT_SYMBOL(dahdi_init_tone_state);
 EXPORT_SYMBOL(dahdi_mf_tone);
@@ -122,7 +110,6 @@ EXPORT_SYMBOL(__dahdi_lineartoalaw);
 EXPORT_SYMBOL(__dahdi_lin2mu);
 EXPORT_SYMBOL(__dahdi_lin2a);
 #endif
-EXPORT_SYMBOL(dahdi_lboname);
 EXPORT_SYMBOL(dahdi_transmit);
 EXPORT_SYMBOL(dahdi_receive);
 EXPORT_SYMBOL(dahdi_rbsbits);
@@ -1636,12 +1623,29 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 	return 0;
 }
 
-char *dahdi_lboname(int x)
+/**
+ * dahdi_lboname() - Convert line build out number to string.
+ *
+ */
+const char *dahdi_lboname(int lbo)
 {
-	if ((x < 0) || (x > 7))
+	/* names of tx level settings */
+	static const char *const dahdi_txlevelnames[] = {
+		"0 db (CSU)/0-133 feet (DSX-1)",
+		"133-266 feet (DSX-1)",
+		"266-399 feet (DSX-1)",
+		"399-533 feet (DSX-1)",
+		"533-655 feet (DSX-1)",
+		"-7.5db (CSU)",
+		"-15db (CSU)",
+		"-22.5db (CSU)"
+	};
+
+	if ((lbo < 0) || (lbo > 7))
 		return "Unknown";
-	return dahdi_txlevelnames[x];
+	return dahdi_txlevelnames[lbo];
 }
+EXPORT_SYMBOL(dahdi_lboname);
 
 #if defined(CONFIG_DAHDI_NET) || defined(CONFIG_DAHDI_PPP)
 static inline void print_debug_writebuf(struct dahdi_chan* ss, struct sk_buff *skb, int oldbuf)
