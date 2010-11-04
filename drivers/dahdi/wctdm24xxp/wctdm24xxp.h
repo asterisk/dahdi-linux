@@ -168,7 +168,6 @@ struct wctdm_chan {
 struct wctdm {
 	const struct wctdm_desc *desc;
 	char board_name[80];
-	int usecount;
 	int pos;				/* card number in system */
 
 	spinlock_t frame_list_lock;

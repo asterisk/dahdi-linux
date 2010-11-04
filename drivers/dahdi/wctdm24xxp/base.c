@@ -3482,8 +3482,6 @@ static int wctdm_open(struct dahdi_chan *chan)
 	if (wc->dead)
 		return -ENODEV;
 #endif
-	wc->usecount++;
-	
 	if (wc->modtype[channo] == MOD_TYPE_FXO) {
 		/* Reset the mwi indicators */
 		spin_lock_irqsave(&wc->reglock, flags);
