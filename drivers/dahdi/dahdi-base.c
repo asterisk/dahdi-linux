@@ -996,26 +996,6 @@ void dahdi_qevent_lock(struct dahdi_chan *chan, int event)
 	spin_unlock_irqrestore(&chan->lock, flags);
 }
 
-/* sleep in user space until woken up. Equivilant of tsleep() in BSD */
-static int schluffen(wait_queue_head_t *q)
-{
-	DECLARE_WAITQUEUE(wait, current);
-
-	add_wait_queue(q, &wait);
-	current->state = TASK_INTERRUPTIBLE;
-
-	if (!signal_pending(current))
-		schedule();
-
-	current->state = TASK_RUNNING;
-	remove_wait_queue(q, &wait);
-
-	if (signal_pending(current))
-		return -ERESTARTSYS;
-
-	return 0;
-}
-
 static inline void calc_fcs(struct dahdi_chan *ss, int inwritebuf)
 {
 	int x;
@@ -2094,7 +2074,8 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 			break;
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
-		rv = schluffen(&chan->readbufq);
+		rv = wait_event_interruptible(chan->readbufq,
+				(chan->outreadbuf > -1));
 		if (rv)
 			return rv;
 	}
@@ -2221,10 +2202,10 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 			return -EAGAIN;
 		}
 		/* Wait for something to be available */
-		rv = schluffen(&chan->writebufq);
-		if (rv) {
+		rv = wait_event_interruptible(chan->writebufq,
+					      (chan->inwritebuf >= 0));
+		if (rv)
 			return rv;
-		}
 	}
 
 	amnt = count;
@@ -4656,9 +4637,9 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			spin_unlock_irqrestore(&s->lock, flags);
 			if (rv)
 				return rv;
-			rv = schluffen(&s->maintq);
-			if (rv)
-				return rv;
+			interruptible_sleep_on(&s->maintq);
+			if (signal_pending(current))
+				return -ERESTARTSYS;
 			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
@@ -5076,9 +5057,12 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 			  /* Know if there is a write pending */
 			i = (chan->outwritebuf > -1);
 			spin_unlock_irqrestore(&chan->lock, flags);
-			if (!i) break; /* skip if none */
-			rv = schluffen(&chan->writebufq);
-			if (rv) return(rv);
+			if (!i)
+				break; /* skip if none */
+			rv = wait_event_interruptible(chan->writebufq,
+						      (chan->outwritebuf > -1));
+			if (rv)
+				return rv;
 		   }
 		break;
 	case DAHDI_IOMUX: /* wait for something to happen */
@@ -5125,8 +5109,10 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 				put_user(ret, (int __user *)data);
 				break; /* get out of loop */
 			   }
-			rv = schluffen(&chan->eventbufq);
-			if (rv) return(rv);
+
+			interruptible_sleep_on(&chan->eventbufq);
+			if (signal_pending(current))
+				return -ERESTARTSYS;
 		   }
 		  /* clear IO MUX mask */
 		chan->iomask = 0;
@@ -5460,7 +5446,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 {
 	struct dahdi_chan *const chan = chan_from_file(file);
 	unsigned long flags;
-	int j, rv;
+	int j;
 	int ret;
 	int oldconf;
 	const void *rxgain = NULL;
@@ -5787,8 +5773,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				rv = schluffen(&chan->txstateq);
-				if (rv) return rv;
+				interruptible_sleep_on(&chan->txstateq);
+				if (signal_pending(current))
+					return -ERESTARTSYS;
 				break;
 			case DAHDI_FLASH:
 				spin_lock_irqsave(&chan->lock, flags);
@@ -5800,8 +5787,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				rv = schluffen(&chan->txstateq);
-				if (rv) return rv;
+				interruptible_sleep_on(&chan->txstateq);
+				if (signal_pending(current))
+					return -ERESTARTSYS;
 				break;
 			case DAHDI_RINGOFF:
 				spin_lock_irqsave(&chan->lock, flags);
