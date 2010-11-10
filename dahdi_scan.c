@@ -196,7 +196,8 @@ int main(int argc, char *argv[])
 			if (s.lineconfig & DAHDI_CONFIG_ESF) fprintf(stdout, "ESF");
 			else if (s.lineconfig & DAHDI_CONFIG_D4) fprintf(stdout, "D4");
 			else if (s.lineconfig & DAHDI_CONFIG_CCS) fprintf(stdout, "CCS");
-			else if (s.lineconfig & DAHDI_CONFIG_CRC4) fprintf(stdout, "/CRC4");
+			else fprintf(stdout, "CAS");
+			if (s.lineconfig & DAHDI_CONFIG_CRC4) fprintf(stdout, "/CRC4");
 			fprintf(stdout, "\n");
 		} else {
 			/* this is an analog span */
