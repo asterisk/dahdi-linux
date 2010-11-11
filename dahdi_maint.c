@@ -142,13 +142,11 @@ int main(int argc, char *argv[])
 			printf("Error counters not supported by the driver"\
 					" for this span\n");
 		printf("Span %d:\n", span);
-		printf(">FEC : %d:\n", s.fecount);
-		printf(">CEC : %d:\n", s.crc4count);
-		printf(">CVC : %d:\n", s.cvcount);
-		printf(">EBC : %d:\n", s.ebitcount);
-		printf(">BEC : %d:\n", s.becount);
-		printf(">PRBS: %d:\n", s.prbs);
-		printf(">GES : %d:\n", s.errsec);
+		printf(">Framing Errors : %d:\n", s.fecount);
+		printf(">CRC Errors : %d:\n", s.crc4count);
+		printf(">Code Violations : %d:\n", s.cvcount);
+		printf(">E-bit Count : %d:\n", s.ebitcount);
+		printf(">General Errored Seconds : %d:\n", s.errsec);
 
 		return 0;
 	}
