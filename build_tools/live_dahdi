@@ -4,6 +4,7 @@ LINUX_DIR=${LINUX_DIR:=.}
 TOOLS_DIR=${TOOLS_DIR:=../dahdi-tools}
 DYNAMIC_LOC="${DYNAMIC_LOC:-no}"
 DESTDIR=$PWD/live
+LIVE_DAHDI_RSYNC_DIR=${LIVE_DAHDI_RSYNC_DIR:-/tmp/dahdi}
 KVERS=${KVERS:-`uname -r`}
 XPP_SYNC=${XPP_SYNC:-auto}
 AST_SCRIPT=${AST_SCRIPT:-/etc/init.d/asterisk}
@@ -258,7 +259,7 @@ rsync)
 	fi
 	# copy the script itself and the installed directory to the
 	# target host:
-	rsync -ai "$0" $DESTDIR "$2:/tmp/"
+	rsync -ai "$0" $DESTDIR "$2:$LIVE_DAHDI_RSYNC_DIR"
 	;;
 unload)
 	# OK for Asterisk not to be running. TODO: a better test?
