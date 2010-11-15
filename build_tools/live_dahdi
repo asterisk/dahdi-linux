@@ -29,13 +29,16 @@ if [ ! -d "$LINUX_DIR" ]; then
 	exit 1
 fi
 
-if [ ! -d "$TOOLS_DIR" ]; then
-	echo >&2 "$0:dahdi-tools dir '$TOOLS_DIR' does not exits.  Aborting".
-	exit 1
-fi
 set -e
 LINUX_DIR_FULL=`(cd $LINUX_DIR; pwd)`
-TOOLS_DIR_FULL=`(cd $TOOLS_DIR; pwd)`
+
+set_tools_dir() {
+	if [ ! -d "$TOOLS_DIR" ]; then
+		echo >&2 "$0:dahdi-tools dir '$TOOLS_DIR' does not exits.  Aborting".
+		exit 1
+	fi
+	TOOLS_DIR_FULL=`(cd $TOOLS_DIR; pwd)`
+}
 
 # Give priority to our installed binaries:
 PATH=$DESTDIR/sbin:$DESTDIR/usr/sbin:$PATH
@@ -227,15 +230,18 @@ usage() {
 case "$1" in
 configure)
 	shift
+	set_tools_dir
 	cd "$TOOLS_DIR"; ./configure --with-dahdi="$LINUX_DIR_FULL" "$@"
 	;;
 install)
 	shift
+	set_tools_dir
 	cd "$LINUX_DIR"; make install DESTDIR=$DESTDIR "$@"
 	cd "$TOOLS_DIR_FULL"; make install DESTDIR=$DESTDIR DYNFS=yes "$@"
 	;;
 config)
 	shift
+	set_tools_dir
 	cd "$TOOLS_DIR"; make config DESTDIR=$DESTDIR "$@"
 	mkdir -p $DESTDIR/etc/asterisk
 	cat >"$FIRMWARE_DIR/live-init.conf" <<EOF
