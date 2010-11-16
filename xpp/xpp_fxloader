@@ -349,6 +349,9 @@ udev_delayed_load() {
 		run_fxload -D "$DEVICE" -I "$FIRM_USB"
 		;;
 	e4e4/11[3456]1/*)
+		# There are potentially two separate udev events, for
+		# each of the two endpoints. Ignore the first interface:
+		case "$DEVPATH" in *.0) exit 0;; esac
 		if [ "$prod_id" = 1131 ]; then
 			FIRM_FPGA="FPGA_FXS.hex"	# Legacy
 		else
