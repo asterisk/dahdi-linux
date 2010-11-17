@@ -77,7 +77,6 @@ sub gen_t1_cas($$) {
 			my $idle_bits = $gconfig->{'r2_idle_bits'};
 			$chan_range = Dahdi::Config::Gen::bchan_range($span);
 			printf "cas=%s:$idle_bits\n", $chan_range;
-			printf "dchan=%d\n", $span->dchan()->num();
 		} elsif ($pri_connection_type eq 'CAS' ) {
 			my $type = ($termtype eq 'TE') ? 'FXO' : 'FXS';
 			my $sig = $gconfig->{'dahdi_signalling'}{$type};
