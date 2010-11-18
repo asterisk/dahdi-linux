@@ -179,6 +179,8 @@ static struct class_simple *dahdi_class = NULL;
 static int deftaps = 64;
 
 static int debug;
+#define DEBUG_MAIN	(1 << 0)
+#define DEBUG_RBS	(1 << 5)
 
 /*!
  * \brief states for transmit signalling
@@ -3465,7 +3467,7 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 		for (x=1; x<maxspans; x++) {
 			struct dahdi_span *const s = spans[x];
 			if (s && !s->alarms && (s->flags & DAHDI_FLAG_RUNNING)) {
-				if (debug && (master != s)) {
+				if ((debug & DEBUG_MAIN) && (master != s)) {
 					module_printk(KERN_NOTICE,
 						"Master changed to %s\n",
 						s->name);
@@ -3475,7 +3477,7 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 			}
 		}
 		/* Report more detailed alarms */
-		if (debug) {
+		if (debug & DEBUG_MAIN) {
 			if (span->alarms & DAHDI_ALARM_LOS) {
 				module_printk(KERN_NOTICE,
 					"Span %d: Loss of signal\n",
@@ -6057,14 +6059,14 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 		}
 	}
 
-	if (debug) {
+	if (debug & DEBUG_MAIN) {
 		module_printk(KERN_NOTICE, "Registered Span %d ('%s') with "
 				"%d channels\n", span->spanno, span->name, span->channels);
 	}
 
 	if (!master || prefmaster) {
 		master = span;
-		if (debug) {
+		if (debug & DEBUG_MAIN) {
 			module_printk(KERN_NOTICE, "Span ('%s') is new master\n", 
 					span->name);
 		}
@@ -6108,7 +6110,7 @@ int dahdi_unregister(struct dahdi_span *span)
 		module_printk(KERN_ERR, "Span %s has spanno %d which is something else\n", span->name, span->spanno);
 		return -1;
 	}
-	if (debug)
+	if (debug & DEBUG_MAIN)
 		module_printk(KERN_NOTICE, "Unregistering Span '%s' with %d channels\n", span->name, span->channels);
 #ifdef CONFIG_PROC_FS
 	snprintf(tempfile, sizeof(tempfile)-1, "dahdi/%d", span->spanno);
@@ -6138,7 +6140,7 @@ int dahdi_unregister(struct dahdi_span *span)
 	}
 	maxspans = new_maxspans;
 	if (master != new_master)
-		if (debug)
+		if (debug & DEBUG_MAIN)
 			module_printk(KERN_NOTICE, "%s: Span ('%s') is new master\n", __FUNCTION__,
 				      (new_master)? new_master->name: "no master");
 	master = new_master;
@@ -7132,6 +7134,10 @@ void dahdi_rbsbits(struct dahdi_chan *chan, int cursig)
 	/* Keep track of signalling for next time */
 	chan->rxsig = cursig;
 	spin_unlock_irqrestore(&chan->lock, flags);
+
+	if ((debug & DEBUG_RBS) && printk_ratelimit()) {
+		chan_notice(chan, "Detected sigbits change to %04x\n", cursig);
+	}
 }
 
 static void process_echocan_events(struct dahdi_chan *chan)
@@ -8633,6 +8639,9 @@ MODULE_ALIAS("dahdi_dummy");
 MODULE_VERSION(DAHDI_VERSION);
 
 module_param(debug, int, 0644);
+MODULE_PARM_DESC(debug, "Sets debugging verbosity as a bitfield, to see"\
+		" general debugging set this to 1. To see RBS debugging set"\
+		" this to 32");
 module_param(deftaps, int, 0644);
 
 static const struct file_operations dahdi_fops = {
