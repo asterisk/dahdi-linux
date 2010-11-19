@@ -8469,6 +8469,28 @@ int dahdi_transmit(struct dahdi_span *span)
 	return 0;
 }
 
+static inline void __pseudo_rx_audio(struct dahdi_chan *chan)
+{
+	unsigned char tmp[DAHDI_CHUNKSIZE];
+	spin_lock(&chan->lock);
+	__dahdi_getempty(chan, tmp);
+	__dahdi_receive_chunk(chan, tmp);
+	spin_unlock(&chan->lock);
+}
+
+#ifdef CONFIG_DAHDI_MIRROR
+static inline void pseudo_rx_audio(struct dahdi_chan *chan)
+{
+	if (!chan->srcmirror)
+		__pseudo_rx_audio(chan);
+}
+#else
+static inline void pseudo_rx_audio(struct dahdi_chan *chan)
+{
+	__pseudo_rx_audio(chan);
+}
+#endif /* CONFIG_DAHDI_MIRROR */
+
 static void process_masterspan(void)
 {
 	unsigned long flags;
@@ -8526,19 +8548,7 @@ static void process_masterspan(void)
 
 	/* do all the pseudo/conferenced channel transmits (putbuf's) */
 	list_for_each_entry(pseudo, &pseudo_chans, node) {
-		unsigned char tmp[DAHDI_CHUNKSIZE];
-		spin_lock(&pseudo->chan.lock);
-#ifdef CONFIG_DAHDI_MIRROR
-		// if this is a mirroring don't generate garbage
-		if(!pseudo->chan.srcmirror)
-		{
-#endif /* CONFIG_DAHDI_MIRROR */
-			__dahdi_getempty(&pseudo->chan, tmp);
-			__dahdi_receive_chunk(&pseudo->chan, tmp);
-#ifdef CONFIG_DAHDI_MIRROR
-		}
-#endif /* CONFIG_DAHDI_MIRROR */
-		spin_unlock(&pseudo->chan.lock);
+		pseudo_rx_audio(&pseudo->chan);
 	}
 
 	for (y = 1; y < maxspans; ++y) {
