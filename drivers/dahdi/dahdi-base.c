@@ -6091,7 +6091,7 @@ int dahdi_unregister(struct dahdi_span *span)
 {
 	int x;
 	int new_maxspans;
-	static struct dahdi_span *new_master;
+	struct dahdi_span *new_master;
 
 #ifdef CONFIG_PROC_FS
 	char tempfile[17];
