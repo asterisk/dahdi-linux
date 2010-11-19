@@ -444,9 +444,11 @@ struct dahdi_chan {
 	struct file *file;	/*!< File structure */
 	
 	
+#ifdef CONFIG_DAHDI_MIRROR
 	struct dahdi_chan	*rxmirror;  /*!< channel we mirror reads to */
 	struct dahdi_chan	*txmirror;  /*!< channel we mirror writes to */
 	struct dahdi_chan	*srcmirror; /*!< channel we mirror from */
+#endif /* CONFIG_DAHDI_MIRROR */
 	struct dahdi_span	*span;			/*!< Span we're a member of */
 	int		sig;			/*!< Signalling */
 	int		sigcap;			/*!< Capability for signalling */

@@ -2801,6 +2801,7 @@ static int dahdi_specchan_release(struct file *file)
 	if (chan) {
 		/* Chan lock protects contents against potentially non atomic accesses.
 		 * So if the pointer setting is not atomic, we should protect */
+#ifdef CONFIG_DAHDI_MIRROR
 		if (chan->srcmirror) {
 			struct dahdi_chan *const srcmirror = chan->srcmirror;
 			spin_lock_irqsave(&srcmirror->lock, flags);
@@ -2821,11 +2822,14 @@ static int dahdi_specchan_release(struct file *file)
 			}
 			spin_unlock_irqrestore(&chan->srcmirror->lock, flags);
 		}
+#endif /* CONFIG_DAHDI_MIRROR */
 
 		spin_lock_irqsave(&chan->lock, flags);
 		chan->file = NULL;
 		file->private_data = NULL;
+#ifdef CONFIG_DAHDI_MIRROR
 		chan->srcmirror = NULL;
+#endif /* CONFIG_DAHDI_MIRROR */
 
 		spin_unlock_irqrestore(&chan->lock, flags);
 		close_channel(chan);
@@ -5042,6 +5046,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 	return ret;
 }
 
+#ifdef CONFIG_DAHDI_MIRROR
 static int dahdi_ioctl_rxmirror(struct file *file, unsigned long data)
 {
 	int res;
@@ -5128,6 +5133,7 @@ static int dahdi_ioctl_txmirror(struct file *file, unsigned long data)
 
 	return 0;
 }
+#endif /* CONFIG_DAHDI_MIRROR */
 
 static int
 dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
@@ -5145,11 +5151,13 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 	if (!chan)
 		return -EINVAL;
 	switch(cmd) {
+#ifdef CONFIG_DAHDI_MIRROR
 	case DAHDI_RXMIRROR:
 		return dahdi_ioctl_rxmirror(file, data);
 
 	case DAHDI_TXMIRROR:
 		return dahdi_ioctl_txmirror(file, data);
+#endif /* CONFIG_DAHDI_MIRROR */
 
 	case DAHDI_DIALING:
 		spin_lock_irqsave(&chan->lock, flags);
@@ -6668,7 +6676,9 @@ static inline void __dahdi_getbuf_chunk(struct dahdi_chan *ss, unsigned char *tx
 {
 
 
+#ifdef CONFIG_DAHDI_MIRROR
 	unsigned char *orig_txb = txb;
+#endif /* CONFIG_DAHDI_MIRROR */
 
 	/* Called with ss->lock held */
 	/* We transmit data from our master channel */
@@ -6832,11 +6842,13 @@ out in the later versions, and is put back now. */
 		}
 	}
 
+#ifdef CONFIG_DAHDI_MIRROR
 	if (ss->txmirror) {
 		spin_lock(&ss->txmirror->lock);
 		__putbuf_chunk(ss->txmirror, orig_txb, DAHDI_CHUNKSIZE);
 		spin_unlock(&ss->txmirror->lock);
 	}
+#endif /* CONFIG_DAHDI_MIRROR */
 }
 
 static inline void rbs_itimer_expire(struct dahdi_chan *chan)
@@ -8012,11 +8024,13 @@ static inline void __dahdi_putbuf_chunk(struct dahdi_chan *ss, unsigned char *rx
 {
 	__putbuf_chunk(ss, rxb, DAHDI_CHUNKSIZE);
 
+#ifdef CONFIG_DAHDI_MIRROR
 	if (ss->rxmirror) {
 		spin_lock(&ss->rxmirror->lock);
 		__putbuf_chunk(ss->rxmirror, rxb, DAHDI_CHUNKSIZE);
 		spin_unlock(&ss->rxmirror->lock);
 	}
+#endif /* CONFIG_DAHDI_MIRROR */
 }
 
 static void __dahdi_hdlc_abort(struct dahdi_chan *ss, int event)

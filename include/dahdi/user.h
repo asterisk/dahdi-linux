@@ -37,6 +37,7 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
+#include <dahdi/dahdi_config.h>
 
 #ifndef ELAST
 #define ELAST 500
@@ -1079,8 +1080,10 @@ struct dahdi_vmwi_info {
 /*
  * Defines which channel to receive mirrored traffic from
  */
+#ifdef CONFIG_DAHDI_MIRROR
 #define DAHDI_RXMIRROR			_IOW(DAHDI_CODE, 103, int)
 #define DAHDI_TXMIRROR			_IOW(DAHDI_CODE, 104, int)
+#endif /* CONFIG_DAHDI_MIRROR */
 
 /* Get current status IOCTL */
 /* Defines for Radio Status (dahdi_radio_stat.radstat) bits */
