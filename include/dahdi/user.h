@@ -1076,6 +1076,12 @@ struct dahdi_vmwi_info {
 
 #define DAHDI_ECHOCANCEL_FAX_MODE	_IOW(DAHDI_CODE, 102, int)
 
+/*
+ * Defines which channel to receive mirrored traffic from
+ */
+#define DAHDI_RXMIRROR			_IOW(DAHDI_CODE, 103, int)
+#define DAHDI_TXMIRROR			_IOW(DAHDI_CODE, 104, int)
+
 /* Get current status IOCTL */
 /* Defines for Radio Status (dahdi_radio_stat.radstat) bits */
 
