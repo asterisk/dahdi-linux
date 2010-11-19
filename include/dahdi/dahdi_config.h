@@ -187,6 +187,6 @@
 /*
  * Creates an interface for mirroring the raw channel data out to a pseudo-chan
  */
-/*#define CONFIG_DAHDI_MIRROR*/
+/* #define CONFIG_DAHDI_MIRROR */
 
 #endif

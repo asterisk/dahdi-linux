@@ -8528,8 +8528,16 @@ static void process_masterspan(void)
 	list_for_each_entry(pseudo, &pseudo_chans, node) {
 		unsigned char tmp[DAHDI_CHUNKSIZE];
 		spin_lock(&pseudo->chan.lock);
-		__dahdi_getempty(&pseudo->chan, tmp);
-		__dahdi_receive_chunk(&pseudo->chan, tmp);
+#ifdef CONFIG_DAHDI_MIRROR
+		// if this is a mirroring don't generate garbage
+		if(!pseudo->chan.srcmirror)
+		{
+#endif /* CONFIG_DAHDI_MIRROR */
+			__dahdi_getempty(&pseudo->chan, tmp);
+			__dahdi_receive_chunk(&pseudo->chan, tmp);
+#ifdef CONFIG_DAHDI_MIRROR
+		}
+#endif /* CONFIG_DAHDI_MIRROR */
 		spin_unlock(&pseudo->chan.lock);
 	}
 
