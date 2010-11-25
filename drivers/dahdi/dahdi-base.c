@@ -5029,6 +5029,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT)) {
 			/* set return value */
 			put_user(ret, (int __user *)data);
+			ret = 0;
 			break; /* get out of loop */
 		}
 
