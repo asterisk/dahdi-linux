@@ -4981,70 +4981,62 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 {
 	struct dahdi_chan *const chan = chan_from_file(file);
 	unsigned long flags;
-	int ret;
+	unsigned int iomask;
 	DEFINE_WAIT(wait);
 
-	if (!chan)
-		return -EINVAL;
+	if (get_user(iomask, (int __user *)data))
+		return -EFAULT;
 
-	get_user(chan->iomask, (int __user *)data);
-	if (!chan->iomask)
+	if (unlikely(!iomask || !chan))
 		return -EINVAL;
 
 	while (1) {
+		unsigned int wait_result;
 
-		ret = 0;
+		wait_result = 0;
 		prepare_to_wait(&chan->eventbufq, &wait, TASK_INTERRUPTIBLE);
 
 		spin_lock_irqsave(&chan->lock, flags);
-		/* if looking for read */
-		if (chan->iomask & DAHDI_IOMUX_READ) {
-			/* if read available */
+		chan->iomask = iomask;
+		if (iomask & DAHDI_IOMUX_READ) {
 			if ((chan->outreadbuf > -1)  && !chan->rxdisable)
-				ret |= DAHDI_IOMUX_READ;
+				wait_result |= DAHDI_IOMUX_READ;
 		}
-
-		/* if looking for write avail */
-		if (chan->iomask & DAHDI_IOMUX_WRITE) {
+		if (iomask & DAHDI_IOMUX_WRITE) {
 			if (chan->inwritebuf > -1)
-				ret |= DAHDI_IOMUX_WRITE;
+				wait_result |= DAHDI_IOMUX_WRITE;
 		}
-		/* if looking for write empty */
-		if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY) {
+		if (iomask & DAHDI_IOMUX_WRITEEMPTY) {
 			/* if everything empty -- be sure the transmitter is
 			 * enabled */
 			chan->txdisable = 0;
 			if (chan->outwritebuf < 0)
-				ret |= DAHDI_IOMUX_WRITEEMPTY;
+				wait_result |= DAHDI_IOMUX_WRITEEMPTY;
 		}
-		/* if looking for signalling event */
-		if (chan->iomask & DAHDI_IOMUX_SIGEVENT) {
-			/* if event */
+		if (iomask & DAHDI_IOMUX_SIGEVENT) {
 			if (chan->eventinidx != chan->eventoutidx)
-				ret |= DAHDI_IOMUX_SIGEVENT;
+				wait_result |= DAHDI_IOMUX_SIGEVENT;
 		}
 		spin_unlock_irqrestore(&chan->lock, flags);
 
-		/* if something to return, or not to wait */
-		if (ret || (chan->iomask & DAHDI_IOMUX_NOWAIT)) {
-			/* set return value */
-			put_user(ret, (int __user *)data);
-			ret = 0;
-			break; /* get out of loop */
+		if (wait_result || (iomask & DAHDI_IOMUX_NOWAIT)) {
+			put_user(wait_result, (int __user *)data);
+			break;
 		}
 
-		if (!signal_pending(current)) {
-			schedule();
-			continue;
+		if (signal_pending(current)) {
+			finish_wait(&chan->eventbufq, &wait);
+			return -ERESTARTSYS;
 		}
 
-		ret = -ERESTARTSYS;
-		break;
+		schedule();
 	}
 
 	finish_wait(&chan->eventbufq, &wait);
+	spin_lock_irqsave(&chan->lock, flags);
 	chan->iomask = 0;
-	return ret;
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return 0;
 }
 
 #ifdef CONFIG_DAHDI_MIRROR

@@ -509,7 +509,7 @@ struct dahdi_chan {
 	int		cadencepos;				/*!< Where in the cadence we are */
 
 	/* I/O Mask */	
-	int		iomask;  /*! I/O Mux signal mask */
+	unsigned int iomask;  /*! I/O Mux signal mask */
 	wait_queue_head_t sel;	/*! thingy for select stuff */
 	
 	/* HDLC state machines */
