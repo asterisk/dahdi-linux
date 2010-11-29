@@ -270,6 +270,12 @@ install-utils-subdirs:
 		$(MAKE) -C $$dir install; \
 	done
 
+install-tests: tests
+ifneq (,$(TEST_BINS))
+	install -d $(DESTDIR)$(BIN_DIR)
+	install  $(TEST_BINS) $(DESTDIR)$(BIN_DIR)/
+endif
+
 config:
 ifneq (,$(COPY_INITD))
 	$(COPY_INITD)
