@@ -2627,7 +2627,7 @@ void b400m_post_init(struct b400m *b4)
 /* functions called from the wctdm code */
 int wctdm_init_b400m(struct wctdm *wc, int card)
 {
-	int i, ret = 0;
+	int ret = 0;
 	unsigned long flags;
 
 	if (wc->modtype[card & 0xfc] == MOD_TYPE_QRV)
@@ -2641,8 +2641,7 @@ int wctdm_init_b400m(struct wctdm *wc, int card)
 		wc->modtype[card + 3] = MOD_TYPE_BRI;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
-		for (i = 0; i < 10; i++)
-			interruptible_sleep_on(&wc->regq);
+		msleep(20);
 
 		if (b400m_probe(wc, card) != 0) {
 			spin_lock_irqsave(&wc->reglock, flags);

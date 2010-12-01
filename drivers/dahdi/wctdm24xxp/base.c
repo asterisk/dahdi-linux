@@ -3979,8 +3979,7 @@ static int wctdm_vpm_init(struct wctdm *wc)
 				wctdm_vpm_out(wc,x,i,0x00);
 		}
 
-		for (i=0;i<30;i++) 
-			interruptible_sleep_on(&wc->regq);
+		msleep(30);
 
 		/* Put in bypass mode */
 		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
@@ -4215,8 +4214,7 @@ static int wctdm_identify_modules(struct wctdm *wc)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 /* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI commands in the appropriate mode(s). */
-	for (x = 0; x < 10; x++)
-		interruptible_sleep_on(&wc->regq);
+	msleep(20);
 
 /* Now that all the cards have been reset, we can stop checking them all if there aren't as many */
 	spin_lock_irqsave(&wc->reglock, flags);
@@ -4271,6 +4269,7 @@ retry:
 					 "quad-span module\n", x + 1);
 			} else {
 				if ((wc->desc->ports != 24) && ((x & 0x3) == 1) && !wc->altcs[x]) {
+
 					spin_lock_irqsave(&wc->reglock, flags);
 					wc->altcs[x] = 2;
 
@@ -4282,8 +4281,7 @@ retry:
 					wc->modtype[x] = MOD_TYPE_FXSINIT;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
-					interruptible_sleep_on(&wc->regq);
-					interruptible_sleep_on(&wc->regq);
+					msleep(20);
 
 					spin_lock_irqsave(&wc->reglock, flags);
 					wc->modtype[x] = MOD_TYPE_FXS;
