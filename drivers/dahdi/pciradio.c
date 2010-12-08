@@ -1488,7 +1488,6 @@ static int pciradio_initialize(struct pciradio *rad)
 	rad->span.channels = rad->nchans;
 	rad->span.flags = DAHDI_FLAG_RBS;
 	rad->span.ops = &pciradio_span_ops;
-	init_waitqueue_head(&rad->span.maintq);
 
 	if (dahdi_register(&rad->span, 0)) {
 		printk(KERN_NOTICE "Unable to register span with DAHDI\n");

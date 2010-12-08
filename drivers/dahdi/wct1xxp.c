@@ -792,7 +792,6 @@ static int t1xxp_software_init(struct t1xxp *wc)
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
 		wc->span.spantype = "T1";
 	}
-	init_waitqueue_head(&wc->span.maintq);
 	for (x=0;x<wc->span.channels;x++) {
 		sprintf(wc->chans[x]->name, "WCT1/%d/%d", wc->num, x + 1);
 		wc->chans[x]->sigcap = DAHDI_SIG_EM | DAHDI_SIG_CLEAR | DAHDI_SIG_EM_E1 | 

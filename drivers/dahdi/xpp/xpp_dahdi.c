@@ -1113,7 +1113,6 @@ int dahdi_register_xpd(xpd_t *xpd)
 	span = &xpd->span;
 	snprintf(span->name, MAX_SPANNAME, "%s/%s", xbus->busname, xpd->xpdname);
 	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
-	init_waitqueue_head(&span->maintq);
 	span->channels = cn;
 	span->chans = xpd->chans;
 

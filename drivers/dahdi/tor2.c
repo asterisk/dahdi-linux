@@ -304,7 +304,6 @@ static void init_spans(struct tor2 *tor)
 
 		tor->tspans[x].tor = tor;
 		tor->tspans[x].span = x;
-		init_waitqueue_head(&s->maintq);
 		for (y = 0; y < s->channels; y++) {
 			struct dahdi_chan *mychans = tor->chans[x][y];
 			sprintf(mychans->name, "Tor2/%d/%d/%d", tor->num, x + 1, y + 1);

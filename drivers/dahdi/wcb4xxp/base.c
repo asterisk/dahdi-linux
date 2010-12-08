@@ -2415,7 +2415,6 @@ static void init_spans(struct b4xxp *b4)
 		bspan->sigactive = 0;
 
 		bspan->span.chans = bspan->chans;
-		init_waitqueue_head(&bspan->span.maintq);
 
 /* now initialize each channel in the span */
 		for (j=0; j < WCB4XXP_CHANNELS_PER_SPAN; j++) {

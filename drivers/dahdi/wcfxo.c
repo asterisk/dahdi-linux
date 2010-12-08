@@ -666,7 +666,6 @@ static int wcfxo_initialize(struct wcfxo *wc)
 #ifdef ENABLE_TASKLETS
 	tasklet_init(&wc->wcfxo_tlet, wcfxo_tasklet, (unsigned long)wc);
 #endif
-	init_waitqueue_head(&wc->span.maintq);
 
 	wc->chan->pvt = wc;
 	wc->span.ops = &wcfxo_span_ops;

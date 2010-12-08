@@ -2389,7 +2389,6 @@ static int wctdm_initialize(struct wctdm *wc)
 	wc->span.channels = NUM_CARDS;
 	wc->span.irq = wc->dev->irq;
 	wc->span.flags = DAHDI_FLAG_RBS;
-	init_waitqueue_head(&wc->span.maintq);
 	wc->span.ops = &wctdm_span_ops;
 
 	if (dahdi_register(&wc->span, 0)) {

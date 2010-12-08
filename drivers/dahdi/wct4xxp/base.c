@@ -2129,7 +2129,6 @@ static void init_spans(struct t4 *wc)
 		ts->span.offset = x;
 		ts->writechunk = (void *)(wc->writechunk + x * 32 * 2);
 		ts->readchunk = (void *)(wc->readchunk + x * 32 * 2);
-		init_waitqueue_head(&ts->span.maintq);
 
 		if (gen2) {
 			ts->span.ops = &t4_gen2_span_ops;

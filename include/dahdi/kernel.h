@@ -879,7 +879,6 @@ struct dahdi_span {
 	struct dahdi_count count;	/*!< Performance and Error counters */
 
 	int maintstat;			/*!< Maintenance state */
-	wait_queue_head_t maintq;	/*!< Maintenance queue */
 	int mainttimer;			/*!< Maintenance timer */
 
 	int irqmisses;			/*!< Interrupt misses */

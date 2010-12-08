@@ -3828,7 +3828,6 @@ static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chan
 		wc->chans[chanoffset + 2]->chan.sigcap = DAHDI_SIG_HARDHDLC;
 	}
 
-	init_waitqueue_head(&s->span.maintq);
 	wc->spans[spanno] = s;
 	return s;
 }

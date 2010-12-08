@@ -1592,7 +1592,6 @@ static int t1_software_init(struct t1 *wc)
 	}
 	wc->span.chans = wc->chans;
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
-	init_waitqueue_head(&wc->span.maintq);
 	for (x = 0; x < wc->span.channels; x++) {
 		sprintf(wc->chans[x]->name, "WCT1/%d/%d", num, x + 1);
 		t1_chan_set_sigcap(&wc->span, x);

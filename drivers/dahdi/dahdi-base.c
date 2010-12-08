@@ -4675,9 +4675,6 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			spin_unlock_irqrestore(&s->lock, flags);
 			if (rv)
 				return rv;
-			interruptible_sleep_on(&s->maintq);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
 			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
@@ -8461,7 +8458,6 @@ int dahdi_transmit(struct dahdi_span *span)
 			if (span->ops->maint)
 				span->ops->maint(span, DAHDI_MAINT_LOOPSTOP);
 			span->maintstat = 0;
-			wake_up_interruptible(&span->maintq);
 		}
 	}
 	return 0;
