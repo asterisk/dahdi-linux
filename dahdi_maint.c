@@ -56,7 +56,9 @@ void display_help(char *argv0, int exitcode)
 						"networkpayload|off>\n"\
 			"\t\tlocalhost - loop back towards host\n"\
 			"\t\tnetworkline - network line loopback\n"\
-			"\t\tnetworkpayload - network payload loopback\n");
+			"\t\tnetworkpayload - network payload loopback\n"\
+			"\t\tloopup - transmit loopup signal\n"\
+			"\t\tloopdown - transmit loopdown signal\n");
 	fprintf(stderr, "        -i, --insert <fas|multi|crc|cas|prbs|bipolar>"\
 			"\n\t\tinsert an error of a specific type\n");
 	fprintf(stderr, "        -r, --reset		"\
@@ -163,6 +165,12 @@ int main(int argc, char *argv[])
 		} else if (!strcasecmp(larg, "networkpayload")) {
 			printf("Span %d: network payload loopback ON\n", span);
 			m.command = DAHDI_MAINT_NETWORKPAYLOADLOOP;
+		} else if (!strcasecmp(larg, "loopup")) {
+			printf("Span %d: transmitting loopup signal\n", span);
+			m.command = DAHDI_MAINT_LOOPUP;
+		} else if (!strcasecmp(larg, "loopdown")) {
+			printf("Span %d: transmitting loopdown signal\n", span);
+			m.command = DAHDI_MAINT_LOOPDOWN;
 		} else if (!strcasecmp(larg, "off")) {
 			printf("Span %d: loopback OFF\n", span);
 			m.command = DAHDI_MAINT_NONE;
@@ -171,9 +179,21 @@ int main(int argc, char *argv[])
 		}
 
 		res = ioctl(ctl, DAHDI_MAINT, &m);
-		if (res)
+		if (res) {
 			printf("This type of looping not supported by the"\
 					" driver for this span\n");
+			return 1;
+		}
+
+		/* Leave the loopup/loopdown signal on the line for
+		 * five seconds according to AT&T TR 54016
+		 */
+		if ((m.command == DAHDI_MAINT_LOOPUP) ||
+		   (m.command == DAHDI_MAINT_LOOPDOWN)) {
+			sleep(5);
+			m.command = DAHDI_MAINT_NONE;
+			ioctl(ctl, DAHDI_MAINT, &m);
+		}
 	}
 
 	if (iflag) {
