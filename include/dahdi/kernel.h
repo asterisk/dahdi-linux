@@ -1271,12 +1271,13 @@ static inline void list_replace(struct list_head *old, struct list_head *new)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 11)
 #if !defined(HAVE_WAIT_FOR_COMPLETION_TIMEOUT)
 static inline unsigned long
-wait_for_completion_timeout(struct completion *x, unsigned long timeout)
+wait_for_completion_interruptible_timeout(struct completion *x,
+					  unsigned long timeout)
 {
 	/* There is a race condition here.  If x->done is reset to 0
 	 * before the call to wait_for_completion after this thread wakes.
 	 */
-	timeout = wait_event_timeout(x->wait, x->done, timeout);
+	timeout = wait_event_interruptible_timeout(x->wait, x->done, timeout);
 	if (timeout)
 		wait_for_completion(x);
 
