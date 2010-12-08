@@ -8455,8 +8455,6 @@ int dahdi_transmit(struct dahdi_span *span)
 		span->mainttimer -= DAHDI_CHUNKSIZE;
 		if (span->mainttimer <= 0) {
 			span->mainttimer = 0;
-			if (span->ops->maint)
-				span->ops->maint(span, DAHDI_MAINT_LOOPSTOP);
 			span->maintstat = 0;
 		}
 	}

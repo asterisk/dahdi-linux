@@ -999,9 +999,6 @@ int xpp_maint(struct dahdi_span *span, int cmd)
 		case DAHDI_MAINT_LOOPDOWN:
 			INFO("XXX Send loopdown code XXX\n");
 			break;
-		case DAHDI_MAINT_LOOPSTOP:
-			INFO("XXX Stop sending loop codes XXX\n");
-			break;
 		default:
 			ERR("XPP: Unknown maint command: %d\n", cmd);
 			ret = -EINVAL;

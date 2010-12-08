@@ -674,7 +674,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 			break;
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-		case DAHDI_MAINT_LOOPSTOP:
 			res = -ENOSYS;
 			break;
 		default:
@@ -687,6 +686,7 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 	    case DAHDI_MAINT_NONE:
 			__t1_set_reg(wc,0x19,0); /* no local loop */
 			__t1_set_reg(wc,0x0a,0); /* no remote loop */
+			__t1_set_reg(wc, 0x30, 0); /* stop sending loopup code*/
 			break;
 	    case DAHDI_MAINT_LOCALLOOP:
 			__t1_set_reg(wc,0x19,0x40); /* local loop */
@@ -705,9 +705,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 			__t1_set_reg(wc,0x30,2); /* send loopdown code */
 			__t1_set_reg(wc,0x12,0x62); /* send loopdown code */
 			__t1_set_reg(wc,0x13,0x90); /* send loopdown code */
-			break;
-	    case DAHDI_MAINT_LOOPSTOP:
-			__t1_set_reg(wc,0x30,0);	/* stop sending loopup code */
 			break;
 	    default:
 			printk(KERN_NOTICE "wct1xxp/T1: Unknown maint command: %d\n", cmd);

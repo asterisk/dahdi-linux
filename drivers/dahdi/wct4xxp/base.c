@@ -1538,9 +1538,8 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			break;
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-		case DAHDI_MAINT_LOOPSTOP:
 			dev_info(&wc->dev->dev,
-				"Loopup & loopdown supported in E1 mode\n");
+				"Loopup & loopdown not supported in E1 mode\n");
 			return -ENOSYS;
 		case DAHDI_MAINT_FAS_DEFECT:
 			t4_framer_out(wc, span->offset, IERR_T, IFASE);
@@ -1609,11 +1608,6 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
 			t4_clear_maint(span);
 			t4_framer_out(wc, span->offset, 0x21, 0x60);
-			break;
-		case DAHDI_MAINT_LOOPSTOP:
-			dev_info(&wc->dev->dev, "Transmitting loopstop code\n");
-			t4_clear_maint(span);
-			t4_framer_out(wc, span->offset, 0x21, 0x40);
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
 			t4_framer_out(wc, span->offset, IERR_T, IFASE);

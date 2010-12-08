@@ -468,9 +468,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 		case DAHDI_MAINT_LOOPDOWN:
 			printk(KERN_INFO "XXX Send loopdown code E1 XXX\n");
 			break;
-		case DAHDI_MAINT_LOOPSTOP:
-			printk(KERN_INFO "XXX Stop sending loop codes E1 XXX\n");
-			break;
 		default:
 			printk(KERN_NOTICE "TE110P: Unknown E1 maint command: %d\n", cmd);
 			break;
@@ -479,6 +476,7 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 		switch(cmd) {
 	    case DAHDI_MAINT_NONE:
 			printk(KERN_INFO "XXX Turn off local and remote loops T1 XXX\n");
+			t1_framer_out(wc, 0x21, 0x40);
 			break;
 	    case DAHDI_MAINT_LOCALLOOP:
 			printk(KERN_INFO "XXX Turn on local loop and no remote loop XXX\n");
@@ -491,9 +489,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 			break;
 	    case DAHDI_MAINT_LOOPDOWN:
 			t1_framer_out(wc, 0x21, 0x60);	/* FMR5: Nothing but RBS mode */
-			break;
-	    case DAHDI_MAINT_LOOPSTOP:
-			t1_framer_out(wc, 0x21, 0x40);	/* FMR5: Nothing but RBS mode */
 			break;
 	    default:
 			printk(KERN_NOTICE "TE110P: Unknown T1 maint command: %d\n", cmd);

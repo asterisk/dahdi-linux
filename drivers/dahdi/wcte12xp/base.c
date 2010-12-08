@@ -1161,7 +1161,6 @@ static void t1xxp_maint_work(struct work_struct *work)
 		case DAHDI_MAINT_REMOTELOOP:
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-		case DAHDI_MAINT_LOOPSTOP:
 			t1_info(wc, "Only local loop supported in E1 mode\n");
 			goto cleanup;
 		default:
@@ -1202,10 +1201,6 @@ static void t1xxp_maint_work(struct work_struct *work)
 			t1xxp_clear_maint(span);
 			t1_setreg(wc, 0x21, 0x60);
 			break;
-		case DAHDI_MAINT_LOOPSTOP:
-			t1xxp_clear_maint(w->span);
-			t1_setreg(w->wc, 0x21, 0x40);
-			break;
 		default:
 			t1_info(wc, "Unknown T1 maint command: %d\n", cmd);
 			return;
@@ -1230,7 +1225,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 		case DAHDI_MAINT_REMOTELOOP:
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-		case DAHDI_MAINT_LOOPSTOP:
 			t1_info(wc, "Only local loop supported in E1 mode\n");
 			return -ENOSYS;
 		default:
@@ -1245,7 +1239,6 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
-		case DAHDI_MAINT_LOOPSTOP:
 			break;
 		default:
 			t1_info(wc, "Unknown T1 maint command: %d\n", cmd);
@@ -1255,8 +1248,7 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 
 	work = kmalloc(sizeof(*work), GFP_ATOMIC);
 	if (!work) {
-		t1_info(wc, "Failed to allocate memory for "
-			"DAHDI_MAINT_LOOPSTOP\n");
+		t1_info(wc, "Failed to allocate memory for workqueue\n");
 		return -ENOMEM;
 	}
 

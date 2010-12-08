@@ -1042,7 +1042,6 @@ static int tor2_maint(struct dahdi_span *span, int cmd)
 			break;
 		    case DAHDI_MAINT_LOOPUP:
 		    case DAHDI_MAINT_LOOPDOWN:
-		    case DAHDI_MAINT_LOOPSTOP:
 			return -ENOSYS;
 		    default:
 			printk(KERN_NOTICE "Tor2: Unknown maint command: %d\n", cmd);
@@ -1054,6 +1053,7 @@ static int tor2_maint(struct dahdi_span *span, int cmd)
     case DAHDI_MAINT_NONE:
 	t1out(p->tor,tspan,0x19,(japan ? 0x80 : 0x00)); /* no local loop */
 	t1out(p->tor,tspan,0x0a,0); /* no remote loop */
+	t1out(p->tor, tspan, 0x30, 0);	/* stop sending loopup code */
 	break;
     case DAHDI_MAINT_LOCALLOOP:
 	t1out(p->tor,tspan,0x19,0x40 | (japan ? 0x80 : 0x00)); /* local loop */
@@ -1072,9 +1072,6 @@ static int tor2_maint(struct dahdi_span *span, int cmd)
 	t1out(p->tor,tspan,0x30,2); /* send loopdown code */
 	t1out(p->tor,tspan,0x12,0x62); /* send loopdown code */
 	t1out(p->tor,tspan,0x13,0x90); /* send loopdown code */
-	break;
-    case DAHDI_MAINT_LOOPSTOP:
-	t1out(p->tor,tspan,0x30,0);	/* stop sending loopup code */
 	break;
     default:
 	printk(KERN_NOTICE "Tor2: Unknown maint command: %d\n", cmd);

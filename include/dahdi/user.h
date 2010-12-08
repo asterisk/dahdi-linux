@@ -334,7 +334,6 @@ enum {
 #define DAHDI_MAINT_NETWORKLINELOOP	2	/* Remote Loopback */
 #define DAHDI_MAINT_LOOPUP		3	/* send loopup code */
 #define DAHDI_MAINT_LOOPDOWN		4	/* send loopdown code */
-#define DAHDI_MAINT_LOOPSTOP		5	/* stop sending loop codes */
 #define DAHDI_MAINT_FAS_DEFECT		6	/* insert a FAS defect */
 #define DAHDI_MAINT_MULTI_DEFECT	7	/* insert a Multiframe defect */
 #define DAHDI_MAINT_CRC_DEFECT		8	/* insert a FAS defect */
