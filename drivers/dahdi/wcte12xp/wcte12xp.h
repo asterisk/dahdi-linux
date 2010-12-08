@@ -142,6 +142,9 @@ struct t1 {
 #define t1_info(t1, format, arg...)         \
 	dev_info(&t1->vb.pdev->dev , format , ## arg)
 
+#define t1_notice(t1, format, arg...)         \
+	dev_notice(&t1->vb.pdev->dev , format , ## arg)
+
 /* Maintenance Mode Registers */
 #define LIM0		0x36
 #define LIM0_LL		(1<<1)

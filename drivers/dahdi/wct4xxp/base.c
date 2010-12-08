@@ -472,6 +472,10 @@ static void t4_check_sigbits(struct t4 *wc, int span);
 #define FMR0_SIM (1 << 0)	/* Alarm Simulation */
 #define FMR1_T 0x1D		/* Framer Mode Register 1 */
 #define FMR1_ECM (1 << 2)	/* Error Counter 1sec Interrupt Enable */
+#define FMR5 0x21		/* Framer Mode Register 5 */
+#define FMR5_XLU (1 << 4)	/* Transmit loopup code */
+#define FMR5_XLD (1 << 5)	/* Transmit loopdown code */
+#define FMR5_EIBR (1 << 6)	/* Internal Bit Robbing Access */
 #define DEC_T 0x60		/* Diable Error Counter */
 #define IERR_T 0x1B		/* Single Bit Defect Insertion Register */
 #define IBV	0	 /* Bipolar violation */
@@ -1602,12 +1606,20 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 		case DAHDI_MAINT_LOOPUP:
 			dev_info(&wc->dev->dev, "Transmitting loopup code\n");
 			t4_clear_maint(span);
-			t4_framer_out(wc, span->offset, 0x21, 0x50);
+			spin_lock_irqsave(&wc->reglock, flags);
+			reg = __t4_framer_in(wc, span->offset, FMR5);
+			__t4_framer_out(wc, span->offset, FMR5, (reg|FMR5_XLU));
+			spin_unlock_irqrestore(&wc->reglock, flags);
+			ts->span.maintstat = DAHDI_MAINT_REMOTELOOP;
 			break;
 		case DAHDI_MAINT_LOOPDOWN:
 			dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
 			t4_clear_maint(span);
-			t4_framer_out(wc, span->offset, 0x21, 0x60);
+			spin_lock_irqsave(&wc->reglock, flags);
+			reg = __t4_framer_in(wc, span->offset, FMR5);
+			__t4_framer_out(wc, span->offset, FMR5, (reg|FMR5_XLD));
+			spin_unlock_irqrestore(&wc->reglock, flags);
+			ts->span.maintstat = DAHDI_MAINT_NONE;
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
 			t4_framer_out(wc, span->offset, IERR_T, IFASE);
@@ -1686,23 +1698,32 @@ static int t4_clear_maint(struct dahdi_span *span)
 	struct t4_span *ts = container_of(span, struct t4_span, span);
 	struct t4 *wc = ts->owner;
 	unsigned int reg;
+	unsigned long flags;
+
+	spin_lock_irqsave(&wc->reglock, flags);
 
 	/* Clear local loop */
-	reg = t4_framer_in(wc, span->offset, LIM0_T);
-	t4_framer_out(wc, span->offset, LIM0_T, (reg & ~LIM0_LL));
+	reg = __t4_framer_in(wc, span->offset, LIM0_T);
+	__t4_framer_out(wc, span->offset, LIM0_T, (reg & ~LIM0_LL));
 
 	/* Clear Remote Loop */
-	reg = t4_framer_in(wc, span->offset, LIM1_T);
-	t4_framer_out(wc, span->offset, LIM1_T, (reg & ~LIM1_RL));
+	reg = __t4_framer_in(wc, span->offset, LIM1_T);
+	__t4_framer_out(wc, span->offset, LIM1_T, (reg & ~LIM1_RL));
 
 	/* Clear Remote Payload Loop */
-	reg = t4_framer_in(wc, span->offset, FMR2_T);
-	t4_framer_out(wc, span->offset, FMR2_T, (reg & ~FMR2_PLB));
+	reg = __t4_framer_in(wc, span->offset, FMR2_T);
+	__t4_framer_out(wc, span->offset, FMR2_T, (reg & ~FMR2_PLB));
 
 	/* Clear PRBS */
-	reg = t4_framer_in(wc, span->offset, LCR1_T);
-	t4_framer_out(wc, span->offset, LCR1_T, (reg & ~(XPRBS | EPRM)));
+	reg = __t4_framer_in(wc, span->offset, LCR1_T);
+	__t4_framer_out(wc, span->offset, LCR1_T, (reg & ~(XPRBS | EPRM)));
 
+	/* Clear loopup/loopdown signals on the line */
+	reg = __t4_framer_in(wc, span->offset, FMR5);
+	__t4_framer_out(wc, span->offset, FMR5, (reg & ~(FMR5_XLU | FMR5_XLD)));
+	span->maintstat = DAHDI_MAINT_NONE;
+
+	spin_unlock_irqrestore(&wc->reglock, flags);
 	span->mainttimer = 0;
 
 	return 0;
@@ -2489,7 +2510,7 @@ static void __t4_configure_t1(struct t4 *wc, int unit, int lineconfig, int txlev
 	}
 	__t4_framer_out(wc, unit, 0x1c, fmr0);
 	__t4_framer_out(wc, unit, 0x20, fmr4);
-	__t4_framer_out(wc, unit, 0x21, 0x40);	/* FMR5: Enable RBS mode */
+	__t4_framer_out(wc, unit, FMR5, FMR5_EIBR); /* FMR5: Enable RBS mode */
 
 	__t4_framer_out(wc, unit, 0x37, 0xf0 );	/* LIM1: Clear data in case of LOS, Set receiver threshold (0.5V), No remote loop, no DRS */
 	__t4_framer_out(wc, unit, 0x36, 0x08);	/* LIM0: Enable auto long haul mode, no local loop (must be after LIM1) */
@@ -3130,6 +3151,10 @@ static void t4_check_alarms(struct t4 *wc, int span)
 		if ((!ts->span.mainttimer) && (d & 0x08)) {
 			/* Loop-up code detected */
 			if ((ts->loopupcnt++ > 80)  && (ts->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
+				dev_notice(&wc->dev->dev,
+						"span %d: Loopup detected,"\
+						" enabling remote loop\n",
+						span+1);
 				__t4_framer_out(wc, span, 0x36, 0x08);	/* LIM0: Disable any local loop */
 				__t4_framer_out(wc, span, 0x37, 0xf6 );	/* LIM1: Enable remote loop */
 				ts->span.maintstat = DAHDI_MAINT_REMOTELOOP;
@@ -3140,6 +3165,10 @@ static void t4_check_alarms(struct t4 *wc, int span)
 		if ((!ts->span.mainttimer) && (d & 0x10)) {
 			/* Loop-down code detected */
 			if ((ts->loopdowncnt++ > 80)  && (ts->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
+				dev_notice(&wc->dev->dev,
+						"span %d: Loopdown detected,"\
+						" disabling remote loop\n",
+						span+1);
 				__t4_framer_out(wc, span, 0x36, 0x08);	/* LIM0: Disable any local loop */
 				__t4_framer_out(wc, span, 0x37, 0xf0 );	/* LIM1: Disable remote loop */
 				ts->span.maintstat = DAHDI_MAINT_NONE;
@@ -3389,7 +3418,7 @@ static inline void __handle_leds(struct t4 *wc)
 static inline void t4_framer_interrupt(struct t4 *wc, int span)
 {
 	/* Check interrupts for a given span */
-	unsigned char gis, isr0, isr1, isr2, isr3, isr4, reg;
+	unsigned char gis, isr0, isr1, isr2, isr3, isr4;
 	int readsize = -1;
 	struct t4_span *ts = wc->tspans[span];
 	struct dahdi_chan *sigchan;
@@ -3425,16 +3454,6 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
  		ts->span.count.errsec += 1;
  	}
  
- 	if (isr3 & 0x08) {
- 		reg = t4_framer_in(wc, span, FRS1_T);
-		dev_info(&wc->dev->dev, "FRS1: %d\n", reg);
- 		if (reg & LLBDD) {
- 			dev_info(&wc->dev->dev, "Line loop-back activation "\
- 					"signal detected with status: %01d "\
- 					"for span %d\n", reg & LLBAD, span+1);
- 		}
- 	}
-
 	if (isr0)
 		t4_check_sigbits(wc, span);
 
