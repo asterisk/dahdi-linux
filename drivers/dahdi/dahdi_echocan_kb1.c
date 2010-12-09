@@ -160,7 +160,6 @@ static const struct dahdi_echocan_features my_features = {
 };
 
 static const struct dahdi_echocan_ops my_ops = {
-	.name = "KB1",
 	.echocan_free = echo_can_free,
 	.echocan_process = echo_can_process,
 	.echocan_traintap = echo_can_traintap,

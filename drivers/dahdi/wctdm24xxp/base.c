@@ -268,12 +268,10 @@ static const struct dahdi_echocan_features vpm150m_ec_features = {
 };
 
 static const struct dahdi_echocan_ops vpm100m_ec_ops = {
-	.name = "VPM100M",
 	.echocan_free = echocan_free,
 };
 
 static const struct dahdi_echocan_ops vpm150m_ec_ops = {
-	.name = "VPM150M",
 	.echocan_free = echocan_free,
 };
 
@@ -1991,7 +1989,9 @@ static int wctdm_echocan_create(struct dahdi_chan *chan,
 	}
 
 	if (wc->vpm100 && (ecp->param_count > 0)) {
-		dev_warn(&wc->vb.pdev->dev, "%s echo canceller does not support parameters; failing request\n", ops->name);
+		dev_warn(&wc->vb.pdev->dev, "%s echo canceller does not "
+			 "support parameters; failing request\n",
+			 chan->ec_factory->name);
 		return -EINVAL;
 	}
 

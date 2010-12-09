@@ -82,7 +82,6 @@ static const struct dahdi_echocan_features vpm150m_ec_features = {
 };
 
 static const struct dahdi_echocan_ops vpm150m_ec_ops = {
-	.name = "VPM150M",
 	.echocan_free = echocan_free,
 };
 

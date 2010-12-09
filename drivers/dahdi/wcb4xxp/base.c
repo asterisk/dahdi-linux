@@ -152,7 +152,6 @@ static const struct dahdi_echocan_features my_ec_features = {
 };
 
 static const struct dahdi_echocan_ops my_ec_ops = {
-	.name = "HWEC",
 	.echocan_free = echocan_free,
 };
 

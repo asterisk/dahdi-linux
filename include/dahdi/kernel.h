@@ -205,9 +205,6 @@ struct dahdi_echocan_features {
  */
 struct dahdi_echocan_ops {
 
-	/*! The name of the echocan that created this structure. */
-	const char *name;
-
 	/*! \brief Free an echocan state structure.
 	 * \param[in,out] ec Pointer to the state structure to free.
 	 *

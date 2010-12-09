@@ -55,7 +55,6 @@ static const struct dahdi_echocan_factory my_factory = {
 };
 
 static const struct dahdi_echocan_ops my_ops = {
-	.name = "OSLEC",
 	.echocan_free = echo_can_free,
 	.echocan_process = echo_can_process,
 	.echocan_traintap = echo_can_traintap,

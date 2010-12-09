@@ -798,12 +798,9 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 				chan->chan_alarms);
 
 		if (chan->ec_factory)
-			len += snprintf(page+len, count-len, "(ECTYPE: %s) ",
-					chan->ec_factory->name);
-
-		if (chan->ec_state)
-			len += snprintf(page+len, count-len, "(EC: %s) ",
-					chan->ec_state->ops->name);
+			len += snprintf(page+len, count-len, "(EC: %s - %s) ",
+					chan->ec_factory->name,
+					chan->ec_state ? "ACTIVE" : "INACTIVE");
 
 		len += snprintf(page+len, count-len, "\n");
 
