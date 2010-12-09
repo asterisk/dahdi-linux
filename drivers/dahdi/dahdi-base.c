@@ -573,17 +573,6 @@ static void dahdi_disable_dacs(struct dahdi_chan *chan)
 	dahdi_chan_dacs(chan, NULL);
 }
 
-static int dahdi_chan_echocan_create(struct dahdi_chan *chan,
-				     struct dahdi_echocanparams *ecp,
-				     struct dahdi_echocanparam *p,
-				     struct dahdi_echocan_state **ec)
-{
-	if (chan->span && chan->span->ops->echocan_create)
-		return chan->span->ops->echocan_create(chan, ecp, p, ec);
-	else
-		return -ENODEV;
-}
-
 /*!
  * \return quiescent (idle) signalling states, for the various signalling types
  */
@@ -812,7 +801,7 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 				chan->chan_alarms);
 
 		if (chan->ec_factory)
-			len += snprintf(page+len, count-len, "(SWEC: %s) ",
+			len += snprintf(page+len, count-len, "(ECTYPE: %s) ",
 					chan->ec_factory->name);
 
 		if (chan->ec_state)
@@ -5430,7 +5419,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 	struct dahdi_echocan_state *ec = NULL, *ec_state;
 	const struct dahdi_echocan_factory *ec_current;
 	struct dahdi_echocanparam *params;
-	int ret;
+	int ret = 0;
 	unsigned long flags;
 
 	if (ecp->param_count > DAHDI_MAX_ECHOCANPARAMS)
@@ -5491,11 +5480,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 
 	ec_current = NULL;
 
-	/* attempt to use the span's echo canceler; fall back to built-in
-	   if it fails (but not if an error occurs) */
-	ret = dahdi_chan_echocan_create(chan, ecp, params, &ec);
-
-	if ((ret == -ENODEV) && chan->ec_factory) {
+	if (chan->ec_factory) {
 		/* try to get another reference to the module providing
 		   this channel's echo canceler */
 		if (!try_module_get(chan->ec_factory->owner)) {
