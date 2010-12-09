@@ -42,9 +42,11 @@ static int echo_can_create(struct dahdi_chan *chan, struct dahdi_echocanparams *
 static void echo_can_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 static void echo_can_process(struct dahdi_echocan_state *ec, short *isig, const short *iref, __u32 size);
 static int echo_can_traintap(struct dahdi_echocan_state *ec, int pos, short val);
+static const char *name = "HPEC";
+static const char *ec_name(const struct dahdi_chan *chan) { return name; }
 
 static const struct dahdi_echocan_factory my_factory = {
-	.name = "HPEC",
+	.get_name = ec_name,
 	.owner = THIS_MODULE,
 	.echocan_create = echo_can_create,
 };
@@ -56,7 +58,6 @@ static const struct dahdi_echocan_features my_features = {
 };
 
 static const struct dahdi_echocan_ops my_ops = {
-	.name = "HPEC",
 	.echocan_free = echo_can_free,
 	.echocan_process = echo_can_process,
 	.echocan_traintap = echo_can_traintap,
@@ -195,7 +196,8 @@ static int __init mod_init(void)
 		return -EPERM;
 	}
 
-	module_printk(KERN_NOTICE, "Registered echo canceler '%s'\n", my_factory.name);
+	module_printk(KERN_NOTICE, "Registered echo canceler '%s'\n",
+		my_factory.get_name(NULL));
 
 	hpec_init(logger, debug, DAHDI_CHUNKSIZE, memalloc, memfree);
 
