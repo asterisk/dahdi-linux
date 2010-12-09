@@ -8920,6 +8920,22 @@ int dahdi_unregister_chardev(struct dahdi_chardev *dev)
 	return 0;
 }
 
+static int hwec_echocan_create(struct dahdi_chan *chan,
+	struct dahdi_echocanparams *ecp, struct dahdi_echocanparam *p,
+	struct dahdi_echocan_state **ec)
+{
+	if (chan->span && chan->span->ops->echocan_create)
+		return chan->span->ops->echocan_create(chan, ecp, p, ec);
+	else
+		return -ENODEV;
+}
+
+static const struct dahdi_echocan_factory hwec_factory = {
+	.name = "HWEC",
+	.owner = THIS_MODULE,
+	.echocan_create = hwec_echocan_create,
+};
+
 static int __init dahdi_init(void)
 {
 	int res = 0;
@@ -8948,6 +8964,12 @@ static int __init dahdi_init(void)
 	watchdog_init();
 #endif
 	coretimer_init();
+
+	if (dahdi_register_echocan_factory(&hwec_factory)) {
+		WARN_ON(1);
+		return -EFAULT;
+	}
+
 	return res;
 }
 
@@ -8955,6 +8977,7 @@ static void __exit dahdi_cleanup(void)
 {
 	int x;
 
+	dahdi_unregister_echocan_factory(&hwec_factory);
 	coretimer_cleanup();
 
 	CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, 253)); /* timer */
