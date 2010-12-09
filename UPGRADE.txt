@@ -62,10 +62,9 @@ Any or all of these modules can be loaded at the same time, and the echo
 canceler to be used on the system's channels can be configured using
 the dahdi_cfg tool from the dahdi-tools package.
 
-IMPORTANT: It is *mandatory* to configure an echo canceler for the
-system's channels using dahdi_cfg unless the interface cards in use
-have echo canceler modules available and enabled. There is *no*
-default software echo canceler with DAHDI. See
+IMPORTANT: It is *mandatory* to configure an echo canceler for the system's
+channels using dahdi_cfg. There is *no* default echo canceler with DAHDI, not
+even hardware echo cancellation modules. See
 <<_echo_cancellers,section on echo cancellers>> in sample system.conf.
 
 

@@ -312,10 +312,11 @@ defaultzone=us
 # cancellers are compiled and installed as part of the dahdi-linux package.
 # You can specify in this file the echo canceller to be used for each
 # channel. The default behavior is for there to be NO echo canceller on any
-# channel, so it is very important that you specify one here if you do
-# not have hardware echo cancellers and need echo cancellation.
+# channel, so it is very important that you specify one here.
 #
-# Valid echo cancellers are: mg2, kb1, sec2, and sec.
+# Valid echo cancellers are: hwec, mg2, kb1, sec2, and sec.
+# 'hwec' is a special echo canceller that should be used if hardware echo
+# cancellation is desired on and available on the specified channels.
 # If compiled, 'hpec' is also a valid echo canceller.
 # 
 # To configure the default echo cancellers, use the format:

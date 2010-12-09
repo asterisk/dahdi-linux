@@ -106,7 +106,9 @@ channels, and send it to the kernel.
 A sample annotated system.conf is included in this directory and
 installed by default. Edit it to suit your configuration. Alternatively 
 use the script dahdi_genconf to generate one that should work with your 
-system.
+system. Note that while dahdi_genconf will generate a working configuration,
+it will not automatically detect hardware echo cancellation modules.  These
+will have to be enabled manually in system.conf.
 
 /etc/dahdi/init.conf
 ~~~~~~~~~~~~~~~~~~~~
