@@ -95,6 +95,10 @@ static const struct t1_desc te120p = {"Wildcard TE120P"};
 static const struct t1_desc te122 = {"Wildcard TE122"};
 static const struct t1_desc te121 = {"Wildcard TE121"};
 
+/* names of HWEC modules */
+static const char *vpmadt032_name = "VPMADT032";
+static const char *noec_name = "NONE";
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 static kmem_cache_t *cmd_cache;
 #else
@@ -945,10 +949,9 @@ static void set_span_devicetype(struct t1 *wc)
 		sizeof(wc->span.devicetype) - 1);
 
 #if defined(VPM_SUPPORT)
-	if (wc->vpmadt032) {
+	if (wc->vpmadt032)
 		strncat(wc->span.devicetype, " (VPMADT032)",
 			sizeof(wc->span.devicetype) - 1);
-	}
 #endif
 }
 
@@ -1308,6 +1311,14 @@ static int t1xxp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 	return 0;
 }
 
+static const char *t1xxp_echocan_name(const struct dahdi_chan *chan)
+{
+	struct t1 *wc = chan->pvt;
+	if (wc->vpmadt032)
+		return vpmadt032_name;
+	return noec_name;
+}
+
 static int t1xxp_echocan_create(struct dahdi_chan *chan,
 				struct dahdi_echocanparams *ecp,
 				struct dahdi_echocanparam *p,
@@ -1537,6 +1548,7 @@ static const struct dahdi_span_ops t1_span_ops = {
 	.ioctl = t1xxp_ioctl,
 #ifdef VPM_SUPPORT
 	.echocan_create = t1xxp_echocan_create,
+	.echocan_name = t1xxp_echocan_name,
 #endif
 };
 

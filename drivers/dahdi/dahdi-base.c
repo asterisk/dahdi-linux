@@ -799,7 +799,7 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 
 		if (chan->ec_factory)
 			len += snprintf(page+len, count-len, "(EC: %s - %s) ",
-					chan->ec_factory->name,
+					chan->ec_factory->get_name(chan),
 					chan->ec_state ? "ACTIVE" : "INACTIVE");
 
 		len += snprintf(page+len, count-len, "\n");
@@ -1197,7 +1197,7 @@ retry:
 	read_lock(&ecfactory_list_lock);
 
 	list_for_each_entry(cur, &ecfactory_list, list) {
-		if (!strcmp(name_upper, cur->ec->name)) {
+		if (!strcmp(name_upper, cur->ec->get_name(NULL))) {
 			if (try_module_get(cur->ec->owner)) {
 				read_unlock(&ecfactory_list_lock);
 				kfree(name_upper);
@@ -4603,8 +4603,9 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		dahdi_copy_string(vi.version, DAHDI_VERSION, sizeof(vi.version));
 		read_lock(&ecfactory_list_lock);
 		list_for_each_entry(cur, &ecfactory_list, list) {
-			strncat(vi.echo_canceller + strlen(vi.echo_canceller), cur->ec->name, space);
-			space -= strlen(cur->ec->name);
+			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
+				cur->ec->get_name(NULL), space);
+			space -= strlen(cur->ec->get_name(NULL));
 			if (space < 1) {
 				break;
 			}
@@ -5478,7 +5479,9 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 		/* try to get another reference to the module providing
 		   this channel's echo canceler */
 		if (!try_module_get(chan->ec_factory->owner)) {
-			module_printk(KERN_ERR, "Cannot get a reference to the '%s' echo canceler\n", chan->ec_factory->name);
+			module_printk(KERN_ERR, "Cannot get a reference to the"
+				      " '%s' echo canceler\n",
+				      chan->ec_factory->get_name(chan));
 			goto exit_with_free;
 		}
 
@@ -5495,7 +5498,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 		if (!ec) {
 			module_printk(KERN_ERR, "%s failed to allocate an " \
 				      "dahdi_echocan_state instance.\n",
-				      ec_current->name);
+				      ec_current->get_name(chan));
 			ret = -EFAULT;
 			goto exit_with_free;
 		}
@@ -8899,6 +8902,15 @@ int dahdi_unregister_chardev(struct dahdi_chardev *dev)
 	return 0;
 }
 
+static const char *hwec_def_name = "HWEC";
+static const char *hwec_get_name(const struct dahdi_chan *chan)
+{
+	if (chan && chan->span && chan->span->ops->echocan_name)
+		return chan->span->ops->echocan_name(chan);
+	else
+		return hwec_def_name;
+}
+
 static int hwec_echocan_create(struct dahdi_chan *chan,
 	struct dahdi_echocanparams *ecp, struct dahdi_echocanparam *p,
 	struct dahdi_echocan_state **ec)
@@ -8910,7 +8922,7 @@ static int hwec_echocan_create(struct dahdi_chan *chan,
 }
 
 static const struct dahdi_echocan_factory hwec_factory = {
-	.name = "HWEC",
+	.get_name = hwec_get_name,
 	.owner = THIS_MODULE,
 	.echocan_create = hwec_echocan_create,
 };

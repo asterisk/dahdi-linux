@@ -236,6 +236,11 @@ static int altab[] = {
 
 #define CANARY 0xc0de
 
+/* names of available HWEC modules */
+static const char *vpm400_name = "VPM400M";
+static const char *vpmoct064_name = "VPMOCT064";
+static const char *vpmoct128_name = "VPMOCT128";
+static const char *noec_name = "NONE";
 
 #define PORTS_PER_FRAMER 4
 
@@ -393,23 +398,13 @@ static void t4_vpm_set_dtmf_threshold(struct t4 *wc, unsigned int threshold);
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 
-static const struct dahdi_echocan_features vpm400m_ec_features = {
+static const struct dahdi_echocan_features vpm_ec_features = {
 	.NLP_automatic = 1,
 	.CED_tx_detect = 1,
 	.CED_rx_detect = 1,
 };
 
-static const struct dahdi_echocan_features vpm450m_ec_features = {
-	.NLP_automatic = 1,
-	.CED_tx_detect = 1,
-	.CED_rx_detect = 1,
-};
-
-static const struct dahdi_echocan_ops vpm400m_ec_ops = {
-	.echocan_free = echocan_free,
-};
-
-static const struct dahdi_echocan_ops vpm450m_ec_ops = {
+static const struct dahdi_echocan_ops vpm_ec_ops = {
 	.echocan_free = echocan_free,
 };
 #endif
@@ -1279,6 +1274,21 @@ static int t4_vpm_unit(int span, int channel)
 	return unit;
 }
 
+static const char *t4_echocan_name(const struct dahdi_chan *chan)
+{
+	struct t4 *wc = chan->pvt;
+	if (wc->vpm == T4_VPM_PRESENT) {
+		if (!wc->vpm450m)
+			return vpm400_name;
+		else
+			if (wc->numspans == 2)
+				return vpmoct064_name;
+			else if (wc->numspans == 4)
+				return vpmoct128_name;
+	}
+	return noec_name;
+}
+
 static int t4_echocan_create(struct dahdi_chan *chan,
 			     struct dahdi_echocanparams *ecp,
 			     struct dahdi_echocanparam *p,
@@ -1296,18 +1306,13 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	if (chan->span->offset >= vpmspans)
 		return -ENODEV;
 
-	if (wc->vpm450m) {
-		ops = &vpm450m_ec_ops;
-		features = &vpm450m_ec_features;
-	} else {
-		ops = &vpm400m_ec_ops;
-		features = &vpm400m_ec_features;
-	}
+	ops = &vpm_ec_ops;
+	features = &vpm_ec_features;
 
 	if (ecp->param_count > 0) {
 		dev_warn(&wc->dev->dev, "%s echo canceller does not support "
 			 "parameters; failing request\n",
-			 chan->ec_factory->name);
+			 chan->ec_factory->get_name(chan));
 		return -EINVAL;
 	}
 
@@ -2082,6 +2087,7 @@ static const struct dahdi_span_ops t4_gen2_span_ops = {
 	.dacs = t4_dacs,
 #ifdef VPM_SUPPORT
 	.echocan_create = t4_echocan_create,
+	.echocan_name = t4_echocan_name,
 #endif
 };
 

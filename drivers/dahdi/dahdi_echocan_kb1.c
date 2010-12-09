@@ -148,9 +148,11 @@ static void echo_can_free(struct dahdi_chan *chan, struct dahdi_echocan_state *e
 static void echo_can_process(struct dahdi_echocan_state *ec, short *isig, const short *iref, u32 size);
 static int echo_can_traintap(struct dahdi_echocan_state *ec, int pos, short val);
 static void echocan_NLP_toggle(struct dahdi_echocan_state *ec, unsigned int enable);
+static const char *name = "KB1";
+static const char *ec_name(const struct dahdi_chan *chan) { return name; }
 
 static const struct dahdi_echocan_factory my_factory = {
-	.name = "KB1",
+	.get_name = ec_name,
 	.owner = THIS_MODULE,
 	.echocan_create = echo_can_create,
 };
@@ -722,7 +724,8 @@ static int __init mod_init(void)
 		return -EPERM;
 	}
 
-	module_printk(KERN_NOTICE, "Registered echo canceler '%s'\n", my_factory.name);
+	module_printk(KERN_NOTICE, "Registered echo canceler '%s'\n",
+		      my_factory.get_name(NULL));
 
 	return 0;
 }

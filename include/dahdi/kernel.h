@@ -268,8 +268,8 @@ struct dahdi_echocan_ops {
 /*! A factory for creating instances of software echo cancelers to be used on DAHDI channels. */
 struct dahdi_echocan_factory {
 
-	/*! The name of the factory. */
-	const char *name;
+	/*! Get the name of the factory. */
+	const char *(*get_name)(const struct dahdi_chan *chan);
 
 	/*! Pointer to the module that owns this factory; the module's reference count will be
 	 * incremented/decremented by the DAHDI core as needed.
@@ -851,6 +851,9 @@ struct dahdi_span_ops {
 			      struct dahdi_echocanparams *ecp,
 			      struct dahdi_echocanparam *p,
 			      struct dahdi_echocan_state **ec);
+
+	/*! Opt: Provide the name of the echo canceller on a channel */
+	const char *(*echocan_name)(const struct dahdi_chan *chan);
 };
 
 struct dahdi_span {

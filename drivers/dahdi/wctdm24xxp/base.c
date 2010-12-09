@@ -174,6 +174,11 @@ static int ectrans[4] = { 0, 1, 3, 2 };
 #define EC_SIZE_Q (sizeof(ectab) / 4)
 #endif
 
+/* names of HWEC modules */
+static const char *vpm100m_name = "VPM100M";
+static const char *vpmadt032_name = "VPMADT032";
+static const char *noec_name = "NONE";
+
 /* Undefine to enable Power alarm / Transistor debug -- note: do not
    enable for normal operation! */
 /* #define PAQ_DEBUG */
@@ -255,23 +260,13 @@ static int vpmnlpmaxsupp = DEFAULT_NLPMAXSUPP;
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 
-static const struct dahdi_echocan_features vpm100m_ec_features = {
+static const struct dahdi_echocan_features vpm_ec_features = {
 	.NLP_automatic = 1,
 	.CED_tx_detect = 1,
 	.CED_rx_detect = 1,
 };
 
-static const struct dahdi_echocan_features vpm150m_ec_features = {
-	.NLP_automatic = 1,
-	.CED_tx_detect = 1,
-	.CED_rx_detect = 1,
-};
-
-static const struct dahdi_echocan_ops vpm100m_ec_ops = {
-	.echocan_free = echocan_free,
-};
-
-static const struct dahdi_echocan_ops vpm150m_ec_ops = {
+static const struct dahdi_echocan_ops vpm_ec_ops = {
 	.echocan_free = echocan_free,
 };
 
@@ -1963,6 +1958,16 @@ static inline void wctdm_vpm_check(struct wctdm *wc, int x)
 	}
 }
 
+static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
+{
+	struct wctdm *wc = chan->pvt;
+	if (wc->vpm100)
+		return vpm100m_name;
+	else if (wc->vpmadt032)
+		return vpmadt032_name;
+	return noec_name;
+}
+
 static int wctdm_echocan_create(struct dahdi_chan *chan,
 				struct dahdi_echocanparams *ecp,
 				struct dahdi_echocanparam *p,
@@ -1980,18 +1985,13 @@ static int wctdm_echocan_create(struct dahdi_chan *chan,
 	if (!wc->vpm100 && !wc->vpmadt032)
 		return -ENODEV;
 
-	if (wc->vpmadt032) {
-		ops = &vpm150m_ec_ops;
-		features = &vpm150m_ec_features;
-	} else {
-		ops = &vpm100m_ec_ops;
-		features = &vpm100m_ec_features;
-	}
+	ops = &vpm_ec_ops;
+	features = &vpm_ec_features;
 
 	if (wc->vpm100 && (ecp->param_count > 0)) {
 		dev_warn(&wc->vb.pdev->dev, "%s echo canceller does not "
 			 "support parameters; failing request\n",
-			 chan->ec_factory->name);
+			 chan->ec_factory->get_name(chan));
 		return -EINVAL;
 	}
 
@@ -3682,6 +3682,7 @@ static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.dacs = wctdm_dacs,
 #ifdef VPM_SUPPORT
 	.echocan_create = wctdm_echocan_create,
+	.echocan_name = wctdm_echocan_name,
 #endif
 };
 
@@ -3697,6 +3698,7 @@ static const struct dahdi_span_ops wctdm24xxp_digital_span_ops = {
 	.dacs = wctdm_dacs,
 #ifdef VPM_SUPPORT
 	.echocan_create = wctdm_echocan_create,
+	.echocan_name = wctdm_echocan_name,
 #endif
 };
 
