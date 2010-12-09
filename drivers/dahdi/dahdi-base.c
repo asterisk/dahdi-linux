@@ -674,9 +674,6 @@ static int fill_alarm_string(char *buf, int count, int alarms)
 			(alarms & DAHDI_ALARM_RECOVER) ? "RECOVERING " : "",
 			(alarms & DAHDI_ALARM_NOTOPEN) ? "NOTOPEN " : "");
 
-	if (len > 0)
-		buf[--len] = '\0';	/* strip last space */
-
 	return len;
 }
 
