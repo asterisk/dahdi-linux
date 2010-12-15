@@ -179,8 +179,10 @@ static inline unsigned char __pci_in8(struct b4xxp *b4, const unsigned int reg)
 	unsigned char ret = ioread8(b4->addr + reg);
 
 #ifdef DEBUG_LOWLEVEL_REGS
-	if (unlikely(DBG_REGS))
-		drv_dbg(b4->dev, "read 0x%02x from 0x%p\n", ret, b4->addr + reg);
+	if (unlikely(DBG_REGS)) {
+		drv_dbg(&b4->pdev->dev,
+			"read 0x%02x from 0x%p\n", ret, b4->addr + reg);
+	}
 #endif
 	if (unlikely(pedanticpci)) {
 		udelay(3);
@@ -194,8 +196,10 @@ static inline unsigned short __pci_in16(struct b4xxp *b4, const unsigned int reg
 	unsigned short ret = ioread16(b4->addr + reg);
 
 #ifdef DEBUG_LOWLEVEL_REGS
-	if (unlikely(DBG_REGS))
-		drv_dbg(b4->dev, "read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+	if (unlikely(DBG_REGS)) {
+		drv_dbg(&b4->pdev->dev,
+			"read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+	}
 #endif
 	if (unlikely(pedanticpci)) {
 		udelay(3);
@@ -209,8 +213,10 @@ static inline unsigned int __pci_in32(struct b4xxp *b4, const unsigned int reg)
 	unsigned int ret = ioread32(b4->addr + reg);
 
 #ifdef DEBUG_LOWLEVEL_REGS
-	if (unlikely(DBG_REGS))
-		drv_dbg(b4->dev, "read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+	if (unlikely(DBG_REGS)) {
+		drv_dbg(&b4->pdev->dev,
+			"read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+	}
 #endif
 	if (unlikely(pedanticpci)) {
 		udelay(3);
@@ -222,8 +228,10 @@ static inline unsigned int __pci_in32(struct b4xxp *b4, const unsigned int reg)
 static inline void __pci_out32(struct b4xxp *b4, const unsigned int reg, const unsigned int val)
 {
 #ifdef DEBUG_LOWLEVEL_REGS
-	if (unlikely(DBG_REGS))
-		drv_dbg(b4->dev, "writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+	if (unlikely(DBG_REGS)) {
+		drv_dbg(&b4->pdev->dev,
+			"writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+	}
 #endif
 	iowrite32(val, b4->addr + reg);
 
@@ -236,8 +244,10 @@ static inline void __pci_out32(struct b4xxp *b4, const unsigned int reg, const u
 static inline void __pci_out8(struct b4xxp *b4, const unsigned int reg, const unsigned char val)
 {
 #ifdef DEBUG_LOWLEVEL_REGS
-	if (unlikely(DBG_REGS)) 
-		drv_dbg(b4->dev, "writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+	if (unlikely(DBG_REGS)) {
+		drv_dbg(&b4->pdev->dev,
+			"writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+	}
 #endif
 	iowrite8(val, b4->addr + reg);
 
@@ -295,7 +305,8 @@ retry:
 
 #ifndef DEBUG_LOWLEVEL_REGS
 	if (unlikely(DBG_REGS)) {
-		dev_dbg(b4->dev, "read 0x%02x from 0x%p\n", ret, b4->addr + reg);
+		dev_dbg(&b4->pdev->dev,
+			"read 0x%02x from 0x%p\n", ret, b4->addr + reg);
 	}
 #endif
 	return ret;
@@ -312,7 +323,8 @@ static inline unsigned int b4xxp_getreg32(struct b4xxp *b4, const unsigned int r
 
 #ifndef DEBUG_LOWLEVEL_REGS
 	if (unlikely(DBG_REGS)) {
-		dev_dbg(b4->dev, "read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+		dev_dbg(&b4->pdev->dev,
+			 "read 0x%04x from 0x%p\n", ret, b4->addr + reg);
 	}
 #endif
 	return ret;
@@ -329,7 +341,8 @@ static inline unsigned short b4xxp_getreg16(struct b4xxp *b4, const unsigned int
 
 #ifndef DEBUG_LOWLEVEL_REGS
 	if (unlikely(DBG_REGS)) {
-		dev_dbg(b4->dev, "read 0x%04x from 0x%p\n", ret, b4->addr + reg);
+		dev_dbg(&b4->pdev->dev,
+			"read 0x%04x from 0x%p\n", ret, b4->addr + reg);
 	}
 #endif
 	return ret;
@@ -341,7 +354,8 @@ static inline void b4xxp_setreg32(struct b4xxp *b4, const unsigned int reg, cons
 
 #ifndef DEBUG_LOWLEVEL_REGS
 	if (unlikely(DBG_REGS)) {
-		dev_dbg(b4->dev, "writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+		dev_dbg(&b4->pdev->dev,
+			"writing 0x%02x to 0x%p\n", val, b4->addr + reg);
 	}
 #endif
 	spin_lock_irqsave(&b4->reglock, irq_flags);
@@ -355,7 +369,8 @@ static inline void b4xxp_setreg8(struct b4xxp *b4, const unsigned int reg, const
 
 #ifndef DEBUG_LOWLEVEL_REGS
 	if (unlikely(DBG_REGS)) {
-		dev_dbg(b4->dev, "writing 0x%02x to 0x%p\n", val, b4->addr + reg);
+		dev_dbg(&b4->pdev->dev,
+			"writing 0x%02x to 0x%p\n", val, b4->addr + reg);
 	}
 #endif
 	spin_lock_irqsave(&b4->reglock, irq_flags);
@@ -625,11 +640,11 @@ static inline void ec_write(struct b4xxp *b4, int which, unsigned short addr, un
 
 	in = ec_read(b4, which, addr);
 
-	if (in != data) {
-		if (printk_ratelimit()) {
-			dev_warn(b4->dev, "ec_write: Wrote 0x%02x to register 0x%02x "
-			         "of VPM %d but got back 0x%02x\n", data, addr, which, in);
-		}
+	if ((in != data) && printk_ratelimit()) {
+		dev_warn(&b4->pdev->dev,
+			 "ec_write: Wrote 0x%02x to register 0x%02x "
+			 "of VPM %d but got back 0x%02x\n",
+			 data, addr, which, in);
 	}
 }
 
@@ -662,7 +677,8 @@ static void ec_init(struct b4xxp *b4)
 	for (i=0; i < NUM_EC; i++) {
 		b = ec_read(b4, i, 0x1a0);
 
-		dev_info(b4->dev, "VPM %d/%d init: chip ver %02x\n", i, NUM_EC - 1, b);
+		dev_info(&b4->pdev->dev,
+			 "VPM %d/%d init: chip ver %02x\n", i, NUM_EC - 1, b);
 
 		for (j=0; j < b4->numspans; j++) {
 			ec_write(b4, i, 0x1a8 + j, 0x00);	/* GPIO out */
@@ -692,16 +708,16 @@ static void ec_init(struct b4xxp *b4)
 		b |= 0x12;
 		if (!strcasecmp(companding, "alaw")) {
 			if (DBG)
-				dev_info(b4->dev, "Setting alaw mode\n");
+				dev_info(&b4->pdev->dev, "Setting alaw mode\n");
 			b |= 0x01;
 		} else {
 			if (DBG)
-				dev_info(b4->dev, "Setting ulaw mode");
+				dev_info(&b4->pdev->dev, "Setting ulaw mode");
 		}
 
 		ec_write(b4, i, 0x20, b);
 		if (DBG)
-			dev_info(b4->dev, "reg 0x20 is 0x%02x\n", b);
+			dev_info(&b4->pdev->dev, "reg 0x20 is 0x%02x\n", b);
 
 //		ec_write(b4, i, 0x20, 0x38);
 
@@ -709,8 +725,10 @@ static void ec_init(struct b4xxp *b4)
 		ec_write(b4, i, 0x24, 0x02);
 		b = ec_read(b4, i, 0x24);
 #endif
-		if (DBG)
-			dev_info(b4->dev, "NLP threshold is set to %d (0x%02x)\n", b, b);
+		if (DBG) {
+			dev_info(&b4->pdev->dev,
+				 "NLP threshold is set to %d (0x%02x)\n", b, b);
+		}
 
 /* Initialize echo cans */
 		for (j=0; j < MAX_TDM_CHAN; j++) {
@@ -766,9 +784,10 @@ static void hfc_setreg_waitbusy(struct b4xxp *b4, const unsigned int reg, const 
 		}
 	};
 
-	if (timeout) {
-		if (printk_ratelimit())
-			dev_warn(b4->dev, "hfc_setreg_waitbusy(write 0x%02x to 0x%02x) timed out waiting for busy flag to clear!\n", val, reg);
+	if (timeout && printk_ratelimit()) {
+		dev_warn(&b4->pdev->dev,
+			 "hfc_setreg_waitbusy(write 0x%02x to 0x%02x) timed "
+			 "out waiting for busy flag to clear!\n", val, reg);
 	}
 }
 
@@ -785,9 +804,10 @@ static inline unsigned char hfc_readcounter8(struct b4xxp *b4, const unsigned in
 		r2 = b4xxp_getreg8(b4, reg);
 	} while ((r1 != r2) && maxwait--);
 
-	if (!maxwait) {
-		if (printk_ratelimit())
-			dev_warn(b4->dev, "hfc_readcounter8(reg 0x%02x) timed out waiting for data to settle!\n", reg);
+	if (!maxwait && printk_ratelimit()) {
+		dev_warn(&b4->pdev->dev,
+			 "hfc_readcounter8(reg 0x%02x) timed out waiting "
+			 "for data to settle!\n", reg);
 	}
 
 	return r1;
@@ -806,9 +826,10 @@ static inline unsigned short hfc_readcounter16(struct b4xxp *b4, const unsigned 
 		r2 = b4xxp_getreg16(b4, reg);
 	} while ((r1 != r2) && maxwait--);
 
-	if (!maxwait) {
-		if (printk_ratelimit())
-			dev_warn(b4->dev, "hfc_readcounter16(reg 0x%02x) timed out waiting for data to settle!\n", reg);
+	if (!maxwait && printk_ratelimit()) {
+		dev_warn(&b4->pdev->dev,
+			 "hfc_readcounter16(reg 0x%02x) timed out waiting "
+			 "for data to settle!\n", reg);
 	}
 
 	return r1;
@@ -824,9 +845,10 @@ static inline unsigned int hfc_readcounter32(struct b4xxp *b4, const unsigned in
 		r2 = b4xxp_getreg32(b4, reg);
 	} while ((r1 != r2) && maxwait--);
 
-	if (!maxwait) {
-		if (printk_ratelimit())
-			dev_warn(b4->dev, "hfc_readcounter32(reg 0x%02x) timed out waiting for data to settle!\n", reg);
+	if (!maxwait && printk_ratelimit()) {
+		dev_warn(&b4->pdev->dev,
+			 "hfc_readcounter32(reg 0x%02x) timed out waiting "
+			 "for data to settle!\n", reg);
 	}
 
 	return r1;
@@ -869,7 +891,7 @@ static void hfc_reset(struct b4xxp *b4)
 	while ((b = b4xxp_getreg8(b4, R_F0_CNTL)) < 2 && c) { udelay(100); c--; }
 
 	if (!c && b < 2) {
-		dev_warn(b4->dev, "hfc_reset() did not get the green light from the PCM system!\n");
+		dev_warn(&b4->pdev->dev, "hfc_reset() did not get the green light from the PCM system!\n");
 	}
 }
 
@@ -927,7 +949,7 @@ static void hfc_assign_bchan_fifo_ec(struct b4xxp *b4, int port, int bchan)
 
 	if (first) {
 		first = 0;
-		dev_info(b4->dev, "Hardware echo cancellation enabled.\n");
+		dev_info(&b4->pdev->dev, "Hardware echo cancellation enabled.\n");
 	}
 
 	fifo = port * 2;
@@ -944,8 +966,12 @@ static void hfc_assign_bchan_fifo_ec(struct b4xxp *b4, int port, int bchan)
 	b4->spans[port].fifos[bchan] = fifo;
 	spin_lock_irqsave(&b4->fifolock, irq_flags);
 
-	if (DBG)
-		dev_info(b4->dev, "port %d, B channel %d\n\tS/T -> PCM ts %d uses HFC chan %d via FIFO %d\n", port, bchan, ts + 1, hfc_chan, 16 + fifo);
+	if (DBG) {
+		dev_info(&b4->pdev->dev,
+			 "port %d, B channel %d\n\tS/T -> PCM ts %d uses HFC "
+			 "chan %d via FIFO %d\n",
+			 port, bchan, ts + 1, hfc_chan, 16 + fifo);
+	}
 
 /* S/T RX -> PCM TX FIFO, transparent mode, no IRQ. */
 	hfc_setreg_waitbusy(b4, R_FIFO, ((16 + fifo) << V_FIFO_NUM_SHIFT));
@@ -1004,7 +1030,7 @@ static void hfc_assign_bchan_fifo_noec(struct b4xxp *b4, int port, int bchan)
 
 	if (first) {
 		first = 0;
-		dev_info(b4->dev, "NOTE: hardware echo cancellation has been disabled\n");
+		dev_info(&b4->pdev->dev, "NOTE: hardware echo cancellation has been disabled\n");
 	}
 
 	fifo = port * 2;
@@ -1021,8 +1047,12 @@ static void hfc_assign_bchan_fifo_noec(struct b4xxp *b4, int port, int bchan)
 	b4->spans[port].fifos[bchan] = fifo;
 	spin_lock_irqsave(&b4->fifolock, irq_flags);
 
-	if (DBG)
-		dev_info(b4->dev, "port %d, B channel %d\n\thost -> S/T uses HFC chan %d via FIFO %d\n", port, bchan, hfc_chan, fifo);
+	if (DBG) {
+		dev_info(&b4->pdev->dev,
+			 "port %d, B channel %d\n\thost -> S/T "
+			 "uses HFC chan %d via FIFO %d\n",
+			 port, bchan, hfc_chan, fifo);
+	}
 
 	hfc_setreg_waitbusy(b4, R_FIFO, (fifo << V_FIFO_NUM_SHIFT));
 	b4xxp_setreg8(b4, A_CON_HDLC, V_IFF | V_HDLC_TRP | V_DATA_FLOW_000);
@@ -1071,8 +1101,11 @@ static void hfc_assign_dchan_fifo(struct b4xxp *b4, int port)
 /* record the host's FIFO # in the span fifo array */
 	b4->spans[port].fifos[2] = fifo;
 
-	if (DBG)
-		dev_info(b4->dev, "port %d, D channel\n\thost -> S/T uses HFC chan %d via FIFO %d\n", port, hfc_chan, fifo);
+	if (DBG) {
+		dev_info(&b4->pdev->dev,
+			 "port %d, D channel\n\thost -> S/T uses HFC chan %d "
+			 "via FIFO %d\n", port, hfc_chan, fifo);
+	}
 
 	spin_lock_irqsave(&b4->fifolock, irq_flags);
 
@@ -1179,17 +1212,17 @@ static DEVICE_ATTR(timing_master, 0400, b4_timing_master_show, NULL);
 static void create_sysfs_files(struct b4xxp *b4)
 {
 	int ret;
-	ret = device_create_file(b4->dev,
+	ret = device_create_file(&b4->pdev->dev,
 				 &dev_attr_timing_master);
 	if (ret) {
-		dev_info(b4->dev,
+		dev_info(&b4->pdev->dev,
 			"Failed to create device attributes.\n");
 	}
 }
 
 static void remove_sysfs_files(struct b4xxp *b4)
 {
-	device_remove_file(b4->dev,
+	device_remove_file(&b4->pdev->dev,
 			   &dev_attr_timing_master);
 }
 
@@ -1218,7 +1251,7 @@ static char *hfc_decode_st_state(struct b4xxp *b4, int port, unsigned char state
 	};
 
 	if (!(str = kmalloc(256, GFP_KERNEL))) {
-		dev_warn(b4->dev, "could not allocate mem for ST state decode string!\n");
+		dev_warn(&b4->pdev->dev, "could not allocate mem for ST state decode string!\n");
 		return NULL;
 	}
 
@@ -1260,7 +1293,9 @@ static void hfc_force_st_state(struct b4xxp *b4, int port, int state, int resume
 		char *x;
 
 		x = hfc_decode_st_state(b4, port, state, 1);
-		dev_info(b4->dev, "forced port %d to state %d (auto: %d), new decode: %s\n", port + 1, state, resume_auto, x);
+		dev_info(&b4->pdev->dev,
+			 "forced port %d to state %d (auto: %d), "
+			 "new decode: %s\n", port + 1, state, resume_auto, x);
 		kfree(x);
 	}
 
@@ -1273,8 +1308,13 @@ static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 {
 	struct b4xxp *b4 = s->parent;
 
-	if (DBG_ST)
-		dev_info(b4->dev, "%lu: hfc_timer_expire, Port %d T%d expired (value=%lu ena=%d)\n", b4->ticks, s->port + 1, t_no + 1, s->hfc_timers[t_no], s->hfc_timer_on[t_no]);
+	if (DBG_ST) {
+		dev_info(&b4->pdev->dev,
+			 "%lu: hfc_timer_expire, Port %d T%d expired "
+			 "(value=%lu ena=%d)\n",
+			 b4->ticks, s->port + 1, t_no + 1, s->hfc_timers[t_no],
+			 s->hfc_timer_on[t_no]);
+	}
 /*
  * there are three timers associated with every HFC S/T port.
  * T1 is used by the NT state machine, and is the maximum time the NT side should wait for G3 (active) state.
@@ -1296,8 +1336,11 @@ static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 		hfc_force_st_state(b4, s->port, 3, 1);
 		break;
 	default:
-		if (printk_ratelimit())
-			dev_warn(b4->dev, "hfc_timer_expire found an unknown expired timer (%d)??\n", t_no);
+		if (printk_ratelimit()) {
+			dev_warn(&b4->pdev->dev,
+				 "hfc_timer_expire found an unknown expired "
+				 "timer (%d)??\n", t_no);
+		}
 	}
 }
 
@@ -1328,8 +1371,12 @@ static void hfc_update_st_timers(struct b4xxp *b4)
 			if (!s->te_mode || !teignorered) {
 				s->span.alarms = s->newalarm;
 				dahdi_alarm_notify(&s->span);
-				if (DBG_ALARM)
-					dev_info(b4->dev, "span %d: alarm %d debounced\n", i + 1, s->newalarm);
+				if (DBG_ALARM) {
+					dev_info(&b4->pdev->dev,
+						 "span %d: alarm %d "
+						 "debounced\n",
+						 i + 1, s->newalarm);
+				}
 				b4xxp_set_sync_src(b4, b4xxp_find_sync(b4));
 			}
 		}
@@ -1354,7 +1401,9 @@ static void hfc_handle_state(struct b4xxp_span *s)
 		char *x;
 
 		x = hfc_decode_st_state(b4, s->port, state, 1);
-		dev_info(b4->dev, "port %d A_ST_RD_STA old=0x%02x now=0x%02x, decoded: %s\n", s->port + 1, s->oldstate, state, x);
+		dev_info(&b4->pdev->dev,
+			 "port %d A_ST_RD_STA old=0x%02x now=0x%02x, "
+			 "decoded: %s\n", s->port + 1, s->oldstate, state, x);
 		kfree(x);
 	}
 
@@ -1402,7 +1451,7 @@ static void hfc_handle_state(struct b4xxp_span *s)
 	s->oldstate = state;
 
 	if (DBG_ALARM) {
-		dev_info(b4->dev, "span %d: old alarm %d expires %ld, new alarm %d expires %ld\n",
+		dev_info(&b4->pdev->dev, "span %d: old alarm %d expires %ld, new alarm %d expires %ld\n",
 			s->port + 1, oldalarm, oldtimer, s->newalarm, s->alarmtimer);
 	}
 
@@ -1417,7 +1466,9 @@ static void hfc_handle_state(struct b4xxp_span *s)
 		s->hfc_timers[HFC_T3] = b4->ticks + timer_3_ms;
 		s->hfc_timer_on[HFC_T3] = 1;
 		if (DBG_ST) {
-			dev_info(b4->dev, "port %d: receiving INFO0 in state 3, setting T3 and jumping to F4\n", s->port + 1);
+			dev_info(&b4->pdev->dev,
+				 "port %d: receiving INFO0 in state 3, "
+				 "setting T3 and jumping to F4\n", s->port + 1);
 		}
 		hfc_force_st_state(b4, s->port, 4, 1);
 	}
@@ -1425,8 +1476,11 @@ static void hfc_handle_state(struct b4xxp_span *s)
 /* read in R_BERT_STA to determine where our current sync source is */
 	newsync = b4xxp_getreg8(b4, R_BERT_STA) & 0x07;
 	if (newsync != b4->syncspan) {
-		if (printk_ratelimit())
-			dev_info(b4->dev, "new card sync source: port %d\n", newsync + 1);
+		if (printk_ratelimit()) {
+			dev_info(&b4->pdev->dev,
+				 "new card sync source: port %d\n",
+				 newsync + 1);
+		}
 		b4->syncspan = newsync;
 	}
 }
@@ -1478,14 +1532,20 @@ static void hfc_start_st(struct b4xxp_span *s)
 		s->hfc_timers[HFC_T3] = b4->ticks + 500;	/* 500ms wait first time, timer_t3_ms afterward. */
 		s->hfc_timer_on[HFC_T3] = 1;
 		s->hfc_timer_on[HFC_T1] = 0;
-		if (DBG_ST)
-			dev_info(b4->dev, "setting port %d t3 timer to %lu\n", s->port + 1, s->hfc_timers[HFC_T3]);
+		if (DBG_ST) {
+			dev_info(&b4->pdev->dev,
+				 "setting port %d t3 timer to %lu\n",
+				 s->port + 1, s->hfc_timers[HFC_T3]);
+		}
 	} else {
 		s->hfc_timers[HFC_T1] = b4->ticks + timer_1_ms;
 		s->hfc_timer_on[HFC_T1] = 1;
 		s->hfc_timer_on[HFC_T3] = 0;
-		if (DBG_ST)
-			dev_info(b4->dev, "setting port %d t1 timer to %lu\n", s->port + 1, s->hfc_timers[HFC_T1]);
+		if (DBG_ST) {
+			dev_info(&b4->pdev->dev,
+				 "setting port %d t1 timer to %lu\n",
+				 s->port + 1, s->hfc_timers[HFC_T1]);
+		}
 	}
 }
 
@@ -1529,7 +1589,8 @@ static void hfc_init_all_st(struct b4xxp *b4)
 
 		s->te_mode = !nt;
 
-		dev_info(b4->dev, "Port %d: %s mode\n", i + 1, (nt ? "NT" : "TE"));
+		dev_info(&b4->pdev->dev,
+			 "Port %d: %s mode\n", i + 1, (nt ? "NT" : "TE"));
 
 		hfc_reset_st(s);
 		hfc_start_st(s);
@@ -1685,7 +1746,7 @@ static int hdlc_rx_frame(struct b4xxp_span *bspan)
 /* first check to make sure we really do have HDLC frames available to retrieve */
 	if (flen == 0) {
 		if (DBG_HDLC && DBG_SPANFILTER) {
-			dev_info(b4->dev, "hdlc_rx_frame(span %d): no frames available?\n",
+			dev_info(&b4->pdev->dev, "hdlc_rx_frame(span %d): no frames available?\n",
 				bspan->port + 1);
 		}
 
@@ -1716,7 +1777,7 @@ static int hdlc_rx_frame(struct b4xxp_span *bspan)
 
 		zleft -= j;
 		if (DBG_HDLC && DBG_SPANFILTER) {
-			dev_info(b4->dev, "hdlc_rx_frame(span %d): z1/z2/zlen=%d/%d/%d, zleft=%d\n",
+			dev_info(&b4->pdev->dev, "hdlc_rx_frame(span %d): z1/z2/zlen=%d/%d/%d, zleft=%d\n",
 				bspan->port + 1, z1, z2, zlen, zleft);
 			for (i=0; i < j; i++) printk("%02x%c", buf[i], (i < ( j - 1)) ? ' ':'\n');
 		}
@@ -1737,14 +1798,18 @@ static int hdlc_rx_frame(struct b4xxp_span *bspan)
 	++bspan->frames_in;
 	if (zlen < 3) {
 		if (DBG_HDLC && DBG_SPANFILTER)
-			dev_notice(b4->dev, "odd, zlen less then 3?\n");
+			dev_notice(&b4->pdev->dev, "odd, zlen less then 3?\n");
 		dahdi_hdlc_abort(bspan->sigchan, DAHDI_EVENT_ABORT);
 	} else {
 
 /* if STAT != 0, indicates bad frame */
 		if (stat != 0x00) {
-			if (DBG_HDLC && DBG_SPANFILTER)
-				dev_info(b4->dev, "(span %d) STAT=0x%02x indicates frame problem: ", bspan->port + 1, stat);
+			if (DBG_HDLC && DBG_SPANFILTER) {
+				dev_info(&b4->pdev->dev,
+					 "(span %d) STAT=0x%02x indicates "
+					 "frame problem: ",
+					 bspan->port + 1, stat);
+			}
 			if (stat == 0xff) {
 				if (DBG_HDLC && DBG_SPANFILTER)
 					printk("HDLC Abort\n");
@@ -1756,8 +1821,11 @@ static int hdlc_rx_frame(struct b4xxp_span *bspan)
 			}
 /* STAT == 0, means frame was OK */
 		} else {
-			if (DBG_HDLC && DBG_SPANFILTER)
-				dev_info(b4->dev, "(span %d) Frame %d is good!\n", bspan->port + 1, bspan->frames_in);
+			if (DBG_HDLC && DBG_SPANFILTER) {
+				dev_info(&b4->pdev->dev,
+					 "(span %d) Frame %d is good!\n",
+					 bspan->port + 1, bspan->frames_in);
+			}
 			dahdi_hdlc_finish(bspan->sigchan);
 		}
 	}
@@ -1828,8 +1896,8 @@ static int hdlc_tx_frame(struct b4xxp_span *bspan)
 	spin_unlock_irqrestore(&b4->fifolock, irq_flags);
 
 	if (DBG_HDLC && DBG_SPANFILTER) {
-		dev_info(b4->dev, "%s", debugbuf);
-		dev_info(b4->dev, "hdlc_tx_frame(span %d): DAHDI gave %d bytes for FIFO %d (res=%d)\n",
+		dev_info(&b4->pdev->dev, "%s", debugbuf);
+		dev_info(&b4->pdev->dev, "hdlc_tx_frame(span %d): DAHDI gave %d bytes for FIFO %d (res=%d)\n",
 			bspan->port + 1, size, fifo, res);
 		for (i=0; i < size; i++)
 			printk("%02x%c", buf[i], (i < (size - 1)) ? ' ' : '\n');
@@ -2245,17 +2313,20 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 	struct b4xxp *b4 = bspan->parent;
 
 	if (DBG)
-		dev_info(b4->dev, "Configuring span %d\n", span->spanno);
+		dev_info(&b4->pdev->dev, "Configuring span %d\n", span->spanno);
 
 #if 0
 	if (lc->sync > 0 && !bspan->te_mode) {
-		dev_info(b4->dev, "Span %d is not in NT mode, removing from sync source list\n", span->spanno);
+		dev_info(&b4->pdev->dev, "Span %d is not in NT mode, removing "
+			 "from sync source list\n", span->spanno);
 		lc->sync = 0;
 	}
 #endif
 
 	if (lc->sync < 0 || lc->sync > 4) {
-		dev_info(b4->dev, "Span %d has invalid sync priority (%d), removing from sync source list\n", span->spanno, lc->sync);
+		dev_info(&b4->pdev->dev,
+			 "Span %d has invalid sync priority (%d), removing "
+			 "from sync source list\n", span->spanno, lc->sync);
 		lc->sync = 0;
 	}
 
@@ -2293,14 +2364,14 @@ static int b4xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
 	alreadyrunning = bspan->span.flags & DAHDI_FLAG_RUNNING;
 
 	if (DBG_FOPS) {
-		dev_info(b4->dev, "%s channel %d (%s) sigtype %08x\n",
+		dev_info(&b4->pdev->dev, "%s channel %d (%s) sigtype %08x\n",
 			alreadyrunning ? "Reconfigured" : "Configured", chan->channo, chan->name, sigtype);
 	}
 
 	/* (re)configure signalling channel */
 	if ((sigtype == DAHDI_SIG_HARDHDLC) || (bspan->sigchan == chan)) {
 		if (DBG_FOPS)
-			dev_info(b4->dev, "%sonfiguring hardware HDLC on %s\n",
+			dev_info(&b4->pdev->dev, "%sonfiguring hardware HDLC on %s\n",
 				((sigtype == DAHDI_SIG_HARDHDLC) ? "C" : "Unc"), chan->name);
 
 		if (alreadyrunning && bspan->sigchan) {
@@ -2310,7 +2381,7 @@ static int b4xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
 
 		if (sigtype == DAHDI_SIG_HARDHDLC) {
 			if (hdlc_start(b4, fifo)) {
-				dev_warn(b4->dev, "Error initializing signalling controller\n");
+				dev_warn(&b4->pdev->dev, "Error initializing signalling controller\n");
 				return -1;
 			}
 		}
@@ -2330,8 +2401,10 @@ static int b4xxp_open(struct dahdi_chan *chan)
 	struct b4xxp *b4 = chan->pvt;
 	struct b4xxp_span *bspan = &b4->spans[chan->span->offset];
 
-	if (DBG_FOPS && DBG_SPANFILTER)
-		dev_info(b4->dev, "open() on chan %s (%i/%i)\n", chan->name, chan->channo, chan->chanpos);
+	if (DBG_FOPS && DBG_SPANFILTER) {
+		dev_info(&b4->pdev->dev, "open() on chan %s (%i/%i)\n",
+			 chan->name, chan->channo, chan->chanpos);
+	}
 
 	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos], 0, 0);
 	return 0;
@@ -2343,8 +2416,10 @@ static int b4xxp_close(struct dahdi_chan *chan)
 	struct b4xxp *b4 = chan->pvt;
 	struct b4xxp_span *bspan = &b4->spans[chan->span->offset];
 
-	if (DBG_FOPS && DBG_SPANFILTER)
-		dev_info(b4->dev, "close() on chan %s (%i/%i)\n", chan->name, chan->channo, chan->chanpos);
+	if (DBG_FOPS && DBG_SPANFILTER) {
+		dev_info(&b4->pdev->dev, "close() on chan %s (%i/%i)\n",
+			 chan->name, chan->channo, chan->chanpos);
+	}
 
 	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos], 1, 1);
 	return 0;
@@ -2358,7 +2433,7 @@ static void b4xxp_hdlc_hard_xmit(struct dahdi_chan *chan)
 	struct b4xxp_span *bspan = &b4->spans[span];
 
 	if ((DBG_FOPS || DBG_HDLC) && DBG_SPANFILTER)
-		dev_info(b4->dev, "hdlc_hard_xmit on chan %s (%i/%i), span=%i\n",
+		dev_info(&b4->pdev->dev, "hdlc_hard_xmit on chan %s (%i/%i), span=%i\n",
 			chan->name, chan->channo, chan->chanpos, span + 1);
 
 /*
@@ -2563,7 +2638,7 @@ static void b4xxp_bottom_half(unsigned long data)
 					}  while (k);
 				} else {
 					if (printk_ratelimit())
-						dev_warn(b4->dev, "Got FIFO TX int from non-d-chan FIFO %d??\n", fifo);
+						dev_warn(&b4->pdev->dev, "Got FIFO TX int from non-d-chan FIFO %d??\n", fifo);
 				}
 			}
 
@@ -2580,7 +2655,7 @@ static void b4xxp_bottom_half(unsigned long data)
 					} while (k);
 				} else {
 					if (printk_ratelimit())
-						dev_warn(b4->dev, "Got FIFO RX int from non-d-chan FIFO %d??\n", fifo);
+						dev_warn(&b4->pdev->dev, "Got FIFO RX int from non-d-chan FIFO %d??\n", fifo);
 				}
 			}
 
@@ -2655,7 +2730,8 @@ static int b4xxp_proc_read_one(char *buf, struct b4xxp *b4)
 	char str[80], sBuf[4096];
 
 	*sBuf=0;
-	sprintf(sBuf, "Card %d, PCI identifier %s, IRQ %d\n", b4->cardno + 1, b4->dev->bus_id, b4->irq);
+	sprintf(sBuf, "Card %d, PCI identifier %s, IRQ %d\n",
+		b4->cardno + 1, b4->pdev->dev.bus_id, b4->irq);
 
 	strcat(sBuf,"Tx:\n");
 	for (j=0; j<(b4->numspans * 2) ; j++) {			/* B Channels */
@@ -2779,7 +2855,6 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	b4->variety = dt->desc;
 	b4->card_type = dt->card_type;
 	b4->pdev = pdev;
-	b4->dev = &pdev->dev;
 	pci_set_drvdata(pdev, b4);
 
 	b4->ioaddr = pci_iomap(pdev, 0, 0);
@@ -2809,11 +2884,13 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	b4->numspans = dt->ports;
 	b4->syncspan = -1;		/* sync span is unknown */
 	if (b4->numspans > MAX_SPANS_PER_CARD) {
-		dev_err(b4->dev, "Driver does not know how to handle a %d span card!\n", b4->numspans);
+		dev_err(&b4->pdev->dev,
+			"Driver does not know how to handle a %d span card!\n",
+			b4->numspans);
 		goto err_out_free_mem;
 	}
 
-	dev_info(b4->dev, "Identified %s (controller rev %d) at %p, IRQ %i\n",
+	dev_info(&b4->pdev->dev, "Identified %s (controller rev %d) at %p, IRQ %i\n",
 		b4->variety, b4->chiprev, b4->ioaddr, b4->irq);
 
 /* look for the next free card structure */
@@ -2834,7 +2911,8 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	b4xxp_init_stage1(b4);
 
 	if (request_irq(pdev->irq, b4xxp_interrupt, DAHDI_IRQ_SHARED_DISABLED, "b4xxp", b4)) {
-		dev_err(b4->dev, "Unable to request IRQ %d\n", pdev->irq);
+		dev_err(&b4->pdev->dev, "Unable to request IRQ %d\n",
+			pdev->irq);
 		ret = -EIO;
 		goto err_out_del_from_card_array;
 	}
@@ -2851,7 +2929,9 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	init_spans(b4);
 	for (x=0; x < b4->numspans; x++) {
 		if (dahdi_register(&b4->spans[x].span, 0)) {
-			dev_err(b4->dev, "Unable to register span %s\n", b4->spans[x].span.name);
+			dev_err(&b4->pdev->dev,
+				"Unable to register span %s\n",
+				b4->spans[x].span.name);
 			goto err_out_unreg_spans;
 		}
 	}
@@ -2877,7 +2957,7 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 			break;
 	}
 #else
-	dev_info(b4->dev, "Did not do the highestorder stuff\n");
+	dev_info(&b4->pdev->dev, "Did not do the highestorder stuff\n");
 #endif
 
 	ret = b4xxp_startdefaultspan(b4);

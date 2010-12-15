@@ -435,7 +435,6 @@ struct b4xxp {
 	int chiprev;				/* revision of HFC-4S */
 
 	struct pci_dev *pdev;			/* Pointer to PCI device */
-	struct device *dev;			/* kernel dev struct (from pdev->dev) */
 	void __iomem *addr;			/* I/O address (memory mapped) */
 	void __iomem *ioaddr;			/* I/O address (index based) */
 	int irq;				/* IRQ used by device */
