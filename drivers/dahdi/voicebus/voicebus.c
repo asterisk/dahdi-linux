@@ -671,8 +671,13 @@ vb_reset_interface(struct voicebus *vb)
 	} while ((reg & 0x00000001) && time_before(jiffies, timeout));
 
 	if (reg & 0x00000001) {
-		dev_warn(&vb->pdev->dev, "Did not come out of reset "
-			 "within 100ms\n");
+		if (-1 == reg) {
+			dev_err(&vb->pdev->dev,
+				"Unable to read I/O registers.\n");
+		} else {
+			dev_err(&vb->pdev->dev, "Did not come out of reset "
+				"within 100ms\n");
+		}
 		return -EIO;
 	}
 
