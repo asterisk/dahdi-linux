@@ -191,8 +191,6 @@ static inline void vpmadt032_resend(struct vpmadt032 *vpm)
 }
 
 
-int vpmadt032_module_init(void);
-
 typedef __u16 DSP_WORD;			/* 16 bit DSP word */
 typedef __u32 DSP_ADDRESS;		/* 32 bit DSP address */
 typedef __u32 GPAK_FILE_ID;		/* G.PAK Download file identifier */

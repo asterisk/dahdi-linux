@@ -49,7 +49,7 @@
 #include "voicebus.h"
 #include "vpmadtreg.h"
 
-static rwlock_t ifacelock;
+static DEFINE_SPINLOCK(ifacelock);
 static struct vpmadt032 *ifaces[MAX_DSP_CORES];
 
 #define vpm_info(vpm, format, arg...)         \
@@ -59,13 +59,13 @@ static inline struct vpmadt032 *find_iface(const unsigned short dspid)
 {
 	struct vpmadt032 *ret;
 
-	read_lock(&ifacelock);
+	spin_lock(&ifacelock);
 	if (ifaces[dspid]) {
 		ret = ifaces[dspid];
 	} else {
 		ret = NULL;
 	}
-	read_unlock(&ifacelock);
+	spin_unlock(&ifacelock);
 	return ret;
 }
 
@@ -539,7 +539,7 @@ vpmadt032_alloc(struct vpmadt032_options *options, const char *board_name)
 
 	/* Place this structure in the ifaces array so that the DspId from the
 	 * Gpak Library can be used to locate it. */
-	write_lock(&ifacelock);
+	spin_lock(&ifacelock);
 	for (i=0; i<MAX_DSP_CORES; ++i) {
 		if (NULL == ifaces[i]) {
 			ifaces[i] = vpm;
@@ -547,7 +547,7 @@ vpmadt032_alloc(struct vpmadt032_options *options, const char *board_name)
 			break;
 		}
 	}
-	write_unlock(&ifacelock);
+	spin_unlock(&ifacelock);
 
 	if (-1 == vpm->dspid) {
 		kfree(vpm);
@@ -822,19 +822,12 @@ void vpmadt032_free(struct vpmadt032 *vpm)
 	}
 
 	BUG_ON(ifaces[vpm->dspid] != vpm);
-	write_lock(&ifacelock);
+	spin_lock(&ifacelock);
 	ifaces[vpm->dspid] = NULL;
-	write_unlock(&ifacelock);
+	spin_unlock(&ifacelock);
 	kfree(vpm);
 }
 EXPORT_SYMBOL(vpmadt032_free);
-
-int vpmadt032_module_init(void)
-{
-	rwlock_init(&ifacelock);
-	memset(ifaces, 0, sizeof(ifaces));
-	return 0;
-}
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
  * gpakReadDspMemory - Read DSP memory.

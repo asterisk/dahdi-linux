@@ -1979,17 +1979,12 @@ EXPORT_SYMBOL(vpmadtreg_unregister);
 
 static int __init voicebus_module_init(void)
 {
-	int res;
-
 	/* This registration with dahdi.ko will fail since the span is not
 	 * defined, but it will make sure that this module is a dependency of
 	 * dahdi.ko, so that when it is being unloded, this module will be
 	 * unloaded as well. */
 	dahdi_register(NULL, 0);
 	spin_lock_init(&loader_list_lock);
-	res = vpmadt032_module_init();
-	if (res)
-		return res;
 	return 0;
 }
 
