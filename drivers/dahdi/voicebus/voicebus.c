@@ -628,7 +628,23 @@ vb_reset_interface(struct voicebus *vb)
 	unsigned long timeout;
 	u32 reg;
 	u32 pci_access;
-	const u32 DEFAULT_PCI_ACCESS = 0xffdc0002;
+	enum {
+		/* Software Reset */
+		SWR		= (1 << 0),
+		/* Bus Arbitration (1 for priority transmit) */
+		BAR		= (1 << 1),
+		/* Memory Write Invalidate */
+		MWI		= (1 << 24),
+		/* Memory Read Line */
+		MRL		= (1 << 23),
+		/* Descriptor Skip Length */
+		DSLShift	= 2,
+		/* Cache Alignment */
+		CALShift	= 14,
+		/* Transmit Auto Pollling */
+		TAPShift	= 17,
+	};
+	const u32 DEFAULT_PCI_ACCESS = MWI | MRL | (0x2 << TAPShift) | BAR;
 	u8 cacheline_size;
 	BUG_ON(in_interrupt());
 
@@ -641,13 +657,13 @@ vb_reset_interface(struct voicebus *vb)
 
 	switch (cacheline_size) {
 	case 0x08:
-		pci_access = DEFAULT_PCI_ACCESS | (0x1 << 14);
+		pci_access = DEFAULT_PCI_ACCESS | (0x1 << CALShift);
 		break;
 	case 0x10:
-		pci_access = DEFAULT_PCI_ACCESS | (0x2 << 14);
+		pci_access = DEFAULT_PCI_ACCESS | (0x2 << CALShift);
 		break;
 	case 0x20:
-		pci_access = DEFAULT_PCI_ACCESS | (0x3 << 14);
+		pci_access = DEFAULT_PCI_ACCESS | (0x3 << CALShift);
 		break;
 	default:
 		if (*vb->debug) {
@@ -661,16 +677,16 @@ vb_reset_interface(struct voicebus *vb)
 	}
 
 	/* The transmit and receive descriptors will have the same padding. */
-	pci_access |= ((vb->txd.padding / sizeof(u32)) << 2) & 0x7c;
+	pci_access |= ((vb->txd.padding / sizeof(u32)) << DSLShift) & 0x7c;
 
-	vb_setctl(vb, 0x0000, pci_access | 1);
+	vb_setctl(vb, 0x0000, pci_access | SWR);
 
 	timeout = jiffies + HZ/10; /* 100ms interval */
 	do {
 		reg = vb_getctl(vb, 0x0000);
-	} while ((reg & 0x00000001) && time_before(jiffies, timeout));
+	} while ((reg & SWR) && time_before(jiffies, timeout));
 
-	if (reg & 0x00000001) {
+	if (reg & SWR) {
 		if (-1 == reg) {
 			dev_err(&vb->pdev->dev,
 				"Unable to read I/O registers.\n");
