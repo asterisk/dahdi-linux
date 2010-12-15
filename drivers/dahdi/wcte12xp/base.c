@@ -727,13 +727,6 @@ static void free_wc(struct t1 *wc)
 	kfree(wc);
 }
 
-static void t1_release(struct t1 *wc)
-{
-	dahdi_unregister(&wc->span);
-	t1_info(wc, "Freed a Wildcard TE12xP.\n");
-	free_wc(wc);
-}
-
 static void t4_serial_setup(struct t1 *wc)
 {
 	t1_info(wc, "Setting up global serial parameters for %s\n",
@@ -2358,6 +2351,8 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	if (!wc)
 		return;
 
+	dahdi_unregister(&wc->span);
+
 	remove_sysfs_files(wc);
 
 	clear_bit(INITIALIZED, &wc->bit_flags);
@@ -2381,7 +2376,8 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	}
 #endif
 
-	t1_release(wc);
+	t1_info(wc, "Freed a Wildcard TE12xP.\n");
+	free_wc(wc);
 }
 
 static struct pci_device_id te12xp_pci_tbl[] = {
