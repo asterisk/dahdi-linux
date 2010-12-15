@@ -3766,7 +3766,7 @@ static void __exit wctc4xxp_cleanup(void)
 }
 
 module_param(debug, int, S_IRUGO | S_IWUSR);
-module_param(mode, charp, S_IRUGO | S_IWUSR);
+module_param(mode, charp, S_IRUGO);
 MODULE_PARM_DESC(mode, "'g729', 'g723.1', or 'any'.  Default 'any'.");
 MODULE_DESCRIPTION("Wildcard TC400P+TC400M Driver");
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
