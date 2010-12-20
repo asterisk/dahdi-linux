@@ -2337,11 +2337,8 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 		}
 	}
 
-	/* if a sync src, put it in proper place */
-	b4->spans[span->offset].syncpos = lc->sync;
-	if (lc->sync) {
+	if (lc->sync)
 		b4->spans[lc->sync - 1].sync = span->spanno;
-	}
 
 	b4xxp_reset_span(bspan);
 

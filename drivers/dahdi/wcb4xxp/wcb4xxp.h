@@ -390,7 +390,6 @@ struct b4xxp_span {
 	unsigned char readchunk[WCB4XXP_CHANNELS_PER_SPAN * DAHDI_CHUNKSIZE];
 
 	int sync;				/* sync priority */
-	int syncpos;				/* sync priority */
 
 	int oldstate;				/* old state machine state */
 	int newalarm;				/* alarm to send to zaptel once alarm timer expires */
