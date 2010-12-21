@@ -8189,32 +8189,22 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 static unsigned int
 dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 {
-
-	struct dahdi_chan *const chan = file->private_data;
-	int	ret;
+	struct dahdi_chan *const c = file->private_data;
+	int ret = 0;
 	unsigned long flags;
 
-	  /* do the poll wait */
-	if (chan) {
-		poll_wait(file, &chan->waitq, wait_table);
-		ret = 0; /* start with nothing to return */
-		spin_lock_irqsave(&chan->lock, flags);
-		   /* if at least 1 write buffer avail */
-		if (chan->inwritebuf > -1) {
-			ret |= POLLOUT | POLLWRNORM;
-		}
-		if ((chan->outreadbuf > -1) && !chan->rxdisable) {
-			ret |= POLLIN | POLLRDNORM;
-		}
-		if (chan->eventoutidx != chan->eventinidx)
-		   {
-			/* Indicate an exception */
-			ret |= POLLPRI;
-		   }
-		spin_unlock_irqrestore(&chan->lock, flags);
-	} else
-		ret = -EINVAL;
-	return(ret);  /* return what we found */
+	if (unlikely(!c))
+		return -EINVAL;
+
+	poll_wait(file, &c->waitq, wait_table);
+
+	spin_lock_irqsave(&c->lock, flags);
+	ret |= (c->inwritebuf > -1) ? POLLOUT|POLLWRNORM : 0;
+	ret |= ((c->outreadbuf > -1) && !c->rxdisable) ?  POLLIN|POLLRDNORM : 0;
+	ret |= (c->eventoutidx != c->eventinidx) ? POLLPRI : 0;
+	spin_unlock_irqrestore(&c->lock, flags);
+
+	return ret;
 }
 
 static unsigned int dahdi_poll(struct file *file, struct poll_table_struct *wait_table)
