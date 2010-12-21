@@ -451,26 +451,23 @@ struct dahdi_chan {
 	int		sigcap;			/*!< Capability for signalling */
 	__u32		chan_alarms;		/*!< alarms status */
 
+	wait_queue_head_t waitq;
+
 	/* Used only by DAHDI -- NO DRIVER SERVICEABLE PARTS BELOW */
 	/* Buffer declarations */
 	u_char		*readbuf[DAHDI_MAX_NUM_BUFS];	/*!< read buffer */
 	int		inreadbuf;
 	int		outreadbuf;
-	wait_queue_head_t readbufq; /*!< read wait queue */
 
 	u_char		*writebuf[DAHDI_MAX_NUM_BUFS]; /*!< write buffers */
 	int		inwritebuf;
 	int		outwritebuf;
-	wait_queue_head_t writebufq; /*!< write wait queue */
 	
 	int		blocksize;	/*!< Block size */
 
 	int		eventinidx;  /*!< out index in event buf (circular) */
 	int		eventoutidx;  /*!< in index in event buf (circular) */
 	unsigned int	eventbuf[DAHDI_MAX_EVENTSIZE];  /*!< event circ. buffer */
-	wait_queue_head_t eventbufq; /*!< event wait queue */
-	
-	wait_queue_head_t txstateq;	/*!< waiting on the tx state to change */
 	
 	int		readn[DAHDI_MAX_NUM_BUFS];  /*!< # of bytes ready in read buf */
 	int		readidx[DAHDI_MAX_NUM_BUFS];  /*!< current read pointer */
@@ -507,7 +504,6 @@ struct dahdi_chan {
 
 	/* I/O Mask */	
 	unsigned int iomask;  /*! I/O Mux signal mask */
-	wait_queue_head_t sel;	/*! thingy for select stuff */
 	
 	/* HDLC state machines */
 	struct fasthdlc_state txhdlc;

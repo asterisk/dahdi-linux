@@ -945,12 +945,7 @@ static void __qevent(struct dahdi_chan *chan, int event)
 		chan->eventinidx = 0;
 
 	/* wake em all up */
-	if (chan->iomask & DAHDI_IOMUX_SIGEVENT)
-		wake_up_interruptible(&chan->eventbufq);
-
-	wake_up_interruptible(&chan->readbufq);
-	wake_up_interruptible(&chan->writebufq);
-	wake_up_interruptible(&chan->sel);
+	wake_up_interruptible(&chan->waitq);
 
 	return;
 }
@@ -1293,11 +1288,7 @@ static void close_channel(struct dahdi_chan *chan)
 	chan->pulsecount = 0;
 	chan->pulsetimer = 0;
 	chan->ringdebtimer = 0;
-	init_waitqueue_head(&chan->sel);
-	init_waitqueue_head(&chan->readbufq);
-	init_waitqueue_head(&chan->writebufq);
-	init_waitqueue_head(&chan->eventbufq);
-	init_waitqueue_head(&chan->txstateq);
+	init_waitqueue_head(&chan->waitq);
 	chan->txdialbuf[0] = '\0';
 	chan->digitmode = DIGIT_MODE_DTMF;
 	chan->dialing = 0;
@@ -2063,7 +2054,7 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 			break;
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
-		rv = wait_event_interruptible(chan->readbufq,
+		rv = wait_event_interruptible(chan->waitq,
 				(chan->outreadbuf > -1));
 		if (rv)
 			return rv;
@@ -2191,7 +2182,7 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 			return -EAGAIN;
 		}
 		/* Wait for something to be available */
-		rv = wait_event_interruptible(chan->writebufq,
+		rv = wait_event_interruptible(chan->waitq,
 					      (chan->inwritebuf >= 0));
 		if (rv)
 			return rv;
@@ -2605,11 +2596,7 @@ static int initialize_channel(struct dahdi_chan *chan)
 	chan->itimerset = chan->itimer = chan->otimer = 0;
 	chan->ringdebtimer = 0;
 
-	init_waitqueue_head(&chan->sel);
-	init_waitqueue_head(&chan->readbufq);
-	init_waitqueue_head(&chan->writebufq);
-	init_waitqueue_head(&chan->eventbufq);
-	init_waitqueue_head(&chan->txstateq);
+	init_waitqueue_head(&chan->waitq);
 
 	/* Reset conferences */
 	reset_conf(chan);
@@ -4980,7 +4967,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		unsigned int wait_result;
 
 		wait_result = 0;
-		prepare_to_wait(&chan->eventbufq, &wait, TASK_INTERRUPTIBLE);
+		prepare_to_wait(&chan->waitq, &wait, TASK_INTERRUPTIBLE);
 
 		spin_lock_irqsave(&chan->lock, flags);
 		chan->iomask = iomask;
@@ -5011,14 +4998,14 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		}
 
 		if (signal_pending(current)) {
-			finish_wait(&chan->eventbufq, &wait);
+			finish_wait(&chan->waitq, &wait);
 			return -ERESTARTSYS;
 		}
 
 		schedule();
 	}
 
-	finish_wait(&chan->eventbufq, &wait);
+	finish_wait(&chan->waitq, &wait);
 	spin_lock_irqsave(&chan->lock, flags);
 	chan->iomask = 0;
 	spin_unlock_irqrestore(&chan->lock, flags);
@@ -5206,8 +5193,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 				chan->readn[j] = 0;
 				chan->readidx[j] = 0;
 			}
-			wake_up_interruptible(&chan->readbufq);  /* wake_up_interruptible waiting on read */
-			wake_up_interruptible(&chan->sel); /* wake_up_interruptible waiting on select */
+			wake_up_interruptible(&chan->waitq);  /* wake_up_interruptible waiting on read */
 		   }
 		if (i & DAHDI_FLUSH_WRITE) /* if for write (output) */
 		   {
@@ -5219,12 +5205,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 				chan->writen[j] = 0;
 				chan->writeidx[j] = 0;
 			}
-			wake_up_interruptible(&chan->writebufq); /* wake_up_interruptible waiting on write */
-			wake_up_interruptible(&chan->sel);  /* wake_up_interruptible waiting on select */
-			   /* if IO MUX wait on write empty, well, this
-				certainly *did* empty the write */
-			if (chan->iomask & DAHDI_IOMUX_WRITEEMPTY)
-				wake_up_interruptible(&chan->eventbufq); /* wake_up_interruptible waiting on IOMUX */
+			wake_up_interruptible(&chan->waitq); /* wake_up_interruptible waiting on write */
 		   }
 		if (i & DAHDI_FLUSH_EVENT) /* if for events */
 		   {
@@ -5242,7 +5223,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 			spin_unlock_irqrestore(&chan->lock, flags);
 			if (!i)
 				break; /* skip if none */
-			rv = wait_event_interruptible(chan->writebufq,
+			rv = wait_event_interruptible(chan->waitq,
 						      (chan->outwritebuf > -1));
 			if (rv)
 				return rv;
@@ -5917,7 +5898,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				wait_event_interruptible(chan->txstateq,
+				wait_event_interruptible(chan->waitq,
 					is_txstate(chan, DAHDI_TXSIG_ONHOOK));
 				if (signal_pending(current))
 					return -ERESTARTSYS;
@@ -5932,7 +5913,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				wait_event_interruptible(chan->txstateq,
+				wait_event_interruptible(chan->waitq,
 					is_txstate(chan, DAHDI_TXSIG_OFFHOOK));
 				if (signal_pending(current))
 					return -ERESTARTSYS;
@@ -6725,7 +6706,7 @@ static inline void __dahdi_getbuf_chunk(struct dahdi_chan *ss, unsigned char *tx
 						there is something to write */
 						ms->outwritebuf = -1;
 						if (ms->iomask & (DAHDI_IOMUX_WRITE | DAHDI_IOMUX_WRITEEMPTY))
-							wake_up_interruptible(&ms->eventbufq);
+							wake_up_interruptible(&ms->waitq);
 						/* If we're only supposed to start when full, disable the transmitter */
 						if ((ms->txbufpolicy == DAHDI_POLICY_WHEN_FULL) ||
 							(ms->txbufpolicy == DAHDI_POLICY_HALF_FULL))
@@ -6735,7 +6716,7 @@ static inline void __dahdi_getbuf_chunk(struct dahdi_chan *ss, unsigned char *tx
 					if (ms->outwritebuf == ms->inwritebuf) {
 						ms->outwritebuf = oldbuf;
 						if (ms->iomask & (DAHDI_IOMUX_WRITE | DAHDI_IOMUX_WRITEEMPTY))
-							wake_up_interruptible(&ms->eventbufq);
+							wake_up_interruptible(&ms->waitq);
 						/* If we're only supposed to start when full, disable the transmitter */
 						if ((ms->txbufpolicy == DAHDI_POLICY_WHEN_FULL) ||
 							(ms->txbufpolicy == DAHDI_POLICY_HALF_FULL))
@@ -6759,10 +6740,7 @@ otherwise keeps sleeping and looking. The part in this code got "optimized"
 out in the later versions, and is put back now. */
 				if (!(ms->flags & DAHDI_FLAG_PPP) ||
 				    !dahdi_have_netdev(ms)) {
-					wake_up_interruptible(&ms->writebufq);
-					wake_up_interruptible(&ms->sel);
-					if (ms->iomask & DAHDI_IOMUX_WRITE)
-						wake_up_interruptible(&ms->eventbufq);
+					wake_up_interruptible(&ms->waitq);
 				}
 				/* Transmit a flag if this is an HDLC channel */
 				if (ms->flags & DAHDI_FLAG_HDLC)
@@ -6922,7 +6900,7 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 	case DAHDI_TXSTATE_START:
 		/* If we were starting, go off hook now ready to debounce */
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_OFFHOOK, DAHDI_TXSTATE_AFTERSTART, DAHDI_AFTERSTART_TIME);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_PREWINK:
@@ -6935,7 +6913,7 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_ONHOOK, DAHDI_TXSTATE_ONHOOK, 0);
 		if (chan->file && (chan->file->f_flags & O_NONBLOCK))
 			__qevent(chan, DAHDI_EVENT_HOOKCOMPLETE);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_PREFLASH:
@@ -6947,7 +6925,7 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_OFFHOOK, DAHDI_TXSTATE_OFFHOOK, 0);
 		if (chan->file && (chan->file->f_flags & O_NONBLOCK))
 			__qevent(chan, DAHDI_EVENT_HOOKCOMPLETE);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_DEBOUNCE:
@@ -6955,21 +6933,21 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 		/* See if we've gone back on hook */
 		if ((chan->rxhooksig == DAHDI_RXSIG_ONHOOK) && (chan->rxflashtime > 2))
 			chan->itimerset = chan->itimer = chan->rxflashtime * DAHDI_CHUNKSIZE;
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_AFTERSTART:
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_OFFHOOK, DAHDI_TXSTATE_OFFHOOK, 0);
 		if (chan->file && (chan->file->f_flags & O_NONBLOCK))
 			__qevent(chan, DAHDI_EVENT_HOOKCOMPLETE);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_KEWL:
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_ONHOOK, DAHDI_TXSTATE_AFTERKEWL, DAHDI_AFTERKEWLTIME);
 		if (chan->file && (chan->file->f_flags & O_NONBLOCK))
 			__qevent(chan, DAHDI_EVENT_HOOKCOMPLETE);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_AFTERKEWL:
@@ -6983,7 +6961,7 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 	case DAHDI_TXSTATE_PULSEBREAK:
 		dahdi_rbs_sethook(chan, DAHDI_TXSIG_OFFHOOK, DAHDI_TXSTATE_PULSEMAKE,
 			chan->pulsemaketime);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_PULSEMAKE:
@@ -6997,13 +6975,13 @@ static inline void __rbs_otimer_expire(struct dahdi_chan *chan)
 		}
 		chan->txstate = DAHDI_TXSTATE_PULSEAFTER;
 		chan->otimer = chan->pulseaftertime * DAHDI_CHUNKSIZE;
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	case DAHDI_TXSTATE_PULSEAFTER:
 		chan->txstate = DAHDI_TXSTATE_OFFHOOK;
 		__do_dtmf(chan);
-		wake_up_interruptible(&chan->txstateq);
+		wake_up_interruptible(&chan->waitq);
 		break;
 
 	default:
@@ -7913,7 +7891,7 @@ static void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int bytes)
 							/* if there are processes waiting in poll() on this channel,
 							   wake them up */
 							if (!ms->rxdisable) {
-								wake_up_interruptible(&ms->sel);
+								wake_up_interruptible(&ms->waitq);
 							}
 						}
 /* In the very orignal driver, it was quite well known to me (Jim) that there
@@ -7935,9 +7913,7 @@ that the waitqueue is empty. */
 #ifdef CONFIG_DAHDI_DEBUG
 							module_printk(KERN_NOTICE, "Notifying reader data in block %d\n", oldbuf);
 #endif
-							wake_up_interruptible(&ms->readbufq);
-							if (ms->iomask & DAHDI_IOMUX_READ)
-								wake_up_interruptible(&ms->eventbufq);
+							wake_up_interruptible(&ms->waitq);
 						}
 					}
 				}
@@ -8111,12 +8087,8 @@ void dahdi_hdlc_finish(struct dahdi_chan *ss)
 		ss->outreadbuf = oldreadbuf;
 	}
 
-	if (!ss->rxdisable) {
-		wake_up_interruptible(&ss->readbufq);
-		wake_up_interruptible(&ss->sel);
-		if (ss->iomask & DAHDI_IOMUX_READ)
-			wake_up_interruptible(&ss->eventbufq);
-	}
+	if (!ss->rxdisable)
+		wake_up_interruptible(&ss->waitq);
 	spin_unlock_irqrestore(&ss->lock, flags);
 }
 
@@ -8153,7 +8125,7 @@ int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int
 			if (ss->outwritebuf == ss->inwritebuf) {
 				ss->outwritebuf = -1;
 				if (ss->iomask & (DAHDI_IOMUX_WRITE | DAHDI_IOMUX_WRITEEMPTY))
-					wake_up_interruptible(&ss->eventbufq);
+					wake_up_interruptible(&ss->waitq);
 				/* If we're only supposed to start when full, disable the transmitter */
 				if ((ss->txbufpolicy == DAHDI_POLICY_WHEN_FULL) || (ss->txbufpolicy == DAHDI_POLICY_HALF_FULL))
 					ss->txdisable = 1;
@@ -8165,10 +8137,7 @@ int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int
 
 			if (!(ss->flags & DAHDI_FLAG_PPP) ||
 			    !dahdi_have_netdev(ss)) {
-				wake_up_interruptible(&ss->writebufq);
-				wake_up_interruptible(&ss->sel);
-				if ((ss->iomask & DAHDI_IOMUX_WRITE) && (res >= 0))
-					wake_up_interruptible(&ss->eventbufq);
+				wake_up_interruptible(&ss->waitq);
 			}
 		}
 	} else {
@@ -8229,7 +8198,7 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 
 	  /* do the poll wait */
 	if (chan) {
-		poll_wait(file, &chan->sel, wait_table);
+		poll_wait(file, &chan->waitq, wait_table);
 		ret = 0; /* start with nothing to return */
 		spin_lock_irqsave(&chan->lock, flags);
 		   /* if at least 1 write buffer avail */
