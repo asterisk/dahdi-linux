@@ -5574,6 +5574,18 @@ static void set_echocan_fax_mode(struct dahdi_chan *chan, unsigned int channo, c
 	}
 }
 
+static inline bool
+is_txstate(struct dahdi_chan *const chan, const int txstate)
+{
+	bool ret;
+	unsigned long flags;
+
+	spin_lock_irqsave(&chan->lock, flags);
+	ret = (txstate == chan->txstate);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return ret;
+}
+
 static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	struct dahdi_chan *const chan = chan_from_file(file);
@@ -5905,7 +5917,8 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				interruptible_sleep_on(&chan->txstateq);
+				wait_event_interruptible(chan->txstateq,
+					is_txstate(chan, DAHDI_TXSIG_ONHOOK));
 				if (signal_pending(current))
 					return -ERESTARTSYS;
 				break;
@@ -5919,7 +5932,8 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				spin_unlock_irqrestore(&chan->lock, flags);
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
-				interruptible_sleep_on(&chan->txstateq);
+				wait_event_interruptible(chan->txstateq,
+					is_txstate(chan, DAHDI_TXSIG_OFFHOOK));
 				if (signal_pending(current))
 					return -ERESTARTSYS;
 				break;
