@@ -1288,7 +1288,6 @@ static void close_channel(struct dahdi_chan *chan)
 	chan->pulsecount = 0;
 	chan->pulsetimer = 0;
 	chan->ringdebtimer = 0;
-	init_waitqueue_head(&chan->waitq);
 	chan->txdialbuf[0] = '\0';
 	chan->digitmode = DIGIT_MODE_DTMF;
 	chan->dialing = 0;
@@ -1564,6 +1563,7 @@ static int dahdi_chan_reg(struct dahdi_chan *chan)
 	might_sleep();
 
 	spin_lock_init(&chan->lock);
+	init_waitqueue_head(&chan->waitq);
 	if (!chan->master)
 		chan->master = chan;
 	if (!chan->readchunk)
@@ -2595,8 +2595,6 @@ static int initialize_channel(struct dahdi_chan *chan)
 	/* Initialize RBS timers */
 	chan->itimerset = chan->itimer = chan->otimer = 0;
 	chan->ringdebtimer = 0;
-
-	init_waitqueue_head(&chan->waitq);
 
 	/* Reset conferences */
 	reset_conf(chan);
