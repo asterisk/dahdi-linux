@@ -791,7 +791,8 @@ struct dahdi_span_ops {
 	int (*maint)(struct dahdi_span *span, int mode);
 
 #ifdef	DAHDI_SYNC_TICK
-	/*! Opt: send sync to spans */
+	/*! Opt: send sync to spans. Called in hard_irq context with chan_lock
+	 *       held.*/
 	int (*sync_tick)(struct dahdi_span *span, int is_master);
 #endif
 	/* ====  Channel Callback Operations ==== */

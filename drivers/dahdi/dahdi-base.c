@@ -8526,6 +8526,16 @@ static inline void pseudo_rx_audio(struct dahdi_chan *chan)
 }
 #endif /* CONFIG_DAHDI_MIRROR */
 
+#ifdef DAHDI_SYNC_TICK
+static inline void dahdi_sync_tick(struct dahdi_span *const s)
+{
+	if (s->ops->sync_tick)
+		s->ops->sync_tick(s, s == master);
+}
+#else
+#define dahdi_sync_tick(x) do { ; } while (0)
+#endif
+
 static void process_masterspan(void)
 {
 	unsigned long flags;
@@ -8597,10 +8607,8 @@ static void process_masterspan(void)
 				__buf_push(&chan->confout, NULL);
 			spin_unlock(&chan->lock);
 		}
-#ifdef	DAHDI_SYNC_TICK
-		if (s->ops->sync_tick)
-			s->ops->sync_tick(s, s == master);
-#endif
+
+		dahdi_sync_tick(s);
 	}
 	spin_unlock_irqrestore(&chan_lock, flags);
 }
