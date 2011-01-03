@@ -3110,7 +3110,7 @@ static int dahdi_open(struct inode *inode, struct file *file)
 	/* Minor 0: Special "control" descriptor */
 	if (unit == DAHDI_CTL)
 		return dahdi_ctl_open(file);
-	if (unit == 250) {
+	if (unit == DAHDI_TRANSCODE) {
 		if (!dahdi_transcode_fops) {
 			if (request_module("dahdi_transcode")) {
 				return -ENXIO;
@@ -3632,7 +3632,7 @@ static int dahdi_release(struct inode *inode, struct file *file)
 	if (unit == DAHDI_TIMER) {
 		return dahdi_timer_release(file);
 	}
-	if (unit == 250) {
+	if (unit == DAHDI_TRANSCODE) {
 		/* We should not be here because the dahdi_transcode.ko module
 		 * should have updated the file_operations for this file
 		 * handle when the file was opened. */
@@ -6389,7 +6389,7 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 		goto unlock_exit;
 	}
 
-	if (unit == 250) {
+	if (unit == DAHDI_TRANSCODE) {
 		/* dahdi_transcode should have updated the file_operations on
 		 * this file object on open, so we shouldn't be here. */
 		WARN_ON(1);
