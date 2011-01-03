@@ -90,6 +90,7 @@ static struct tasklet_struct dahdi_dynamic_tlet;
 static void dahdi_dynamic_tasklet(unsigned long data);
 #endif
 
+static DEFINE_MUTEX(dspan_mutex);
 static DEFINE_SPINLOCK(dspan_lock);
 static DEFINE_SPINLOCK(driver_lock);
 
@@ -456,7 +457,7 @@ static struct dahdi_dynamic_driver *find_driver(const char *name)
 	return found;
 }
 
-static int destroy_dynamic(struct dahdi_dynamic_span *dds)
+static int _destroy_dynamic(struct dahdi_dynamic_span *dds)
 {
 	unsigned long flags;
 	struct dahdi_dynamic *d;
@@ -484,6 +485,15 @@ static int destroy_dynamic(struct dahdi_dynamic_span *dds)
 	/* ...and one for find_dynamic. */
 	dynamic_put(d);
 	return 0;
+}
+
+static int destroy_dynamic(struct dahdi_dynamic_span *dds)
+{
+	int ret;
+	mutex_lock(&dspan_mutex);
+	ret = _destroy_dynamic(dds);
+	mutex_unlock(&dspan_mutex);
+	return ret;
 }
 
 static int dahdi_dynamic_rbsbits(struct dahdi_chan *chan, int bits)
@@ -541,7 +551,7 @@ static const struct dahdi_span_ops dynamic_ops = {
 	.sync_tick = dahdi_dynamic_sync_tick,
 };
 
-static int create_dynamic(struct dahdi_dynamic_span *dds)
+static int _create_dynamic(struct dahdi_dynamic_span *dds)
 {
 	int res = 0;
 	struct dahdi_dynamic *d;
@@ -673,6 +683,15 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	return x;
 }
 
+static int create_dynamic(struct dahdi_dynamic_span *dds)
+{
+	int ret;
+	mutex_lock(&dspan_mutex);
+	ret = _create_dynamic(dds);
+	mutex_unlock(&dspan_mutex);
+	return ret;
+}
+
 #ifdef ENABLE_TASKLETS
 static void dahdi_dynamic_tasklet(unsigned long data)
 {
@@ -740,6 +759,8 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 	struct dahdi_dynamic *d, *n;
 	unsigned long flags;
 
+	mutex_lock(&dspan_mutex);
+
 	list_for_each_entry_safe(d, n, &dspan_list, list) {
 		if (d->driver == dri) {
 			if (d->pvt) {
@@ -764,6 +785,8 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 	list_del_rcu(&dri->list);
 	spin_unlock_irqrestore(&driver_lock, flags);
 	synchronize_rcu();
+
+	mutex_unlock(&dspan_mutex);
 }
 EXPORT_SYMBOL(dahdi_dynamic_unregister_driver);
 
