@@ -9058,5 +9058,34 @@ static void __exit dahdi_cleanup(void)
 #endif
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
+char *dahdi_kasprintf(gfp_t gfp, const char *fmt, ...)
+{
+	va_list ap;
+	char *p;
+	char *temp;
+	unsigned int len;
+
+	temp = kmalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!temp)
+		return NULL;
+
+	va_start(ap, fmt);
+	len = vsnprintf(temp, PAGE_SIZE, fmt, ap);
+	va_end(ap);
+
+	p = kzalloc(len + 1, gfp);
+	if (!p) {
+		kfree(temp);
+		return NULL;
+	}
+
+	memcpy(p, temp, len + 1);
+	kfree(temp);
+	return p;
+}
+EXPORT_SYMBOL(dahdi_kasprintf);
+#endif
+
 module_init(dahdi_init);
 module_exit(dahdi_cleanup);

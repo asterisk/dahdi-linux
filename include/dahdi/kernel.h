@@ -1285,6 +1285,8 @@ static inline void list_replace(struct list_head *old, struct list_head *new)
 #define kzalloc(a, b) kcalloc(1, a, b)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
 #define synchronize_rcu() synchronize_kernel()
+#define kasprintf dahdi_kasprintf
+char *dahdi_kasprintf(gfp_t gfp, const char *fmt, ...);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 11)
 #if !defined(HAVE_WAIT_FOR_COMPLETION_TIMEOUT)
 static inline unsigned long
@@ -1301,6 +1303,7 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 	return timeout;
 }
 #endif
+
 #endif /* 2.6.11 */
 #endif /* 2.6.12 */
 #endif /* 2.6.14 */
