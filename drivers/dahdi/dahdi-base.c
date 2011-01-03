@@ -363,9 +363,9 @@ static LIST_HEAD(dahdi_timers);
 
 static DEFINE_SPINLOCK(dahdi_timer_lock);
 
+#define DEFAULT_TONE_ZONE (-1)
+
 struct dahdi_zone {
-	atomic_t refcount;
-	char name[40];	/* Informational, only */
 	int ringcadence[DAHDI_MAX_CADENCE];
 	struct dahdi_tone *tones[DAHDI_TONE_MAX];
 	/* Each of these is a circular list
@@ -379,9 +379,45 @@ struct dahdi_zone {
 	struct dahdi_tone mfr2_rev[15];		/* MFR2 REV tones for this zone, with desired length */
 	struct dahdi_tone mfr2_fwd_continuous[16];	/* MFR2 FWD tones for this zone, continuous play */
 	struct dahdi_tone mfr2_rev_continuous[16];	/* MFR2 REV tones for this zone, continuous play */
+	struct list_head node;
+	struct kref refcount;
+	const char *name;	/* Informational, only */
+	u8 num;
 };
 
+static void tone_zone_release(struct kref *kref)
+{
+	struct dahdi_zone *z = container_of(kref, struct dahdi_zone, refcount);
+	kfree(z->name);
+	kfree(z);
+}
+
+/**
+ * tone_zone_put()  - Release the reference on the tone_zone.
+ *
+ * On old kernels, since kref_put does not have a return value, we'll just
+ * always report that we released the memory.
+ *
+ */
+static inline int tone_zone_put(struct dahdi_zone *z)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
+	kref_put(&z->refcount, tone_zone_release);
+	return 1;
+#else
+	return kref_put(&z->refcount, tone_zone_release);
+#endif
+}
+
+static inline void tone_zone_get(struct dahdi_zone *z)
+{
+	kref_get(&z->refcount);
+}
+
 static DEFINE_SPINLOCK(zone_lock);
+
+/* The first zone on the list is the default zone. */
+static LIST_HEAD(tone_zones);
 
 static DEFINE_SPINLOCK(chan_lock);
 
@@ -468,8 +504,6 @@ static inline bool can_provide_timing(const struct dahdi_span *const s)
 static int maxchans = 0;
 static int maxconfs = 0;
 
-static int default_zone = -1;
-
 short __dahdi_mulaw[256];
 short __dahdi_alaw[256];
 
@@ -484,8 +518,6 @@ static u_char defgain[256];
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
 #define __RW_LOCK_UNLOCKED() RW_LOCK_UNLOCKED
 #endif
-
-static struct dahdi_zone *tone_zones[DAHDI_TONE_ZONE_MAX];
 
 #define NUM_SIGS	10
 
@@ -1306,9 +1338,11 @@ static void close_channel(struct dahdi_chan *chan)
 	readchunkpreec = chan->readchunkpreec;
 	chan->readchunkpreec = NULL;
 	chan->curtone = NULL;
-	if (chan->curzone)
-		atomic_dec(&chan->curzone->refcount);
-	chan->curzone = NULL;
+	if (chan->curzone) {
+		struct dahdi_zone *zone = chan->curzone;
+		chan->curzone = NULL;
+		tone_zone_put(zone);
+	}
 	chan->cadencepos = 0;
 	chan->pdialcount = 0;
 	dahdi_hangup(chan);
@@ -1376,49 +1410,44 @@ static void close_channel(struct dahdi_chan *chan)
 
 }
 
-static int free_tone_zone(int num)
+static int dahdi_unregister_tone_zone(unsigned int num)
 {
-	struct dahdi_zone *z = NULL;
-	int res = 0;
-
-	if ((num >= DAHDI_TONE_ZONE_MAX) || (num < 0))
-		return -EINVAL;
-
+	struct dahdi_zone *z;
+	struct dahdi_zone *found = NULL;
 	spin_lock(&zone_lock);
-	if (tone_zones[num]) {
-		if (!atomic_read(&tone_zones[num]->refcount)) {
-			z = tone_zones[num];
-			tone_zones[num] = NULL;
-		} else {
-			res = -EBUSY;
+	list_for_each_entry(z, &tone_zones, node) {
+		if (z->num == num) {
+			found = z;
+			break;
 		}
 	}
-	spin_unlock(&zone_lock);
-
-	if (z)
-		kfree(z);
-
-	return res;
-}
-
-static int dahdi_register_tone_zone(int num, struct dahdi_zone *zone)
-{
-	int res = 0;
-
-	if ((num >= DAHDI_TONE_ZONE_MAX) || (num < 0))
-		return -EINVAL;
-
-	spin_lock(&zone_lock);
-	if (tone_zones[num]) {
-		res = -EINVAL;
-	} else {
-		res = 0;
-		tone_zones[num] = zone;
+	if (found) {
+		list_del(&found->node);
+		tone_zone_put(found);
 	}
 	spin_unlock(&zone_lock);
+	return 0;
+}
 
-	if (!res)
-		module_printk(KERN_INFO, "Registered tone zone %d (%s)\n", num, zone->name);
+static int dahdi_register_tone_zone(struct dahdi_zone *zone)
+{
+	struct dahdi_zone *cur;
+	int res = 0;
+
+	kref_init(&zone->refcount);
+	spin_lock(&zone_lock);
+	list_for_each_entry(cur, &tone_zones, node) {
+		if (cur->num == zone->num) {
+			res = -EINVAL;
+			break;
+		}
+	}
+	if (!res) {
+		list_add_tail(&zone->node, &tone_zones);
+		module_printk(KERN_INFO, "Registered tone zone %d (%s)\n",
+			      zone->num, zone->name);
+	}
+	spin_unlock(&zone_lock);
 
 	return res;
 }
@@ -1522,37 +1551,38 @@ static int start_tone(struct dahdi_chan *chan, int tone)
 static int set_tone_zone(struct dahdi_chan *chan, int zone)
 {
 	int res = 0;
+	struct dahdi_zone *cur;
 	struct dahdi_zone *z;
+	unsigned long flags;
 
-	/* Do not call with the channel locked. */
-
-	if (zone == -1)
-		zone = default_zone;
-
-	if ((zone >= DAHDI_TONE_ZONE_MAX) || (zone < 0))
-		return -EINVAL;
-
+	z = NULL;
 	spin_lock(&zone_lock);
-
-	if ((z = tone_zones[zone])) {
-		unsigned long flags;
-
-		spin_lock_irqsave(&chan->lock, flags);
-
-		if (chan->curzone)
-			atomic_dec(&chan->curzone->refcount);
-
-		atomic_inc(&z->refcount);
-		chan->curzone = z;
-		chan->tonezone = zone;
-		memcpy(chan->ringcadence, z->ringcadence, sizeof(chan->ringcadence));
-
-		spin_unlock_irqrestore(&chan->lock, flags);
+	if ((DEFAULT_TONE_ZONE == zone) && !list_empty(&tone_zones)) {
+		z = list_entry(tone_zones.next, struct dahdi_zone, node);
+		tone_zone_get(z);
 	} else {
-		res = -ENODATA;
+		list_for_each_entry(cur, &tone_zones, node) {
+			if (cur->num != (u8)zone)
+				continue;
+			z = cur;
+			tone_zone_get(z);
+			break;
+		}
 	}
-
 	spin_unlock(&zone_lock);
+
+	if (unlikely(!z))
+		return -ENODATA;
+
+	spin_lock_irqsave(&chan->lock, flags);
+	if (chan->curzone) {
+		struct dahdi_zone *zone = chan->curzone;
+		chan->curzone = NULL;
+		tone_zone_put(zone);
+	}
+	chan->curzone = z;
+	memcpy(chan->ringcadence, z->ringcadence, sizeof(chan->ringcadence));
+	spin_unlock_irqrestore(&chan->lock, flags);
 
 	return res;
 }
@@ -2679,7 +2709,7 @@ static int initialize_channel(struct dahdi_chan *chan)
 
 	spin_unlock_irqrestore(&chan->lock, flags);
 
-	set_tone_zone(chan, -1);
+	set_tone_zone(chan, DEFAULT_TONE_ZONE);
 
 	if (rxgain)
 		kfree(rxgain);
@@ -2959,21 +2989,32 @@ static int dahdi_open(struct inode *inode, struct file *file)
 	return dahdi_specchan_open(file);
 }
 
+/**
+ * dahdi_set_default_zone() - Set defzone to the default.
+ * @defzone:	The number of the default zone.
+ *
+ * The default zone is the zone that will be used if the channels request the
+ * default zone in dahdi_ioctl_chanconfig.  The first entry on the tone_zones
+ * list is the default zone.  This function searches the list for the zone,
+ * and if found, moves it to the head of the list.
+ */
 static int dahdi_set_default_zone(int defzone)
 {
-	if ((defzone < 0) || (defzone >= DAHDI_TONE_ZONE_MAX))
-		return -EINVAL;
+	struct dahdi_zone *cur;
+	struct dahdi_zone *dz = NULL;
+
 	spin_lock(&zone_lock);
-	if (!tone_zones[defzone]) {
-		spin_unlock(&zone_lock);
-		return -EINVAL;
+	list_for_each_entry(cur, &tone_zones, node) {
+		if (cur->num != defzone)
+			continue;
+		dz = cur;
+		break;
 	}
-	if ((default_zone != -1) && tone_zones[default_zone])
-		atomic_dec(&tone_zones[default_zone]->refcount);
-	atomic_inc(&tone_zones[defzone]->refcount);
-	default_zone = defzone;
+	if (dz)
+		list_move(&dz->node, &tone_zones);
 	spin_unlock(&zone_lock);
-	return 0;
+
+	return (dz) ? 0 : -EINVAL;
 }
 
 /* No bigger than 32k for everything per tone zone */
@@ -3000,50 +3041,59 @@ static int ioctl_load_zone(unsigned long data)
 	size_t size;
 	int res;
 	int x;
-	void *slab, *ptr;
-	struct dahdi_zone *z;
-	struct dahdi_tone *t;
+	void *ptr;
+	struct dahdi_zone *z = NULL;
+	struct dahdi_tone *t = NULL;
 	void __user * user_data = (void __user *)data;
+	const unsigned char MAX_ZONE = -1;
 
 	work = kzalloc(sizeof(*work), GFP_KERNEL);
 	if (!work)
 		return -ENOMEM;
 
 	if (copy_from_user(&work->th, user_data, sizeof(work->th))) {
-		kfree(work);
-		return -EFAULT;
+		res = -EFAULT;
+		goto error_exit;
+	}
+
+	if ((work->th.zone < 0) || (work->th.zone > MAX_ZONE)) {
+		res = -EINVAL;
+		goto error_exit;
 	}
 
 	user_data += sizeof(work->th);
 
 	if ((work->th.count < 0) || (work->th.count > MAX_TONES)) {
 		module_printk(KERN_NOTICE, "Too many tones included\n");
-		kfree(work);
-		return -EINVAL;
+		res = -EINVAL;
+		goto error_exit;
 	}
 
 	space = size = sizeof(*z) + work->th.count * sizeof(*t);
 
 	if (size > MAX_SIZE) {
-		kfree(work);
-		return -E2BIG;
+		res = -E2BIG;
+		goto error_exit;
 	}
 
-	z = ptr = slab = kzalloc(size, GFP_KERNEL);
+	z = ptr = kzalloc(size, GFP_KERNEL);
 	if (!z) {
-		kfree(work);
-		return -ENOMEM;
+		res = -ENOMEM;
+		goto error_exit;
 	}
 
 	ptr = (char *) ptr + sizeof(*z);
 	space -= sizeof(*z);
 
-	strlcpy(z->name, work->th.name, sizeof(z->name));
+	z->name = kasprintf(GFP_KERNEL, work->th.name);
+	if (!z->name) {
+		kfree(z);
+		kfree(work);
+		return -ENOMEM;
+	}
 
 	for (x = 0; x < DAHDI_MAX_CADENCE; x++)
 		z->ringcadence[x] = work->th.ringcadence[x];
-
-	atomic_set(&z->refcount, 0);
 
 	for (x = 0; x < work->th.count; x++) {
 		enum {
@@ -3055,18 +3105,16 @@ static int ioctl_load_zone(unsigned long data)
 		} tone_type;
 
 		if (space < sizeof(*t)) {
-			kfree(slab);
-			kfree(work);
 			module_printk(KERN_NOTICE, "Insufficient tone zone space\n");
-			return -EINVAL;
+			res = -EINVAL;
+			goto error_exit;
 		}
 
 		res = copy_from_user(&work->td, user_data,
 				     sizeof(work->td));
 		if (res) {
-			kfree(slab);
-			kfree(work);
-			return -EFAULT;
+			res = -EFAULT;
+			goto error_exit;
 		}
 
 		user_data += sizeof(work->td);
@@ -3088,9 +3136,8 @@ static int ioctl_load_zone(unsigned long data)
 				module_printk(KERN_NOTICE,
 					      "Invalid 'next' pointer: %d\n",
 					      work->next[x]);
-				kfree(slab);
-				kfree(work);
-				return -EINVAL;
+				res = -EINVAL;
+				goto error_exit;
 			}
 		} else if ((work->td.tone >= DAHDI_TONE_DTMF_BASE) &&
 			   (work->td.tone <= DAHDI_TONE_DTMF_MAX)) {
@@ -3116,9 +3163,8 @@ static int ioctl_load_zone(unsigned long data)
 			module_printk(KERN_NOTICE,
 				      "Invalid tone (%d) defined\n",
 				      work->td.tone);
-			kfree(slab);
-			kfree(work);
-			return -EINVAL;
+			res = -EINVAL;
+			goto error_exit;
 		}
 
 		t->fac1 = work->td.fac1;
@@ -3180,15 +3226,21 @@ static int ioctl_load_zone(unsigned long data)
 			work->samples[x]->next = work->samples[work->next[x]];
 	}
 
-	res = dahdi_register_tone_zone(work->th.zone, z);
-	if (res) {
-		kfree(slab);
-	} else {
-		if ( -1 == default_zone ) {
-			dahdi_set_default_zone(work->th.zone);
-		}
-	}
+	z->num = work->th.zone;
 
+	/* After we call dahdi_register_tone_zone, the only safe way to free
+	 * the zone is with a tone_zone_put call. */
+	res = dahdi_register_tone_zone(z);
+	if (res)
+		tone_zone_put(z);
+
+	kfree(work);
+	return res;
+
+error_exit:
+	if (z)
+		kfree(z->name);
+	kfree(z);
 	kfree(work);
 	return res;
 }
@@ -3722,14 +3774,12 @@ static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 	if (!temp)
 		return -ENOMEM;
 
-	/* lock channel */
 	spin_lock_irqsave(&chan->lock, flags);
-	/* make static copy of channel */
 	*temp = *chan;
 	if (temp->ec_state)
 		ec_state = *temp->ec_state;
-
-	/* release it. */
+	if (temp->curzone)
+		tone_zone_get(temp->curzone);
 	spin_unlock_irqrestore(&chan->lock, flags);
 
 	module_printk(KERN_INFO, "Dump of DAHDI Channel %d (%s,%d,%d):\n\n",
@@ -3747,7 +3797,9 @@ static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 	module_printk(KERN_INFO, "txdisable: %d, rxdisable: %d, iomask: %d\n",
 		      temp->txdisable, temp->rxdisable, temp->iomask);
 	module_printk(KERN_INFO, "curzone: %p, tonezone: %d, curtone: %p, tonep: %d\n",
-		      temp->curzone, temp->tonezone, temp->curtone, temp->tonep);
+		      temp->curzone,
+		      ((temp->curzone) ? temp->curzone->num : -1),
+		      temp->curtone, temp->tonep);
 	module_printk(KERN_INFO, "digitmode: %d, txdialbuf: %s, dialing: %d, aftdialtimer: %d, cadpos. %d\n",
 		      temp->digitmode, temp->txdialbuf, temp->dialing,
 		      temp->afterdialingtimer, temp->cadencepos);
@@ -3761,6 +3813,9 @@ static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 	}
 	module_printk(KERN_INFO, "itimer: %d, otimer: %d, ringdebtimer: %d\n\n",
 		      temp->itimer, temp->otimer, temp->ringdebtimer);
+
+	if (temp->curzone)
+		tone_zone_put(temp->curzone);
 	kfree(temp);
 	return 0;
 }
@@ -4575,11 +4630,13 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 	case DAHDI_LOADZONE:
 		return ioctl_load_zone(data);
 	case DAHDI_FREEZONE:
-		get_user(j, (int __user *) data);
-		return free_tone_zone(j);
+		if (get_user(j, (int __user *) data))
+			return -EFAULT;
+		return dahdi_unregister_tone_zone(j);
 	case DAHDI_SET_DIALPARAMS:
 	{
 		struct dahdi_dialparams tdp;
+		struct dahdi_zone *z;
 
 		if (copy_from_user(&tdp, (void __user *)data, sizeof(tdp)))
 			return -EFAULT;
@@ -4596,12 +4653,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 
 		/* update the lengths in all currently loaded zones */
 		spin_lock(&zone_lock);
-		for (j = 0; j < ARRAY_SIZE(tone_zones); j++) {
-			struct dahdi_zone *z = tone_zones[j];
-
-			if (!z)
-				continue;
-
+		list_for_each_entry(z, &tone_zones, node) {
 			for (i = 0; i < ARRAY_SIZE(z->dtmf); i++) {
 				z->dtmf[i].tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
 			}
@@ -5334,8 +5386,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		return rv;
 	case DAHDI_GETTONEZONE:
 		spin_lock_irqsave(&chan->lock, flags);
-		if (chan->curzone)
-			j = chan->tonezone;
+		j = (chan->curzone) ? chan->curzone->num : 0;
 		spin_unlock_irqrestore(&chan->lock, flags);
 		put_user(j, (int __user *) data);
 		break;
@@ -9030,7 +9081,7 @@ static int __init dahdi_init(void)
 
 static void __exit dahdi_cleanup(void)
 {
-	int x;
+	struct dahdi_zone *z;
 
 	dahdi_unregister_echocan_factory(&hwec_factory);
 	coretimer_cleanup();
@@ -9048,10 +9099,18 @@ static void __exit dahdi_cleanup(void)
 #endif
 
 	module_printk(KERN_INFO, "Telephony Interface Unloaded\n");
-	for (x = 0; x < DAHDI_TONE_ZONE_MAX; x++) {
-		if (tone_zones[x])
-			kfree(tone_zones[x]);
+
+	spin_lock(&zone_lock);
+	while (!list_empty(&tone_zones)) {
+		z = list_entry(tone_zones.next, struct dahdi_zone, node);
+		list_del(&z->node);
+		if (!tone_zone_put(z)) {
+			module_printk(KERN_WARNING,
+				      "Potential memory leak detected in %s\n",
+				      __func__);
+		}
 	}
+	spin_unlock(&zone_lock);
 
 #ifdef CONFIG_DAHDI_WATCHDOG
 	watchdog_cleanup();

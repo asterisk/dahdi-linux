@@ -483,7 +483,6 @@ struct dahdi_chan {
 	
 	/* Tone zone stuff */
 	struct dahdi_zone *curzone;		/*!< Zone for selecting tones */
-	int 	tonezone;				/*!< Tone zone for this channel */
 	struct dahdi_tone *curtone;		/*!< Current tone we're playing (if any) */
 	int		tonep;					/*!< Current position in tone */
 	struct dahdi_tone_state ts;		/*!< Tone state */
