@@ -166,49 +166,55 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 		goto INVALID_ADDRESS;
 
 	d = kzalloc(sizeof(*d), GFP_KERNEL);
-	if (d) {
-		d->key = key;
-		d->id = id;
-		d->span = span;
-			
-		spin_lock_irqsave(&local_lock, flags);
-		/* Add this peer to any existing spans with same key
-		   And add them as peers to this one */
-		list_for_each_entry(l, &dynamic_local_list, node) {
-			if (l->key != d->key)
-				continue;
+	if (!d)
+		return NULL;
 
-			if (l->id == d->id) {
-				printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key %d\n", d->id, d->key);
+	d->key = key;
+	d->id = id;
+	d->span = span;
+
+	spin_lock_irqsave(&local_lock, flags);
+	/* Add this peer to any existing spans with same key
+	   And add them as peers to this one */
+	list_for_each_entry(l, &dynamic_local_list, node) {
+		if (l->key != d->key)
+			continue;
+
+		if (l->id == d->id) {
+			printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key "
+				"%d\n", d->id, d->key);
+			goto CLEAR_AND_DEL_FROM_PEERS;
+		}
+		if (monitor == -1) {
+			if (l->peer) {
+				printk(KERN_DEBUG "TDMoL: Span with key %d and "
+					"id %d already has a R/W peer\n",
+					d->key, d->id);
 				goto CLEAR_AND_DEL_FROM_PEERS;
-			}
-			if (monitor == -1) {
-				if (l->peer) {
-					printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a R/W peer\n", d->key, d->id);
-					goto CLEAR_AND_DEL_FROM_PEERS;
-				} else {
-					l->peer = d;
-					d->peer = l;
-				}
-			}
-			if (monitor == l->id) {
-				if (l->monitor_rx_peer) {
-					printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a monitoring peer\n", d->key, d->id);
-					goto CLEAR_AND_DEL_FROM_PEERS;
-				} else {
-					l->monitor_rx_peer = d;
-				}
+			} else {
+				l->peer = d;
+				d->peer = l;
 			}
 		}
-		list_add(&d->node, &dynamic_local_list);
-		spin_unlock_irqrestore(&local_lock, flags);
-
-		if(!try_module_get(THIS_MODULE))
-			printk(KERN_DEBUG "TDMoL: Unable to increment module use count\n");
-
-		printk(KERN_INFO "TDMoL: Added new interface for %s, "
-		       "key %d id %d\n", span->name, d->key, d->id);
+		if (monitor == l->id) {
+			if (l->monitor_rx_peer) {
+				printk(KERN_DEBUG "TDMoL: Span with key %d and "
+					"id %d already has a monitoring peer\n",
+					d->key, d->id);
+				goto CLEAR_AND_DEL_FROM_PEERS;
+			} else {
+				l->monitor_rx_peer = d;
+			}
+		}
 	}
+	list_add(&d->node, &dynamic_local_list);
+	spin_unlock_irqrestore(&local_lock, flags);
+
+	if (!try_module_get(THIS_MODULE))
+		printk(KERN_DEBUG "TDMoL: Unable to increment module use count\n");
+
+	printk(KERN_INFO "TDMoL: Added new interface for %s, "
+	       "key %d id %d\n", span->name, d->key, d->id);
 	return d;
 
 CLEAR_AND_DEL_FROM_PEERS:
