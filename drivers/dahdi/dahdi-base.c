@@ -8659,9 +8659,8 @@ static void process_masterspan(void)
 			spin_lock(&chan->lock);
 			data = __buf_peek(&chan->confin);
 			__dahdi_receive_chunk(chan, data);
-			if (data) {
-				__buf_pull(&chan->confin, NULL, chans[x]);
-			}
+			if (data)
+				__buf_pull(&chan->confin, NULL, chan);
 			spin_unlock(&chan->lock);
 		}
 	}
@@ -8848,6 +8847,13 @@ static void __receive_from_slaves(struct dahdi_chan *const chan)
 	}
 }
 
+static inline bool should_skip_receive(const struct dahdi_chan *const chan)
+{
+	return (unlikely(chan->flags & DAHDI_FLAG_NOSTDTXRX) ||
+		(chan->master != chan) ||
+		is_chan_dacsed(chan));
+}
+
 int dahdi_receive(struct dahdi_span *span)
 {
 	unsigned long flags;
@@ -8861,65 +8867,60 @@ int dahdi_receive(struct dahdi_span *span)
 	for (x = 0; x < span->channels; x++) {
 		struct dahdi_chan *const chan = span->chans[x];
 		spin_lock(&chan->lock);
-		if (unlikely(chan->flags & DAHDI_FLAG_NOSTDTXRX)) {
+		if (should_skip_receive(chan)) {
 			spin_unlock(&chan->lock);
 			continue;
 		}
-		if (chan->master == chan) {
-			if (is_chan_dacsed(chan)) {
-				/* this channel is in DACS mode, there is nothing to do here */
-				spin_unlock_irqrestore(&chan->lock, flags);
-				continue;
-			} else if (chan->nextslave) {
-				__receive_from_slaves(chan);
-			} else {
-				/* Process a normal channel */
-				__dahdi_real_receive(chan);
-			}
-			if (chan->itimer) {
-				chan->itimer -= DAHDI_CHUNKSIZE;
-				if (chan->itimer <= 0)
-					rbs_itimer_expire(chan);
-			}
-			if (chan->ringdebtimer)
-				chan->ringdebtimer--;
-			if (chan->sig & __DAHDI_SIG_FXS) {
-				if (chan->rxhooksig == DAHDI_RXSIG_RING)
-					chan->ringtrailer = DAHDI_RINGTRAILER;
-				else if (chan->ringtrailer) {
-					chan->ringtrailer -= DAHDI_CHUNKSIZE;
-					/* See if RING trailer is expired */
-					if (!chan->ringtrailer && !chan->ringdebtimer)
-						__qevent(chan, DAHDI_EVENT_RINGOFFHOOK);
-				}
-			}
-			if (chan->pulsetimer) {
-				chan->pulsetimer--;
-				if (chan->pulsetimer <= 0) {
-					if (chan->pulsecount) {
-						if (chan->pulsecount > 12) {
 
-							module_printk(KERN_NOTICE, "Got pulse digit %d on %s???\n",
-						    chan->pulsecount,
-							chan->name);
-						} else if (chan->pulsecount > 11) {
-							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '#');
-						} else if (chan->pulsecount > 10) {
-							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '*');
-						} else if (chan->pulsecount > 9) {
-							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '0');
-						} else {
-							__qevent(chan, DAHDI_EVENT_PULSEDIGIT | ('0' +
-								chan->pulsecount));
-						}
-						chan->pulsecount = 0;
+		if (chan->nextslave) {
+			__receive_from_slaves(chan);
+		} else {
+			/* Process a normal channel */
+			__dahdi_real_receive(chan);
+		}
+		if (chan->itimer) {
+			chan->itimer -= DAHDI_CHUNKSIZE;
+			if (chan->itimer <= 0)
+				rbs_itimer_expire(chan);
+		}
+		if (chan->ringdebtimer)
+			chan->ringdebtimer--;
+		if (chan->sig & __DAHDI_SIG_FXS) {
+			if (chan->rxhooksig == DAHDI_RXSIG_RING)
+				chan->ringtrailer = DAHDI_RINGTRAILER;
+			else if (chan->ringtrailer) {
+				chan->ringtrailer -= DAHDI_CHUNKSIZE;
+				/* See if RING trailer is expired */
+				if (!chan->ringtrailer && !chan->ringdebtimer)
+					__qevent(chan, DAHDI_EVENT_RINGOFFHOOK);
+			}
+		}
+		if (chan->pulsetimer) {
+			chan->pulsetimer--;
+			if (chan->pulsetimer <= 0) {
+				if (chan->pulsecount) {
+					if (chan->pulsecount > 12) {
+
+						module_printk(KERN_NOTICE, "Got pulse digit %d on %s???\n",
+					    chan->pulsecount,
+						chan->name);
+					} else if (chan->pulsecount > 11) {
+						__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '#');
+					} else if (chan->pulsecount > 10) {
+						__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '*');
+					} else if (chan->pulsecount > 9) {
+						__qevent(chan, DAHDI_EVENT_PULSEDIGIT | '0');
+					} else {
+						__qevent(chan, DAHDI_EVENT_PULSEDIGIT | ('0' +
+							chan->pulsecount));
 					}
+					chan->pulsecount = 0;
 				}
 			}
-#ifdef BUFFER_DEBUG
-			chan->statcount -= DAHDI_CHUNKSIZE;
-#endif
 		}
+#ifdef BUFFER_DEBUG
+		chan->statcount -= DAHDI_CHUNKSIZE;
+#endif
 		spin_unlock(&chan->lock);
 	}
 
