@@ -988,10 +988,10 @@ struct dahdi_transcoder {
 
 struct dahdi_dynamic_driver {
 	/*! Driver name (e.g. Eth) */
-	char name[20];
+	const char *name;
 
 	/*! Driver description */
-	char desc[80];
+	const char *desc;
 
 	/*! Create a new transmission pipe */
 	void *(*create)(struct dahdi_span *span, char *address);

@@ -441,7 +441,7 @@ static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *dds)
 	return found;
 }
 
-static struct dahdi_dynamic_driver *find_driver(char *name)
+static struct dahdi_dynamic_driver *find_driver(const char *name)
 {
 	struct dahdi_dynamic_driver *dtd, *found = NULL;
 
