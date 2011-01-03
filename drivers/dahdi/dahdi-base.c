@@ -2117,6 +2117,7 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 			pos->_confn = 0;
 			pos->confmode = 0;
 			pos->dacs_chan = NULL;
+			pos->conf_chan = NULL;
 		}
 	}
 	chan->channo = -1;
@@ -2719,6 +2720,7 @@ static int initialize_channel(struct dahdi_chan *chan)
 	if ((chan->sig & __DAHDI_SIG_DACS) != __DAHDI_SIG_DACS) {
 		chan->confna = 0;
 		chan->confmode = 0;
+		chan->conf_chan = NULL;
 		dahdi_disable_dacs(chan);
 	}
 	chan->_confn = 0;
@@ -5022,6 +5024,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	}
 	j = chan->confna;  /* save old conference number */
 	chan->confna = conf.confno;   /* set conference number */
+	chan->conf_chan = conf_chan;
 	chan->confmode = conf.confmode;  /* set conference mode */
 	chan->_confn = 0;		     /* Clear confn */
 	dahdi_check_conf(j);
@@ -5823,6 +5826,7 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 			  /* initialize conference variables */
 			chan->_confn = 0;
 			chan->confna = 0;
+			chan->conf_chan = NULL;
 			dahdi_disable_dacs(chan);
 			chan->confmode = 0;
 			chan->confmute = 0;
@@ -6627,8 +6631,8 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 #endif
 
 	if ((!ms->confmute && !ms->dialing) || (is_pseudo_chan(ms))) {
+		struct dahdi_chan *const conf_chan = ms->conf_chan;
 		/* Handle conferencing on non-clear channel and non-HDLC channels */
-		struct dahdi_chan *const conf_chan = chans[ms->confna];
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
 		case DAHDI_CONF_NORMAL:
 			/* Do nuffin */
@@ -7696,7 +7700,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 	/* Take the rxc, twiddle it for conferencing if appropriate and put it
 	   back */
 	if ((!ms->confmute && !ms->afterdialingtimer) || is_pseudo_chan(ms)) {
-		struct dahdi_chan *const conf_chan = chans[ms->confna];
+		struct dahdi_chan *const conf_chan = ms->conf_chan;
 		switch(ms->confmode & DAHDI_CONF_MODE_MASK) {
 		case DAHDI_CONF_NORMAL:		/* Normal mode */
 			/* Do nothing.  rx goes output */

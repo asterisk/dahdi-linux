@@ -517,6 +517,7 @@ struct dahdi_chan {
 	int		_confn;	/*! Actual conference number */
 	int		confmode;  /*! conference mode */
 	int		confmute; /*! conference mute mode */
+	struct dahdi_chan *conf_chan;
 
 	/* Incoming and outgoing conference chunk queues for
 	   communicating between DAHDI master time and
