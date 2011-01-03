@@ -388,7 +388,7 @@ static int ztdethmf_notifier(struct notifier_block *block, unsigned long event,
 	return 0;
 }
 
-static int ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
+static void ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
 {
 	struct ztdeth *z = pvt, *ready_spans[ETHMF_MAX_PER_SPAN_GROUP];
 	struct sk_buff *skb;
@@ -402,13 +402,13 @@ static int ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
 #endif
 
 	if (atomic_read(&shutdown))
-		return 0;
+		return;
 
 	rcu_read_lock();
 
 	if (unlikely(!z || !z->dev)) {
 		rcu_read_unlock();
-		return 0;
+		return;
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
@@ -464,7 +464,7 @@ static int ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
 		if (unlikely(!skb)) {
 			rcu_read_unlock();
 			ethmf_errors_inc();
-			return 0;
+			return;
 		}
 
 		/* Reserve header space */
@@ -534,7 +534,7 @@ static int ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
 
 	rcu_read_unlock();
 
-	return 0;
+	return;
 }
 
 static int ztdethmf_flush(void)

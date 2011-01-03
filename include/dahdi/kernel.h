@@ -1000,7 +1000,7 @@ struct dahdi_dynamic_driver {
 	void (*destroy)(void *tpipe);
 
 	/*! Transmit a given message */
-	int (*transmit)(void *tpipe, unsigned char *msg, int msglen);
+	void (*transmit)(void *tpipe, unsigned char *msg, int msglen);
 
 	/*! Flush any pending messages */
 	int (*flush)(void);

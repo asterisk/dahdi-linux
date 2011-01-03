@@ -140,7 +140,7 @@ static int ztdeth_notifier(struct notifier_block *block, unsigned long event, vo
 	return 0;
 }
 
-static int ztdeth_transmit(void *pvt, unsigned char *msg, int msglen)
+static void ztdeth_transmit(void *pvt, unsigned char *msg, int msglen)
 {
 	struct ztdeth *z;
 	struct sk_buff *skb;
@@ -189,7 +189,6 @@ static int ztdeth_transmit(void *pvt, unsigned char *msg, int msglen)
 	}
 	else
 		spin_unlock_irqrestore(&zlock, flags);
-	return 0;
 }
 
 

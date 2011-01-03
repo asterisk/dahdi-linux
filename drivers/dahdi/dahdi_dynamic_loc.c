@@ -75,7 +75,7 @@ struct dahdi_dynamic_local {
 static DEFINE_SPINLOCK(local_lock);
 static LIST_HEAD(dynamic_local_list);
 
-static int
+static void
 dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
 {
 	struct dahdi_dynamic_local *const d = pvt;
@@ -94,7 +94,6 @@ dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
 		}
 	}
 	spin_unlock_irqrestore(&local_lock, flags);
-	return 0;
 }
 
 static int digit2int(char d)
