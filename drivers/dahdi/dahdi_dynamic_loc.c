@@ -57,31 +57,31 @@
 
 #include <dahdi/kernel.h>
 
-static DEFINE_SPINLOCK(local_lock);
-
 /**
  * struct dahdi_dynamic_loc - For local dynamic spans
  * @monitor_rx_peer:   Indicates the peer span that monitors this span.
  * @peer:	       Indicates the rw peer for this span.
  *
  */
-static struct dahdi_dynamic_local {
+struct dahdi_dynamic_local {
 	unsigned short key;
 	unsigned short id;
 	struct dahdi_dynamic_local *monitor_rx_peer;
 	struct dahdi_dynamic_local *peer;
 	struct dahdi_span *span;
-	struct dahdi_dynamic_local *next;
-} *ddevs = NULL;
+	struct list_head node;
+};
+
+static DEFINE_SPINLOCK(local_lock);
+static LIST_HEAD(dynamic_local_list);
 
 static int
 dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
 {
-	struct dahdi_dynamic_local *d;
+	struct dahdi_dynamic_local *const d = pvt;
 	unsigned long flags;
 
 	spin_lock_irqsave(&local_lock, flags);
-	d = pvt;
 	if (d->peer && d->peer->span)
 		dahdi_dynamic_receive(d->peer->span, msg, msglen);
 	if (d->monitor_rx_peer && d->monitor_rx_peer->span)
@@ -126,36 +126,22 @@ static void dahdi_dynamic_local_destroy(void *pvt)
 {
 	struct dahdi_dynamic_local *d = pvt;
 	unsigned long flags;
-	struct dahdi_dynamic_local *prev = NULL, *cur;
+	struct dahdi_dynamic_local *cur;
 
 	spin_lock_irqsave(&local_lock, flags);
-	cur = ddevs;
-	while(cur) {
+	list_for_each_entry(cur, &dynamic_local_list, node) {
 		if (cur->peer == d)
 			cur->peer = NULL;
 		if (cur->monitor_rx_peer == d)
 			cur->monitor_rx_peer = NULL;
-		cur = cur->next;
 	}
-	cur = ddevs;
-	while(cur) {
-		if (cur == d) {
-			if (prev)
-				prev->next = cur->next;
-			else
-				ddevs = cur->next;
-			break;
-		}
-		prev = cur;
-		cur = cur->next;
-	}
+	list_del(&d->node);
 	spin_unlock_irqrestore(&local_lock, flags);
-	if (cur == d) {
-		printk(KERN_INFO "TDMoL: Removed interface for %s, key %d "
-			"id %d\n", d->span->name, d->key, d->id);
-		module_put(THIS_MODULE);
-		kfree(d);
-	}
+
+	printk(KERN_INFO "TDMoL: Removed interface for %s, key %d "
+		"id %d\n", d->span->name, d->key, d->id);
+	module_put(THIS_MODULE);
+	kfree(d);
 }
 
 static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
@@ -188,33 +174,35 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 		spin_lock_irqsave(&local_lock, flags);
 		/* Add this peer to any existing spans with same key
 		   And add them as peers to this one */
-		for (l = ddevs; l; l = l->next)
-			if (l->key == d->key) {
-				if (l->id == d->id) {
-					printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key %d\n", d->id, d->key);
+		list_for_each_entry(l, &dynamic_local_list, node) {
+			if (l->key != d->key)
+				continue;
+
+			if (l->id == d->id) {
+				printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key %d\n", d->id, d->key);
+				goto CLEAR_AND_DEL_FROM_PEERS;
+			}
+			if (monitor == -1) {
+				if (l->peer) {
+					printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a R/W peer\n", d->key, d->id);
 					goto CLEAR_AND_DEL_FROM_PEERS;
-				}
-				if (monitor == -1) {
-					if (l->peer) {
-						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a R/W peer\n", d->key, d->id);
-						goto CLEAR_AND_DEL_FROM_PEERS;
-					} else {
-						l->peer = d;
-						d->peer = l;
-					}
-				}
-				if (monitor == l->id) {
-					if (l->monitor_rx_peer) {
-						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a monitoring peer\n", d->key, d->id);
-						goto CLEAR_AND_DEL_FROM_PEERS;
-					} else {
-						l->monitor_rx_peer = d;
-					}
+				} else {
+					l->peer = d;
+					d->peer = l;
 				}
 			}
-		d->next = ddevs;
-		ddevs = d;
+			if (monitor == l->id) {
+				if (l->monitor_rx_peer) {
+					printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a monitoring peer\n", d->key, d->id);
+					goto CLEAR_AND_DEL_FROM_PEERS;
+				} else {
+					l->monitor_rx_peer = d;
+				}
+			}
+		}
+		list_add(&d->node, &dynamic_local_list);
 		spin_unlock_irqrestore(&local_lock, flags);
+
 		if(!try_module_get(THIS_MODULE))
 			printk(KERN_DEBUG "TDMoL: Unable to increment module use count\n");
 
@@ -224,7 +212,7 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 	return d;
 
 CLEAR_AND_DEL_FROM_PEERS:
-	for (l = ddevs; l; l = l->next) {
+	list_for_each_entry(l, &dynamic_local_list, node) {
 		if (l->peer == d)
 			l->peer = NULL;
 		if (l->monitor_rx_peer == d)
