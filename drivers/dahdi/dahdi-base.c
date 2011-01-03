@@ -4431,6 +4431,54 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 	return res;
 }
 
+static int dahdi_ioctl_set_dialparams(struct file *file, unsigned long data)
+{
+	unsigned int i;
+	struct dahdi_dialparams tdp;
+	struct dahdi_zone *z;
+
+	if (copy_from_user(&tdp, (void __user *)data, sizeof(tdp)))
+		return -EFAULT;
+
+	if ((tdp.dtmf_tonelen >= 10) && (tdp.dtmf_tonelen <= 4000)) {
+		global_dialparams.dtmf_tonelen = tdp.dtmf_tonelen;
+	}
+	if ((tdp.mfv1_tonelen >= 10) && (tdp.mfv1_tonelen <= 4000)) {
+		global_dialparams.mfv1_tonelen = tdp.mfv1_tonelen;
+	}
+	if ((tdp.mfr2_tonelen >= 10) && (tdp.mfr2_tonelen <= 4000)) {
+		global_dialparams.mfr2_tonelen = tdp.mfr2_tonelen;
+	}
+
+	/* update the lengths in all currently loaded zones */
+	spin_lock(&zone_lock);
+	list_for_each_entry(z, &tone_zones, node) {
+		for (i = 0; i < ARRAY_SIZE(z->dtmf); i++) {
+			z->dtmf[i].tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
+		}
+
+		/* for MFR1, we only adjust the length of the digits */
+		for (i = DAHDI_TONE_MFR1_0; i <= DAHDI_TONE_MFR1_9; i++) {
+			z->mfr1[i - DAHDI_TONE_MFR1_BASE].tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
+		}
+
+		for (i = 0; i < ARRAY_SIZE(z->mfr2_fwd); i++) {
+			z->mfr2_fwd[i].tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
+		}
+
+		for (i = 0; i < ARRAY_SIZE(z->mfr2_rev); i++) {
+			z->mfr2_rev[i].tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
+		}
+	}
+	spin_unlock(&zone_lock);
+
+	dtmf_silence.tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
+	mfr1_silence.tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
+	mfr2_silence.tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
+
+	return 0;
+}
+
 static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	/* I/O CTL's for control interface */
@@ -4633,52 +4681,10 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		if (get_user(j, (int __user *) data))
 			return -EFAULT;
 		return dahdi_unregister_tone_zone(j);
+
 	case DAHDI_SET_DIALPARAMS:
-	{
-		struct dahdi_dialparams tdp;
-		struct dahdi_zone *z;
+		return dahdi_ioctl_set_dialparams(file, data);
 
-		if (copy_from_user(&tdp, (void __user *)data, sizeof(tdp)))
-			return -EFAULT;
-
-		if ((tdp.dtmf_tonelen >= 10) && (tdp.dtmf_tonelen <= 4000)) {
-			global_dialparams.dtmf_tonelen = tdp.dtmf_tonelen;
-		}
-		if ((tdp.mfv1_tonelen >= 10) && (tdp.mfv1_tonelen <= 4000)) {
-			global_dialparams.mfv1_tonelen = tdp.mfv1_tonelen;
-		}
-		if ((tdp.mfr2_tonelen >= 10) && (tdp.mfr2_tonelen <= 4000)) {
-			global_dialparams.mfr2_tonelen = tdp.mfr2_tonelen;
-		}
-
-		/* update the lengths in all currently loaded zones */
-		spin_lock(&zone_lock);
-		list_for_each_entry(z, &tone_zones, node) {
-			for (i = 0; i < ARRAY_SIZE(z->dtmf); i++) {
-				z->dtmf[i].tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
-			}
-
-			/* for MFR1, we only adjust the length of the digits */
-			for (i = DAHDI_TONE_MFR1_0; i <= DAHDI_TONE_MFR1_9; i++) {
-				z->mfr1[i - DAHDI_TONE_MFR1_BASE].tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
-			}
-
-			for (i = 0; i < ARRAY_SIZE(z->mfr2_fwd); i++) {
-				z->mfr2_fwd[i].tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
-			}
-
-			for (i = 0; i < ARRAY_SIZE(z->mfr2_rev); i++) {
-				z->mfr2_rev[i].tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
-			}
-		}
-		spin_unlock(&zone_lock);
-
-		dtmf_silence.tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
-		mfr1_silence.tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
-		mfr2_silence.tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
-
-		break;
-	}
 	case DAHDI_GET_DIALPARAMS:
 	{
 		struct dahdi_dialparams tdp;
