@@ -1544,10 +1544,15 @@ static void close_channel(struct dahdi_chan *chan)
 
 }
 
-static int dahdi_unregister_tone_zone(unsigned int num)
+static int dahdi_ioctl_freezone(unsigned long data)
 {
 	struct dahdi_zone *z;
 	struct dahdi_zone *found = NULL;
+	int num;
+
+	if (get_user(num, (int __user *) data))
+		return -EFAULT;
+
 	spin_lock(&zone_lock);
 	list_for_each_entry(z, &tone_zones, node) {
 		if (z->num == num) {
@@ -3146,7 +3151,7 @@ static int dahdi_open(struct inode *inode, struct file *file)
 }
 
 /**
- * dahdi_set_default_zone() - Set defzone to the default.
+ * dahdi_ioctl_defaultzone() - Set defzone to the default.
  * @defzone:	The number of the default zone.
  *
  * The default zone is the zone that will be used if the channels request the
@@ -3154,10 +3159,14 @@ static int dahdi_open(struct inode *inode, struct file *file)
  * list is the default zone.  This function searches the list for the zone,
  * and if found, moves it to the head of the list.
  */
-static int dahdi_set_default_zone(int defzone)
+static int dahdi_ioctl_defaultzone(unsigned long data)
 {
+	int defzone;
 	struct dahdi_zone *cur;
 	struct dahdi_zone *dz = NULL;
+
+	if (get_user(defzone, (int __user *)data))
+		return -EFAULT;
 
 	spin_lock(&zone_lock);
 	list_for_each_entry(cur, &tone_zones, node) {
@@ -3184,7 +3193,7 @@ static int dahdi_set_default_zone(int defzone)
    format is much simpler (an array structure field of the zone
    structure, rather an array of pointers).
 */
-static int ioctl_load_zone(unsigned long data)
+static int dahdi_ioctl_loadzone(unsigned long data)
 {
 	struct load_zone_workarea {
 		struct dahdi_tone *samples[MAX_TONES];
@@ -4415,7 +4424,7 @@ static const struct net_device_ops dahdi_netdev_ops = {
 };
 #endif
 
-static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
+static int dahdi_ioctl_chanconfig(unsigned long data)
 {
 	int res = 0;
 	int y;
@@ -4682,331 +4691,370 @@ static int dahdi_ioctl_set_dialparams(unsigned long data)
 	return 0;
 }
 
-static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
+static int dahdi_ioctl_get_dialparams(unsigned long data)
+{
+	struct dahdi_dialparams tdp;
+
+	tdp = global_dialparams;
+	if (copy_to_user((void __user *)data, &tdp, sizeof(tdp)))
+		return -EFAULT;
+	return 0;
+}
+
+static int dahdi_ioctl_indirect(struct file *file, unsigned long data)
+{
+	int res;
+	struct dahdi_indirect_data ind;
+	void *old;
+	static bool warned;
+	struct dahdi_chan *chan;
+
+	if (copy_from_user(&ind, (void __user *)data, sizeof(ind)))
+		return -EFAULT;
+
+	chan = chan_from_num(ind.chan);
+	if (!chan)
+		return -EINVAL;
+
+	if (!warned) {
+		warned = true;
+		module_printk(KERN_WARNING, "Using deprecated " \
+			      "DAHDI_INDIRECT.  Please update " \
+			      "dahdi-tools.\n");
+	}
+
+	/* Since dahdi_chan_ioctl expects to be called on file handles
+	 * associated with channels, we'll temporarily set the
+	 * private_data pointer on the ctl file handle just for this
+	 * call. */
+	old = file->private_data;
+	file->private_data = chan;
+	res = dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data);
+	file->private_data = old;
+	return res;
+}
+
+static int dahdi_ioctl_spanconfig(unsigned long data)
+{
+	int res = 0;
+	struct dahdi_lineconfig lc;
+	struct dahdi_span *s;
+
+	if (copy_from_user(&lc, (void __user *)data, sizeof(lc)))
+		return -EFAULT;
+	s = span_find_and_get(lc.span);
+	if (!s)
+		return -ENXIO;
+
+	if ((lc.lineconfig & 0x1ff0 & s->linecompat) !=
+	    (lc.lineconfig & 0x1ff0)) {
+		put_span(s);
+		return -EINVAL;
+	}
+	if (s->ops->spanconfig) {
+		s->lineconfig = lc.lineconfig;
+		s->lbo = lc.lbo;
+		s->txlevel = lc.lbo;
+		s->rxlevel = 0;
+
+		res = s->ops->spanconfig(s, &lc);
+	}
+	put_span(s);
+	return res;
+}
+
+static int dahdi_ioctl_startup(unsigned long data)
 {
 	/* I/O CTL's for control interface */
-	int i,j;
+	int j;
 	int res = 0;
-	int x,y;
+	int x, y;
+	unsigned long flags;
+	struct dahdi_span *s;
+
+	if (get_user(j, (int __user *)data))
+		return -EFAULT;
+	s = span_find_and_get(j);
+	if (!s)
+		return -ENXIO;
+
+	if (s->flags & DAHDI_FLAG_RUNNING) {
+		put_span(s);
+		return 0;
+	}
+
+	if (s->ops->startup)
+		res = s->ops->startup(s);
+
+	if (!res) {
+		/* Mark as running and hangup any channels */
+		s->flags |= DAHDI_FLAG_RUNNING;
+		for (x = 0; x < s->channels; x++) {
+			y = dahdi_q_sig(s->chans[x]) & 0xff;
+			if (y >= 0)
+				s->chans[x]->rxsig = (unsigned char)y;
+			spin_lock_irqsave(&s->chans[x]->lock, flags);
+			dahdi_hangup(s->chans[x]);
+			spin_unlock_irqrestore(&s->chans[x]->lock, flags);
+			/*
+			 * Set the rxhooksig back to
+			 * DAHDI_RXSIG_INITIAL so that new events are
+			 * queued on the channel with the actual
+			 * received hook state.
+			 *
+			 */
+			s->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
+		}
+	}
+	put_span(s);
+	return 0;
+}
+
+static int dahdi_ioctl_shutdown(unsigned long data)
+{
+	/* I/O CTL's for control interface */
+	int j;
+	int res = 0;
+	int x;
+	struct dahdi_span *s;
+
+	if (get_user(j, (int __user *)data))
+		return -EFAULT;
+	s = span_find_and_get(j);
+	if (!s)
+		return -ENXIO;
+
+	/* Unconfigure channels */
+	for (x = 0; x < s->channels; x++)
+		s->chans[x]->sig = 0;
+
+	if (s->ops->shutdown)
+		res =  s->ops->shutdown(s);
+	s->flags &= ~DAHDI_FLAG_RUNNING;
+	put_span(s);
+	return 0;
+}
+
+static int dahdi_ioctl_attach_echocan(unsigned long data)
+{
+	unsigned long flags;
+	struct dahdi_chan *chan;
+	struct dahdi_attach_echocan ae;
+	const struct dahdi_echocan_factory *new = NULL, *old;
+
+	if (copy_from_user(&ae, (void __user *)data, sizeof(ae)))
+		return -EFAULT;
+
+	chan = chan_from_num(ae.chan);
+	if (!chan)
+		return -EINVAL;
+
+	ae.echocan[sizeof(ae.echocan) - 1] = 0;
+	if (ae.echocan[0]) {
+		new = find_echocan(ae.echocan);
+		if (!new)
+			return -EINVAL;
+	}
+
+	spin_lock_irqsave(&chan->lock, flags);
+	old = chan->ec_factory;
+	chan->ec_factory = new;
+	spin_unlock_irqrestore(&chan->lock, flags);
+
+	if (old)
+		release_echocan(old);
+
+	return 0;
+}
+
+static int dahdi_ioctl_sfconfig(unsigned long data)
+{
+	int res = 0;
+	unsigned long flags;
+	struct dahdi_chan *chan;
+	struct dahdi_sfconfig sf;
+
+	if (copy_from_user(&sf, (void __user *)data, sizeof(sf)))
+		return -EFAULT;
+	chan = chan_from_num(sf.chan);
+	if (!chan)
+		return -EINVAL;
+
+	if (chan->sig != DAHDI_SIG_SF)
+		return -EINVAL;
+
+	spin_lock_irqsave(&chan->lock, flags);
+	chan->rxp1 = sf.rxp1;
+	chan->rxp2 = sf.rxp2;
+	chan->rxp3 = sf.rxp3;
+	chan->txtone = sf.txtone;
+	chan->tx_v2 = sf.tx_v2;
+	chan->tx_v3 = sf.tx_v3;
+	chan->toneflags = sf.toneflag;
+	if (sf.txtone) { /* if set to make tone for tx */
+		if ((chan->txhooksig &&
+		     !(sf.toneflag & DAHDI_REVERSE_TXTONE)) ||
+		     ((!chan->txhooksig) &&
+		       (sf.toneflag & DAHDI_REVERSE_TXTONE))) {
+			set_txtone(chan, sf.txtone, sf.tx_v2, sf.tx_v3);
+		} else {
+			set_txtone(chan, 0, 0, 0);
+		}
+	}
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
+}
+
+static int dahdi_ioctl_get_version(unsigned long data)
+{
+	struct dahdi_versioninfo vi;
+	struct ecfactory *cur;
+	size_t space = sizeof(vi.echo_canceller) - 1;
+
+	memset(&vi, 0, sizeof(vi));
+	strlcpy(vi.version, DAHDI_VERSION, sizeof(vi.version));
+	spin_lock(&ecfactory_list_lock);
+	list_for_each_entry(cur, &ecfactory_list, list) {
+		strncat(vi.echo_canceller + strlen(vi.echo_canceller),
+			cur->ec->get_name(NULL), space);
+		space -= strlen(cur->ec->get_name(NULL));
+		if (space < 1)
+			break;
+		if (cur->list.next && (cur->list.next != &ecfactory_list)) {
+			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
+				", ", space);
+			space -= 2;
+			if (space < 1)
+				break;
+		}
+	}
+	spin_unlock(&ecfactory_list_lock);
+	if (copy_to_user((void __user *)data, &vi, sizeof(vi)))
+		return -EFAULT;
+
+	return 0;
+}
+
+static int dahdi_ioctl_maint(unsigned long data)
+{
+	int i;
 	unsigned long flags;
 	int rv;
 	struct dahdi_span *s;
-	struct dahdi_chan *chan;
+	struct dahdi_maintinfo maint;
 
-	switch (cmd) {
-	case DAHDI_INDIRECT:
-	{
-		struct dahdi_indirect_data ind;
-		void *old;
-		static bool warned;
-
-		if (copy_from_user(&ind, (void __user *)data, sizeof(ind)))
-			return -EFAULT;
-
-		chan = chan_from_num(ind.chan);
-		if (!chan)
-			return -EINVAL;
-
-		if (!warned) {
-			warned = true;
-			module_printk(KERN_WARNING, "Using deprecated " \
-				      "DAHDI_INDIRECT.  Please update " \
-				      "dahdi-tools.\n");
-		}
-
-		/* Since dahdi_chan_ioctl expects to be called on file handles
-		 * associated with channels, we'll temporarily set the
-		 * private_data pointer on the ctl file handle just for this
-		 * call. */
-		old = file->private_data;
-		file->private_data = chan;
-		res = dahdi_chan_ioctl(file, ind.op, (unsigned long) ind.data);
-		file->private_data = old;
-		return res;
-	}
-	case DAHDI_SPANCONFIG:
-	{
-		struct dahdi_lineconfig lc;
-		struct dahdi_span *s;
-
-		res = 0;
-		if (copy_from_user(&lc, (void __user *)data, sizeof(lc)))
-			return -EFAULT;
-		s = span_find_and_get(lc.span);
-		if (!s)
-			return -ENXIO;
-
-		if ((lc.lineconfig & 0x1ff0 & s->linecompat) !=
-		    (lc.lineconfig & 0x1ff0)) {
-			put_span(s);
-			return -EINVAL;
-		}
-		if (s->ops->spanconfig) {
-			s->lineconfig = lc.lineconfig;
-			s->lbo = lc.lbo;
-			s->txlevel = lc.lbo;
-			s->rxlevel = 0;
-
-			res = s->ops->spanconfig(s, &lc);
-		}
+	  /* get struct from user */
+	if (copy_from_user(&maint, (void __user *)data, sizeof(maint)))
+		return -EFAULT;
+	s = span_find_and_get(maint.spanno);
+	if (!s)
+		return -EINVAL;
+	if (!s->ops->maint) {
 		put_span(s);
-		return res;
+		return -ENOSYS;
 	}
-	case DAHDI_STARTUP:
-		if (get_user(j, (int __user *)data))
-			return -EFAULT;
-		s = span_find_and_get(j);
-		if (!s)
-			return -ENXIO;
-
-		if (s->flags & DAHDI_FLAG_RUNNING) {
+	spin_lock_irqsave(&s->lock, flags);
+	  /* save current maint state */
+	i = s->maintstat;
+	  /* set maint mode */
+	s->maintstat = maint.command;
+	switch (maint.command) {
+	case DAHDI_MAINT_NONE:
+	case DAHDI_MAINT_LOCALLOOP:
+	case DAHDI_MAINT_NETWORKLINELOOP:
+	case DAHDI_MAINT_NETWORKPAYLOADLOOP:
+		/* if same, ignore it */
+		if (i == maint.command)
+			break;
+		rv = s->ops->maint(s, maint.command);
+		spin_unlock_irqrestore(&s->lock, flags);
+		if (rv) {
 			put_span(s);
-			return 0;
-		}
-
-		if (s->ops->startup)
-			res = s->ops->startup(s);
-
-		if (!res) {
-			/* Mark as running and hangup any channels */
-			s->flags |= DAHDI_FLAG_RUNNING;
-			for (x = 0; x < s->channels; x++) {
-				y = dahdi_q_sig(s->chans[x]) & 0xff;
-				if (y >= 0)
-					s->chans[x]->rxsig = (unsigned char)y;
-				spin_lock_irqsave(&s->chans[x]->lock, flags);
-				dahdi_hangup(s->chans[x]);
-				spin_unlock_irqrestore(&s->chans[x]->lock, flags);
-				/*
-				 * Set the rxhooksig back to
-				 * DAHDI_RXSIG_INITIAL so that new events are
-				 * queued on the channel with the actual
-				 * received hook state.
-				 * 
-				 */
-				s->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
-			}
-		}
-		put_span(s);
-		return 0;
-	case DAHDI_SHUTDOWN:
-		if (get_user(j, (int __user *)data))
-			return -EFAULT;
-		s = span_find_and_get(j);
-		if (!s)
-			return -ENXIO;
-
-		/* Unconfigure channels */
-		for (x = 0; x < s->channels; x++)
-			s->chans[x]->sig = 0;
-
-		if (s->ops->shutdown)
-			res =  s->ops->shutdown(s);
-		s->flags &= ~DAHDI_FLAG_RUNNING;
-		put_span(s);
-		return 0;
-	case DAHDI_ATTACH_ECHOCAN:
-	{
-		struct dahdi_attach_echocan ae;
-		const struct dahdi_echocan_factory *new = NULL, *old;
-
-		if (copy_from_user(&ae, (void __user *)data, sizeof(ae)))
-			return -EFAULT;
-
-		chan = chan_from_num(ae.chan);
-		if (!chan)
-			return -EINVAL;
-
-		ae.echocan[sizeof(ae.echocan) - 1] = 0;
-		if (ae.echocan[0]) {
-			if (!(new = find_echocan(ae.echocan))) {
-				return -EINVAL;
-			}
-		}
-
-		spin_lock_irqsave(&chan->lock, flags);
-		old = chan->ec_factory;
-		chan->ec_factory = new;
-		spin_unlock_irqrestore(&chan->lock, flags);
-
-		if (old) {
-			release_echocan(old);
-		}
-
-		break;
-	}
-	case DAHDI_CHANCONFIG:
-		return dahdi_ioctl_chanconfig(file, data);
-
-	case DAHDI_SFCONFIG:
-	{
-		struct dahdi_sfconfig sf;
-
-		if (copy_from_user(&sf, (void __user *)data, sizeof(sf)))
-			return -EFAULT;
-		chan = chan_from_num(sf.chan);
-		if (!chan)
-			return -EINVAL;
-
-		if (chan->sig != DAHDI_SIG_SF)
-			return -EINVAL;
-
-		spin_lock_irqsave(&chan->lock, flags);
-		chan->rxp1 = sf.rxp1;
-		chan->rxp2 = sf.rxp2;
-		chan->rxp3 = sf.rxp3;
-		chan->txtone = sf.txtone;
-		chan->tx_v2 = sf.tx_v2;
-		chan->tx_v3 = sf.tx_v3;
-		chan->toneflags = sf.toneflag;
-		if (sf.txtone) /* if set to make tone for tx */
-		{
-			if ((chan->txhooksig && !(sf.toneflag & DAHDI_REVERSE_TXTONE)) ||
-			 ((!chan->txhooksig) && (sf.toneflag & DAHDI_REVERSE_TXTONE)))
-			{
-				set_txtone(chan, sf.txtone, sf.tx_v2, sf.tx_v3);
-			}
-			else
-			{
-				set_txtone(chan, 0, 0, 0);
-			}
-		}
-		spin_unlock_irqrestore(&chan->lock, flags);
-		return res;
-	}
-	case DAHDI_DEFAULTZONE:
-		if (get_user(j, (int __user *)data))
-			return -EFAULT;
-		return dahdi_set_default_zone(j);
-	case DAHDI_LOADZONE:
-		return ioctl_load_zone(data);
-	case DAHDI_FREEZONE:
-		if (get_user(j, (int __user *) data))
-			return -EFAULT;
-		return dahdi_unregister_tone_zone(j);
-
-	case DAHDI_SET_DIALPARAMS:
-		return dahdi_ioctl_set_dialparams(data);
-
-	case DAHDI_GET_DIALPARAMS:
-	{
-		struct dahdi_dialparams tdp;
-
-		tdp = global_dialparams;
-		if (copy_to_user((void __user *)data, &tdp, sizeof(tdp)))
-			return -EFAULT;
-		break;
-	}
-	case DAHDI_GETVERSION:
-	{
-		struct dahdi_versioninfo vi;
-		struct ecfactory *cur;
-		size_t space = sizeof(vi.echo_canceller) - 1;
-
-		memset(&vi, 0, sizeof(vi));
-		strlcpy(vi.version, DAHDI_VERSION, sizeof(vi.version));
-		spin_lock(&ecfactory_list_lock);
-		list_for_each_entry(cur, &ecfactory_list, list) {
-			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
-				cur->ec->get_name(NULL), space);
-			space -= strlen(cur->ec->get_name(NULL));
-			if (space < 1) {
-				break;
-			}
-			if (cur->list.next && (cur->list.next != &ecfactory_list)) {
-				strncat(vi.echo_canceller + strlen(vi.echo_canceller), ", ", space);
-				space -= 2;
-				if (space < 1) {
-					break;
-				}
-			}
-		}
-		spin_unlock(&ecfactory_list_lock);
-		if (copy_to_user((void __user *)data, &vi, sizeof(vi)))
-			return -EFAULT;
-		break;
-	}
-	case DAHDI_MAINT:  /* do maintenance stuff */
-	{
-		struct dahdi_maintinfo maint;
-		  /* get struct from user */
-		if (copy_from_user(&maint, (void __user *)data, sizeof(maint)))
-			return -EFAULT;
-		s = span_find_and_get(maint.spanno);
-		if (!s)
-			return -EINVAL;
-		if (!s->ops->maint) {
-			put_span(s);
-			return -ENOSYS;
+			return rv;
 		}
 		spin_lock_irqsave(&s->lock, flags);
-		  /* save current maint state */
-		i = s->maintstat;
-		  /* set maint mode */
-		s->maintstat = maint.command;
-		switch(maint.command) {
-		case DAHDI_MAINT_NONE:
-		case DAHDI_MAINT_LOCALLOOP:
-		case DAHDI_MAINT_NETWORKLINELOOP:
-		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-			/* if same, ignore it */
-			if (i == maint.command)
-				break;
-			rv = s->ops->maint(s, maint.command);
-			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv) {
-				put_span(s);
-				return rv;
-			}
-			spin_lock_irqsave(&s->lock, flags);
-			break;
-		case DAHDI_MAINT_LOOPUP:
-		case DAHDI_MAINT_LOOPDOWN:
-			s->mainttimer = DAHDI_LOOPCODE_TIME * DAHDI_CHUNKSIZE;
-			rv = s->ops->maint(s, maint.command);
-			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv) {
-				put_span(s);
-				return rv;
-			}
-			spin_lock_irqsave(&s->lock, flags);
-			break;
-		case DAHDI_MAINT_FAS_DEFECT:
-		case DAHDI_MAINT_MULTI_DEFECT:
-		case DAHDI_MAINT_CRC_DEFECT:
-		case DAHDI_MAINT_CAS_DEFECT:
-		case DAHDI_MAINT_PRBS_DEFECT:
-		case DAHDI_MAINT_BIPOLAR_DEFECT:
-		case DAHDI_MAINT_PRBS:
-		case DAHDI_RESET_COUNTERS:
-		case DAHDI_MAINT_ALARM_SIM:
-			/* Prevent notifying an alarm state for generic
-			   maintenance functions, unless the driver is
-			   already in a maint state */
-			if(!i)
-				s->maintstat = 0;
-
-			rv = s->ops->maint(s, maint.command);
-			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv) {
-				put_span(s);
-				return rv;
-			}
-			spin_lock_irqsave(&s->lock, flags);
-			break;
-		default:
-			spin_unlock_irqrestore(&s->lock, flags);
-			module_printk(KERN_NOTICE,
-				      "Unknown maintenance event: %d\n",
-				      maint.command);
-			put_span(s);
-			return -ENOSYS;
-		}
-		dahdi_alarm_notify(s);  /* process alarm-related events */
-		spin_unlock_irqrestore(&s->lock, flags);
-		put_span(s);
 		break;
+	case DAHDI_MAINT_LOOPUP:
+	case DAHDI_MAINT_LOOPDOWN:
+		s->mainttimer = DAHDI_LOOPCODE_TIME * DAHDI_CHUNKSIZE;
+		rv = s->ops->maint(s, maint.command);
+		spin_unlock_irqrestore(&s->lock, flags);
+		if (rv) {
+			put_span(s);
+			return rv;
+		}
+		spin_lock_irqsave(&s->lock, flags);
+		break;
+	case DAHDI_MAINT_FAS_DEFECT:
+	case DAHDI_MAINT_MULTI_DEFECT:
+	case DAHDI_MAINT_CRC_DEFECT:
+	case DAHDI_MAINT_CAS_DEFECT:
+	case DAHDI_MAINT_PRBS_DEFECT:
+	case DAHDI_MAINT_BIPOLAR_DEFECT:
+	case DAHDI_MAINT_PRBS:
+	case DAHDI_RESET_COUNTERS:
+	case DAHDI_MAINT_ALARM_SIM:
+		/* Prevent notifying an alarm state for generic
+		   maintenance functions, unless the driver is
+		   already in a maint state */
+		if (!i)
+			s->maintstat = 0;
+
+		rv = s->ops->maint(s, maint.command);
+		spin_unlock_irqrestore(&s->lock, flags);
+		if (rv) {
+			put_span(s);
+			return rv;
+		}
+		spin_lock_irqsave(&s->lock, flags);
+		break;
+	default:
+		spin_unlock_irqrestore(&s->lock, flags);
+		module_printk(KERN_NOTICE,
+			      "Unknown maintenance event: %d\n",
+			      maint.command);
+		put_span(s);
+		return -ENOSYS;
 	}
+	dahdi_alarm_notify(s);  /* process alarm-related events */
+	spin_unlock_irqrestore(&s->lock, flags);
+	put_span(s);
+
+	return 0;
+}
+
+static int
+dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
+{
+	switch (cmd) {
+	case DAHDI_INDIRECT:
+		return dahdi_ioctl_indirect(file, data);
+	case DAHDI_SPANCONFIG:
+		return dahdi_ioctl_spanconfig(data);
+	case DAHDI_STARTUP:
+		return dahdi_ioctl_startup(data);
+	case DAHDI_SHUTDOWN:
+		return dahdi_ioctl_shutdown(data);
+	case DAHDI_ATTACH_ECHOCAN:
+		return dahdi_ioctl_attach_echocan(data);
+	case DAHDI_CHANCONFIG:
+		return dahdi_ioctl_chanconfig(data);
+	case DAHDI_SFCONFIG:
+		return dahdi_ioctl_sfconfig(data);
+	case DAHDI_DEFAULTZONE:
+		return dahdi_ioctl_defaultzone(data);
+	case DAHDI_LOADZONE:
+		return dahdi_ioctl_loadzone(data);
+	case DAHDI_FREEZONE:
+		return dahdi_ioctl_freezone(data);
+	case DAHDI_SET_DIALPARAMS:
+		return dahdi_ioctl_set_dialparams(data);
+	case DAHDI_GET_DIALPARAMS:
+		return dahdi_ioctl_get_dialparams(data);
+	case DAHDI_GETVERSION:
+		return dahdi_ioctl_get_version(data);
+	case DAHDI_MAINT:
+		return dahdi_ioctl_maint(data);
 	case DAHDI_DYNAMIC_CREATE:
 	case DAHDI_DYNAMIC_DESTROY:
 		if (dahdi_dynamic_ioctl) {
@@ -5027,10 +5075,9 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				return dahdi_hpec_ioctl(cmd, data);
 		}
 		return -ENOSYS;
-	default:
-		return dahdi_common_ioctl(file, cmd, data);
 	}
-	return 0;
+
+	return dahdi_common_ioctl(file, cmd, data);
 }
 
 static int ioctl_dahdi_dial(struct dahdi_chan *chan, unsigned long data)
