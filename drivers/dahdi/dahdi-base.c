@@ -6090,6 +6090,8 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 {
 	int x;
 	int res = 0;
+	int spanno;
+	unsigned long flags;
 
 	if (!span)
 		return -EINVAL;
@@ -6119,15 +6121,12 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 	}
 
 	if (x < DAHDI_MAX_SPANS) {
-		spans[x] = span;
-		if (maxspans < x + 1)
-			maxspans = x + 1;
+		spanno = x;
 	} else {
 		module_printk(KERN_ERR, "Too many DAHDI spans registered\n");
 		return -EBUSY;
 	}
 
-	set_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
 	span->spanno = x;
 
 	spin_lock_init(&span->lock);
@@ -6181,6 +6180,13 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 		}
 	}
 
+	spin_lock_irqsave(&chan_lock, flags);
+	spans[spanno] = span;
+	if (maxspans < x + 1)
+		maxspans = x + 1;
+	spin_unlock_irqrestore(&chan_lock, flags);
+	set_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
+
 	return 0;
 
 unreg_channels:
@@ -6209,6 +6215,7 @@ int dahdi_unregister(struct dahdi_span *span)
 		module_printk(KERN_ERR, "Span %s does not appear to be registered\n", span->name);
 		return -1;
 	}
+
 	/* Shutdown the span if it's running */
 	if (span->flags & DAHDI_FLAG_RUNNING)
 		if (span->ops->shutdown)
@@ -6218,6 +6225,12 @@ int dahdi_unregister(struct dahdi_span *span)
 		module_printk(KERN_ERR, "Span %s has spanno %d which is something else\n", span->name, span->spanno);
 		return -1;
 	}
+
+	clear_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
+	spin_lock_irqsave(&chan_lock, flags);
+	spans[span->spanno] = NULL;
+	spin_unlock_irqrestore(&chan_lock, flags);
+
 	if (debug & DEBUG_MAIN)
 		module_printk(KERN_NOTICE, "Unregistering Span '%s' with %d channels\n", span->name, span->channels);
 #ifdef CONFIG_PROC_FS
@@ -6230,9 +6243,6 @@ int dahdi_unregister(struct dahdi_span *span)
 			CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, span->chans[x]->channo));
 	}
 
-	spans[span->spanno] = NULL;
-	span->spanno = 0;
-	clear_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
 	for (x=0;x<span->channels;x++)
 		dahdi_chan_unreg(span->chans[x]);
 
@@ -6263,7 +6273,7 @@ int dahdi_unregister(struct dahdi_span *span)
 		}
 		master = new_master;
 	}
-
+	span->spanno = 0;
 	return 0;
 }
 
