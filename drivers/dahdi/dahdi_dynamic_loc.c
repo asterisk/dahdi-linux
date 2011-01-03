@@ -179,11 +179,8 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 	if (key == -1 || id == -1)
 		goto INVALID_ADDRESS;
 
-	d = kmalloc(sizeof(struct dahdi_dynamic_local), GFP_KERNEL);
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (d) {
-		/* Zero it out */
-		memset(d, 0, sizeof(struct dahdi_dynamic_local));
-
 		d->key = key;
 		d->id = id;
 		d->span = span;
