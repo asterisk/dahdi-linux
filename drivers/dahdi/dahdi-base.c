@@ -483,11 +483,7 @@ static struct dahdi_zone *tone_zones[DAHDI_TONE_ZONE_MAX];
 
 #define NUM_SIGS	10
 
-#ifdef DEFINE_RWLOCK
-static DEFINE_RWLOCK(ecfactory_list_lock);
-#else
-static rwlock_t ecfactory_list_lock = __RW_LOCK_UNLOCKED();
-#endif
+static DEFINE_SPINLOCK(ecfactory_list_lock);
 
 static LIST_HEAD(ecfactory_list);
 
@@ -502,18 +498,18 @@ int dahdi_register_echocan_factory(const struct dahdi_echocan_factory *ec)
 
 	WARN_ON(!ec->owner);
 
-	write_lock(&ecfactory_list_lock);
+	spin_lock(&ecfactory_list_lock);
 
 	/* make sure it isn't already registered */
 	list_for_each_entry(cur, &ecfactory_list, list) {
 		if (cur->ec == ec) {
-			write_unlock(&ecfactory_list_lock);
+			spin_unlock(&ecfactory_list_lock);
 			return -EPERM;
 		}
 	}
 
 	if (!(cur = kzalloc(sizeof(*cur), GFP_KERNEL))) {
-		write_unlock(&ecfactory_list_lock);
+		spin_unlock(&ecfactory_list_lock);
 		return -ENOMEM;
 	}
 
@@ -522,7 +518,7 @@ int dahdi_register_echocan_factory(const struct dahdi_echocan_factory *ec)
 
 	list_add_tail(&cur->list, &ecfactory_list);
 
-	write_unlock(&ecfactory_list_lock);
+	spin_unlock(&ecfactory_list_lock);
 
 	return 0;
 }
@@ -531,7 +527,7 @@ void dahdi_unregister_echocan_factory(const struct dahdi_echocan_factory *ec)
 {
 	struct ecfactory *cur, *next;
 
-	write_lock(&ecfactory_list_lock);
+	spin_lock(&ecfactory_list_lock);
 
 	list_for_each_entry_safe(cur, next, &ecfactory_list, list) {
 		if (cur->ec == ec) {
@@ -540,7 +536,7 @@ void dahdi_unregister_echocan_factory(const struct dahdi_echocan_factory *ec)
 		}
 	}
 
-	write_unlock(&ecfactory_list_lock);
+	spin_unlock(&ecfactory_list_lock);
 }
 
 static inline void rotate_sums(void)
@@ -1213,23 +1209,23 @@ static const struct dahdi_echocan_factory *find_echocan(const char *name)
 	*c = '\0';
 
 retry:
-	read_lock(&ecfactory_list_lock);
+	spin_lock(&ecfactory_list_lock);
 
 	list_for_each_entry(cur, &ecfactory_list, list) {
 		if (!strcmp(name_upper, cur->ec->get_name(NULL))) {
 			if (try_module_get(cur->ec->owner)) {
-				read_unlock(&ecfactory_list_lock);
+				spin_unlock(&ecfactory_list_lock);
 				kfree(name_upper);
 				return cur->ec;
 			} else {
-				read_unlock(&ecfactory_list_lock);
+				spin_unlock(&ecfactory_list_lock);
 				kfree(name_upper);
 				return NULL;
 			}
 		}
 	}
 
-	read_unlock(&ecfactory_list_lock);
+	spin_unlock(&ecfactory_list_lock);
 
 	if (tried_once) {
 		kfree(name_upper);
@@ -4641,7 +4637,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 
 		memset(&vi, 0, sizeof(vi));
 		strlcpy(vi.version, DAHDI_VERSION, sizeof(vi.version));
-		read_lock(&ecfactory_list_lock);
+		spin_lock(&ecfactory_list_lock);
 		list_for_each_entry(cur, &ecfactory_list, list) {
 			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
 				cur->ec->get_name(NULL), space);
@@ -4657,7 +4653,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				}
 			}
 		}
-		read_unlock(&ecfactory_list_lock);
+		spin_unlock(&ecfactory_list_lock);
 		if (copy_to_user((void __user *)data, &vi, sizeof(vi)))
 			return -EFAULT;
 		break;
