@@ -8458,10 +8458,6 @@ static void process_masterspan(void)
 
 	/* Process any timers */
 	process_timers();
-	/* If we have dynamic stuff, call the ioctl with 0,0 parameters to
-	   make it run */
-	if (dahdi_dynamic_ioctl)
-		dahdi_dynamic_ioctl(0, 0);
 
 	for (y = 1; y < maxspans; ++y) {
 		s = spans[y];

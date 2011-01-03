@@ -35,6 +35,10 @@
 
 #include <dahdi/kernel.h>
 
+#ifndef DAHDI_SYNC_TICK
+#error "Dynamic support depends on DAHDI_SYNC_TICK being enabled."
+#endif
+
 /*
  * Tasklets provide better system interactive response at the cost of the
  * possibility of losing a frame of data at very infrequent intervals.  If
@@ -533,12 +537,30 @@ static int dahdi_dynamic_close(struct dahdi_chan *chan)
 	return 0;
 }
 
+static int dahdi_dynamic_sync_tick(struct dahdi_span *span, int is_master)
+{
+	struct dahdi_dynamic *head;
+	struct dahdi_dynamic *d = dynamic_from_span(span);
+
+	if (hasmaster)
+		return 0;
+
+	rcu_read_lock();
+	head = list_entry(dspan_list.next, struct dahdi_dynamic, list);
+	rcu_read_unlock();
+
+	if (d == head)
+		dahdi_dynamic_run();
+	return 0;
+}
+
 static const struct dahdi_span_ops dynamic_ops = {
 	.owner = THIS_MODULE,
 	.rbsbits = dahdi_dynamic_rbsbits,
 	.open = dahdi_dynamic_open,
 	.close = dahdi_dynamic_close,
 	.chanconfig = dahdi_dynamic_chanconfig,
+	.sync_tick = dahdi_dynamic_sync_tick,
 };
 
 static int create_dynamic(struct dahdi_dynamic_span *dds)
@@ -689,13 +711,6 @@ static int dahdi_dynamic_ioctl(unsigned int cmd, unsigned long data)
 	struct dahdi_dynamic_span dds;
 	int res;
 	switch(cmd) {
-	case 0:
-		/* This is called just before rotation.  If none of our
-		   spans are pulling timing, then now is the time to process
-		   them */
-		if (!hasmaster)
-			dahdi_dynamic_run();
-		return 0;
 	case DAHDI_DYNAMIC_CREATE:
 		if (copy_from_user(&dds, (__user const void *)data,
 				   sizeof(dds)))
