@@ -57,31 +57,36 @@
 
 #include <dahdi/kernel.h>
 
-static DEFINE_SPINLOCK(zlock);
+static DEFINE_SPINLOCK(local_lock);
 
-static struct ztdlocal {
+/**
+ * struct dahdi_dynamic_loc - For local dynamic spans
+ * @monitor_rx_peer:   Indicates the peer span that monitors this span.
+ * @peer:	       Indicates the rw peer for this span.
+ *
+ */
+static struct dahdi_dynamic_local {
 	unsigned short key;
 	unsigned short id;
-	struct ztdlocal *monitor_rx_peer; /* Indicates the peer span that monitors this span */
-	struct ztdlocal *peer; /* Indicates the rw peer for this span */
+	struct dahdi_dynamic_local *monitor_rx_peer;
+	struct dahdi_dynamic_local *peer;
 	struct dahdi_span *span;
-	struct ztdlocal *next;
-} *zdevs = NULL;
+	struct dahdi_dynamic_local *next;
+} *ddevs = NULL;
 
-static int ztdlocal_transmit(void *pvt, unsigned char *msg, int msglen)
+static int
+dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
 {
-	struct ztdlocal *z;
+	struct dahdi_dynamic_local *d;
 	unsigned long flags;
 
-	spin_lock_irqsave(&zlock, flags);
-	z = pvt;
-	if (z->peer && z->peer->span) {
-		dahdi_dynamic_receive(z->peer->span, msg, msglen);
-	}
-	if (z->monitor_rx_peer && z->monitor_rx_peer->span) {
-		dahdi_dynamic_receive(z->monitor_rx_peer->span, msg, msglen);
-	}
-	spin_unlock_irqrestore(&zlock, flags);
+	spin_lock_irqsave(&local_lock, flags);
+	d = pvt;
+	if (d->peer && d->peer->span)
+		dahdi_dynamic_receive(d->peer->span, msg, msglen);
+	if (d->monitor_rx_peer && d->monitor_rx_peer->span)
+		dahdi_dynamic_receive(d->monitor_rx_peer->span, msg, msglen);
+	spin_unlock_irqrestore(&local_lock, flags);
 	return 0;
 }
 
@@ -117,44 +122,45 @@ static int digit2int(char d)
 	return -1;
 }
 
-static void ztdlocal_destroy(void *pvt)
+static void dahdi_dynamic_local_destroy(void *pvt)
 {
-	struct ztdlocal *z = pvt;
+	struct dahdi_dynamic_local *d = pvt;
 	unsigned long flags;
-	struct ztdlocal *prev=NULL, *cur;
+	struct dahdi_dynamic_local *prev = NULL, *cur;
 
-	spin_lock_irqsave(&zlock, flags);
-	cur = zdevs;
+	spin_lock_irqsave(&local_lock, flags);
+	cur = ddevs;
 	while(cur) {
-		if (cur->peer == z)
+		if (cur->peer == d)
 			cur->peer = NULL;
-		if (cur->monitor_rx_peer == z)
+		if (cur->monitor_rx_peer == d)
 			cur->monitor_rx_peer = NULL;
 		cur = cur->next;
 	}
-	cur = zdevs;
+	cur = ddevs;
 	while(cur) {
-		if (cur == z) {
+		if (cur == d) {
 			if (prev)
 				prev->next = cur->next;
 			else
-				zdevs = cur->next;
+				ddevs = cur->next;
 			break;
 		}
 		prev = cur;
 		cur = cur->next;
 	}
-	spin_unlock_irqrestore(&zlock, flags);
-	if (cur == z) {
-		printk(KERN_INFO "TDMoL: Removed interface for %s, key %d id %d\n", z->span->name, z->key, z->id);
+	spin_unlock_irqrestore(&local_lock, flags);
+	if (cur == d) {
+		printk(KERN_INFO "TDMoL: Removed interface for %s, key %d "
+			"id %d\n", d->span->name, d->key, d->id);
 		module_put(THIS_MODULE);
-		kfree(z);
+		kfree(d);
 	}
 }
 
-static void *ztdlocal_create(struct dahdi_span *span, char *address)
+static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 {
-	struct ztdlocal *z, *l;
+	struct dahdi_dynamic_local *d, *l;
 	unsigned long flags;
 	int key = -1, id = -1, monitor = -1;
 
@@ -173,61 +179,62 @@ static void *ztdlocal_create(struct dahdi_span *span, char *address)
 	if (key == -1 || id == -1)
 		goto INVALID_ADDRESS;
 
-	z = kmalloc(sizeof(struct ztdlocal), GFP_KERNEL);
-	if (z) {
+	d = kmalloc(sizeof(struct dahdi_dynamic_local), GFP_KERNEL);
+	if (d) {
 		/* Zero it out */
-		memset(z, 0, sizeof(struct ztdlocal));
+		memset(d, 0, sizeof(struct dahdi_dynamic_local));
 
-		z->key = key;
-		z->id = id;
-		z->span = span;
+		d->key = key;
+		d->id = id;
+		d->span = span;
 			
-		spin_lock_irqsave(&zlock, flags);
+		spin_lock_irqsave(&local_lock, flags);
 		/* Add this peer to any existing spans with same key
 		   And add them as peers to this one */
-		for (l = zdevs; l; l = l->next)
-			if (l->key == z->key) {
-				if (l->id == z->id) {
-					printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key %d\n", z->id, z->key);
+		for (l = ddevs; l; l = l->next)
+			if (l->key == d->key) {
+				if (l->id == d->id) {
+					printk(KERN_DEBUG "TDMoL: Duplicate id (%d) for key %d\n", d->id, d->key);
 					goto CLEAR_AND_DEL_FROM_PEERS;
 				}
 				if (monitor == -1) {
 					if (l->peer) {
-						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a R/W peer\n", z->key, z->id);
+						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a R/W peer\n", d->key, d->id);
 						goto CLEAR_AND_DEL_FROM_PEERS;
 					} else {
-						l->peer = z;
-						z->peer = l;
+						l->peer = d;
+						d->peer = l;
 					}
 				}
 				if (monitor == l->id) {
 					if (l->monitor_rx_peer) {
-						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a monitoring peer\n", z->key, z->id);
+						printk(KERN_DEBUG "TDMoL: Span with key %d and id %d already has a monitoring peer\n", d->key, d->id);
 						goto CLEAR_AND_DEL_FROM_PEERS;
 					} else {
-						l->monitor_rx_peer = z;
+						l->monitor_rx_peer = d;
 					}
 				}
 			}
-		z->next = zdevs;
-		zdevs = z;
-		spin_unlock_irqrestore(&zlock, flags);
+		d->next = ddevs;
+		ddevs = d;
+		spin_unlock_irqrestore(&local_lock, flags);
 		if(!try_module_get(THIS_MODULE))
 			printk(KERN_DEBUG "TDMoL: Unable to increment module use count\n");
 
-		printk(KERN_INFO "TDMoL: Added new interface for %s, key %d id %d\n", span->name, z->key, z->id);
+		printk(KERN_INFO "TDMoL: Added new interface for %s, "
+		       "key %d id %d\n", span->name, d->key, d->id);
 	}
-	return z;
+	return d;
 
 CLEAR_AND_DEL_FROM_PEERS:
-	for (l = zdevs; l; l = l->next) {
-		if (l->peer == z)
+	for (l = ddevs; l; l = l->next) {
+		if (l->peer == d)
 			l->peer = NULL;
-		if (l->monitor_rx_peer == z)
+		if (l->monitor_rx_peer == d)
 			l->monitor_rx_peer = NULL;
 	}
-	kfree (z);
-	spin_unlock_irqrestore(&zlock, flags);
+	kfree(d);
+	spin_unlock_irqrestore(&local_lock, flags);
 	return NULL;
 	
 INVALID_ADDRESS:
@@ -235,27 +242,27 @@ INVALID_ADDRESS:
 	return NULL;
 }
 
-static struct dahdi_dynamic_driver ztd_local = {
+static struct dahdi_dynamic_driver dahdi_dynamic_local = {
 	"loc",
 	"Local",
-	ztdlocal_create,
-	ztdlocal_destroy,
-	ztdlocal_transmit,
+	dahdi_dynamic_local_create,
+	dahdi_dynamic_local_destroy,
+	dahdi_dynamic_local_transmit,
 	NULL	/* flush */
 };
 
-static int __init ztdlocal_init(void)
+static int __init dahdi_dynamic_local_init(void)
 {
-	dahdi_dynamic_register(&ztd_local);
+	dahdi_dynamic_register(&dahdi_dynamic_local);
 	return 0;
 }
 
-static void __exit ztdlocal_exit(void)
+static void __exit dahdi_dynamic_local_exit(void)
 {
-	dahdi_dynamic_unregister(&ztd_local);
+	dahdi_dynamic_unregister(&dahdi_dynamic_local);
 }
 
-module_init(ztdlocal_init);
-module_exit(ztdlocal_exit);
+module_init(dahdi_dynamic_local_init);
+module_exit(dahdi_dynamic_local_exit);
 
 MODULE_LICENSE("GPL v2");
