@@ -9,7 +9,7 @@
  *   Russ Meyerriecks <rmeyerriecks@digium.com>
  *
  * Copyright (C) 2001 Jim Dixon / Zapata Telephony.
- * Copyright (C) 2001-2010, Digium, Inc.
+ * Copyright (C) 2001-2011, Digium, Inc.
  *
  * All rights reserved.
  *
