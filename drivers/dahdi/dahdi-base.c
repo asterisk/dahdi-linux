@@ -375,11 +375,7 @@ struct dahdi_zone {
 	struct dahdi_tone mfr2_rev_continuous[16];	/* MFR2 REV tones for this zone, continuous play */
 };
 
-#ifdef DEFINE_RWLOCK
-static DEFINE_RWLOCK(zone_lock);
-#else
-static rwlock_t zone_lock = RW_LOCK_UNLOCKED;
-#endif
+static DEFINE_SPINLOCK(zone_lock);
 
 static DEFINE_SPINLOCK(chan_lock);
 
@@ -1384,7 +1380,7 @@ static int free_tone_zone(int num)
 	if ((num >= DAHDI_TONE_ZONE_MAX) || (num < 0))
 		return -EINVAL;
 
-	write_lock(&zone_lock);
+	spin_lock(&zone_lock);
 	if (tone_zones[num]) {
 		if (!atomic_read(&tone_zones[num]->refcount)) {
 			z = tone_zones[num];
@@ -1393,7 +1389,7 @@ static int free_tone_zone(int num)
 			res = -EBUSY;
 		}
 	}
-	write_unlock(&zone_lock);
+	spin_unlock(&zone_lock);
 
 	if (z)
 		kfree(z);
@@ -1408,14 +1404,14 @@ static int dahdi_register_tone_zone(int num, struct dahdi_zone *zone)
 	if ((num >= DAHDI_TONE_ZONE_MAX) || (num < 0))
 		return -EINVAL;
 
-	write_lock(&zone_lock);
+	spin_lock(&zone_lock);
 	if (tone_zones[num]) {
 		res = -EINVAL;
 	} else {
 		res = 0;
 		tone_zones[num] = zone;
 	}
-	write_unlock(&zone_lock);
+	spin_unlock(&zone_lock);
 
 	if (!res)
 		module_printk(KERN_INFO, "Registered tone zone %d (%s)\n", num, zone->name);
@@ -1532,7 +1528,7 @@ static int set_tone_zone(struct dahdi_chan *chan, int zone)
 	if ((zone >= DAHDI_TONE_ZONE_MAX) || (zone < 0))
 		return -EINVAL;
 
-	read_lock(&zone_lock);
+	spin_lock(&zone_lock);
 
 	if ((z = tone_zones[zone])) {
 		unsigned long flags;
@@ -1552,7 +1548,7 @@ static int set_tone_zone(struct dahdi_chan *chan, int zone)
 		res = -ENODATA;
 	}
 
-	read_unlock(&zone_lock);
+	spin_unlock(&zone_lock);
 
 	return res;
 }
@@ -2963,16 +2959,16 @@ static int dahdi_set_default_zone(int defzone)
 {
 	if ((defzone < 0) || (defzone >= DAHDI_TONE_ZONE_MAX))
 		return -EINVAL;
-	write_lock(&zone_lock);
+	spin_lock(&zone_lock);
 	if (!tone_zones[defzone]) {
-		write_unlock(&zone_lock);
+		spin_unlock(&zone_lock);
 		return -EINVAL;
 	}
 	if ((default_zone != -1) && tone_zones[default_zone])
 		atomic_dec(&tone_zones[default_zone]->refcount);
 	atomic_inc(&tone_zones[defzone]->refcount);
 	default_zone = defzone;
-	write_unlock(&zone_lock);
+	spin_unlock(&zone_lock);
 	return 0;
 }
 
@@ -4596,7 +4592,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		}
 
 		/* update the lengths in all currently loaded zones */
-		write_lock(&zone_lock);
+		spin_lock(&zone_lock);
 		for (j = 0; j < ARRAY_SIZE(tone_zones); j++) {
 			struct dahdi_zone *z = tone_zones[j];
 
@@ -4620,7 +4616,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				z->mfr2_rev[i].tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
 			}
 		}
-		write_unlock(&zone_lock);
+		spin_unlock(&zone_lock);
 
 		dtmf_silence.tonesamples = global_dialparams.dtmf_tonelen * DAHDI_CHUNKSIZE;
 		mfr1_silence.tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
