@@ -994,7 +994,7 @@ struct dahdi_dynamic_driver {
 	const char *desc;
 
 	/*! Create a new transmission pipe */
-	void *(*create)(struct dahdi_span *span, char *address);
+	void *(*create)(struct dahdi_span *span, const char *address);
 
 	/*! Destroy a created transmission pipe */
 	void (*destroy)(void *tpipe);

@@ -149,7 +149,8 @@ static void dahdi_dynamic_local_destroy(void *pvt)
 	kfree(d);
 }
 
-static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
+static void *dahdi_dynamic_local_create(struct dahdi_span *span,
+					const char *address)
 {
 	struct dahdi_dynamic_local *d, *l;
 	unsigned long flags;

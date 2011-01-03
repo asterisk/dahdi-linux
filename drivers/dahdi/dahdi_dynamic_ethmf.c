@@ -581,7 +581,7 @@ static void ztdethmf_destroy(void *pvt)
 	}
 }
 
-static void *ztdethmf_create(struct dahdi_span *span, char *addr)
+static void *ztdethmf_create(struct dahdi_span *span, const char *addr)
 {
 	struct ztdeth *z;
 	char src[256];
