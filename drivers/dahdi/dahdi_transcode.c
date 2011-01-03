@@ -438,7 +438,7 @@ static struct file_operations __dahdi_transcode_fops = {
 
 static struct dahdi_chardev transcode_chardev = {
 	.name = "transcode",
-	.minor = 250,
+	.minor = DAHDI_TRANSCODE,
 };
 
 static int dahdi_transcode_init(void)

@@ -1301,6 +1301,12 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
 
+#define	DAHDI_CTL	0
+#define	DAHDI_TRANSCODE	250
+#define	DAHDI_TIMER	253
+#define	DAHDI_CHANNEL	254
+#define	DAHDI_PSEUDO	255
+
 /* prink-wrapper macros */
 #define	DAHDI_PRINTK(level, category, fmt, ...)	\
 	printk(KERN_ ## level "%s%s-%s: " fmt, #level, category, \
