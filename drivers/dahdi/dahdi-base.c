@@ -8849,8 +8849,12 @@ int dahdi_receive(struct dahdi_span *span)
 
 	for (x = 0; x < span->channels; x++) {
 		struct dahdi_chan *const chan = span->chans[x];
+		spin_lock(&chan->lock);
+		if (unlikely(chan->flags & DAHDI_FLAG_NOSTDTXRX)) {
+			spin_unlock(&chan->lock);
+			continue;
+		}
 		if (chan->master == chan) {
-			spin_lock(&chan->lock);
 			if (chan->nextslave) {
 				/* Must process each slave at the same time */
 				u_char data[DAHDI_CHUNKSIZE];
@@ -8862,16 +8866,14 @@ int dahdi_receive(struct dahdi_span *span)
 					for (z = chan; z; z = z->nextslave) {
 						data[pos++] = z->readchunk[y];
 						if (pos == DAHDI_CHUNKSIZE) {
-							if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
-								__dahdi_receive_chunk(chan, data);
+							__dahdi_receive_chunk(chan, data);
 							pos = 0;
 						}
 					}
 				}
 			} else {
 				/* Process a normal channel */
-				if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
-					__dahdi_real_receive(chan);
+				__dahdi_real_receive(chan);
 			}
 			if (chan->itimer) {
 				chan->itimer -= DAHDI_CHUNKSIZE;
@@ -8916,8 +8918,8 @@ int dahdi_receive(struct dahdi_span *span)
 #ifdef BUFFER_DEBUG
 			chan->statcount -= DAHDI_CHUNKSIZE;
 #endif
-			spin_unlock(&chan->lock);
 		}
+		spin_unlock(&chan->lock);
 	}
 
 	local_irq_restore(flags);
