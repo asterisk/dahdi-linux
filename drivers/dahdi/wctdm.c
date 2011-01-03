@@ -2370,7 +2370,7 @@ static int wctdm_initialize(struct wctdm *wc)
 	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
 		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
 	wc->span.manufacturer = "Digium";
-	dahdi_copy_string(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
+	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
 	if (alawoverride) {
 		printk(KERN_INFO "ALAW override parameter detected.  Device will be operating in ALAW\n");
 		wc->span.deflaw = DAHDI_LAW_ALAW;

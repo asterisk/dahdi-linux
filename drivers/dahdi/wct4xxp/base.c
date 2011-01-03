@@ -2016,7 +2016,8 @@ static void set_span_devicetype(struct t4 *wc)
 
 	for (x = 0; x < wc->numspans; x++) {
 		ts = wc->tspans[x];
-		dahdi_copy_string(ts->span.devicetype, wc->variety, sizeof(ts->span.devicetype));
+		strlcpy(ts->span.devicetype, wc->variety,
+			sizeof(ts->span.devicetype));
 		if (wc->vpm == T4_VPM_PRESENT) {
 			if (!wc->vpm450m)
 				strncat(ts->span.devicetype, " (VPM400M)", sizeof(ts->span.devicetype) - 1);

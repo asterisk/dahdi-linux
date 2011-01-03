@@ -306,12 +306,12 @@ static int ztdeth_create(struct dahdi_dynamic *dyn, const char *addr)
 		memset(z, 0, sizeof(struct ztdeth));
 
 		/* Address should be <dev>/<macaddr>[/subaddr] */
-		dahdi_copy_string(tmp, addr, sizeof(tmp));
+		strlcpy(tmp, addr, sizeof(tmp));
 		tmp2 = strchr(tmp, '/');
 		if (tmp2) {
 			*tmp2 = '\0';
 			tmp2++;
-			dahdi_copy_string(z->ethdev, tmp, sizeof(z->ethdev));
+			strlcpy(z->ethdev, tmp, sizeof(z->ethdev));
 		} else {
 			printk(KERN_NOTICE "Invalid TDMoE address (no device) '%s'\n", addr);
 			kfree(z);

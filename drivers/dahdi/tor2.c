@@ -284,7 +284,7 @@ static void init_spans(struct tor2 *tor)
 			 "Tormenta 2 (PCI) Quad %s Card %d Span %d",
 			 (tor->cardtype == TYPE_T1)  ?  "T1"  :  "E1", tor->num, x + 1);
 		s->manufacturer = "Digium";
-		dahdi_copy_string(s->devicetype, tor->type, sizeof(s->devicetype));
+		strlcpy(s->devicetype, tor->type, sizeof(s->devicetype));
 		snprintf(s->location, sizeof(s->location) - 1,
 			 "PCI Bus %02d Slot %02d", tor->pci->bus->number, PCI_SLOT(tor->pci->devfn) + 1);
 		if (tor->cardtype == TYPE_T1) {

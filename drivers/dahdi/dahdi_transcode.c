@@ -328,7 +328,7 @@ static long dahdi_tc_getinfo(unsigned long data)
 		return -ENOSYS;
 	}
 
-	dahdi_copy_string(info.name, tc->name, sizeof(info.name));
+	strlcpy(info.name, tc->name, sizeof(info.name));
 	info.numchannels = tc->numchannels;
 	info.srcfmts = tc->srcfmts;
 	info.dstfmts = tc->dstfmts;

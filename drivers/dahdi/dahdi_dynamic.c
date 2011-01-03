@@ -604,8 +604,8 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 	}
 	
 	/* Setup parameters properly assuming we're going to be okay. */
-	dahdi_copy_string(d->dname, dds->driver, sizeof(d->dname));
-	dahdi_copy_string(d->addr, dds->addr, sizeof(d->addr));
+	strlcpy(d->dname, dds->driver, sizeof(d->dname));
+	strlcpy(d->addr, dds->addr, sizeof(d->addr));
 	d->timing = dds->timing;
 	sprintf(d->span.name, "DYN/%s/%s", dds->driver, dds->addr);
 	sprintf(d->span.desc, "Dynamic '%s' span at '%s'",

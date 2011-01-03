@@ -2492,7 +2492,8 @@ static void init_spans(struct b4xxp *b4)
 		sprintf(bspan->span.name, "B4/%d/%d", b4->cardno, i+1);
 		sprintf(bspan->span.desc, "B4XXP (PCI) Card %d Span %d", b4->cardno, i+1);
 		bspan->span.manufacturer = "Digium";
-		dahdi_copy_string(bspan->span.devicetype, b4->variety, sizeof(bspan->span.devicetype));
+		strlcpy(bspan->span.devicetype, b4->variety,
+			sizeof(bspan->span.devicetype));
 		sprintf(bspan->span.location, "PCI Bus %02d Slot %02d",
 			b4->pdev->bus->number, PCI_SLOT(b4->pdev->devfn) + 1);
 

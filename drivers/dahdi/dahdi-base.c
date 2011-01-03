@@ -3038,7 +3038,7 @@ static int ioctl_load_zone(unsigned long data)
 	ptr = (char *) ptr + sizeof(*z);
 	space -= sizeof(*z);
 
-	dahdi_copy_string(z->name, work->th.name, sizeof(z->name));
+	strlcpy(z->name, work->th.name, sizeof(z->name));
 
 	for (x = 0; x < DAHDI_MAX_CADENCE; x++)
 		z->ringcadence[x] = work->th.ringcadence[x];
@@ -3855,7 +3855,7 @@ static int dahdi_ioctl_getparams(struct file *file, unsigned long data)
 	param.pulsebreaktime = chan->pulsebreaktime;
 	param.pulseaftertime = chan->pulseaftertime;
 	param.spanno = (chan->span) ? chan->span->spanno : 0;
-	dahdi_copy_string(param.name, chan->name, sizeof(param.name));
+	strlcpy(param.name, chan->name, sizeof(param.name));
 	param.chanpos = chan->chanpos;
 	param.sigcap = chan->sigcap;
 	/* Return current law */
@@ -3943,8 +3943,8 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 
 	spaninfo.spanno = s->spanno; /* put the span # in here */
 	spaninfo.totalspans = span_count();
-	dahdi_copy_string(spaninfo.desc, s->desc, sizeof(spaninfo.desc));
-	dahdi_copy_string(spaninfo.name, s->name, sizeof(spaninfo.name));
+	strlcpy(spaninfo.desc, s->desc, sizeof(spaninfo.desc));
+	strlcpy(spaninfo.name, s->name, sizeof(spaninfo.name));
 	spaninfo.alarms = s->alarms;		/* get alarm status */
 	spaninfo.rxlevel = s->rxlevel;	/* get rx level */
 	spaninfo.txlevel = s->txlevel;	/* get tx level */
@@ -3971,20 +3971,20 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 	spaninfo.lineconfig = s->lineconfig;
 	spaninfo.irq = s->irq;
 	spaninfo.linecompat = s->linecompat;
-	dahdi_copy_string(spaninfo.lboname, dahdi_lboname(s->lbo),
+	strlcpy(spaninfo.lboname, dahdi_lboname(s->lbo),
 			  sizeof(spaninfo.lboname));
 	if (s->manufacturer) {
-		dahdi_copy_string(spaninfo.manufacturer, s->manufacturer,
+		strlcpy(spaninfo.manufacturer, s->manufacturer,
 				  sizeof(spaninfo.manufacturer));
 	}
 	if (s->devicetype) {
-		dahdi_copy_string(spaninfo.devicetype, s->devicetype,
+		strlcpy(spaninfo.devicetype, s->devicetype,
 				  sizeof(spaninfo.devicetype));
 	}
-	dahdi_copy_string(spaninfo.location, s->location,
+	strlcpy(spaninfo.location, s->location,
 			  sizeof(spaninfo.location));
 	if (s->spantype) {
-		dahdi_copy_string(spaninfo.spantype, s->spantype,
+		strlcpy(spaninfo.spantype, s->spantype,
 				  sizeof(spaninfo.spantype));
 	}
 
@@ -4031,10 +4031,10 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	spaninfo_v1.spanno = s->spanno; /* put the span # in here */
 	spaninfo_v1.totalspans = 0;
 	spaninfo_v1.totalspans = span_count();
-	dahdi_copy_string(spaninfo_v1.desc,
+	strlcpy(spaninfo_v1.desc,
 			  s->desc,
 			  sizeof(spaninfo_v1.desc));
-	dahdi_copy_string(spaninfo_v1.name,
+	strlcpy(spaninfo_v1.name,
 			  s->name,
 			  sizeof(spaninfo_v1.name));
 	spaninfo_v1.alarms = s->alarms;
@@ -4056,28 +4056,28 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	spaninfo_v1.lineconfig = s->lineconfig;
 	spaninfo_v1.irq = s->irq;
 	spaninfo_v1.linecompat = s->linecompat;
-	dahdi_copy_string(spaninfo_v1.lboname,
+	strlcpy(spaninfo_v1.lboname,
 			  dahdi_lboname(s->lbo),
 			  sizeof(spaninfo_v1.lboname));
 
 	if (s->manufacturer) {
-		dahdi_copy_string(spaninfo_v1.manufacturer,
+		strlcpy(spaninfo_v1.manufacturer,
 			s->manufacturer,
 			sizeof(spaninfo_v1.manufacturer));
 	}
 
 	if (s->devicetype) {
-		dahdi_copy_string(spaninfo_v1.devicetype,
+		strlcpy(spaninfo_v1.devicetype,
 				  s->devicetype,
 				  sizeof(spaninfo_v1.devicetype));
 	}
 
-	dahdi_copy_string(spaninfo_v1.location,
+	strlcpy(spaninfo_v1.location,
 			  s->location,
 			  sizeof(spaninfo_v1.location));
 
 	if (s->spantype) {
-		dahdi_copy_string(spaninfo_v1.spantype,
+		strlcpy(spaninfo_v1.spantype,
 				  s->spantype,
 				  sizeof(spaninfo_v1.spantype));
 	}
@@ -4644,7 +4644,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		size_t space = sizeof(vi.echo_canceller) - 1;
 
 		memset(&vi, 0, sizeof(vi));
-		dahdi_copy_string(vi.version, DAHDI_VERSION, sizeof(vi.version));
+		strlcpy(vi.version, DAHDI_VERSION, sizeof(vi.version));
 		read_lock(&ecfactory_list_lock);
 		list_for_each_entry(cur, &ecfactory_list, list) {
 			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
@@ -4818,7 +4818,8 @@ static int ioctl_dahdi_dial(struct dahdi_chan *chan, unsigned long data)
 			rv = -EBUSY;
 			break;
 		}
-		dahdi_copy_string(chan->txdialbuf + strlen(chan->txdialbuf), tdo->dialstr, DAHDI_MAX_DTMF_BUF - strlen(chan->txdialbuf));
+		strlcpy(chan->txdialbuf + strlen(chan->txdialbuf), tdo->dialstr,
+			DAHDI_MAX_DTMF_BUF - strlen(chan->txdialbuf));
 		if (!chan->dialing) {
 			chan->dialing = 1;
 			__do_dtmf(chan);

@@ -654,7 +654,7 @@ static int wcfxo_initialize(struct wcfxo *wc)
 	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
 		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
 	wc->span.manufacturer = "Digium";
-	dahdi_copy_string(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
+	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
 	wc->chan->sigcap = DAHDI_SIG_FXSKS | DAHDI_SIG_FXSLS | DAHDI_SIG_SF;
 	wc->chan->chanpos = 1;
 	wc->span.chans = &wc->chan;

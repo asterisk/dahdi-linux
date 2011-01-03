@@ -771,7 +771,7 @@ static int t1xxp_software_init(struct t1xxp *wc)
 	sprintf(wc->span.name, "WCT1/%d", wc->num);
 	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Card %d", wc->variety, wc->num);
 	wc->span.manufacturer = "Digium";
-	dahdi_copy_string(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
+	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
 	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
 		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
 	wc->span.irq = wc->dev->irq;

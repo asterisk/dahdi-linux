@@ -210,7 +210,8 @@ static int dahdi_dummy_initialize(struct dahdi_dummy *ztd)
 	sprintf(ztd->span.name, "DAHDI_DUMMY/1");
 	snprintf(ztd->span.desc, sizeof(ztd->span.desc) - 1, "%s (source: " CLOCK_SRC ") %d", ztd->span.name, 1);
 	sprintf(ztd->chan->name, "DAHDI_DUMMY/%d/%d", 1, 0);
-	dahdi_copy_string(ztd->span.devicetype, "DAHDI Dummy Timing", sizeof(ztd->span.devicetype));
+	strlcpy(ztd->span.devicetype, "DAHDI Dummy Timing",
+		sizeof(ztd->span.devicetype));
 	ztd->chan->chanpos = 1;
 	ztd->span.chans = &ztd->chan;
 	ztd->span.channels = 0;		/* no channels on our span */
