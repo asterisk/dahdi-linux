@@ -549,36 +549,28 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 		return -EEXIST;
 
 	/* Allocate memory */
-	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d)
 		return -ENOMEM;
 
-	/* Zero it out */
-	memset(d, 0, sizeof(*d));
-
 	for (x = 0; x < dds->numchans; x++) {
-		d->chans[x] = kmalloc(sizeof(*d->chans[x]), GFP_KERNEL);
+		d->chans[x] = kzalloc(sizeof(*d->chans[x]), GFP_KERNEL);
 		if (!d->chans[x]) {
 			dynamic_destroy(d);
 			return -ENOMEM;
 		}
-
-		memset(d->chans[x], 0, sizeof(*d->chans[x]));
 	}
 
 	/* Allocate message buffer with sample space and header space */
 	bufsize = dds->numchans * DAHDI_CHUNKSIZE + dds->numchans / 4 + 48;
 
-	d->msgbuf = kmalloc(bufsize, GFP_KERNEL);
+	d->msgbuf = kzalloc(bufsize, GFP_KERNEL);
 
 	if (!d->msgbuf) {
 		dynamic_destroy(d);
 		return -ENOMEM;
 	}
 	
-	/* Zero out -- probably not needed but why not */
-	memset(d->msgbuf, 0, bufsize);
-
 	/* Setup parameters properly assuming we're going to be okay. */
 	dahdi_copy_string(d->dname, dds->driver, sizeof(d->dname));
 	dahdi_copy_string(d->addr, dds->addr, sizeof(d->addr));
