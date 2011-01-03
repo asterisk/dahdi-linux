@@ -47,7 +47,7 @@
  * tasklets.
  */
 
-#define ENABLE_TASKLETS
+#undef ENABLE_TASKLETS
 
 /*
  *  Dynamic spans implemented using TDM over X with standard message
