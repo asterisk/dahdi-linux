@@ -437,6 +437,11 @@ deftaps (dahdi)::
   different default size. So normally setting this doesn't change
   anything.
 
+max_pseudo_channels (dahdi)::
+  The maximum number of pseudo channels that dahdi will allow userspace to
+  create.  Pseudo channels are used when conferencing channels together.
+  The default is 512.
+
 To get a list of parameters supported by a module, use 
 
   modinfo module_name

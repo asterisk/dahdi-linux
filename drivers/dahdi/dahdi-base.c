@@ -3003,7 +3003,10 @@ static int can_open_timer(void)
 #endif
 }
 
-static struct dahdi_chan *dahdi_alloc_pseudo(void)
+static unsigned int max_pseudo_channels = 512;
+static unsigned int num_pseudo_channels;
+
+static struct dahdi_chan *dahdi_alloc_pseudo(struct file *file)
 {
 	struct pseudo_chan *pseudo;
 	unsigned long flags;
@@ -3014,6 +3017,9 @@ static struct dahdi_chan *dahdi_alloc_pseudo(void)
 	/* Don't allow /dev/dahdi/pseudo to open if there is not a timing
 	 * source. */
 	if (!can_open_timer())
+		return NULL;
+
+	if (unlikely(num_pseudo_channels >= max_pseudo_channels))
 		return NULL;
 
 	pseudo = kzalloc(sizeof(*pseudo), GFP_KERNEL);
@@ -3059,9 +3065,12 @@ static struct dahdi_chan *dahdi_alloc_pseudo(void)
 	snprintf(pseudo->chan.name, sizeof(pseudo->chan.name)-1,
 		 "Pseudo/%d", pseudo->chan.channo);
 
+	file->private_data = &pseudo->chan;
+
 	/* Once we place the pseudo chan on the list...it's registered and
 	 * live. */
 	spin_lock_irqsave(&chan_lock, flags);
+	++num_pseudo_channels;
 	list_add(&pseudo->node, pos);
 	spin_unlock_irqrestore(&chan_lock, flags);
 
@@ -3082,6 +3091,7 @@ static void dahdi_free_pseudo(struct dahdi_chan *chan)
 
 	spin_lock_irqsave(&chan_lock, flags);
 	list_del(&pseudo->node);
+	--num_pseudo_channels;
 	spin_unlock_irqrestore(&chan_lock, flags);
 
 	dahdi_chan_unreg(chan);
@@ -3127,13 +3137,10 @@ static int dahdi_open(struct inode *inode, struct file *file)
 	if (unit == DAHDI_CHANNEL)
 		return dahdi_chan_open(file);
 	if (unit == DAHDI_PSEUDO) {
-		chan = dahdi_alloc_pseudo();
-		if (chan) {
-			file->private_data = chan;
-			return dahdi_specchan_open(file);
-		} else {
-			return -ENXIO;
-		}
+		chan = dahdi_alloc_pseudo(file);
+		if (unlikely(!chan))
+			return -ENOMEM;
+		return dahdi_specchan_open(file);
 	}
 	return dahdi_specchan_open(file);
 }
@@ -9049,6 +9056,9 @@ MODULE_PARM_DESC(debug, "Sets debugging verbosity as a bitfield, to see"\
 		" general debugging set this to 1. To see RBS debugging set"\
 		" this to 32");
 module_param(deftaps, int, 0644);
+
+module_param(max_pseudo_channels, int, 0644);
+MODULE_PARM_DESC(max_pseudo_channels, "Maximum number of pseudo channels.");
 
 static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,
