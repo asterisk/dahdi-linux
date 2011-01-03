@@ -8518,6 +8518,27 @@ static inline void __dahdi_real_receive(struct dahdi_chan *chan)
 	}
 }
 
+/**
+ * __transmit_to_slaves() - Distribute the tx data to all the slave channels.
+ *
+ */
+static void __transmit_to_slaves(struct dahdi_chan *const chan)
+{
+	u_char data[DAHDI_CHUNKSIZE];
+	int i;
+	int pos = DAHDI_CHUNKSIZE;
+	struct dahdi_chan *slave;
+	for (i = 0; i < DAHDI_CHUNKSIZE; i++) {
+		for (slave = chan; (NULL != slave); slave = slave->nextslave) {
+			if (pos == DAHDI_CHUNKSIZE) {
+				__dahdi_transmit_chunk(chan, data);
+				pos = 0;
+			}
+			slave->writechunk[i] = data[pos++];
+		}
+	}
+}
+
 int dahdi_transmit(struct dahdi_span *span)
 {
 	unsigned long flags;
@@ -8550,22 +8571,7 @@ int dahdi_transmit(struct dahdi_span *span)
 				spin_unlock_irqrestore(&chan->lock, flags);
 				continue;
 			} else if (chan->nextslave) {
-				u_char data[DAHDI_CHUNKSIZE];
-				int pos = DAHDI_CHUNKSIZE;
-				int y;
-				struct dahdi_chan *z;
-				/* Process master/slaves one way */
-				for (y = 0; y < DAHDI_CHUNKSIZE; y++) {
-					/* Process slaves for this byte too */
-					for (z = chan; z; z = z->nextslave) {
-						if (pos == DAHDI_CHUNKSIZE) {
-							/* Get next chunk */
-							__dahdi_transmit_chunk(chan, data);
-							pos = 0;
-						}
-						z->writechunk[y] = data[pos++];
-					}
-				}
+				__transmit_to_slaves(chan);
 			} else {
 				/* Process a normal channel */
 				__dahdi_real_transmit(chan);
@@ -8820,6 +8826,27 @@ static void coretimer_cleanup(void)
 
 #endif /* CONFIG_DAHDI_CORE_TIMER */
 
+/**
+ * __receive_from_slaves() - Collect the rx data from all the slave channels.
+ *
+ */
+static void __receive_from_slaves(struct dahdi_chan *const chan)
+{
+	u_char data[DAHDI_CHUNKSIZE];
+	int i;
+	int pos = 0;
+	struct dahdi_chan *slave;
+
+	for (i = 0; i < DAHDI_CHUNKSIZE; ++i) {
+		for (slave = chan; (NULL != slave); slave = slave->nextslave) {
+			data[pos++] = slave->readchunk[i];
+			if (pos == DAHDI_CHUNKSIZE) {
+				__dahdi_receive_chunk(chan, data);
+				pos = 0;
+			}
+		}
+	}
+}
 
 int dahdi_receive(struct dahdi_span *span)
 {
@@ -8844,21 +8871,7 @@ int dahdi_receive(struct dahdi_span *span)
 				spin_unlock_irqrestore(&chan->lock, flags);
 				continue;
 			} else if (chan->nextslave) {
-				/* Must process each slave at the same time */
-				u_char data[DAHDI_CHUNKSIZE];
-				int pos = 0;
-				int y;
-				struct dahdi_chan *z;
-				for (y=0;y<DAHDI_CHUNKSIZE;y++) {
-					/* Put all its slaves, too */
-					for (z = chan; z; z = z->nextslave) {
-						data[pos++] = z->readchunk[y];
-						if (pos == DAHDI_CHUNKSIZE) {
-							__dahdi_receive_chunk(chan, data);
-							pos = 0;
-						}
-					}
-				}
+				__receive_from_slaves(chan);
 			} else {
 				/* Process a normal channel */
 				__dahdi_real_receive(chan);
