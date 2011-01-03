@@ -67,9 +67,9 @@
 /* Arbitrary limit to the max # of channels in a span */
 #define DAHDI_DYNAMIC_MAX_CHANS	256
 
-#define ZTD_FLAG_YELLOW_ALARM		(1 << 0)
-#define ZTD_FLAG_SIGBITS_PRESENT	(1 << 1)
-#define ZTD_FLAG_LOOPBACK		(1 << 2)
+#define DAHDI_DYNAMIC_FLAG_YELLOW_ALARM		(1 << 0)
+#define DAHDI_DYNAMIC_FLAG_SIGBITS_PRESENT	(1 << 1)
+#define DAHDI_DYNAMIC_FLAG_LOOPBACK		(1 << 2)
 
 #define ERR_NSAMP			(1 << 16)
 #define ERR_NCHAN			(1 << 17)
@@ -79,8 +79,8 @@ EXPORT_SYMBOL(dahdi_dynamic_register);
 EXPORT_SYMBOL(dahdi_dynamic_unregister);
 EXPORT_SYMBOL(dahdi_dynamic_receive);
 
-static int ztdynamic_init(void);
-static void ztdynamic_cleanup(void);
+static int dahdi_dynamic_init(void);
+static void dahdi_dynamic_cleanup(void);
 
 #ifdef ENABLE_TASKLETS
 static int taskletrun;
@@ -88,9 +88,9 @@ static int taskletsched;
 static int taskletpending;
 static int taskletexec;
 static int txerrors;
-static struct tasklet_struct ztd_tlet;
+static struct tasklet_struct dahdi_dynamic_tlet;
 
-static void ztd_tasklet(unsigned long data);
+static void dahdi_dynamic_tasklet(unsigned long data);
 #endif
 
 struct dahdi_dynamic {
@@ -127,19 +127,19 @@ static void checkmaster(void)
 {
 	int newhasmaster=0;
 	int best = 9999999;
-	struct dahdi_dynamic *z, *master=NULL;
+	struct dahdi_dynamic *d, *master = NULL;
 
 	rcu_read_lock();
 
-	list_for_each_entry_rcu(z, &dspan_list, list) {
-		if (z->timing) {
-			z->master = 0;
-			if (!(z->span.alarms & DAHDI_ALARM_RED) &&
-			    (z->timing < best) && !z->dead) {
+	list_for_each_entry_rcu(d, &dspan_list, list) {
+		if (d->timing) {
+			d->master = 0;
+			if (!(d->span.alarms & DAHDI_ALARM_RED) &&
+			    (d->timing < best) && !d->dead) {
 				/* If not in alarm and they're
 				   a better timing source, use them */
-				master = z;
-				best = z->timing;
+				master = d;
+				best = d->timing;
 				newhasmaster = 1;
 			}
 		}
@@ -158,9 +158,9 @@ static void checkmaster(void)
 		printk(KERN_INFO "TDMoX: No master.\n");
 }
 
-static void ztd_sendmessage(struct dahdi_dynamic *z)
+static void dahdi_dynamic_sendmessage(struct dahdi_dynamic *d)
 {
-	unsigned char *buf = z->msgbuf;
+	unsigned char *buf = d->msgbuf;
 	unsigned short bits;
 	int msglen = 0;
 	int x;
@@ -172,26 +172,26 @@ static void ztd_sendmessage(struct dahdi_dynamic *z)
 
 	/* Byte 1: Flags */
 	*buf = 0;
-	if (z->span.alarms & DAHDI_ALARM_RED)
-		*buf |= ZTD_FLAG_YELLOW_ALARM;
-	*buf |= ZTD_FLAG_SIGBITS_PRESENT;
+	if (d->span.alarms & DAHDI_ALARM_RED)
+		*buf |= DAHDI_DYNAMIC_FLAG_YELLOW_ALARM;
+	*buf |= DAHDI_DYNAMIC_FLAG_SIGBITS_PRESENT;
 	buf++; msglen++;
 
 	/* Bytes 2-3: Transmit counter */
-	*((unsigned short *)buf) = htons((unsigned short)z->txcnt);
-	z->txcnt++;
+	*((unsigned short *)buf) = htons((unsigned short)d->txcnt);
+	d->txcnt++;
 	buf++; msglen++;
 	buf++; msglen++;
 
 	/* Bytes 4-5: Number of channels */
-	*((unsigned short *)buf) = htons((unsigned short)z->span.channels);
+	*((unsigned short *)buf) = htons((unsigned short)d->span.channels);
 	buf++; msglen++;
 	buf++; msglen++;
 	bits = 0;
 	offset = 0;
-	for (x=0;x<z->span.channels;x++) {
+	for (x = 0; x < d->span.channels; x++) {
 		offset = x % 4;
-		bits |= (z->chans[x]->txsig & 0xf) << (offset << 2);
+		bits |= (d->chans[x]->txsig & 0xf) << (offset << 2);
 		if (offset == 3) {
 			/* Write the bits when we have four channels */
 			*((unsigned short *)buf) = htons(bits);
@@ -208,33 +208,34 @@ static void ztd_sendmessage(struct dahdi_dynamic *z)
 		buf++; msglen++;
 	}
 	
-	for (x=0;x<z->span.channels;x++) {
-		memcpy(buf, z->chans[x]->writechunk, DAHDI_CHUNKSIZE);
+	for (x = 0; x < d->span.channels; x++) {
+		memcpy(buf, d->chans[x]->writechunk, DAHDI_CHUNKSIZE);
 		buf += DAHDI_CHUNKSIZE;
 		msglen += DAHDI_CHUNKSIZE;
 	}
 	
-	z->driver->transmit(z->pvt, z->msgbuf, msglen);
+	d->driver->transmit(d->pvt, d->msgbuf, msglen);
 	
 }
 
-static void __ztdynamic_run(void)
+static void __dahdi_dynamic_run(void)
 {
-	struct dahdi_dynamic *z;
+	struct dahdi_dynamic *d;
 	struct dahdi_dynamic_driver *drv;
 	int y;
 
 	rcu_read_lock();
-	list_for_each_entry_rcu(z, &dspan_list, list) {
-		if (!z->dead) {
-			for (y=0;y<z->span.channels;y++) {
+	list_for_each_entry_rcu(d, &dspan_list, list) {
+		if (!d->dead) {
+			for (y = 0; y < d->span.channels; y++) {
+				struct dahdi_chan *const c = d->span.chans[y];
 				/* Echo cancel double buffered data */
-				dahdi_ec_chunk(z->span.chans[y], z->span.chans[y]->readchunk, z->span.chans[y]->writechunk);
+				dahdi_ec_chunk(c, c->readchunk, c->writechunk);
 			}
-			dahdi_receive(&z->span);
-			dahdi_transmit(&z->span);
+			dahdi_receive(&d->span);
+			dahdi_transmit(&d->span);
 			/* Handle all transmissions now */
-			ztd_sendmessage(z);
+			dahdi_dynamic_sendmessage(d);
 		}
 	}
 
@@ -248,18 +249,18 @@ static void __ztdynamic_run(void)
 }
 
 #ifdef ENABLE_TASKLETS
-static void ztdynamic_run(void)
+static void dahdi_dynamic_run(void)
 {
 	if (likely(!taskletpending)) {
 		taskletpending = 1;
 		taskletsched++;
-		tasklet_hi_schedule(&ztd_tlet);
+		tasklet_hi_schedule(&dahdi_dynamic_tlet);
 	} else {
 		txerrors++;
 	}
 }
 #else
-#define ztdynamic_run __ztdynamic_run
+#define dahdi_dynamic_run __dahdi_dynamic_run
 #endif
 
 static inline struct dahdi_dynamic *dynamic_from_span(struct dahdi_span *span)
@@ -269,7 +270,7 @@ static inline struct dahdi_dynamic *dynamic_from_span(struct dahdi_span *span)
 
 void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msglen)
 {
-	struct dahdi_dynamic *ztd = dynamic_from_span(span);
+	struct dahdi_dynamic *dtd = dynamic_from_span(span);
 	int newerr=0;
 	int sflags;
 	int xlen;
@@ -283,10 +284,9 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	if (unlikely(msglen < 6)) {
 		rcu_read_unlock();
 		newerr = ERR_LEN;
-		if (newerr != ztd->err) {
+		if (newerr != dtd->err)
 			printk(KERN_NOTICE "Span %s: Insufficient samples for header (only %d)\n", span->name, msglen);
-		}
-		ztd->err = newerr;
+		dtd->err = newerr;
 		return;
 	}
 	
@@ -294,10 +294,9 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	if (unlikely(*msg != DAHDI_CHUNKSIZE)) {
 		rcu_read_unlock();
 		newerr = ERR_NSAMP | msg[0];
-		if (newerr != 	ztd->err) {
+		if (newerr != dtd->err)
 			printk(KERN_NOTICE "Span %s: Expected %d samples, but receiving %d\n", span->name, DAHDI_CHUNKSIZE, msg[0]);
-		}
-		ztd->err = newerr;
+		dtd->err = newerr;
 		return;
 	}
 	msg++;
@@ -312,10 +311,9 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	if (unlikely(nchans != span->channels)) {
 		rcu_read_unlock();
 		newerr = ERR_NCHAN | nchans;
-		if (newerr != ztd->err) {
+		if (newerr != dtd->err)
 			printk(KERN_NOTICE "Span %s: Expected %d channels, but receiving %d\n", span->name, span->channels, nchans);
-		}
-		ztd->err = newerr;
+		dtd->err = newerr;
 		return;
 	}
 	msg++;
@@ -329,7 +327,7 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	/* Add samples of audio */
 	xlen += nchans * DAHDI_CHUNKSIZE;
 	/* If RBS info is there, add that */
-	if (sflags & ZTD_FLAG_SIGBITS_PRESENT) {
+	if (sflags & DAHDI_DYNAMIC_FLAG_SIGBITS_PRESENT) {
 		/* Account for sigbits -- one short per 4 channels*/
 		xlen += ((nchans + 3) / 4) * 2;
 	}
@@ -337,17 +335,16 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	if (unlikely(xlen != msglen)) {
 		rcu_read_unlock();
 		newerr = ERR_LEN | xlen;
-		if (newerr != ztd->err) {
+		if (newerr != dtd->err)
 			printk(KERN_NOTICE "Span %s: Expected message size %d, but was %d instead\n", span->name, xlen, msglen);
-		}
-		ztd->err = newerr;
+		dtd->err = newerr;
 		return;
 	}
 
 	bits = 0;
 
 	/* Record sigbits if present */
-	if (sflags & ZTD_FLAG_SIGBITS_PRESENT) {
+	if (sflags & DAHDI_DYNAMIC_FLAG_SIGBITS_PRESENT) {
 		for (x=0;x<nchans;x++) {
 			if (!(x%4)) {
 				/* Get new bits */
@@ -372,19 +369,19 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 		msg += DAHDI_CHUNKSIZE;
 	}
 
-	master = ztd->master;
+	master = dtd->master;
 	
-	rxcnt = ztd->rxcnt;
-	ztd->rxcnt = rxpos+1;
+	rxcnt = dtd->rxcnt;
+	dtd->rxcnt = rxpos+1;
 
 	/* Keep track of last received packet */
-	ztd->rxjif = jiffies;
+	dtd->rxjif = jiffies;
 
 	rcu_read_unlock();
 
 	/* Check for Yellow alarm */
 	newalarm = span->alarms & ~(DAHDI_ALARM_YELLOW | DAHDI_ALARM_RED);
-	if (sflags & ZTD_FLAG_YELLOW_ALARM)
+	if (sflags & DAHDI_DYNAMIC_FLAG_YELLOW_ALARM)
 		newalarm |= DAHDI_ALARM_YELLOW;
 
 	if (newalarm != span->alarms) {
@@ -399,45 +396,43 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 
 	/* If this is our master span, then run everything */
 	if (master)
-		ztdynamic_run();
+		dahdi_dynamic_run();
 }
 
-static void dynamic_destroy(struct dahdi_dynamic *z)
+static void dynamic_destroy(struct dahdi_dynamic *d)
 {
 	unsigned int x;
 
 	/* Unregister span if appropriate */
-	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &z->span.flags))
-		dahdi_unregister(&z->span);
+	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &d->span.flags))
+		dahdi_unregister(&d->span);
 
 	/* Destroy the pvt stuff if there */
-	if (z->pvt)
-		z->driver->destroy(z->pvt);
+	if (d->pvt)
+		d->driver->destroy(d->pvt);
 
 	/* Free message buffer if appropriate */
-	if (z->msgbuf)
-		kfree(z->msgbuf);
+	kfree(d->msgbuf);
 
 	/* Free channels */
-	for (x = 0; x < z->span.channels; x++) {
-		kfree(z->chans[x]);
-	}
+	for (x = 0; x < d->span.channels; x++)
+		kfree(d->chans[x]);
 
-	/* Free z */
-	kfree(z);
+	/* Free d */
+	kfree(d);
 
 	checkmaster();
 }
 
-static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *zds)
+static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *dds)
 {
-	struct dahdi_dynamic *z = NULL, *found = NULL;
+	struct dahdi_dynamic *d = NULL, *found = NULL;
 
 	rcu_read_lock();
-	list_for_each_entry_rcu(z, &dspan_list, list) {
-		if (!strcmp(z->dname, zds->driver) &&
-				!strcmp(z->addr, zds->addr)) {
-			found = z;
+	list_for_each_entry_rcu(d, &dspan_list, list) {
+		if (!strcmp(d->dname, dds->driver) &&
+				!strcmp(d->addr, dds->addr)) {
+			found = d;
 			break;
 		}
 	}
@@ -448,13 +443,13 @@ static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *zds)
 
 static struct dahdi_dynamic_driver *find_driver(char *name)
 {
-	struct dahdi_dynamic_driver *ztd, *found = NULL;
+	struct dahdi_dynamic_driver *dtd, *found = NULL;
 
 	rcu_read_lock();
-	list_for_each_entry_rcu(ztd, &driver_list, list) {
+	list_for_each_entry_rcu(dtd, &driver_list, list) {
 		/* here's our driver */
-		if (!strcmp(name, ztd->name)) {
-			found = ztd;
+		if (!strcmp(name, dtd->name)) {
+			found = dtd;
 			break;
 		}
 	}
@@ -463,214 +458,223 @@ static struct dahdi_dynamic_driver *find_driver(char *name)
 	return found;
 }
 
-static int destroy_dynamic(struct dahdi_dynamic_span *zds)
+static int destroy_dynamic(struct dahdi_dynamic_span *dds)
 {
 	unsigned long flags;
-	struct dahdi_dynamic *z;
+	struct dahdi_dynamic *d;
 
-	z = find_dynamic(zds);
-	if (unlikely(!z)) {
+	d = find_dynamic(dds);
+	if (unlikely(!d))
 		return -EINVAL;
-	}
 
-	if (z->usecount) {
+	if (d->usecount) {
 		printk(KERN_NOTICE "Attempt to destroy dynamic span while it is in use\n");
 		return -EBUSY;
 	}
 
 	spin_lock_irqsave(&dspan_lock, flags);
-	list_del_rcu(&z->list);
+	list_del_rcu(&d->list);
 	spin_unlock_irqrestore(&dspan_lock, flags);
 	synchronize_rcu();
 
 	/* Destroy it */
-	dynamic_destroy(z);
+	dynamic_destroy(d);
 
 	return 0;
 }
 
-static int ztd_rbsbits(struct dahdi_chan *chan, int bits)
+static int dahdi_dynamic_rbsbits(struct dahdi_chan *chan, int bits)
 {
 	/* Don't have to do anything */
 	return 0;
 }
 
-static int ztd_open(struct dahdi_chan *chan)
+static int dahdi_dynamic_open(struct dahdi_chan *chan)
 {
-	struct dahdi_dynamic *z = dynamic_from_span(chan->span);
-	if (likely(z)) {
-		if (unlikely(z->dead))
+	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
+	if (likely(d)) {
+		if (unlikely(d->dead))
 			return -ENODEV;
-		z->usecount++;
+		d->usecount++;
 	}
 	return 0;
 }
 
-static int ztd_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int dahdi_dynamic_chanconfig(struct dahdi_chan *chan, int sigtype)
 {
 	return 0;
 }
 
-static int ztd_close(struct dahdi_chan *chan)
+static int dahdi_dynamic_close(struct dahdi_chan *chan)
 {
-	struct dahdi_dynamic *z = dynamic_from_span(chan->span);
-	if (z) {
-		z->usecount--;
-		if (z->dead && !z->usecount)
-			dynamic_destroy(z);
+	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
+	if (d) {
+		d->usecount--;
+		if (d->dead && !d->usecount)
+			dynamic_destroy(d);
 	}
 	return 0;
 }
 
 static const struct dahdi_span_ops dynamic_ops = {
 	.owner = THIS_MODULE,
-	.rbsbits = ztd_rbsbits,
-	.open = ztd_open,
-	.close = ztd_close,
-	.chanconfig = ztd_chanconfig,
+	.rbsbits = dahdi_dynamic_rbsbits,
+	.open = dahdi_dynamic_open,
+	.close = dahdi_dynamic_close,
+	.chanconfig = dahdi_dynamic_chanconfig,
 };
 
-static int create_dynamic(struct dahdi_dynamic_span *zds)
+static int create_dynamic(struct dahdi_dynamic_span *dds)
 {
-	struct dahdi_dynamic *z;
-	struct dahdi_dynamic_driver *ztd;
+	struct dahdi_dynamic *d;
+	struct dahdi_dynamic_driver *dtd;
 	unsigned long flags;
 	int x;
 	int bufsize;
 
-	if (zds->numchans < 1) {
-		printk(KERN_NOTICE "Can't be less than 1 channel (%d)!\n", zds->numchans);
+	if (dds->numchans < 1) {
+		printk(KERN_NOTICE "Can't be less than 1 channel (%d)!\n",
+			dds->numchans);
 		return -EINVAL;
 	}
-	if (zds->numchans >= DAHDI_DYNAMIC_MAX_CHANS) {
-		printk(KERN_NOTICE "Can't create dynamic span with greater than %d channels.  See ztdynamic.c and increase DAHDI_DYNAMIC_MAX_CHANS\n", zds->numchans);
+	if (dds->numchans >= DAHDI_DYNAMIC_MAX_CHANS) {
+		printk(KERN_NOTICE "Can't create dynamic span with greater "
+		       "than %d channels.  See dahdi_dynamic.c and increase "
+		       "DAHDI_DYNAMIC_MAX_CHANS\n", dds->numchans);
 		return -EINVAL;
 	}
 
-	z = find_dynamic(zds);
-	if (z)
+	d = find_dynamic(dds);
+	if (d)
 		return -EEXIST;
 
 	/* Allocate memory */
-	z = (struct dahdi_dynamic *) kmalloc(sizeof(struct dahdi_dynamic), GFP_KERNEL);
-	if (!z) {
+	d = kmalloc(sizeof(*d), GFP_KERNEL);
+	if (!d)
 		return -ENOMEM;
-	}
 
 	/* Zero it out */
-	memset(z, 0, sizeof(*z));
+	memset(d, 0, sizeof(*d));
 
-	for (x = 0; x < zds->numchans; x++) {
-		if (!(z->chans[x] = kmalloc(sizeof(*z->chans[x]), GFP_KERNEL))) {
-			dynamic_destroy(z);
+	for (x = 0; x < dds->numchans; x++) {
+		d->chans[x] = kmalloc(sizeof(*d->chans[x]), GFP_KERNEL);
+		if (!d->chans[x]) {
+			dynamic_destroy(d);
 			return -ENOMEM;
 		}
 
-		memset(z->chans[x], 0, sizeof(*z->chans[x]));
+		memset(d->chans[x], 0, sizeof(*d->chans[x]));
 	}
 
 	/* Allocate message buffer with sample space and header space */
-	bufsize = zds->numchans * DAHDI_CHUNKSIZE + zds->numchans / 4 + 48;
+	bufsize = dds->numchans * DAHDI_CHUNKSIZE + dds->numchans / 4 + 48;
 
-	z->msgbuf = kmalloc(bufsize, GFP_KERNEL);
+	d->msgbuf = kmalloc(bufsize, GFP_KERNEL);
 
-	if (!z->msgbuf) {
-		dynamic_destroy(z);
+	if (!d->msgbuf) {
+		dynamic_destroy(d);
 		return -ENOMEM;
 	}
 	
 	/* Zero out -- probably not needed but why not */
-	memset(z->msgbuf, 0, bufsize);
+	memset(d->msgbuf, 0, bufsize);
 
 	/* Setup parameters properly assuming we're going to be okay. */
-	dahdi_copy_string(z->dname, zds->driver, sizeof(z->dname));
-	dahdi_copy_string(z->addr, zds->addr, sizeof(z->addr));
-	z->timing = zds->timing;
-	sprintf(z->span.name, "DYN/%s/%s", zds->driver, zds->addr);
-	sprintf(z->span.desc, "Dynamic '%s' span at '%s'", zds->driver, zds->addr);
-	z->span.channels = zds->numchans;
-	z->span.deflaw = DAHDI_LAW_MULAW;
-	z->span.flags |= DAHDI_FLAG_RBS;
-	z->span.chans = z->chans;
-	z->span.ops = &dynamic_ops;
-	for (x=0; x < z->span.channels; x++) {
-		sprintf(z->chans[x]->name, "DYN/%s/%s/%d", zds->driver, zds->addr, x+1);
-		z->chans[x]->sigcap = DAHDI_SIG_EM | DAHDI_SIG_CLEAR | DAHDI_SIG_FXSLS |
-				      DAHDI_SIG_FXSKS | DAHDI_SIG_FXSGS | DAHDI_SIG_FXOLS |
-				      DAHDI_SIG_FXOKS | DAHDI_SIG_FXOGS | DAHDI_SIG_SF | 
-				      DAHDI_SIG_DACS_RBS | DAHDI_SIG_CAS;
-		z->chans[x]->chanpos = x + 1;
-		z->chans[x]->pvt = z;
+	dahdi_copy_string(d->dname, dds->driver, sizeof(d->dname));
+	dahdi_copy_string(d->addr, dds->addr, sizeof(d->addr));
+	d->timing = dds->timing;
+	sprintf(d->span.name, "DYN/%s/%s", dds->driver, dds->addr);
+	sprintf(d->span.desc, "Dynamic '%s' span at '%s'",
+		dds->driver, dds->addr);
+	d->span.channels = dds->numchans;
+	d->span.deflaw = DAHDI_LAW_MULAW;
+	d->span.flags |= DAHDI_FLAG_RBS;
+	d->span.chans = d->chans;
+	d->span.ops = &dynamic_ops;
+	for (x = 0; x < d->span.channels; x++) {
+		sprintf(d->chans[x]->name, "DYN/%s/%s/%d",
+			dds->driver, dds->addr, x+1);
+		d->chans[x]->sigcap = DAHDI_SIG_EM | DAHDI_SIG_CLEAR |
+				      DAHDI_SIG_FXSLS | DAHDI_SIG_FXSKS |
+				      DAHDI_SIG_FXSGS | DAHDI_SIG_FXOLS |
+				      DAHDI_SIG_FXOKS | DAHDI_SIG_FXOGS |
+				      DAHDI_SIG_SF | DAHDI_SIG_DACS_RBS |
+				      DAHDI_SIG_CAS;
+		d->chans[x]->chanpos = x + 1;
+		d->chans[x]->pvt = d;
 	}
 	
-	ztd = find_driver(zds->driver);
-	if (!ztd) {
+	dtd = find_driver(dds->driver);
+	if (!dtd) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,70)
 		char fn[80];
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,70)
-		request_module("dahdi_dynamic_%s", zds->driver);
+		request_module("dahdi_dynamic_%s", dds->driver);
 #else
-		sprintf(fn, "dahdi_dynamic_%s", zds->driver);
+		sprintf(fn, "dahdi_dynamic_%s", dds->driver);
 		request_module(fn);
 #endif
-		ztd = find_driver(zds->driver);
+		dtd = find_driver(dds->driver);
 	}
 
 
 	/* Another race -- should let the module get unloaded while we
 	   have it here */
-	if (!ztd) {
-		printk(KERN_NOTICE "No such driver '%s' for dynamic span\n", zds->driver);
-		dynamic_destroy(z);
+	if (!dtd) {
+		printk(KERN_NOTICE "No such driver '%s' for dynamic span\n",
+			dds->driver);
+		dynamic_destroy(d);
 		return -EINVAL;
 	}
 
 	/* Create the stuff */
-	z->pvt = ztd->create(&z->span, z->addr);
-	if (!z->pvt) {
-		printk(KERN_NOTICE "Driver '%s' (%s) rejected address '%s'\n", ztd->name, ztd->desc, z->addr);
+	d->pvt = dtd->create(&d->span, d->addr);
+	if (!d->pvt) {
+		printk(KERN_NOTICE "Driver '%s' (%s) rejected address '%s'\n",
+			dtd->name, dtd->desc, d->addr);
 		/* Creation failed */
 		return -EINVAL;
 	}
 
 	/* Remember the driver */
-	z->driver = ztd;
+	d->driver = dtd;
 
 	/* Whee!  We're created.  Now register the span */
-	if (dahdi_register(&z->span, 0)) {
-		printk(KERN_NOTICE "Unable to register span '%s'\n", z->span.name);
-		dynamic_destroy(z);
+	if (dahdi_register(&d->span, 0)) {
+		printk(KERN_NOTICE "Unable to register span '%s'\n",
+			d->span.name);
+		dynamic_destroy(d);
 		return -EINVAL;
 	}
 
 	spin_lock_irqsave(&dspan_lock, flags);
-	list_add_rcu(&z->list, &dspan_list);
+	list_add_rcu(&d->list, &dspan_list);
 	spin_unlock_irqrestore(&dspan_lock, flags);
 
 	checkmaster();
 
 	/* All done */
-	return z->span.spanno;
+	return d->span.spanno;
 
 }
 
 #ifdef ENABLE_TASKLETS
-static void ztd_tasklet(unsigned long data)
+static void dahdi_dynamic_tasklet(unsigned long data)
 {
 	taskletrun++;
 	if (taskletpending) {
 		taskletexec++;
-		__ztdynamic_run();
+		__dahdi_dynamic_run();
 	}
 	taskletpending = 0;
 }
 #endif
 
-static int ztdynamic_ioctl(unsigned int cmd, unsigned long data)
+static int dahdi_dynamic_ioctl(unsigned int cmd, unsigned long data)
 {
-	struct dahdi_dynamic_span zds;
+	struct dahdi_dynamic_span dds;
 	int res;
 	switch(cmd) {
 	case 0:
@@ -678,27 +682,29 @@ static int ztdynamic_ioctl(unsigned int cmd, unsigned long data)
 		   spans are pulling timing, then now is the time to process
 		   them */
 		if (!hasmaster)
-			ztdynamic_run();
+			dahdi_dynamic_run();
 		return 0;
 	case DAHDI_DYNAMIC_CREATE:
-		if (copy_from_user(&zds, (__user const void *) data, sizeof(zds)))
+		if (copy_from_user(&dds, (__user const void *)data,
+				   sizeof(dds)))
 			return -EFAULT;
 		if (debug)
 			printk(KERN_DEBUG "Dynamic Create\n");
-		res = create_dynamic(&zds);
+		res = create_dynamic(&dds);
 		if (res < 0)
 			return res;
-		zds.spanno = res;
+		dds.spanno = res;
 		/* Let them know the new span number */
-		if (copy_to_user((__user void *) data, &zds, sizeof(zds)))
+		if (copy_to_user((__user void *) data, &dds, sizeof(dds)))
 			return -EFAULT;
 		return 0;
 	case DAHDI_DYNAMIC_DESTROY:
-		if (copy_from_user(&zds, (__user const void *) data, sizeof(zds)))
+		if (copy_from_user(&dds, (__user const void *)data,
+				   sizeof(dds)))
 			return -EFAULT;
 		if (debug)
 			printk(KERN_DEBUG "Dynamic Destroy\n");
-		return destroy_dynamic(&zds);
+		return destroy_dynamic(&dds);
 	}
 
 	return -ENOTTY;
@@ -721,7 +727,7 @@ int dahdi_dynamic_register(struct dahdi_dynamic_driver *dri)
 
 void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *dri)
 {
-	struct dahdi_dynamic *z;
+	struct dahdi_dynamic *d;
 	unsigned long flags;
 
 	spin_lock_irqsave(&driver_lock, flags);
@@ -729,17 +735,17 @@ void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *dri)
 	spin_unlock_irqrestore(&driver_lock, flags);
 	synchronize_rcu();
 
-	list_for_each_entry(z, &dspan_list, list) {
-		if (z->driver == dri) {
+	list_for_each_entry(d, &dspan_list, list) {
+		if (d->driver == dri) {
 			spin_lock_irqsave(&dspan_lock, flags);
-			list_del_rcu(&z->list);
+			list_del_rcu(&d->list);
 			spin_unlock_irqrestore(&dspan_lock, flags);
 			synchronize_rcu();
 
-			if (!z->usecount)
-				dynamic_destroy(z);
+			if (!d->usecount)
+				dynamic_destroy(d);
 			else
-				z->dead = 1;
+				d->dead = 1;
 		}
 	}
 }
@@ -750,17 +756,17 @@ static void check_for_red_alarm(unsigned long ignored)
 {
 	int newalarm;
 	int alarmchanged = 0;
-	struct dahdi_dynamic *z;
+	struct dahdi_dynamic *d;
 
 	rcu_read_lock();
-	list_for_each_entry_rcu(z, &dspan_list, list) {
-		newalarm = z->span.alarms & ~DAHDI_ALARM_RED;
+	list_for_each_entry_rcu(d, &dspan_list, list) {
+		newalarm = d->span.alarms & ~DAHDI_ALARM_RED;
 		/* If nothing received for a second, consider that RED ALARM */
-		if ((jiffies - z->rxjif) > 1 * HZ) {
+		if ((jiffies - d->rxjif) > 1 * HZ) {
 			newalarm |= DAHDI_ALARM_RED;
-			if (z->span.alarms != newalarm) {
-				z->span.alarms = newalarm;
-				dahdi_alarm_notify(&z->span);
+			if (d->span.alarms != newalarm) {
+				d->span.alarms = newalarm;
+				dahdi_alarm_notify(&d->span);
 				alarmchanged++;
 			}
 		}
@@ -774,9 +780,9 @@ static void check_for_red_alarm(unsigned long ignored)
 	mod_timer(&alarmcheck, jiffies + 1 * HZ);
 }
 
-static int ztdynamic_init(void)
+static int dahdi_dynamic_init(void)
 {
-	dahdi_set_dynamic_ioctl(ztdynamic_ioctl);
+	dahdi_set_dynamic_ioctl(dahdi_dynamic_ioctl);
 
 	/* Start process to check for RED ALARM */
 	init_timer(&alarmcheck);
@@ -786,18 +792,18 @@ static int ztdynamic_init(void)
 	/* Check once per second */
 	mod_timer(&alarmcheck, jiffies + 1 * HZ);
 #ifdef ENABLE_TASKLETS
-	tasklet_init(&ztd_tlet, ztd_tasklet, 0);
+	tasklet_init(&dahdi_dynamic_tlet, dahdi_dynamic_tasklet, 0);
 #endif
 	printk(KERN_INFO "DAHDI Dynamic Span support LOADED\n");
 	return 0;
 }
 
-static void ztdynamic_cleanup(void)
+static void dahdi_dynamic_cleanup(void)
 {
 #ifdef ENABLE_TASKLETS
 	if (taskletpending) {
-		tasklet_disable(&ztd_tlet);
-		tasklet_kill(&ztd_tlet);
+		tasklet_disable(&dahdi_dynamic_tlet);
+		tasklet_kill(&dahdi_dynamic_tlet);
 	}
 #endif
 	dahdi_set_dynamic_ioctl(NULL);
@@ -811,5 +817,5 @@ MODULE_DESCRIPTION("DAHDI Dynamic Span Support");
 MODULE_AUTHOR("Mark Spencer <markster@digium.com>");
 MODULE_LICENSE("GPL v2");
 
-module_init(ztdynamic_init);
-module_exit(ztdynamic_cleanup);
+module_init(dahdi_dynamic_init);
+module_exit(dahdi_dynamic_cleanup);
