@@ -634,6 +634,14 @@ static inline void rotate_sums(void)
 	memset(conf_sums_next, 0, maxconfs * sizeof(sumtype));
 }
 
+/**
+ * is_chan_dacsed() - True if chan is sourcing it's data from another channel.
+ *
+ */
+static inline bool is_chan_dacsed(const struct dahdi_chan *const chan)
+{
+	return (NULL != chan->dacs_chan);
+}
 
 /**
  * can_dacs_chans() - Returns true if it may be possible to dacs two channels.
@@ -1404,15 +1412,15 @@ static void close_channel(struct dahdi_chan *chan)
 	oldconf = chan->confna;
 	  /* initialize conference variables */
 	chan->_confn = 0;
-	if ((chan->sig & __DAHDI_SIG_DACS) != __DAHDI_SIG_DACS) {
-		chan->confna = 0;
-		chan->confmode = 0;
-	}
+	if ((chan->sig & __DAHDI_SIG_DACS) != __DAHDI_SIG_DACS)
+		chan->dacs_chan = NULL;
+
 	chan->confmute = 0;
 	/* release conference resource, if any to release */
 	if (oldconf) dahdi_check_conf(oldconf);
 	chan->gotgs = 0;
 	reset_conf(chan);
+	chan->dacs_chan = NULL;
 
 	if (is_gain_allocated(chan))
 		rxgain = chan->rxgain;
@@ -2101,14 +2109,14 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 		      DAHDI_CONF_DIGITALMON))) {
 			/* Take them out of conference with us */
 			/* release conference resource if any */
-			if (pos->confna) {
+			if (pos->confna)
 				dahdi_check_conf(pos->confna);
-				if (pos->span)
-					dahdi_disable_dacs(pos);
-			}
+
+			dahdi_disable_dacs(pos);
 			pos->confna = 0;
 			pos->_confn = 0;
 			pos->confmode = 0;
+			pos->dacs_chan = NULL;
 		}
 	}
 	chan->channo = -1;
@@ -2700,6 +2708,8 @@ static int initialize_channel(struct dahdi_chan *chan)
 
 	/* Reset conferences */
 	reset_conf(chan);
+
+	chan->dacs_chan = NULL;
 
 	/* I/O Mask, etc */
 	chan->iomask = 0;
@@ -4387,6 +4397,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 			/* Setup conference properly */
 			chan->confmode = DAHDI_CONF_DIGITALMON;
 			chan->confna = ch.idlebits;
+			chan->dacs_chan = dacs_chan;
 			res = dahdi_chan_dacs(chan, dacs_chan);
 		} else {
 			dahdi_disable_dacs(chan);
@@ -6778,29 +6789,6 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 			break;
-		case DAHDI_CONF_DIGITALMON:
-			/* Real digital monitoring, but still echo cancel if desired */
-			if (!conf_chan)
-				break;
-			if (is_pseudo_chan(conf_chan)) {
-				if (ms->ec_state) {
-					for (x=0;x<DAHDI_CHUNKSIZE;x++)
-						txb[x] = DAHDI_LIN2X(conf_chan->getlin[x], ms);
-				} else {
-					memcpy(txb, conf_chan->getraw, DAHDI_CHUNKSIZE);
-				}
-			} else {
-				if (ms->ec_state) {
-					for (x = 0; x < DAHDI_CHUNKSIZE; x++)
-						txb[x] = DAHDI_LIN2X(conf_chan->putlin[x], ms);
-				} else {
-					memcpy(txb, conf_chan->putraw,
-					       DAHDI_CHUNKSIZE);
-				}
-			}
-			for (x=0;x<DAHDI_CHUNKSIZE;x++)
-				getlin[x] = DAHDI_XLAW(txb[x], ms);
-			break;
 		}
 	}
 	if (ms->confmute || (ms->ec_state && (ms->ec_state->status.mode) & __ECHO_MODE_MUTE)) {
@@ -7876,16 +7864,6 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				rxb[x] = DAHDI_LIN2X((int)conf_sums_prev[ms->_confn][x], ms);
 			break;
-		case DAHDI_CONF_DIGITALMON:
-			  /* if not a pseudo-channel, ignore */
-			if (!is_pseudo_chan(ms))
-				break;
-			/* Add monitored channel */
-			if (is_pseudo_chan(conf_chan))
-				memcpy(rxb, conf_chan->getraw, DAHDI_CHUNKSIZE);
-			else
-				memcpy(rxb, conf_chan->putraw, DAHDI_CHUNKSIZE);
-			break;
 		}
 	}
 }
@@ -8546,51 +8524,53 @@ int dahdi_transmit(struct dahdi_span *span)
 	for (x=0;x<span->channels;x++) {
 		struct dahdi_chan *const chan = span->chans[x];
 		spin_lock(&chan->lock);
-		if (chan->flags & DAHDI_FLAG_NOSTDTXRX) {
+		if (unlikely(chan->flags & DAHDI_FLAG_NOSTDTXRX)) {
 			spin_unlock(&chan->lock);
 			continue;
 		}
 		if (chan == chan->master) {
+			if (is_chan_dacsed(chan)) {
+				struct dahdi_chan *const src = chan->dacs_chan;
+				memcpy(chan->writechunk, src->readchunk,
+				       DAHDI_CHUNKSIZE);
+				if (chan->sig == DAHDI_SIG_DACS_RBS) {
+					/* Just set bits for our destination */
+					if (chan->txsig != src->rxsig) {
+						chan->txsig = src->rxsig;
+						span->ops->rbsbits(chan, src->rxsig);
+					}
+				}
+				/* there is no further processing to do for DACS channels, so
+				 * jump to the next channel in the span
+				 */
+				spin_unlock_irqrestore(&chan->lock, flags);
+				continue;
+			} else if (chan->nextslave) {
+				u_char data[DAHDI_CHUNKSIZE];
+				int pos = DAHDI_CHUNKSIZE;
+				int y;
+				struct dahdi_chan *z;
+				/* Process master/slaves one way */
+				for (y = 0; y < DAHDI_CHUNKSIZE; y++) {
+					/* Process slaves for this byte too */
+					for (z = chan; z; z = z->nextslave) {
+						if (pos == DAHDI_CHUNKSIZE) {
+							/* Get next chunk */
+							__dahdi_transmit_chunk(chan, data);
+							pos = 0;
+						}
+						z->writechunk[y] = data[pos++];
+					}
+				}
+			} else {
+				/* Process a normal channel */
+				__dahdi_real_transmit(chan);
+			}
 			if (chan->otimer) {
 				chan->otimer -= DAHDI_CHUNKSIZE;
 				if (chan->otimer <= 0)
 					__rbs_otimer_expire(chan);
 			}
-			if (chan->flags & DAHDI_FLAG_AUDIO) {
-				__dahdi_real_transmit(chan);
-			} else {
-				if (chan->nextslave) {
-					u_char data[DAHDI_CHUNKSIZE];
-					int pos = DAHDI_CHUNKSIZE;
-					int y;
-					struct dahdi_chan *z;
-					/* Process master/slaves one way */
-					for (y = 0; y < DAHDI_CHUNKSIZE; y++) {
-						/* Process slaves for this byte too */
-						for (z = chan; z; z = z->nextslave) {
-							if (pos == DAHDI_CHUNKSIZE) {
-								/* Get next chunk */
-								__dahdi_transmit_chunk(chan, data);
-								pos = 0;
-							}
-							z->writechunk[y] = data[pos++];
-						}
-					}
-				} else {
-					/* Process independents elsewise */
-					__dahdi_real_transmit(chan);
-				}
-			}
-			if (chan->sig == DAHDI_SIG_DACS_RBS) {
-				struct dahdi_chan *const conf =
-							chans[chan->confna];
-				if (conf && (chan->txsig != conf->rxsig)) {
-				    	/* Just set bits for our destination */
-					chan->txsig = conf->rxsig;
-					span->ops->rbsbits(chan, conf->rxsig);
-				}
-			}
-
 		}
 		spin_unlock(&chan->lock);
 	}
@@ -8855,7 +8835,11 @@ int dahdi_receive(struct dahdi_span *span)
 			continue;
 		}
 		if (chan->master == chan) {
-			if (chan->nextslave) {
+			if (is_chan_dacsed(chan)) {
+				/* this channel is in DACS mode, there is nothing to do here */
+				spin_unlock_irqrestore(&chan->lock, flags);
+				continue;
+			} else if (chan->nextslave) {
 				/* Must process each slave at the same time */
 				u_char data[DAHDI_CHUNKSIZE];
 				int pos = 0;

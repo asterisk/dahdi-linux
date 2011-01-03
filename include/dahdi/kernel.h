@@ -432,6 +432,9 @@ struct dahdi_chan {
 	u_char sreadchunk[DAHDI_MAX_CHUNKSIZE];	/*!< Preallocated static area */
 	short *readchunkpreec;
 
+	/* Channel from which to read when DACSed. */
+	struct dahdi_chan *dacs_chan;
+
 	/*! Pointer to tx and rx gain tables */
 	const u_char *rxgain;
 	const u_char *txgain;
@@ -529,7 +532,7 @@ struct dahdi_chan {
 	short	conflast[DAHDI_MAX_CHUNKSIZE];			/*!< Last conference sample -- base part of channel */
 	short	conflast1[DAHDI_MAX_CHUNKSIZE];		/*!< Last conference sample  -- pseudo part of channel */
 	short	conflast2[DAHDI_MAX_CHUNKSIZE];		/*!< Previous last conference sample -- pseudo part of channel */
-	
+
 
 	/*! The echo canceler module that should be used to create an
 	   instance when this channel needs one */
