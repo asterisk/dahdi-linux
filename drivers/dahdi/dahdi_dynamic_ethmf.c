@@ -388,9 +388,9 @@ static int ztdethmf_notifier(struct notifier_block *block, unsigned long event,
 	return 0;
 }
 
-static void ztdethmf_transmit(void *pvt, unsigned char *msg, int msglen)
+static void ztdethmf_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 {
-	struct ztdeth *z = pvt, *ready_spans[ETHMF_MAX_PER_SPAN_GROUP];
+	struct ztdeth *z = dyn->pvt, *ready_spans[ETHMF_MAX_PER_SPAN_GROUP];
 	struct sk_buff *skb;
 	struct ztdeth_header *zh;
 	struct net_device *dev;
@@ -554,9 +554,9 @@ static struct packet_type ztdethmf_ptype = {
 	.func = ztdethmf_rcv,			/* Receiver */
 };
 
-static void ztdethmf_destroy(void *pvt)
+static void ztdethmf_destroy(struct dahdi_dynamic *dyn)
 {
-	struct ztdeth *z = pvt;
+	struct ztdeth *z = dyn->pvt;
 	unsigned long flags;
 
 	atomic_set(&shutdown, 1);
@@ -581,20 +581,21 @@ static void ztdethmf_destroy(void *pvt)
 	}
 }
 
-static void *ztdethmf_create(struct dahdi_span *span, const char *addr)
+static int ztdethmf_create(struct dahdi_dynamic *dyn, const char *addr)
 {
 	struct ztdeth *z;
 	char src[256];
 	char *src_ptr;
 	int x, bufsize, num_matched;
 	unsigned long flags;
+	struct dahdi_span *const span = &dyn->span;
 
 	BUG_ON(!span);
 	BUG_ON(!addr);
 
 	z = kmalloc(sizeof(struct ztdeth), GFP_KERNEL);
 	if (!z)
-		return NULL;
+		return -ENOMEM;
 
 	/* Zero it out */
 	memset(z, 0, sizeof(struct ztdeth));
@@ -625,7 +626,7 @@ static void *ztdethmf_create(struct dahdi_span *span, const char *addr)
 		printk(KERN_ERR "Only matched %d entries in '%s'\n", num_matched, src);
 		printk(KERN_ERR "Invalid TDMoE Multiframe address: %s\n", addr);
 		kfree(z);
-		return NULL;
+		return -EINVAL;
 	}
 	z->dev = dev_get_by_name(
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 24)
@@ -635,7 +636,7 @@ static void *ztdethmf_create(struct dahdi_span *span, const char *addr)
 	if (!z->dev) {
 		printk(KERN_ERR "TDMoE Multiframe: Invalid device '%s'\n", z->ethdev);
 		kfree(z);
-		return NULL;
+		return -EINVAL;
 	}
 	z->span = span;
 	z->subaddr = htons(z->subaddr);
@@ -662,7 +663,8 @@ static void *ztdethmf_create(struct dahdi_span *span, const char *addr)
 	/* enable the timer for enabling the spans */
 	mod_timer(&timer, jiffies + HZ);
 	atomic_set(&shutdown, 0);
-	return z;
+	dyn->pvt = z;
+	return 0;
 }
 
 static struct dahdi_dynamic_driver ztd_ethmf = {

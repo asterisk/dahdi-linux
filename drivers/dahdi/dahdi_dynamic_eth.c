@@ -140,7 +140,7 @@ static int ztdeth_notifier(struct notifier_block *block, unsigned long event, vo
 	return 0;
 }
 
-static void ztdeth_transmit(void *pvt, unsigned char *msg, int msglen)
+static void ztdeth_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 {
 	struct ztdeth *z;
 	struct sk_buff *skb;
@@ -151,7 +151,7 @@ static void ztdeth_transmit(void *pvt, unsigned char *msg, int msglen)
 	unsigned short subaddr; /* Network byte order */
 
 	spin_lock_irqsave(&zlock, flags);
-	z = pvt;
+	z = dyn->pvt;
 	if (z->dev) {
 		/* Copy fields to local variables to remove spinlock ASAP */
 		dev = z->dev;
@@ -266,9 +266,9 @@ static int hex2int(char *s)
 	return tmp;
 }
 
-static void ztdeth_destroy(void *pvt)
+static void ztdeth_destroy(struct dahdi_dynamic *dyn)
 {
-	struct ztdeth *z = pvt;
+	struct ztdeth *z = dyn->pvt;
 	unsigned long flags;
 	struct ztdeth *prev=NULL, *cur;
 	spin_lock_irqsave(&zlock, flags);
@@ -291,13 +291,14 @@ static void ztdeth_destroy(void *pvt)
 	}
 }
 
-static void *ztdeth_create(struct dahdi_span *span, const char *addr)
+static int ztdeth_create(struct dahdi_dynamic *dyn, const char *addr)
 {
 	struct ztdeth *z;
 	char src[256];
 	char tmp[256], *tmp2, *tmp3, *tmp4 = NULL;
 	int res,x;
 	unsigned long flags;
+	struct dahdi_span *const span = &dyn->span;
 
 	z = kmalloc(sizeof(struct ztdeth), GFP_KERNEL);
 	if (z) {
@@ -314,7 +315,7 @@ static void *ztdeth_create(struct dahdi_span *span, const char *addr)
 		} else {
 			printk(KERN_NOTICE "Invalid TDMoE address (no device) '%s'\n", addr);
 			kfree(z);
-			return NULL;
+			return -EINVAL;
 		}
 		if (tmp2) {
 			tmp4 = strchr(tmp2+1, '/');
@@ -342,12 +343,12 @@ static void *ztdeth_create(struct dahdi_span *span, const char *addr)
 			if (x != 6) {
 				printk(KERN_NOTICE "TDMoE: Invalid MAC address in: %s\n", addr);
 				kfree(z);
-				return NULL;
+				return -EINVAL;
 			}
 		} else {
 			printk(KERN_NOTICE "TDMoE: Missing MAC address\n");
 			kfree(z);
-			return NULL;
+			return -EINVAL;
 		}
 		if (tmp4) {
 			int sub = 0;
@@ -361,7 +362,7 @@ static void *ztdeth_create(struct dahdi_span *span, const char *addr)
 				} else {
 					printk(KERN_NOTICE "TDMoE: Invalid subaddress\n");
 					kfree(z);
-					return NULL;
+					return -EINVAL;
 				}
 				mul *= 10;
 				tmp3--;
@@ -376,7 +377,7 @@ static void *ztdeth_create(struct dahdi_span *span, const char *addr)
 		if (!z->dev) {
 			printk(KERN_NOTICE "TDMoE: Invalid device '%s'\n", z->ethdev);
 			kfree(z);
-			return NULL;
+			return -EINVAL;
 		}
 		z->span = span;
 		src[0] ='\0';
@@ -388,9 +389,10 @@ static void *ztdeth_create(struct dahdi_span *span, const char *addr)
 		spin_lock_irqsave(&zlock, flags);
 		z->next = zdevs;
 		zdevs = z;
+		dyn->pvt = z;
 		spin_unlock_irqrestore(&zlock, flags);
 	}
-	return z;
+	return (z) ? 0 : -ENOMEM;
 }
 
 static struct dahdi_dynamic_driver ztd_eth = {

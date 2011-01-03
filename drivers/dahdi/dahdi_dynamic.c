@@ -68,9 +68,6 @@
                             before moving to the next.
  */
 
-/* Arbitrary limit to the max # of channels in a span */
-#define DAHDI_DYNAMIC_MAX_CHANS	256
-
 #define DAHDI_DYNAMIC_FLAG_YELLOW_ALARM		(1 << 0)
 #define DAHDI_DYNAMIC_FLAG_SIGBITS_PRESENT	(1 << 1)
 #define DAHDI_DYNAMIC_FLAG_LOOPBACK		(1 << 2)
@@ -92,25 +89,6 @@ static struct tasklet_struct dahdi_dynamic_tlet;
 
 static void dahdi_dynamic_tasklet(unsigned long data);
 #endif
-
-struct dahdi_dynamic {
-	char addr[40];
-	char dname[20];
-	int err;
-	struct kref kref;
-	long rxjif;
-	unsigned short txcnt;
-	unsigned short rxcnt;
-	struct dahdi_span span;
-	struct dahdi_chan *chans[DAHDI_DYNAMIC_MAX_CHANS];
-	struct dahdi_dynamic_driver *driver;
-	void *pvt;
-	int timing;
-	int master;
-	unsigned char *msgbuf;
-
-	struct list_head list;
-};
 
 static DEFINE_SPINLOCK(dspan_lock);
 static DEFINE_SPINLOCK(driver_lock);
@@ -213,7 +191,7 @@ static void dahdi_dynamic_sendmessage(struct dahdi_dynamic *d)
 		msglen += DAHDI_CHUNKSIZE;
 	}
 	
-	d->driver->transmit(d->pvt, d->msgbuf, msglen);
+	d->driver->transmit(d, d->msgbuf, msglen);
 	
 }
 
@@ -413,7 +391,7 @@ static void dahdi_dynamic_release(struct kref *kref)
 	if (d->pvt) {
 		if (d->driver && d->driver->destroy) {
 			__module_get(d->driver->owner);
-			d->driver->destroy(d->pvt);
+			d->driver->destroy(d);
 			module_put(d->driver->owner);
 		} else {
 			WARN_ON(1);
@@ -565,6 +543,7 @@ static const struct dahdi_span_ops dynamic_ops = {
 
 static int create_dynamic(struct dahdi_dynamic_span *dds)
 {
+	int res = 0;
 	struct dahdi_dynamic *d;
 	struct dahdi_dynamic_driver *dtd;
 	unsigned long flags;
@@ -576,7 +555,7 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 			dds->numchans);
 		return -EINVAL;
 	}
-	if (dds->numchans >= DAHDI_DYNAMIC_MAX_CHANS) {
+	if (dds->numchans >= ARRAY_SIZE(d->chans)) {
 		printk(KERN_NOTICE "Can't create dynamic span with greater "
 		       "than %d channels.  See dahdi_dynamic.c and increase "
 		       "DAHDI_DYNAMIC_MAX_CHANS\n", dds->numchans);
@@ -662,13 +641,13 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	d->driver = dtd;
 
 	/* Create the stuff */
-	d->pvt = d->driver->create(&d->span, d->addr);
-	if (!d->pvt) {
+	res = dtd->create(d, d->addr);
+	if (res) {
 		printk(KERN_NOTICE "Driver '%s' (%s) rejected address '%s'\n",
 			dtd->name, dtd->desc, d->addr);
 		dynamic_put(d);
 		module_put(dtd->owner);
-		return -EINVAL;
+		return res;
 	}
 
 	/* Whee!  We're created.  Now register the span */
@@ -766,9 +745,8 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 			if (d->pvt) {
 				if (d->driver && d->driver->destroy) {
 					__module_get(d->driver->owner);
-					d->driver->destroy(d->pvt);
+					d->driver->destroy(d);
 					module_put(d->driver->owner);
-					d->pvt = NULL;
 				} else {
 					WARN_ON(1);
 				}

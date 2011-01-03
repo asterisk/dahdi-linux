@@ -986,6 +986,25 @@ struct dahdi_transcoder {
 #define DAHDI_WATCHSTATE_FAILED		3
 
 
+struct dahdi_dynamic {
+	char addr[40];
+	char dname[20];
+	int err;
+	struct kref kref;
+	long rxjif;
+	unsigned short txcnt;
+	unsigned short rxcnt;
+	struct dahdi_span span;
+	struct dahdi_chan *chans[256];
+	struct dahdi_dynamic_driver *driver;
+	void *pvt;
+	int timing;
+	int master;
+	unsigned char *msgbuf;
+
+	struct list_head list;
+};
+
 struct dahdi_dynamic_driver {
 	/*! Driver name (e.g. Eth) */
 	const char *name;
@@ -994,13 +1013,13 @@ struct dahdi_dynamic_driver {
 	const char *desc;
 
 	/*! Create a new transmission pipe */
-	void *(*create)(struct dahdi_span *span, const char *address);
+	int (*create)(struct dahdi_dynamic *d, const char *address);
 
 	/*! Destroy a created transmission pipe */
-	void (*destroy)(void *tpipe);
+	void (*destroy)(struct dahdi_dynamic *d);
 
 	/*! Transmit a given message */
-	void (*transmit)(void *tpipe, unsigned char *msg, int msglen);
+	void (*transmit)(struct dahdi_dynamic *d, u8 *msg, size_t msglen);
 
 	/*! Flush any pending messages */
 	int (*flush)(void);

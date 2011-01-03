@@ -76,17 +76,17 @@ static DEFINE_SPINLOCK(local_lock);
 static LIST_HEAD(dynamic_local_list);
 
 static void
-dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
+dahdi_dynamic_local_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 {
-	struct dahdi_dynamic_local *const d = pvt;
+	struct dahdi_dynamic_local *const d = dyn->pvt;
 	unsigned long flags;
 
 	spin_lock_irqsave(&local_lock, flags);
-	if (d->peer && d->peer->span) {
+	if (d && d->peer && d->peer->span) {
 		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &d->peer->span->flags))
 			dahdi_dynamic_receive(d->peer->span, msg, msglen);
 	}
-	if (d->monitor_rx_peer && d->monitor_rx_peer->span) {
+	if (d && d->monitor_rx_peer && d->monitor_rx_peer->span) {
 		if (test_bit(DAHDI_FLAGBIT_REGISTERED,
 			     &d->monitor_rx_peer->span->flags))  {
 			dahdi_dynamic_receive(d->monitor_rx_peer->span,
@@ -128,9 +128,9 @@ static int digit2int(char d)
 	return -1;
 }
 
-static void dahdi_dynamic_local_destroy(void *pvt)
+static void dahdi_dynamic_local_destroy(struct dahdi_dynamic *dyn)
 {
-	struct dahdi_dynamic_local *d = pvt;
+	struct dahdi_dynamic_local *d = dyn->pvt;
 	unsigned long flags;
 	struct dahdi_dynamic_local *cur;
 
@@ -142,6 +142,7 @@ static void dahdi_dynamic_local_destroy(void *pvt)
 			cur->monitor_rx_peer = NULL;
 	}
 	list_del(&d->node);
+	dyn->pvt = NULL;
 	spin_unlock_irqrestore(&local_lock, flags);
 
 	printk(KERN_INFO "TDMoL: Removed interface for %s, key %d "
@@ -149,12 +150,13 @@ static void dahdi_dynamic_local_destroy(void *pvt)
 	kfree(d);
 }
 
-static void *dahdi_dynamic_local_create(struct dahdi_span *span,
-					const char *address)
+static int dahdi_dynamic_local_create(struct dahdi_dynamic *dyn,
+				      const char *address)
 {
 	struct dahdi_dynamic_local *d, *l;
 	unsigned long flags;
 	int key = -1, id = -1, monitor = -1;
+	struct dahdi_span *const span = &dyn->span;
 
 	if (strlen(address) >= 3) {
 		if (address[1] != ':')
@@ -173,7 +175,7 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span,
 
 	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d)
-		return NULL;
+		return -ENOMEM;
 
 	d->key = key;
 	d->id = id;
@@ -214,11 +216,12 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span,
 		}
 	}
 	list_add(&d->node, &dynamic_local_list);
+	dyn->pvt = d;
 	spin_unlock_irqrestore(&local_lock, flags);
 
 	printk(KERN_INFO "TDMoL: Added new interface for %s, "
 	       "key %d id %d\n", span->name, d->key, d->id);
-	return d;
+	return 0;
 
 CLEAR_AND_DEL_FROM_PEERS:
 	list_for_each_entry(l, &dynamic_local_list, node) {
@@ -229,11 +232,11 @@ CLEAR_AND_DEL_FROM_PEERS:
 	}
 	kfree(d);
 	spin_unlock_irqrestore(&local_lock, flags);
-	return NULL;
+	return -EINVAL;
 	
 INVALID_ADDRESS:
 	printk (KERN_NOTICE "TDMoL: Invalid address %s\n", address);
-	return NULL;
+	return -EINVAL;
 }
 
 static struct dahdi_dynamic_driver dahdi_dynamic_local = {
