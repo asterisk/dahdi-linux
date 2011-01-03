@@ -75,10 +75,6 @@
 #define ERR_NCHAN			(1 << 17)
 #define ERR_LEN				(1 << 18)
 
-EXPORT_SYMBOL(dahdi_dynamic_register);
-EXPORT_SYMBOL(dahdi_dynamic_unregister);
-EXPORT_SYMBOL(dahdi_dynamic_receive);
-
 static int dahdi_dynamic_init(void);
 static void dahdi_dynamic_cleanup(void);
 
@@ -395,6 +391,7 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	if (master)
 		dahdi_dynamic_run();
 }
+EXPORT_SYMBOL(dahdi_dynamic_receive);
 
 /**
  * dahdi_dynamic_release() - Free the memory associated with the dahdi_dynamic.
@@ -717,7 +714,7 @@ static int dahdi_dynamic_ioctl(unsigned int cmd, unsigned long data)
 	return -ENOTTY;
 }
 
-int dahdi_dynamic_register(struct dahdi_dynamic_driver *dri)
+int dahdi_dynamic_register_driver(struct dahdi_dynamic_driver *dri)
 {
 	unsigned long flags;
 	int res = 0;
@@ -731,8 +728,9 @@ int dahdi_dynamic_register(struct dahdi_dynamic_driver *dri)
 	}
 	return res;
 }
+EXPORT_SYMBOL(dahdi_dynamic_register_driver);
 
-void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *dri)
+void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 {
 	struct dahdi_dynamic *d;
 	unsigned long flags;
@@ -752,6 +750,7 @@ void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *dri)
 		}
 	}
 }
+EXPORT_SYMBOL(dahdi_dynamic_unregister_driver);
 
 static struct timer_list alarmcheck;
 

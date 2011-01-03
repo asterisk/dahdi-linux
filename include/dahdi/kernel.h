@@ -1012,10 +1012,10 @@ struct dahdi_dynamic_driver {
 void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msglen);
 
 /*! \brief Register a dynamic driver */
-int dahdi_dynamic_register(struct dahdi_dynamic_driver *driver);
+int dahdi_dynamic_register_driver(struct dahdi_dynamic_driver *driver);
 
 /*! \brief Unregister a dynamic driver */
-void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *driver);
+void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *driver);
 
 /*! Receive on a span.  The DAHDI interface will handle all the calculations for
    all member channels of the span, pulling the data from the readchunk buffer */

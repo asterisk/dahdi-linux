@@ -413,7 +413,7 @@ static int __init ztdeth_init(void)
 {
 	dev_add_pack(&ztdeth_ptype);
 	register_netdevice_notifier(&ztdeth_nblock);
-	dahdi_dynamic_register(&ztd_eth);
+	dahdi_dynamic_register_driver(&ztd_eth);
 
 	skb_queue_head_init(&skbs);
 
@@ -424,7 +424,7 @@ static void __exit ztdeth_exit(void)
 {
 	dev_remove_pack(&ztdeth_ptype);
 	unregister_netdevice_notifier(&ztdeth_nblock);
-	dahdi_dynamic_unregister(&ztd_eth);
+	dahdi_dynamic_unregister_driver(&ztd_eth);
 }
 
 MODULE_DESCRIPTION("DAHDI Dynamic TDMoE Support");

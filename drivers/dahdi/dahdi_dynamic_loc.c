@@ -250,13 +250,13 @@ static struct dahdi_dynamic_driver dahdi_dynamic_local = {
 
 static int __init dahdi_dynamic_local_init(void)
 {
-	dahdi_dynamic_register(&dahdi_dynamic_local);
+	dahdi_dynamic_register_driver(&dahdi_dynamic_local);
 	return 0;
 }
 
 static void __exit dahdi_dynamic_local_exit(void)
 {
-	dahdi_dynamic_unregister(&dahdi_dynamic_local);
+	dahdi_dynamic_unregister_driver(&dahdi_dynamic_local);
 }
 
 module_init(dahdi_dynamic_local_init);

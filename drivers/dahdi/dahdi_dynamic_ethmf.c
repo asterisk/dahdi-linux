@@ -800,7 +800,7 @@ static int __init ztdethmf_init(void)
 
 	dev_add_pack(&ztdethmf_ptype);
 	register_netdevice_notifier(&ztdethmf_nblock);
-	dahdi_dynamic_register(&ztd_ethmf);
+	dahdi_dynamic_register_driver(&ztd_ethmf);
 
 	skb_queue_head_init(&skbs);
 
@@ -822,7 +822,7 @@ static void __exit ztdethmf_exit(void)
 
 	dev_remove_pack(&ztdethmf_ptype);
 	unregister_netdevice_notifier(&ztdethmf_nblock);
-	dahdi_dynamic_unregister(&ztd_ethmf);
+	dahdi_dynamic_unregister_driver(&ztd_ethmf);
 
 #ifdef USE_PROC_FS
 	if (proc_entry)
