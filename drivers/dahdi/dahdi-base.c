@@ -3681,10 +3681,55 @@ void dahdi_alarm_channel(struct dahdi_chan *chan, int alarms)
 	spin_unlock_irqrestore(&chan->lock, flags);
 }
 
+static void __dahdi_find_master_span(void)
+{
+	struct dahdi_span *s;
+	unsigned long flags;
+	struct dahdi_span *old_master;
+
+	spin_lock_irqsave(&chan_lock, flags);
+	old_master = master;
+	list_for_each_entry(s, &span_list, node) {
+		if (s->alarms)
+			continue;
+		if (!test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
+			continue;
+		if (!can_provide_timing(s))
+			continue;
+		if (master == s)
+			continue;
+
+		master = s;
+		break;
+	}
+	spin_unlock_irqrestore(&chan_lock, flags);
+
+	if ((debug & DEBUG_MAIN) && (old_master != master))
+		module_printk(KERN_NOTICE, "Master changed to %s\n", s->name);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void _dahdi_find_master_span(void *work)
+{
+	__dahdi_find_master_span();
+}
+static DECLARE_WORK(find_master_work, _dahdi_find_master_span, NULL);
+#else
+static void _dahdi_find_master_span(struct work_struct *work)
+{
+	__dahdi_find_master_span();
+}
+static DECLARE_WORK(find_master_work, _dahdi_find_master_span);
+#endif
+
+static void dahdi_find_master_span(void)
+{
+	schedule_work(&find_master_work);
+}
+
 void dahdi_alarm_notify(struct dahdi_span *span)
 {
 	int x;
-	unsigned long flags;
 
 	span->alarms &= ~DAHDI_ALARM_LOOPBACK;
 	/* Determine maint status */
@@ -3695,32 +3740,13 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 	   as ((!a) != (!b)) */
 	/* if change in general state */
 	if ((!span->alarms) != (!span->lastalarms)) {
-		struct dahdi_span *s;
 		span->lastalarms = span->alarms;
 		for (x = 0; x < span->channels; x++)
 			dahdi_alarm_channel(span->chans[x], span->alarms);
 
-		/* Switch to other master if current master in alarm */
-		spin_lock_irqsave(&chan_lock, flags);
-		list_for_each_entry(s, &span_list, node) {
-			if (s->alarms)
-				continue;
-			if (!test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
-				continue;
-			if (!can_provide_timing(s))
-				continue;
-			if (master == s)
-				continue;
-
-			if (debug & DEBUG_MAIN) {
-				module_printk(KERN_NOTICE,
-					      "Master changed to %s\n",
-					      s->name);
-			}
-			master = s;
-			break;
-		}
-		spin_unlock_irqrestore(&chan_lock, flags);
+		/* If we're going into or out of alarm we should try to find a
+		 * new master that may be a better fit. */
+		dahdi_find_master_span();
 
 		/* Report more detailed alarms */
 		if (debug & DEBUG_MAIN) {
@@ -6448,18 +6474,11 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 				"%d channels\n", span->spanno, span->name, span->channels);
 	}
 
-	if (!master && can_provide_timing(span)) {
-		master = span;
-		if (debug & DEBUG_MAIN) {
-			module_printk(KERN_NOTICE, "Span ('%s') is new master\n", 
-					span->name);
-		}
-	}
-
 	spin_lock_irqsave(&chan_lock, flags);
 	list_add(&span->node, loc);
 	spin_unlock_irqrestore(&chan_lock, flags);
 	set_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
+	__dahdi_find_master_span();
 
 	return 0;
 }
@@ -9238,6 +9257,18 @@ static int __init dahdi_init(void)
 	return res;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
+static inline void flush_find_master_work(void)
+{
+	flush_scheduled_work();
+}
+#else
+static inline void flush_find_master_work(void)
+{
+	cancel_work_sync(&find_master_work);
+}
+#endif
+
 static void __exit dahdi_cleanup(void)
 {
 	struct dahdi_zone *z;
@@ -9274,6 +9305,7 @@ static void __exit dahdi_cleanup(void)
 #ifdef CONFIG_DAHDI_WATCHDOG
 	watchdog_cleanup();
 #endif
+	flush_find_master_work();
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
