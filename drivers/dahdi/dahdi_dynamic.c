@@ -618,16 +618,7 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	
 	dtd = find_driver(dds->driver);
 	if (!dtd) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,70)
-		char fn[80];
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,70)
 		request_module("dahdi_dynamic_%s", dds->driver);
-#else
-		sprintf(fn, "dahdi_dynamic_%s", dds->driver);
-		request_module(fn);
-#endif
 		dtd = find_driver(dds->driver);
 	}
 
