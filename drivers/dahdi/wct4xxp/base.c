@@ -3431,12 +3431,13 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 
 
 	/* 1st gen cards isn't used interrupts */
-	gis = t4_framer_in(wc, span, FRMR_GIS);
-	isr0 = (gis & FRMR_GIS_ISR0) ? t4_framer_in(wc, span, FRMR_ISR0) : 0;
-	isr1 = (gis & FRMR_GIS_ISR1) ? t4_framer_in(wc, span, FRMR_ISR1) : 0;
-	isr2 = (gis & FRMR_GIS_ISR2) ? t4_framer_in(wc, span, FRMR_ISR2) : 0;
-	isr3 = (gis & FRMR_GIS_ISR3) ? t4_framer_in(wc, span, FRMR_ISR3) : 0;
-	isr4 = (gis & FRMR_GIS_ISR4) ? t4_framer_in(wc, span, FRMR_ISR4) : 0;
+	spin_lock_irqsave(&wc->reglock, flags);
+	gis = __t4_framer_in(wc, span, FRMR_GIS);
+	isr0 = (gis & FRMR_GIS_ISR0) ? __t4_framer_in(wc, span, FRMR_ISR0) : 0;
+	isr1 = (gis & FRMR_GIS_ISR1) ? __t4_framer_in(wc, span, FRMR_ISR1) : 0;
+	isr2 = (gis & FRMR_GIS_ISR2) ? __t4_framer_in(wc, span, FRMR_ISR2) : 0;
+	isr3 = (gis & FRMR_GIS_ISR3) ? __t4_framer_in(wc, span, FRMR_ISR3) : 0;
+	isr4 = (gis & FRMR_GIS_ISR4) ? __t4_framer_in(wc, span, FRMR_ISR4) : 0;
 
  	if ((debug & DEBUG_FRAMER) && !(isr3 & ISR3_SEC)) {
  		dev_info(&wc->dev->dev, "gis: %02x, isr0: %02x, isr1: %02x, "\
@@ -3445,14 +3446,15 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
  	}
  
 	/* Collect performance counters once per second */
- 	if (isr3 & ISR3_SEC) {
- 		ts->span.count.fe += t4_framer_in(wc, span, FECL_T);
- 		ts->span.count.crc4 += t4_framer_in(wc, span, CEC1L_T);
- 		ts->span.count.cv += t4_framer_in(wc, span, CVCL_T);
- 		ts->span.count.ebit += t4_framer_in(wc, span, EBCL_T);
- 		ts->span.count.be += t4_framer_in(wc, span, BECL_T);
- 		ts->span.count.prbs = t4_framer_in(wc, span, FRS1_T);
- 	}
+	if (isr3 & ISR3_SEC) {
+		ts->span.count.fe += __t4_framer_in(wc, span, FECL_T);
+		ts->span.count.crc4 += __t4_framer_in(wc, span, CEC1L_T);
+		ts->span.count.cv += __t4_framer_in(wc, span, CVCL_T);
+		ts->span.count.ebit += __t4_framer_in(wc, span, EBCL_T);
+		ts->span.count.be += __t4_framer_in(wc, span, BECL_T);
+		ts->span.count.prbs = __t4_framer_in(wc, span, FRS1_T);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
  
 	/* Collect errored second counter once per second */
  	if (isr3 & ISR3_ES) {
