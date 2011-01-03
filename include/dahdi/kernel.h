@@ -424,7 +424,7 @@ struct dahdi_chan {
 
 	struct dahdi_chan *master;	/*!< Our Master channel (could be us) */
 	/*! \brief Next slave (if appropriate) */
-	int nextslave;
+	struct dahdi_chan *nextslave;
 
 	u_char *writechunk;						/*!< Actual place to write to */
 	u_char swritechunk[DAHDI_MAX_CHUNKSIZE];	/*!< Buffer to be written */

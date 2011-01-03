@@ -4258,11 +4258,11 @@ static void recalc_slaves(struct dahdi_chan *chan)
 			module_printk(KERN_NOTICE, "Channel %s, slave to %s, last is %s, its next will be %d\n",
 				      chan->span->chans[x]->name, chan->name, last->name, x);
 #endif
-			last->nextslave = x;
-			last = chan->span->chans[x];
+			last->nextslave = chan->span->chans[x];
+			last = last->nextslave;
 		}
 	/* Terminate list */
-	last->nextslave = 0;
+	last->nextslave = NULL;
 #ifdef CONFIG_DAHDI_DEBUG
 	module_printk(KERN_NOTICE, "Done Recalculating slaves on %s (last is %s)\n", chan->name, last->name);
 #endif
@@ -4345,7 +4345,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 
 		/* Clear the master channel */
 		chan->master = chan;
-		chan->nextslave = 0;
+		chan->nextslave = NULL;
 		/* Unlink this channel from the master's channel list */
 		recalc_slaves(oldmaster);
 	}
@@ -8538,8 +8538,8 @@ static inline void __dahdi_real_receive(struct dahdi_chan *chan)
 
 int dahdi_transmit(struct dahdi_span *span)
 {
-	int x,y,z;
 	unsigned long flags;
+	unsigned int x;
 
 	local_irq_save(flags);
 
@@ -8561,20 +8561,20 @@ int dahdi_transmit(struct dahdi_span *span)
 			} else {
 				if (chan->nextslave) {
 					u_char data[DAHDI_CHUNKSIZE];
-					int pos=DAHDI_CHUNKSIZE;
+					int pos = DAHDI_CHUNKSIZE;
+					int y;
+					struct dahdi_chan *z;
 					/* Process master/slaves one way */
-					for (y=0;y<DAHDI_CHUNKSIZE;y++) {
+					for (y = 0; y < DAHDI_CHUNKSIZE; y++) {
 						/* Process slaves for this byte too */
-						z = x;
-						do {
-							if (pos==DAHDI_CHUNKSIZE) {
+						for (z = chan; z; z = z->nextslave) {
+							if (pos == DAHDI_CHUNKSIZE) {
 								/* Get next chunk */
 								__dahdi_transmit_chunk(chan, data);
 								pos = 0;
 							}
-							span->chans[z]->writechunk[y] = data[pos++];
-							z = span->chans[z]->nextslave;
-						} while(z);
+							z->writechunk[y] = data[pos++];
+						}
 					}
 				} else {
 					/* Process independents elsewise */
@@ -8839,8 +8839,8 @@ static void coretimer_cleanup(void)
 
 int dahdi_receive(struct dahdi_span *span)
 {
-	int x,y,z;
 	unsigned long flags;
+	unsigned int x;
 
 #ifdef CONFIG_DAHDI_WATCHDOG
 	span->watchcounter--;
@@ -8855,18 +8855,18 @@ int dahdi_receive(struct dahdi_span *span)
 				/* Must process each slave at the same time */
 				u_char data[DAHDI_CHUNKSIZE];
 				int pos = 0;
+				int y;
+				struct dahdi_chan *z;
 				for (y=0;y<DAHDI_CHUNKSIZE;y++) {
 					/* Put all its slaves, too */
-					z = x;
-					do {
-						data[pos++] = span->chans[z]->readchunk[y];
+					for (z = chan; z; z = z->nextslave) {
+						data[pos++] = z->readchunk[y];
 						if (pos == DAHDI_CHUNKSIZE) {
 							if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
 								__dahdi_receive_chunk(chan, data);
 							pos = 0;
 						}
-						z=span->chans[z]->nextslave;
-					} while(z);
+					}
 				}
 			} else {
 				/* Process a normal channel */
