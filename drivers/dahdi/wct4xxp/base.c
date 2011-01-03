@@ -4928,7 +4928,7 @@ static void __devexit t4_remove_one(struct pci_dev *pdev)
 }
 
 
-static struct pci_device_id t4_pci_tbl[] __devinitdata =
+static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 {
 	{ 0x10ee, 0x0314, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct4xxp },
 

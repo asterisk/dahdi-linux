@@ -3035,7 +3035,7 @@ static void __devexit b4xxp_remove(struct pci_dev *pdev)
 	return;
 }
 
-static struct pci_device_id b4xx_ids[] __devinitdata =
+static DEFINE_PCI_DEVICE_TABLE(b4xx_ids) =
 {
 	{ 0xd161, 0xb410, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb4xxp },
 	{ 0x1397, 0x16b8, 0x1397, 0xb552, 0, 0, (unsigned long)&hfc8s },

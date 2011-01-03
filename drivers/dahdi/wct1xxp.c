@@ -1397,7 +1397,7 @@ static void __devexit t1xxp_remove_one(struct pci_dev *pdev)
 	}
 }
 
-static struct pci_device_id t1xxp_pci_tbl[] = {
+static DEFINE_PCI_DEVICE_TABLE(t1xxp_pci_tbl) = {
 	{ 0xe159, 0x0001, 0x6159, PCI_ANY_ID, 0, 0, (unsigned long) "Digium Wildcard T100P T1/PRI or E100P E1/PRA Board" },
 	{ 0 }
 };

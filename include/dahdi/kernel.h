@@ -1324,6 +1324,11 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 #define mutex_unlock(_x) up(_x)
 #endif
 
+#ifndef DEFINE_PCI_DEVICE_TABLE
+#define DEFINE_PCI_DEVICE_TABLE(_x) \
+	const struct pci_device_id _x[] __devinitdata
+#endif
+
 #ifndef DMA_BIT_MASK
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif

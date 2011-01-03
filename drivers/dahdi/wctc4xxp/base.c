@@ -3711,7 +3711,7 @@ static void __devexit wctc4xxp_remove_one(struct pci_dev *pdev)
 	kfree(wc);
 }
 
-static struct pci_device_id wctc4xxp_pci_tbl[] = {
+static DEFINE_PCI_DEVICE_TABLE(wctc4xxp_pci_tbl) = {
 	{ 0xd161, 0x3400, PCI_ANY_ID, PCI_ANY_ID,
 		0, 0, (unsigned long) &wctc400p }, /* Digium board */
 	{ 0xd161, 0x8004, PCI_ANY_ID, PCI_ANY_ID,

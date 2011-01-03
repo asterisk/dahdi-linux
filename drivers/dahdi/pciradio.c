@@ -1850,7 +1850,7 @@ static void __devexit pciradio_remove_one(struct pci_dev *pdev)
 	}
 }
 
-static struct pci_device_id pciradio_pci_tbl[] = {
+static DEFINE_PCI_DEVICE_TABLE(pciradio_pci_tbl) = {
 	{ 0xe159, 0x0001, 0xe16b, PCI_ANY_ID, 0, 0, (unsigned long)"PCIRADIO" },
 	{ 0 }
 };
