@@ -898,6 +898,7 @@ struct dahdi_span {
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry *proc_entry;
 #endif
+	struct list_head node;
 };
 
 struct dahdi_transcoder_channel {
