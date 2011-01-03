@@ -427,9 +427,30 @@ static inline struct dahdi_chan *chan_from_file(struct file *file)
 			file->private_data : chan_from_num(UNIT(file));
 }
 
-static struct dahdi_span *find_span(int spanno)
+/**
+ * span_find_and_get() - Search for the span by number, and if found take out
+ * a reference on it.
+ *
+ * When you are no longer using the returned pointer, you must release it with
+ * a put_span call.
+ *
+ */
+static struct dahdi_span *span_find_and_get(int spanno)
 {
-	return (spanno > 0 && spanno < DAHDI_MAX_SPANS) ? spans[spanno] : NULL;
+	unsigned long flags;
+	struct dahdi_span *span;
+
+	spin_lock_irqsave(&chan_lock, flags);
+	span = (spanno > 0 && spanno < DAHDI_MAX_SPANS) ? spans[spanno] : NULL;
+	if (likely(span && !try_module_get(span->ops->owner)))
+		span = NULL;
+	spin_unlock_irqrestore(&chan_lock, flags);
+	return span;
+}
+
+static void put_span(struct dahdi_span *span)
+{
+	module_put(span->ops->owner);
 }
 
 static inline unsigned int span_count(void)
@@ -699,7 +720,7 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 	if (!spanno)
 		return 0;
 
-	s = find_span(spanno);
+	s = span_find_and_get(spanno);
 	if (!s)
 		return -ENODEV;
 
@@ -834,6 +855,8 @@ static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *
 	*eof = 1;
 	if (len > count)
 		len = count;	/* don't return bytes not asked for */
+
+	put_span(s);
 	return len;
 }
 #endif
@@ -3895,10 +3918,12 @@ static int dahdi_ioctl_setparams(struct file *file, unsigned long data)
  */
 static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 {
+	int ret = 0;
 	struct dahdi_spaninfo spaninfo;
 	struct dahdi_span *s;
 	int j;
 	size_t size_to_copy;
+	bool via_chan = false;
 
 	size_to_copy = sizeof(struct dahdi_spaninfo);
 	if (copy_from_user(&spaninfo, (void __user *)data, size_to_copy))
@@ -3909,8 +3934,9 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 			return -EINVAL;
 
 		s = chan->span;
+		via_chan = true;
 	} else {
-		s = find_span(spaninfo.spanno);
+		s = span_find_and_get(spaninfo.spanno);
 	}
 	if (!s)
 		return -EINVAL;
@@ -3963,8 +3989,12 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 	}
 
 	if (copy_to_user((void __user *)data, &spaninfo, size_to_copy))
-		return -EFAULT;
-	return 0;
+		ret = -EFAULT;
+
+	if (!via_chan)
+		put_span(s);
+
+	return ret;
 }
 
 /**
@@ -3973,9 +4003,11 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
  */
 static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 {
+	int ret = 0;
 	struct dahdi_spaninfo_v1 spaninfo_v1;
 	struct dahdi_span *s;
 	int j;
+	bool via_chan = false;
 
 	if (copy_from_user(&spaninfo_v1, (void __user *)data,
 			   sizeof(spaninfo_v1))) {
@@ -3988,8 +4020,9 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 			return -EINVAL;
 
 		s = chan->span;
+		via_chan = true;
 	} else {
-		s = find_span(spaninfo_v1.spanno);
+		s = span_find_and_get(spaninfo_v1.spanno);
 	}
 
 	if (!s)
@@ -4051,9 +4084,11 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 
 	if (copy_to_user((void __user *)data, &spaninfo_v1,
 			 sizeof(spaninfo_v1))) {
-		return -EFAULT;
+		ret = -EFAULT;
 	}
-	return 0;
+	if (!via_chan)
+		put_span(s);
+	return ret;
 }
 
 static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
@@ -4389,33 +4424,40 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		struct dahdi_lineconfig lc;
 		struct dahdi_span *s;
 
+		res = 0;
 		if (copy_from_user(&lc, (void __user *)data, sizeof(lc)))
 			return -EFAULT;
-		s = find_span(lc.span);
+		s = span_find_and_get(lc.span);
 		if (!s)
 			return -ENXIO;
+
 		if ((lc.lineconfig & 0x1ff0 & s->linecompat) !=
-		    (lc.lineconfig & 0x1ff0))
+		    (lc.lineconfig & 0x1ff0)) {
+			put_span(s);
 			return -EINVAL;
+		}
 		if (s->ops->spanconfig) {
 			s->lineconfig = lc.lineconfig;
 			s->lbo = lc.lbo;
 			s->txlevel = lc.lbo;
 			s->rxlevel = 0;
 
-			return s->ops->spanconfig(s, &lc);
+			res = s->ops->spanconfig(s, &lc);
 		}
-		return 0;
+		put_span(s);
+		return res;
 	}
 	case DAHDI_STARTUP:
 		if (get_user(j, (int __user *)data))
 			return -EFAULT;
-		s = find_span(j);
+		s = span_find_and_get(j);
 		if (!s)
 			return -ENXIO;
 
-		if (s->flags & DAHDI_FLAG_RUNNING)
+		if (s->flags & DAHDI_FLAG_RUNNING) {
+			put_span(s);
 			return 0;
+		}
 
 		if (s->ops->startup)
 			res = s->ops->startup(s);
@@ -4440,11 +4482,12 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				s->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
 			}
 		}
+		put_span(s);
 		return 0;
 	case DAHDI_SHUTDOWN:
 		if (get_user(j, (int __user *)data))
 			return -EFAULT;
-		s = find_span(j);
+		s = span_find_and_get(j);
 		if (!s)
 			return -ENXIO;
 
@@ -4455,6 +4498,7 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		if (s->ops->shutdown)
 			res =  s->ops->shutdown(s);
 		s->flags &= ~DAHDI_FLAG_RUNNING;
+		put_span(s);
 		return 0;
 	case DAHDI_ATTACH_ECHOCAN:
 	{
@@ -4628,11 +4672,13 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		  /* get struct from user */
 		if (copy_from_user(&maint, (void __user *)data, sizeof(maint)))
 			return -EFAULT;
-		s = find_span(maint.spanno);
+		s = span_find_and_get(maint.spanno);
 		if (!s)
 			return -EINVAL;
-		if (!s->ops->maint)
+		if (!s->ops->maint) {
+			put_span(s);
 			return -ENOSYS;
+		}
 		spin_lock_irqsave(&s->lock, flags);
 		  /* save current maint state */
 		i = s->maintstat;
@@ -4648,8 +4694,10 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 				break;
 			rv = s->ops->maint(s, maint.command);
 			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv)
+			if (rv) {
+				put_span(s);
 				return rv;
+			}
 			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_LOOPUP:
@@ -4657,8 +4705,10 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			s->mainttimer = DAHDI_LOOPCODE_TIME * DAHDI_CHUNKSIZE;
 			rv = s->ops->maint(s, maint.command);
 			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv)
+			if (rv) {
+				put_span(s);
 				return rv;
+			}
 			spin_lock_irqsave(&s->lock, flags);
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
@@ -4678,8 +4728,10 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 
 			rv = s->ops->maint(s, maint.command);
 			spin_unlock_irqrestore(&s->lock, flags);
-			if (rv)
+			if (rv) {
+				put_span(s);
 				return rv;
+			}
 			spin_lock_irqsave(&s->lock, flags);
 			break;
 		default:
@@ -4687,10 +4739,12 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 			module_printk(KERN_NOTICE,
 				      "Unknown maintenance event: %d\n",
 				      maint.command);
+			put_span(s);
 			return -ENOSYS;
 		}
 		dahdi_alarm_notify(s);  /* process alarm-related events */
 		spin_unlock_irqrestore(&s->lock, flags);
+		put_span(s);
 		break;
 	}
 	case DAHDI_DYNAMIC_CREATE:
