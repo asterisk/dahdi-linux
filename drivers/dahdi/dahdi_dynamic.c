@@ -407,10 +407,13 @@ static void dahdi_dynamic_release(struct kref *kref)
 	WARN_ON(test_bit(DAHDI_FLAGBIT_REGISTERED, &d->span.flags));
 
 	if (d->pvt) {
-		if (d->driver && d->driver->destroy)
+		if (d->driver && d->driver->destroy) {
+			__module_get(d->driver->owner);
 			d->driver->destroy(d->pvt);
-		else
+			module_put(d->driver->owner);
+		} else {
 			WARN_ON(1);
+		}
 	}
 
 	kfree(d->msgbuf);
@@ -480,8 +483,12 @@ static int destroy_dynamic(struct dahdi_dynamic_span *dds)
 	if (unlikely(!d))
 		return -EINVAL;
 
-	if (atomic_read(&d->kref.refcount) > 1)
+	/* We shouldn't have more than the two references at this point.  If
+	 * we do, there are probably channels that are still opened. */
+	if (atomic_read(&d->kref.refcount) > 2) {
+		dynamic_put(d);
 		return -EBUSY;
+	}
 
 	dahdi_unregister(&d->span);
 
@@ -506,6 +513,8 @@ static int dahdi_dynamic_rbsbits(struct dahdi_chan *chan, int bits)
 static int dahdi_dynamic_open(struct dahdi_chan *chan)
 {
 	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
+	if (!try_module_get(d->driver->owner))
+		return -ENODEV;
 	dynamic_get(d);
 	return 0;
 }
@@ -518,7 +527,9 @@ static int dahdi_dynamic_chanconfig(struct dahdi_chan *chan, int sigtype)
 static int dahdi_dynamic_close(struct dahdi_chan *chan)
 {
 	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
+	struct module *owner = d->driver->owner;
 	dynamic_put(d);
+	module_put(owner);
 	return 0;
 }
 
@@ -621,8 +632,6 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	}
 
 
-	/* Another race -- should let the module get unloaded while we
-	   have it here */
 	if (!dtd) {
 		printk(KERN_NOTICE "No such driver '%s' for dynamic span\n",
 			dds->driver);
@@ -630,23 +639,31 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 		return -EINVAL;
 	}
 
+	if (!try_module_get(dtd->owner)) {
+		dynamic_put(d);
+		return -ENODEV;
+	}
+
+	/* Remember the driver.  We also give our reference to the driver to
+	 * the dahdi_dyanmic here.  Do not access dtd directly now. */
+	d->driver = dtd;
+
 	/* Create the stuff */
-	d->pvt = dtd->create(&d->span, d->addr);
+	d->pvt = d->driver->create(&d->span, d->addr);
 	if (!d->pvt) {
 		printk(KERN_NOTICE "Driver '%s' (%s) rejected address '%s'\n",
 			dtd->name, dtd->desc, d->addr);
 		dynamic_put(d);
+		module_put(dtd->owner);
 		return -EINVAL;
 	}
-
-	/* Remember the driver */
-	d->driver = dtd;
 
 	/* Whee!  We're created.  Now register the span */
 	if (dahdi_register(&d->span, 0)) {
 		printk(KERN_NOTICE "Unable to register span '%s'\n",
 			d->span.name);
 		dynamic_put(d);
+		module_put(dtd->owner);
 		return -EINVAL;
 	}
 
@@ -660,8 +677,8 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 
 	checkmaster();
 
+	module_put(dtd->owner);
 	return x;
-
 }
 
 #ifdef ENABLE_TASKLETS
@@ -719,6 +736,9 @@ int dahdi_dynamic_register_driver(struct dahdi_dynamic_driver *dri)
 	unsigned long flags;
 	int res = 0;
 
+	if (!dri->owner)
+		return -EINVAL;
+
 	if (find_driver(dri->name)) {
 		res = -1;
 	} else {
@@ -732,16 +752,22 @@ EXPORT_SYMBOL(dahdi_dynamic_register_driver);
 
 void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 {
-	struct dahdi_dynamic *d;
+	struct dahdi_dynamic *d, *n;
 	unsigned long flags;
 
-	spin_lock_irqsave(&driver_lock, flags);
-	list_del_rcu(&dri->list);
-	spin_unlock_irqrestore(&driver_lock, flags);
-	synchronize_rcu();
-
-	list_for_each_entry(d, &dspan_list, list) {
+	list_for_each_entry_safe(d, n, &dspan_list, list) {
 		if (d->driver == dri) {
+			if (d->pvt) {
+				if (d->driver && d->driver->destroy) {
+					__module_get(d->driver->owner);
+					d->driver->destroy(d->pvt);
+					module_put(d->driver->owner);
+					d->pvt = NULL;
+				} else {
+					WARN_ON(1);
+				}
+			}
+			dahdi_unregister(&d->span);
 			spin_lock_irqsave(&dspan_lock, flags);
 			list_del_rcu(&d->list);
 			spin_unlock_irqrestore(&dspan_lock, flags);
@@ -749,6 +775,11 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 			dynamic_put(d);
 		}
 	}
+
+	spin_lock_irqsave(&driver_lock, flags);
+	list_del_rcu(&dri->list);
+	spin_unlock_irqrestore(&driver_lock, flags);
+	synchronize_rcu();
 }
 EXPORT_SYMBOL(dahdi_dynamic_unregister_driver);
 

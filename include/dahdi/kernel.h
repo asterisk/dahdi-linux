@@ -1006,6 +1006,7 @@ struct dahdi_dynamic_driver {
 	int (*flush)(void);
 
 	struct list_head list;
+	struct module *owner;
 };
 
 /*! \brief Receive a dynamic span message */

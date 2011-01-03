@@ -146,7 +146,6 @@ static void dahdi_dynamic_local_destroy(void *pvt)
 
 	printk(KERN_INFO "TDMoL: Removed interface for %s, key %d "
 		"id %d\n", d->span->name, d->key, d->id);
-	module_put(THIS_MODULE);
 	kfree(d);
 }
 
@@ -216,9 +215,6 @@ static void *dahdi_dynamic_local_create(struct dahdi_span *span, char *address)
 	list_add(&d->node, &dynamic_local_list);
 	spin_unlock_irqrestore(&local_lock, flags);
 
-	if (!try_module_get(THIS_MODULE))
-		printk(KERN_DEBUG "TDMoL: Unable to increment module use count\n");
-
 	printk(KERN_INFO "TDMoL: Added new interface for %s, "
 	       "key %d id %d\n", span->name, d->key, d->id);
 	return d;
@@ -240,12 +236,12 @@ INVALID_ADDRESS:
 }
 
 static struct dahdi_dynamic_driver dahdi_dynamic_local = {
-	"loc",
-	"Local",
-	dahdi_dynamic_local_create,
-	dahdi_dynamic_local_destroy,
-	dahdi_dynamic_local_transmit,
-	NULL	/* flush */
+	.owner = THIS_MODULE,
+	.name = "loc",
+	.desc = "Local",
+	.create = dahdi_dynamic_local_create,
+	.destroy = dahdi_dynamic_local_destroy,
+	.transmit = dahdi_dynamic_local_transmit,
 };
 
 static int __init dahdi_dynamic_local_init(void)

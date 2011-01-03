@@ -288,7 +288,6 @@ static void ztdeth_destroy(void *pvt)
 	if (cur == z) {	/* Successfully removed */
 		printk(KERN_INFO "TDMoE: Removed interface for %s\n", z->span->name);
 		kfree(z);
-		module_put(THIS_MODULE);
 	}
 }
 
@@ -390,19 +389,18 @@ static void *ztdeth_create(struct dahdi_span *span, char *addr)
 		z->next = zdevs;
 		zdevs = z;
 		spin_unlock_irqrestore(&zlock, flags);
-		if(!try_module_get(THIS_MODULE))
-			printk(KERN_DEBUG "TDMoE: Unable to increment module use count\n");
 	}
 	return z;
 }
 
 static struct dahdi_dynamic_driver ztd_eth = {
-	"eth",
-	"Ethernet",
-	ztdeth_create,
-	ztdeth_destroy,
-	ztdeth_transmit,
-	ztdeth_flush
+	.owner = THIS_MODULE,
+	.name = "eth",
+	.desc = "Ethernet",
+	.create = ztdeth_create,
+	.destroy = ztdeth_destroy,
+	.transmit = ztdeth_transmit,
+	.flush = ztdeth_flush,
 };
 
 static struct notifier_block ztdeth_nblock = {

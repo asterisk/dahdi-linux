@@ -573,7 +573,6 @@ static void ztdethmf_destroy(void *pvt)
 			z->span->name);
 		kfree(z->msgbuf);
 		kfree(z);
-		module_put(THIS_MODULE);
 	} else {
 		if (z && z->span && z->span->name) {
 			printk(KERN_ERR "Cannot find interface for %s\n",
@@ -660,9 +659,6 @@ static void *ztdethmf_create(struct dahdi_span *span, char *addr)
 	spin_unlock_irqrestore(&ethmf_lock, flags);
 	atomic_inc(&(ethmf_groups[hashaddr_to_index(z->addr_hash)].spans));
 
-	if (!try_module_get(THIS_MODULE))
-		printk(KERN_ERR "TDMoEmf: Unable to increment module use count\n");
-
 	/* enable the timer for enabling the spans */
 	mod_timer(&timer, jiffies + HZ);
 	atomic_set(&shutdown, 0);
@@ -670,12 +666,13 @@ static void *ztdethmf_create(struct dahdi_span *span, char *addr)
 }
 
 static struct dahdi_dynamic_driver ztd_ethmf = {
-	"ethmf",
-	"Ethernet",
-	ztdethmf_create,
-	ztdethmf_destroy,
-	ztdethmf_transmit,
-	ztdethmf_flush
+	.owner = THIS_MODULE,
+	.name = "ethmf",
+	.desc = "Ethernet",
+	.create = ztdethmf_create,
+	.destroy = ztdethmf_destroy,
+	.transmit = ztdethmf_transmit,
+	.flush = ztdethmf_flush,
 };
 
 static struct notifier_block ztdethmf_nblock = {
