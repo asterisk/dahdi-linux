@@ -97,8 +97,7 @@ struct dahdi_dynamic {
 	char addr[40];
 	char dname[20];
 	int err;
-	int usecount;
-	int dead;
+	struct kref kref;
 	long rxjif;
 	unsigned short txcnt;
 	unsigned short rxcnt;
@@ -135,7 +134,7 @@ static void checkmaster(void)
 		if (d->timing) {
 			d->master = 0;
 			if (!(d->span.alarms & DAHDI_ALARM_RED) &&
-			    (d->timing < best) && !d->dead) {
+			    (d->timing < best)) {
 				/* If not in alarm and they're
 				   a better timing source, use them */
 				master = d;
@@ -226,17 +225,15 @@ static void __dahdi_dynamic_run(void)
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(d, &dspan_list, list) {
-		if (!d->dead) {
-			for (y = 0; y < d->span.channels; y++) {
-				struct dahdi_chan *const c = d->span.chans[y];
-				/* Echo cancel double buffered data */
-				dahdi_ec_chunk(c, c->readchunk, c->writechunk);
-			}
-			dahdi_receive(&d->span);
-			dahdi_transmit(&d->span);
-			/* Handle all transmissions now */
-			dahdi_dynamic_sendmessage(d);
+		for (y = 0; y < d->span.channels; y++) {
+			struct dahdi_chan *const c = d->span.chans[y];
+			/* Echo cancel double buffered data */
+			dahdi_ec_chunk(c, c->readchunk, c->writechunk);
 		}
+		dahdi_receive(&d->span);
+		dahdi_transmit(&d->span);
+		/* Handle all transmissions now */
+		dahdi_dynamic_sendmessage(d);
 	}
 
 	list_for_each_entry_rcu(drv, &driver_list, list) {
@@ -399,29 +396,47 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 		dahdi_dynamic_run();
 }
 
-static void dynamic_destroy(struct dahdi_dynamic *d)
+/**
+ * dahdi_dynamic_release() - Free the memory associated with the dahdi_dynamic.
+ * @kref:	Pointer to kref embedded in dahdi_dynamic structure.
+ *
+ */
+static void dahdi_dynamic_release(struct kref *kref)
 {
+	struct dahdi_dynamic *d = container_of(kref, struct dahdi_dynamic,
+					       kref);
 	unsigned int x;
 
-	/* Unregister span if appropriate */
-	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &d->span.flags))
-		dahdi_unregister(&d->span);
+	WARN_ON(test_bit(DAHDI_FLAGBIT_REGISTERED, &d->span.flags));
 
-	/* Destroy the pvt stuff if there */
-	if (d->pvt)
-		d->driver->destroy(d->pvt);
+	if (d->pvt) {
+		if (d->driver && d->driver->destroy)
+			d->driver->destroy(d->pvt);
+		else
+			WARN_ON(1);
+	}
 
-	/* Free message buffer if appropriate */
 	kfree(d->msgbuf);
 
-	/* Free channels */
 	for (x = 0; x < d->span.channels; x++)
 		kfree(d->chans[x]);
 
-	/* Free d */
 	kfree(d);
+}
 
-	checkmaster();
+static inline int dynamic_put(struct dahdi_dynamic *d)
+{
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
+	kref_put(&d->kref, dahdi_dynamic_release);
+	return 1;
+#else
+	return kref_put(&d->kref, dahdi_dynamic_release);
+#endif
+}
+
+static inline void dynamic_get(struct dahdi_dynamic *d)
+{
+	kref_get(&d->kref);
 }
 
 static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *dds)
@@ -432,6 +447,7 @@ static struct dahdi_dynamic *find_dynamic(struct dahdi_dynamic_span *dds)
 	list_for_each_entry_rcu(d, &dspan_list, list) {
 		if (!strcmp(d->dname, dds->driver) &&
 				!strcmp(d->addr, dds->addr)) {
+			dynamic_get(d);
 			found = d;
 			break;
 		}
@@ -467,19 +483,20 @@ static int destroy_dynamic(struct dahdi_dynamic_span *dds)
 	if (unlikely(!d))
 		return -EINVAL;
 
-	if (d->usecount) {
-		printk(KERN_NOTICE "Attempt to destroy dynamic span while it is in use\n");
+	if (atomic_read(&d->kref.refcount) > 1)
 		return -EBUSY;
-	}
+
+	dahdi_unregister(&d->span);
 
 	spin_lock_irqsave(&dspan_lock, flags);
 	list_del_rcu(&d->list);
 	spin_unlock_irqrestore(&dspan_lock, flags);
 	synchronize_rcu();
 
-	/* Destroy it */
-	dynamic_destroy(d);
-
+	/* One since we've removed the item from the list... */
+	dynamic_put(d);
+	/* ...and one for find_dynamic. */
+	dynamic_put(d);
 	return 0;
 }
 
@@ -492,11 +509,7 @@ static int dahdi_dynamic_rbsbits(struct dahdi_chan *chan, int bits)
 static int dahdi_dynamic_open(struct dahdi_chan *chan)
 {
 	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
-	if (likely(d)) {
-		if (unlikely(d->dead))
-			return -ENODEV;
-		d->usecount++;
-	}
+	dynamic_get(d);
 	return 0;
 }
 
@@ -508,11 +521,7 @@ static int dahdi_dynamic_chanconfig(struct dahdi_chan *chan, int sigtype)
 static int dahdi_dynamic_close(struct dahdi_chan *chan)
 {
 	struct dahdi_dynamic *d = dynamic_from_span(chan->span);
-	if (d) {
-		d->usecount--;
-		if (d->dead && !d->usecount)
-			dynamic_destroy(d);
-	}
+	dynamic_put(d);
 	return 0;
 }
 
@@ -545,20 +554,24 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	}
 
 	d = find_dynamic(dds);
-	if (d)
+	if (d) {
+		dynamic_put(d);
 		return -EEXIST;
+	}
 
-	/* Allocate memory */
 	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d)
 		return -ENOMEM;
 
+	kref_init(&d->kref);
+
 	for (x = 0; x < dds->numchans; x++) {
 		d->chans[x] = kzalloc(sizeof(*d->chans[x]), GFP_KERNEL);
 		if (!d->chans[x]) {
-			dynamic_destroy(d);
+			dynamic_put(d);
 			return -ENOMEM;
 		}
+		d->span.channels++;
 	}
 
 	/* Allocate message buffer with sample space and header space */
@@ -567,7 +580,7 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	d->msgbuf = kzalloc(bufsize, GFP_KERNEL);
 
 	if (!d->msgbuf) {
-		dynamic_destroy(d);
+		dynamic_put(d);
 		return -ENOMEM;
 	}
 	
@@ -578,7 +591,6 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	sprintf(d->span.name, "DYN/%s/%s", dds->driver, dds->addr);
 	sprintf(d->span.desc, "Dynamic '%s' span at '%s'",
 		dds->driver, dds->addr);
-	d->span.channels = dds->numchans;
 	d->span.deflaw = DAHDI_LAW_MULAW;
 	d->span.flags |= DAHDI_FLAG_RBS;
 	d->span.chans = d->chans;
@@ -617,7 +629,7 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	if (!dtd) {
 		printk(KERN_NOTICE "No such driver '%s' for dynamic span\n",
 			dds->driver);
-		dynamic_destroy(d);
+		dynamic_put(d);
 		return -EINVAL;
 	}
 
@@ -626,7 +638,7 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	if (!d->pvt) {
 		printk(KERN_NOTICE "Driver '%s' (%s) rejected address '%s'\n",
 			dtd->name, dtd->desc, d->addr);
-		/* Creation failed */
+		dynamic_put(d);
 		return -EINVAL;
 	}
 
@@ -637,18 +649,21 @@ static int create_dynamic(struct dahdi_dynamic_span *dds)
 	if (dahdi_register(&d->span, 0)) {
 		printk(KERN_NOTICE "Unable to register span '%s'\n",
 			d->span.name);
-		dynamic_destroy(d);
+		dynamic_put(d);
 		return -EINVAL;
 	}
 
+	x = d->span.spanno;
+
+	/* Transfer our reference to the dspan_list.  Do not touch d after
+	 * this point. It also must remain on the list while registered. */
 	spin_lock_irqsave(&dspan_lock, flags);
 	list_add_rcu(&d->list, &dspan_list);
 	spin_unlock_irqrestore(&dspan_lock, flags);
 
 	checkmaster();
 
-	/* All done */
-	return d->span.spanno;
+	return x;
 
 }
 
@@ -733,11 +748,7 @@ void dahdi_dynamic_unregister(struct dahdi_dynamic_driver *dri)
 			list_del_rcu(&d->list);
 			spin_unlock_irqrestore(&dspan_lock, flags);
 			synchronize_rcu();
-
-			if (!d->usecount)
-				dynamic_destroy(d);
-			else
-				d->dead = 1;
+			dynamic_put(d);
 		}
 	}
 }
