@@ -83,6 +83,12 @@
 #error "You cannot define both EMPULSE and EMFLASH"
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
+#ifndef CONFIG_BKL
+#error You must have CONFIG_BKL lock defined to build DAHDI
+#endif
+#endif
+
 /* Get helper arithmetic */
 #include "arith.h"
 #if defined(CONFIG_DAHDI_MMX) || defined(ECHO_CAN_FP)
