@@ -31,7 +31,6 @@
 #include "xpp_dahdi.h"
 #include "card_pri.h"
 #include "dahdi_debug.h"
-#include "xpd.h"
 #include "xbus-core.h"
 
 static const char rcsid[] = "$Id$";

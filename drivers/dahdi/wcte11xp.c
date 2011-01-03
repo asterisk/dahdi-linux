@@ -28,7 +28,6 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/usb.h>
-#include <linux/errno.h>
 #include <linux/pci.h>
 #include <linux/spinlock.h>
 #include <linux/moduleparam.h>
