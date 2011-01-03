@@ -82,10 +82,17 @@ dahdi_dynamic_local_transmit(void *pvt, unsigned char *msg, int msglen)
 	unsigned long flags;
 
 	spin_lock_irqsave(&local_lock, flags);
-	if (d->peer && d->peer->span)
-		dahdi_dynamic_receive(d->peer->span, msg, msglen);
-	if (d->monitor_rx_peer && d->monitor_rx_peer->span)
-		dahdi_dynamic_receive(d->monitor_rx_peer->span, msg, msglen);
+	if (d->peer && d->peer->span) {
+		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &d->peer->span->flags))
+			dahdi_dynamic_receive(d->peer->span, msg, msglen);
+	}
+	if (d->monitor_rx_peer && d->monitor_rx_peer->span) {
+		if (test_bit(DAHDI_FLAGBIT_REGISTERED,
+			     &d->monitor_rx_peer->span->flags))  {
+			dahdi_dynamic_receive(d->monitor_rx_peer->span,
+					      msg, msglen);
+		}
+	}
 	spin_unlock_irqrestore(&local_lock, flags);
 	return 0;
 }
