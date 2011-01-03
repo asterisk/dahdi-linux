@@ -4284,6 +4284,7 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 	struct dahdi_chanconfig ch;
 	struct dahdi_chan *newmaster;
 	struct dahdi_chan *chan;
+	struct dahdi_chan *dacs_chan = NULL;
 	unsigned long flags;
 	int sigcap;
 
@@ -4301,7 +4302,8 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 		ch.sigtype = newmaster->sig;
 	} else if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
 		newmaster = chan;
-		if (!chan_from_num(ch.idlebits))
+		dacs_chan = chan_from_num(ch.idlebits);
+		if (!dacs_chan)
 			return -EINVAL;
 	} else {
 		newmaster = chan;
@@ -4378,10 +4380,14 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 			chan->flags &= ~DAHDI_FLAG_FCS;
 		}
 		if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
+			if (unlikely(!dacs_chan)) {
+				spin_unlock_irqrestore(&chan->lock, flags);
+				return -EINVAL;
+			}
 			/* Setup conference properly */
 			chan->confmode = DAHDI_CONF_DIGITALMON;
 			chan->confna = ch.idlebits;
-			res = dahdi_chan_dacs(chan, chan_from_num(ch.idlebits));
+			res = dahdi_chan_dacs(chan, dacs_chan);
 		} else {
 			dahdi_disable_dacs(chan);
 		}
