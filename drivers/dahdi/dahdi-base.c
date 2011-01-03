@@ -495,8 +495,15 @@ struct ecfactory {
 int dahdi_register_echocan_factory(const struct dahdi_echocan_factory *ec)
 {
 	struct ecfactory *cur;
+	struct ecfactory *new;
 
 	WARN_ON(!ec->owner);
+
+	new = kzalloc(sizeof(*new), GFP_KERNEL);
+	if (!new)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&new->list);
 
 	spin_lock(&ecfactory_list_lock);
 
@@ -504,19 +511,13 @@ int dahdi_register_echocan_factory(const struct dahdi_echocan_factory *ec)
 	list_for_each_entry(cur, &ecfactory_list, list) {
 		if (cur->ec == ec) {
 			spin_unlock(&ecfactory_list_lock);
+			kfree(new);
 			return -EPERM;
 		}
 	}
 
-	if (!(cur = kzalloc(sizeof(*cur), GFP_KERNEL))) {
-		spin_unlock(&ecfactory_list_lock);
-		return -ENOMEM;
-	}
-
-	cur->ec = ec;
-	INIT_LIST_HEAD(&cur->list);
-
-	list_add_tail(&cur->list, &ecfactory_list);
+	new->ec = ec;
+	list_add_tail(&new->list, &ecfactory_list);
 
 	spin_unlock(&ecfactory_list_lock);
 
@@ -532,6 +533,7 @@ void dahdi_unregister_echocan_factory(const struct dahdi_echocan_factory *ec)
 	list_for_each_entry_safe(cur, next, &ecfactory_list, list) {
 		if (cur->ec == ec) {
 			list_del(&cur->list);
+			kfree(cur);
 			break;
 		}
 	}
