@@ -494,7 +494,7 @@ static void global_tick(void)
 }
 
 #ifdef	DAHDI_SYNC_TICK
-int dahdi_sync_tick(struct dahdi_span *span, int is_master)
+void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 {
 	xpd_t		*xpd = container_of(span, struct xpd, span);
 	static int	redundant_ticks;	/* for extra spans */
@@ -536,9 +536,8 @@ int dahdi_sync_tick(struct dahdi_span *span, int is_master)
 	xpp_ticker_step(&dahdi_ticker, &now);
 	dahdi_tick_count++;
 	//flip_parport_bit(1);
-	return 0;
 noop:
-	return 0;	/* No auto sync from dahdi */
+	return;
 }
 #endif
 

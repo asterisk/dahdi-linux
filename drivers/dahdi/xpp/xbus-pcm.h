@@ -120,7 +120,7 @@ void		elect_syncer(const char *msg);
 int		exec_sync_command(const char *buf, size_t count);
 int		fill_sync_string(char *buf, size_t count);
 #ifdef	DAHDI_SYNC_TICK
-int		dahdi_sync_tick(struct dahdi_span *span, int is_master);
+void		dahdi_sync_tick(struct dahdi_span *span, int is_master);
 #endif
 
 #ifdef	DEBUG_PCMTX

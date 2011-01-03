@@ -525,13 +525,13 @@ static int dahdi_dynamic_close(struct dahdi_chan *chan)
 	return 0;
 }
 
-static int dahdi_dynamic_sync_tick(struct dahdi_span *span, int is_master)
+static void dahdi_dynamic_sync_tick(struct dahdi_span *span, int is_master)
 {
 	struct dahdi_dynamic *head;
 	struct dahdi_dynamic *d = dynamic_from_span(span);
 
 	if (hasmaster)
-		return 0;
+		return;
 
 	rcu_read_lock();
 	head = list_entry(dspan_list.next, struct dahdi_dynamic, list);
@@ -539,7 +539,7 @@ static int dahdi_dynamic_sync_tick(struct dahdi_span *span, int is_master)
 
 	if (d == head)
 		dahdi_dynamic_run();
-	return 0;
+	return;
 }
 
 static const struct dahdi_span_ops dynamic_ops = {
