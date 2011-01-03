@@ -437,6 +437,11 @@ static inline unsigned int span_count(void)
 	return maxspans;
 }
 
+static inline bool can_provide_timing(const struct dahdi_span *const s)
+{
+	return !s->cannot_provide_timing;
+}
+
 static int maxchans = 0;
 static int maxconfs = 0;
 
@@ -3466,16 +3471,26 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 		/* Switch to other master if current master in alarm */
 		for (x=1; x<maxspans; x++) {
 			struct dahdi_span *const s = spans[x];
-			if (s && !s->alarms && (s->flags & DAHDI_FLAG_RUNNING)) {
-				if ((debug & DEBUG_MAIN) && (master != s)) {
-					module_printk(KERN_NOTICE,
-						"Master changed to %s\n",
-						s->name);
-				}
-				master = s;
-				break;
+			if (!s)
+				continue;
+			if (s->alarms)
+				continue;
+			if (!test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
+				continue;
+			if (!can_provide_timing(s))
+				continue;
+			if (master == s)
+				continue;
+
+			if (debug & DEBUG_MAIN) {
+				module_printk(KERN_NOTICE,
+					      "Master changed to %s\n",
+					      s->name);
 			}
+			master = s;
+			break;
 		}
+
 		/* Report more detailed alarms */
 		if (debug & DEBUG_MAIN) {
 			if (span->alarms & DAHDI_ALARM_LOS) {
@@ -6158,7 +6173,7 @@ int dahdi_register(struct dahdi_span *span, int prefmaster)
 				"%d channels\n", span->spanno, span->name, span->channels);
 	}
 
-	if (!master || prefmaster) {
+	if (!master && can_provide_timing(span)) {
 		master = span;
 		if (debug & DEBUG_MAIN) {
 			module_printk(KERN_NOTICE, "Span ('%s') is new master\n", 
@@ -6184,8 +6199,7 @@ unreg_channels:
 int dahdi_unregister(struct dahdi_span *span)
 {
 	int x;
-	int new_maxspans;
-	struct dahdi_span *new_master;
+	unsigned long flags;
 
 #ifdef CONFIG_PROC_FS
 	char tempfile[17];
@@ -6221,23 +6235,34 @@ int dahdi_unregister(struct dahdi_span *span)
 	clear_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
 	for (x=0;x<span->channels;x++)
 		dahdi_chan_unreg(span->chans[x]);
-	new_maxspans = 0;
-	new_master = master; /* FIXME: locking */
-	if (master == span)
-		new_master = NULL;
-	for (x=1;x<DAHDI_MAX_SPANS;x++) {
-		if (spans[x]) {
-			new_maxspans = x+1;
-			if (!new_master)
-				new_master = spans[x];
+
+	if (master == span) {
+		struct dahdi_span *new_master = NULL;
+		int new_maxspans = 0;
+
+		spin_lock_irqsave(&chan_lock, flags);
+		for (x = 1; x < DAHDI_MAX_SPANS; x++) {
+			struct dahdi_span *const cur = spans[x];
+			if (!cur)
+				continue;
+
+			new_maxspans = x;
+			if (can_provide_timing(cur)) {
+				new_master = cur;
+				break;
+			}
 		}
+		maxspans = new_maxspans;
+		spin_unlock_irqrestore(&chan_lock, flags);
+
+		if (debug & DEBUG_MAIN) {
+			module_printk(KERN_NOTICE, "%s: Span ('%s') is new "
+				      "master\n", __func__,
+				      (new_master) ? new_master->name :
+						     "no master");
+		}
+		master = new_master;
 	}
-	maxspans = new_maxspans;
-	if (master != new_master)
-		if (debug & DEBUG_MAIN)
-			module_printk(KERN_NOTICE, "%s: Span ('%s') is new master\n", __FUNCTION__,
-				      (new_master)? new_master->name: "no master");
-	master = new_master;
 
 	return 0;
 }

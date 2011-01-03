@@ -863,6 +863,7 @@ struct dahdi_span {
 	int deflaw;			/*!< Default law (DAHDI_MULAW or DAHDI_ALAW) */
 	int alarms;			/*!< Pending alarms on span */
 	unsigned long flags;
+	u8 cannot_provide_timing:1;
 	int irq;			/*!< IRQ for this span's hardware */
 	int lbo;			/*!< Span Line-Buildout */
 	int lineconfig;			/*!< Span line configuration */

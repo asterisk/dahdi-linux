@@ -221,6 +221,8 @@ static int dahdi_dynamic_local_create(struct dahdi_dynamic *dyn,
 
 	printk(KERN_INFO "TDMoL: Added new interface for %s, "
 	       "key %d id %d\n", span->name, d->key, d->id);
+
+	span->cannot_provide_timing = 1;
 	return 0;
 
 CLEAR_AND_DEL_FROM_PEERS:
