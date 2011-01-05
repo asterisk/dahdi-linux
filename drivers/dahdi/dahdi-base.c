@@ -6442,16 +6442,88 @@ static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
 }
 #endif
 
+/**
+ * _get_next_channo - Return the next taken channel number from the span list.
+ * @span:	The span with which to start the search.
+ *
+ * Returns -1 if there aren't any channels on span or any of the following
+ * spans, otherwise, returns the channel number of the first channel.
+ *
+ * Must be callled with registration_mutex held.
+ *
+ */
+static int _get_next_channo(const struct dahdi_span *span)
+{
+	const struct list_head *pos = &span->node;
+	while (pos != &span_list) {
+		span = list_entry(pos, struct dahdi_span, node);
+		if (span->channels)
+			return span->chans[0]->channo;
+		pos = pos->next;
+	}
+	return -1;
+}
+
+/**
+ * _find_spanno_and_channo - Find the next available span and channel number.
+ *
+ * Must be called with registration_mutex held.
+ *
+ */
+static struct list_head *_find_spanno_and_channo(const struct dahdi_span *span,
+						 int *spanno, int *channo,
+						 struct list_head *loc)
+{
+	struct dahdi_span *pos;
+	int next_channo;
+
+	*spanno = 1;
+	*channo = 1;
+
+	list_for_each_entry(pos, &span_list, node) {
+		bool skip_span;
+
+		loc = &pos->node;
+		next_channo = _get_next_channo(pos);
+
+		skip_span = (pos->spanno == *spanno) ||
+			     ((next_channo > 1) &&
+			      ((*channo + span->channels) > next_channo));
+
+		if (!skip_span)
+			break;
+
+		*spanno = pos->spanno + 1;
+		if (pos->channels)
+			*channo = next_channo + pos->channels;
+
+	}
+
+	return loc;
+}
+
+/**
+ * _dahdi_register - Register the span.
+ *
+ * NOTE: Must be called with the registration_mutex held.
+ *
+ */
 static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 {
 	unsigned int spanno;
 	unsigned int x;
 	struct list_head *loc = &span_list;
 	unsigned long flags;
-	unsigned int next_channo = 1;
+	unsigned int channo;
 
 	if (!span || !span->ops || !span->ops->owner)
 		return -EINVAL;
+
+	if (!list_empty(&pseudo_chans)) {
+		module_printk(KERN_ERR, "Cannot register spans while psuedo "
+			      "chans are open.\n");
+		return -EINVAL;
+	}
 
 	if (!span->deflaw) {
 		module_printk(KERN_NOTICE, "Span %s didn't specify default law.  "
@@ -6462,32 +6534,16 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 
 	spin_lock_init(&span->lock);
 
-	spanno = 1;
-
 	/* Look through the span list to find the first available span number.
 	 * The spans are kept on this list in sorted order. We'll also save
 	 * off the next available channel number to use. */
 
-	if (!list_empty(&span_list)) {
-		struct dahdi_span *pos;
-		list_for_each_entry(pos, &span_list, node) {
-			loc = &pos->node;
-			if (pos->spanno == spanno) {
-				++spanno;
-				if (pos->channels) {
-					next_channo = pos->chans[0]->channo +
-							pos->channels;
-				}
-				continue;
-			}
-			break;
-		}
-	}
+	loc = _find_spanno_and_channo(span, &spanno, &channo, loc);
 
 	span->spanno = spanno;
 	for (x = 0; x < span->channels; x++) {
 		span->chans[x]->span = span;
-		span->chans[x]->channo = next_channo + x;
+		span->chans[x]->channo = channo + x;
 		dahdi_chan_reg(span->chans[x]);
 	}
 
@@ -6517,7 +6573,10 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	}
 
 	spin_lock_irqsave(&chan_lock, flags);
-	list_add(&span->node, loc);
+	if (loc == &span_list)
+		list_add_tail(&span->node, &span_list);
+	else
+		list_add(&span->node, loc);
 	spin_unlock_irqrestore(&chan_lock, flags);
 	set_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
 	__dahdi_find_master_span();
