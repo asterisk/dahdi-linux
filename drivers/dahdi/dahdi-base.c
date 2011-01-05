@@ -287,35 +287,30 @@ enum dahdi_digit_mode {
 	DIGIT_MODE_MFR2_REV,
 };
 
-#define DEFAULT_DTMF_LENGTH	(100 * DAHDI_CHUNKSIZE)
-#define DEFAULT_MFR1_LENGTH	(68 * DAHDI_CHUNKSIZE)
-#define DEFAULT_MFR2_LENGTH	(100 * DAHDI_CHUNKSIZE)
-#define PAUSE_LENGTH		(500 * DAHDI_CHUNKSIZE)
-
 /* At the end of silence, the tone stops */
 static struct dahdi_tone dtmf_silence = {
-	.tonesamples = DEFAULT_DTMF_LENGTH,
+	.tonesamples = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_DTMF_LENGTH),
 };
 
 /* At the end of silence, the tone stops */
 static struct dahdi_tone mfr1_silence = {
-	.tonesamples = DEFAULT_MFR1_LENGTH,
+	.tonesamples = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_MFR1_LENGTH),
 };
 
 /* At the end of silence, the tone stops */
 static struct dahdi_tone mfr2_silence = {
-	.tonesamples = DEFAULT_MFR2_LENGTH,
+	.tonesamples = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_MFR2_LENGTH),
 };
 
 /* A pause in the dialing */
 static struct dahdi_tone tone_pause = {
-	.tonesamples = PAUSE_LENGTH,
+	.tonesamples = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_PAUSE_LENGTH),
 };
 
 static struct dahdi_dialparams global_dialparams = {
-	.dtmf_tonelen = DEFAULT_DTMF_LENGTH,
-	.mfv1_tonelen = DEFAULT_MFR1_LENGTH,
-	.mfr2_tonelen = DEFAULT_MFR2_LENGTH,
+	.dtmf_tonelen = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_DTMF_LENGTH),
+	.mfv1_tonelen = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_MFR1_LENGTH),
+	.mfr2_tonelen = DAHDI_MS_TO_SAMPLES(DAHDI_CONFIG_DEFAULT_MFR2_LENGTH),
 };
 
 static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data);

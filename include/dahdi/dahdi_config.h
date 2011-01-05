@@ -28,6 +28,12 @@
 
 /* DAHDI compile time options */
 
+/* These default tone lengths are in units of milliseconds. */
+#define DAHDI_CONFIG_DEFAULT_DTMF_LENGTH	100
+#define DAHDI_CONFIG_DEFAULT_MFR1_LENGTH	68
+#define DAHDI_CONFIG_DEFAULT_MFR2_LENGTH	100
+#define DAHDI_CONFIG_PAUSE_LENGTH		500
+
 /*
  * Uncomment if you have a European phone, or any other phone with a 
  *  short flash time.
