@@ -1493,8 +1493,6 @@ static void close_channel(struct dahdi_chan *chan)
 		chan->dacs_chan = NULL;
 
 	chan->confmute = 0;
-	/* release conference resource, if any to release */
-	if (oldconf) dahdi_check_conf(oldconf);
 	chan->gotgs = 0;
 	reset_conf(chan);
 	chan->dacs_chan = NULL;
@@ -1522,6 +1520,10 @@ static void close_channel(struct dahdi_chan *chan)
 	}
 
 	spin_unlock_irqrestore(&chan->lock, flags);
+
+	/* release conference resource, if any to release */
+	if (oldconf)
+		dahdi_check_conf(oldconf);
 
 	if (rxgain)
 		kfree(rxgain);
@@ -5141,7 +5143,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	struct dahdi_chan *conf_chan = NULL;
 	unsigned long flags;
 	unsigned int confmode;
-	int j;
+	int oldconf;
 
 	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
 		return -EFAULT;
@@ -5173,6 +5175,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	/* likewise if 0 mode must have no conf */
 	if ((!conf.confmode) && conf.confno)
 		return -EINVAL;
+	dahdi_check_conf(conf.confno);
 	conf.chan = chan->channo;  /* return with real channel # */
 	spin_lock_irqsave(&chan_lock, flags);
 	spin_lock(&chan->lock);
@@ -5190,13 +5193,11 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 		memset(chan->conflast1, 0, DAHDI_MAX_CHUNKSIZE);
 		memset(chan->conflast2, 0, DAHDI_MAX_CHUNKSIZE);
 	}
-	j = chan->confna;  /* save old conference number */
+	oldconf = chan->confna;  /* save old conference number */
 	chan->confna = conf.confno;   /* set conference number */
 	chan->conf_chan = conf_chan;
 	chan->confmode = conf.confmode;  /* set conference mode */
 	chan->_confn = 0;		     /* Clear confn */
-	dahdi_check_conf(j);
-	dahdi_check_conf(conf.confno);
 	if (chan->span && chan->span->ops->dacs) {
 		if ((confmode == DAHDI_CONF_DIGITALMON) &&
 		    (chan->txgain == defgain) &&
@@ -5234,6 +5235,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 
 	spin_unlock(&chan->lock);
 	spin_unlock_irqrestore(&chan_lock, flags);
+	dahdi_check_conf(oldconf);
 	if (copy_to_user((void __user *)data, &conf, sizeof(conf)))
 		return -EFAULT;
 	return 0;
