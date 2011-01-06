@@ -87,9 +87,9 @@ Kernel Source / "Headers"
 - If you use a kernel from your distribution you will typically have a
   package with all the files required to build a kernel modules for your
   kernel image.
-  * On Debian Etch and Ubuntu this is
+  * On Debian and Ubuntu this is
     +++ linux-headers-`uname -r` +++
-  * On Fedora, RHEL and compatibles (e.g. CentOS) and in SUSE this is
+  * On Fedora, RHEL and compatibles (e.g. CentOS) and SUSE this is
     the kernel-devel package. Or if you run kernel-smp or kernel-xen,
     you need kernel-smp-devel or kernel-xen-devel, respectively.
   * In some distributions (e.g.: in RHEL/CentOS, Fedora, Ubuntu) the
@@ -104,6 +104,19 @@ Kernel Source / "Headers"
 
   make KVERS=2.6.18.Custom
   make KSRC=/home/tzafrir/kernels/linus
+
+
+Kernel Configuration
+^^^^^^^^^^^^^^^^^^^^
+If you build a custom kernel, note the following configuration items:
+
+- CONFIG_CRC_CCITT must be enabled ('y' or 'm'). On 2.6 kernels this can
+  be selected These can be selected from the "Library Routines" submenu
+  during kernel configuration via "make menuconfig".
+- DAHDI will work if you disable module unloading. But you may need
+  extra reboots.
+- DAHDI needs the BKL (Big Kernel Lock). This may be annoying in
+  >=2.6.37 kernels. Make sure you enable CONFIG_BKL on those kernels.
 
 
 Installing to a Subtree
