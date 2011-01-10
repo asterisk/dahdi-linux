@@ -9452,7 +9452,6 @@ static int __init dahdi_init(void)
 	res = dahdi_register_echocan_factory(&hwec_factory);
 	if (res) {
 		WARN_ON(1);
-		res = -EFAULT;
 		goto failed_register_ec_factory;
 	}
 
