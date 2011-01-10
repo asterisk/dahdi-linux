@@ -6445,6 +6445,54 @@ static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
 }
 #endif
 
+static void span_sysfs_remove(struct dahdi_span *span)
+{
+	int x;
+	for (x = 0; x < span->channels; x++) {
+		struct dahdi_chan *chan = span->chans[x];
+		if (!test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
+			continue;
+
+		CLASS_DEV_DESTROY(dahdi_class,
+				MKDEV(DAHDI_MAJOR, chan->channo));
+		clear_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
+	}
+}
+
+static int span_sysfs_create(struct dahdi_span *span)
+{
+	int res = 0;
+	int x;
+
+	for (x = 0; x < span->channels; x++) {
+		struct dahdi_chan *chan = span->chans[x];
+		char chan_name[32];
+		void *dummy;
+
+		if (chan->channo >= 250)
+			continue;
+		if (test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
+			continue;
+
+		snprintf(chan_name, sizeof(chan_name), "dahdi!%d",
+				chan->channo);
+		dummy = (void *)CLASS_DEV_CREATE(dahdi_class,
+				MKDEV(DAHDI_MAJOR, chan->channo),
+				NULL, chan_name);
+		if (IS_ERR(dummy)) {
+			res = PTR_ERR(dummy);
+			goto cleanup;
+		}
+
+		set_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
+	}
+	return 0;
+
+cleanup:
+	span_sysfs_remove(span);
+	return res;
+}
+
 /**
  * _get_next_channo - Return the next taken channel number from the span list.
  * @span:	The span with which to start the search.
@@ -6518,6 +6566,7 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	struct list_head *loc = &span_list;
 	unsigned long flags;
 	unsigned int channo;
+	int res = 0;
 
 	if (!span || !span->ops || !span->ops->owner)
 		return -EINVAL;
@@ -6560,15 +6609,7 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	}
 #endif
 
-	for (x = 0; x < span->channels; x++) {
-		if (span->chans[x]->channo < 250) {
-			char chan_name[32];
-			snprintf(chan_name, sizeof(chan_name), "dahdi!%d", 
-					span->chans[x]->channo);
-			CLASS_DEV_CREATE(dahdi_class, MKDEV(DAHDI_MAJOR, 
-					span->chans[x]->channo), NULL, chan_name);
-		}
-	}
+	res = span_sysfs_create(span);
 
 	if (debug & DEBUG_MAIN) {
 		module_printk(KERN_NOTICE, "Registered Span %d ('%s') with "
@@ -6637,10 +6678,7 @@ static int _dahdi_unregister(struct dahdi_span *span)
 	remove_proc_entry(span->proc_entry->name, root_proc_entry);
 #endif /* CONFIG_PROC_FS */
 
-	for (x = 0; x < span->channels; x++) {
-		if (span->chans[x]->channo < 250)
-			CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, span->chans[x]->channo));
-	}
+	span_sysfs_remove(span);
 
 	for (x=0;x<span->channels;x++)
 		dahdi_chan_unreg(span->chans[x]);

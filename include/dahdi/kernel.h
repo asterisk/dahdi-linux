@@ -712,6 +712,7 @@ enum {
 	DAHDI_FLAGBIT_LOOPED	= 18,	/*!< Loopback the receive data from the channel to the transmit */
 	DAHDI_FLAGBIT_MTP2	= 19,	/*!< Repeats last message in buffer and also discards repeating messages sent to us */
 	DAHDI_FLAGBIT_HDLC56	= 20,	/*!< Sets the given channel (if in HDLC mode) to use 56K HDLC instead of 64K  */
+	DAHDI_FLAGBIT_DEVFILE	= 25,	/*!< Channel has a sysfs dev file */
 };
 
 #ifdef CONFIG_DAHDI_NET
