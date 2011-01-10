@@ -6481,6 +6481,8 @@ static int span_sysfs_create(struct dahdi_span *span)
 				NULL, chan_name);
 		if (IS_ERR(dummy)) {
 			res = PTR_ERR(dummy);
+			chan_err(chan, "Failed creating sysfs device: %d\n",
+					res);
 			goto cleanup;
 		}
 
@@ -6606,10 +6608,17 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 		span->proc_entry = create_proc_read_entry(tempfile, 0444,
 					root_proc_entry, dahdi_proc_read,
 					(int *) (long) span->spanno);
+		if (!span->proc_entry) {
+			res = -EFAULT;
+			span_err(span, "Error creating procfs entry\n");
+			goto cleanup;
+		}
 	}
 #endif
 
 	res = span_sysfs_create(span);
+	if (res)
+		goto cleanup;
 
 	if (debug & DEBUG_MAIN) {
 		module_printk(KERN_NOTICE, "Registered Span %d ('%s') with "
@@ -6626,6 +6635,23 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	__dahdi_find_master_span();
 
 	return 0;
+
+cleanup:
+#ifdef CONFIG_PROC_FS
+	if (span->proc_entry) {
+		char tempfile[17];
+
+		snprintf(tempfile, sizeof(tempfile), "dahdi/%d", span->spanno);
+		remove_proc_entry(tempfile, NULL);
+		span->proc_entry = NULL;
+	}
+#endif
+	for (x = 0; x < span->channels; x++) {
+		struct dahdi_chan *chan = span->chans[x];
+		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags))
+			dahdi_chan_unreg(chan);
+	}
+	return res;
 }
 
 /**
