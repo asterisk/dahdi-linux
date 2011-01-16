@@ -76,7 +76,7 @@ CFLAGS_dahdi_dynamic_ethmf.o := -DNEW_SKB_LINEARIZE
 endif
 endif
 
-dahdi-objs := dahdi-base.o
+dahdi-objs := dahdi-base.o dahdi-sysfs.o
 
 ###############################################################################
 # Find appropriate ARCH value for VPMADT032 and HPEC binary modules
