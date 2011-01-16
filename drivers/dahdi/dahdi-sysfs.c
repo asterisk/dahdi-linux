@@ -3,6 +3,7 @@
 #define DAHDI_PRINK_MACROS_USE_debug
 #include <dahdi/kernel.h>
 #include <linux/device.h>
+#include <linux/slab.h>
 #include <dahdi/version.h>
 
 #include "dahdi.h"
