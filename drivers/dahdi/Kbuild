@@ -143,7 +143,4 @@ $(obj)/tor2fw.h: $(src)/tormenta2.rbt $(obj)/makefw
 $(obj)/radfw.h: $(src)/pciradio.rbt $(obj)/makefw
 	$(obj)/makefw $< radfw > $@
 
-$(obj)/makefw: $(src)/makefw.c
-	$(HOSTCC) -o $@ $^
-
 clean-files	:= radfw.h tor2fw.h
