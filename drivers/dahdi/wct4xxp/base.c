@@ -4882,16 +4882,11 @@ static int t4_hardware_stop(struct t4 *wc)
 	return 0;
 }
 
-static void __devexit t4_remove_one(struct pci_dev *pdev)
+static void __devexit _t4_remove_one(struct t4 *wc)
 {
-	struct t4 *wc = pci_get_drvdata(pdev);
 	struct dahdi_span *span;
 	int basesize;
 	int i;
-
-	if (!wc) {
-		return;
-	}
 
 	remove_sysfs_files(wc);
 
@@ -4920,22 +4915,31 @@ static void __devexit t4_remove_one(struct pci_dev *pdev)
 	}
 #endif			
 	
-	free_irq(pdev->irq, wc);
+	free_irq(wc->dev->irq, wc);
 	
 	if (wc->membase)
 		iounmap(wc->membase);
 	
-	pci_release_regions(pdev);		
+	pci_release_regions(wc->dev);
 	
 	/* Immediately free resources */
-	pci_free_consistent(pdev, T4_BASE_SIZE * wc->numbufs * 2,
+	pci_free_consistent(wc->dev, T4_BASE_SIZE * wc->numbufs * 2,
 			    wc->writechunk, wc->writedma);
 	
 	order_index[wc->order]--;
 	
 	cards[wc->num] = NULL;
-	pci_set_drvdata(pdev, NULL);
+	pci_set_drvdata(wc->dev, NULL);
 	free_wc(wc);
+}
+
+static void __devexit t4_remove_one(struct pci_dev *pdev)
+{
+	struct t4 *wc = pci_get_drvdata(pdev);
+	if (!wc)
+		return;
+
+	_t4_remove_one(wc);
 }
 
 
@@ -4976,6 +4980,7 @@ static struct pci_driver t4_driver = {
 
 static int __init t4_init(void)
 {
+	int i;
 	int res;
 	res = dahdi_pci_module(&t4_driver);
 	if (res)
@@ -4986,17 +4991,23 @@ static int __init t4_init(void)
 		printk(KERN_NOTICE "wct4xxp: Ident of first card is not zero (%d)\n",
 			cards[0]->order);
 	}
-	for (res = 0; cards[res]; res++) {
+	for (i = 0; cards[i]; i++) {
 		/* warn the user of duplicate ident values it is probably
 		 * unintended */
-		if (debug && res < 15 && cards[res+1] &&
-		    cards[res]->order == cards[res+1]->order) {
+		if (debug && res < 15 && cards[i+1] &&
+		    cards[res]->order == cards[i+1]->order) {
 			printk(KERN_NOTICE "wct4xxp: Duplicate ident value found (%d)\n",
-				cards[res]->order);
+				cards[i]->order);
 		}
-		t4_launch(cards[res]);
+		res = t4_launch(cards[i]);
+		if (res) {
+			int j;
+			for (j = 0; j < i; ++j)
+				_t4_remove_one(cards[j]);
+			break;
+		}
 	}
-	return 0;
+	return res;
 }
 
 static void __exit t4_cleanup(void)
