@@ -413,6 +413,7 @@ static inline struct pseudo_chan *chan_to_pseudo(struct dahdi_chan *chan)
 	return container_of(chan, struct pseudo_chan, chan);
 }
 
+enum { FIRST_PSEUDO_CHANNEL = 0x8000, };
 /* This list is protected by the chan_lock. */
 static LIST_HEAD(pseudo_chans);
 
@@ -422,11 +423,6 @@ static LIST_HEAD(pseudo_chans);
 static inline bool is_pseudo_chan(const struct dahdi_chan *chan)
 {
 	return (NULL == chan->span);
-}
-
-static bool valid_channo(const int channo)
-{
-	return (channo < 1) ?  false : true;
 }
 
 static DEFINE_MUTEX(registration_mutex);
@@ -470,8 +466,13 @@ static struct dahdi_chan *_chan_from_num(unsigned int channo)
 	struct dahdi_span *s;
 	struct pseudo_chan *pseudo;
 
-	if (!unlikely(valid_channo(channo)))
+	if (channo >= FIRST_PSEUDO_CHANNEL) {
+		list_for_each_entry(pseudo, &pseudo_chans, node) {
+			if (pseudo->chan.channo == channo)
+				return &pseudo->chan;
+		}
 		return NULL;
+	}
 
 	/* When searching for the channel amongst the spans, we can use the
 	 * fact that channels on a span must be numbered consecutively to skip
@@ -498,13 +499,6 @@ static struct dahdi_chan *_chan_from_num(unsigned int channo)
 		return chan;
 	}
 
-	/* If we didn't find the channel on the list of real channels, then
-	 * it's most likely a pseudo channel. */
-	list_for_each_entry(pseudo, &pseudo_chans, node) {
-		if (pseudo->chan.channo == channo)
-			return &pseudo->chan;
-	}
-
 	return NULL;
 }
 
@@ -526,7 +520,7 @@ static inline struct dahdi_chan *chan_from_file(struct file *file)
 /**
  * _find_span() - Find a span by span number.
  *
- * Must be called with registration_lock held.
+ * Must be called with registration_mutex held.
  *
  */
 static struct dahdi_span *_find_span(int spanno)
@@ -2974,8 +2968,8 @@ static struct dahdi_chan *dahdi_alloc_pseudo(struct file *file)
 	struct pseudo_chan *pseudo;
 	unsigned long flags;
 	unsigned int channo;
+	struct pseudo_chan *p;
 	struct list_head *pos = &pseudo_chans;
-	static unsigned int first_pseudo_channo;
 
 	/* Don't allow /dev/dahdi/pseudo to open if there is not a timing
 	 * source. */
@@ -2996,37 +2990,20 @@ static struct dahdi_chan *dahdi_alloc_pseudo(struct file *file)
 
 	mutex_lock(&registration_mutex);
 
-	if (list_empty(&pseudo_chans)) {
-		/* If there aren't any pseudo channels allocated, we need to
-		 * take the next channel number after all the 'real' channels
-		 * on the spans. */
-		struct dahdi_span *span;
-		channo = 1;
-		list_for_each_entry_reverse(span, &span_list, node) {
-			if (unlikely(!span->channels))
-				continue;
-			channo = span->chans[0]->channo + span->channels;
+	channo = FIRST_PSEUDO_CHANNEL;
+	list_for_each_entry(p, &pseudo_chans, node) {
+		if (channo != p->chan.channo)
 			break;
-		}
-		first_pseudo_channo = channo;
-	} else {
-		struct pseudo_chan *p;
-		/* Otherwise, we'll find the first available channo in the list
-		 * of pseudo chans. */
-		channo = first_pseudo_channo;
-		list_for_each_entry(p, &pseudo_chans, node) {
-			if (channo != p->chan.channo)
-				break;
-			pos = &p->node;
-			++channo;
-		}
+		pos = &p->node;
+		++channo;
 	}
 
 	pseudo->chan.channo = channo;
+	pseudo->chan.chanpos = channo - FIRST_PSEUDO_CHANNEL + 1;
 	dahdi_chan_reg(&pseudo->chan);
 
 	snprintf(pseudo->chan.name, sizeof(pseudo->chan.name)-1,
-		 "Pseudo/%d", pseudo->chan.channo);
+		 "Pseudo/%d", pseudo->chan.chanpos);
 
 	file->private_data = &pseudo->chan;
 
@@ -6483,12 +6460,6 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	if (!span || !span->ops || !span->ops->owner)
 		return -EINVAL;
 
-	if (!list_empty(&pseudo_chans)) {
-		module_printk(KERN_ERR, "Cannot register spans while psuedo "
-			      "chans are open.\n");
-		return -EINVAL;
-	}
-
 	if (!span->deflaw) {
 		module_printk(KERN_NOTICE, "Span %s didn't specify default law.  "
 				"Assuming mulaw, please fix driver!\n", span->name);
@@ -6503,6 +6474,9 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	 * off the next available channel number to use. */
 
 	loc = _find_spanno_and_channo(span, &spanno, &channo, loc);
+
+	if (unlikely(channo >= FIRST_PSEUDO_CHANNEL))
+		return -EINVAL;
 
 	span->spanno = spanno;
 	for (x = 0; x < span->channels; x++) {
