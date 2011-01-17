@@ -169,12 +169,18 @@ static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct 
 #endif
 
 /*
- * Define CONFIG_EXTENDED_RESET to allow the qfalc framer extra time
+ * Define CONFIG_FORCE_EXTENDED_RESET to allow the qfalc framer extra time
  * to reset itself upon hardware initialization. This exits for rare
  * cases for customers who are seeing the qfalc returning unexpected
  * information at initialization
  */
-#undef CONFIG_EXTENDED_RESET
+/* #define CONFIG_FORCE_EXTENDED_RESET */
+/* #define CONFIG_NOEXTENDED_RESET */
+
+#if defined(CONFIG_FORCE_EXTENDED_RESET) && defined(CONFIG_NOEXTENDED_RESET)
+#error "You cannot define both CONFIG_FORCE_EXTENDED_RESET and " \
+		"CONFIG_NOEXTENDED_RESET."
+#endif
 
 static int pedanticpci = 1;
 static int debug=0;
@@ -4445,7 +4451,8 @@ static void t4_tsi_unassign(struct t4 *wc, int tospan, int tochan)
 	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
-#ifdef CONFIG_EXTENDED_RESET
+
+#ifndef CONFIG_NOEXTENDED_RESET
 static void t4_extended_reset(struct t4 *wc)
 {
 	unsigned int oldreg = t4_pci_in(wc, 0x4);
@@ -4486,8 +4493,11 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 	dev_info(&wc->dev->dev, "Work Queues: Enabled\n");
 #endif
 
-#ifdef CONFIG_EXTENDED_RESET
+#if defined(CONFIG_FORCE_EXTENDED_RESET)
 	t4_extended_reset(wc);
+#elif !defined(CONFIG_NOEXTENDED_RESET)
+	if (wc->flags & FLAG_EXPRESS)
+		t4_extended_reset(wc);
 #endif
 
 	/* Make sure DMA engine is not running and interrupts are acknowledged */
