@@ -201,45 +201,6 @@ static struct core_timer {
 #endif /* CONFIG_DAHDI_CORE_TIMER */
 
 
-
-/* There are three sets of conference sum accumulators. One for the current
-sample chunk (conf_sums), one for the next sample chunk (conf_sums_next), and
-one for the previous sample chunk (conf_sums_prev). The following routine
-(rotate_sums) "rotates" the pointers to these accululator arrays as part
-of the events of sample chink processing as follows:
-
-The following sequence is designed to be looked at from the reference point
-of the receive routine of the master span.
-
-1. All (real span) receive chunks are processed (with putbuf). The last one
-to be processed is the master span. The data received is loaded into the
-accumulators for the next chunk (conf_sums_next), to be in alignment with
-current data after rotate_sums() is called (which immediately follows).
-Keep in mind that putbuf is *also* a transmit routine for the pseudo parts
-of channels that are in the REALANDPSEUDO conference mode. These channels
-are processed from data in the current sample chunk (conf_sums), being
-that this is a "transmit" function (for the pseudo part).
-
-2. rotate_sums() is called.
-
-3. All pseudo channel receive chunks are processed. This data is loaded into
-the current sample chunk accumulators (conf_sums).
-
-4. All conference links are processed (being that all receive data for this
-chunk has already been processed by now).
-
-5. All pseudo channel transmit chunks are processed. This data is loaded from
-the current sample chunk accumulators (conf_sums).
-
-6. All (real span) transmit chunks are processed (with getbuf).  This data is
-loaded from the current sample chunk accumulators (conf_sums). Keep in mind
-that getbuf is *also* a receive routine for the pseudo part of channels that
-are in the REALANDPSEUDO conference mode. These samples are loaded into
-the next sample chunk accumulators (conf_sums_next) to be processed as part
-of the next sample chunk's data (next time around the world).
-
-*/
-
 enum dahdi_digit_mode {
 	DIGIT_MODE_DTMF,
 	DIGIT_MODE_MFR1,
@@ -8847,6 +8808,43 @@ static inline void dahdi_sync_tick(struct dahdi_span *const s)
 #define dahdi_sync_tick(x) do { ; } while (0)
 #endif
 
+/**
+ * process_masterspan - Handle conferencing and timers.
+ *
+ * There are three sets of conference sum accumulators. One for the current
+ * sample chunk (conf_sums), one for the next sample chunk (conf_sums_next), and
+ * one for the previous sample chunk (conf_sums_prev). The following routine
+ * (rotate_sums) "rotates" the pointers to these accululator arrays as part
+ * of the events of sample chink processing as follows:
+ *
+ * 1. All (real span) receive chunks are processed (with putbuf). The last one
+ * to be processed is the master span. The data received is loaded into the
+ * accumulators for the next chunk (conf_sums_next), to be in alignment with
+ * current data after rotate_sums() is called (which immediately follows).
+ * Keep in mind that putbuf is *also* a transmit routine for the pseudo parts
+ * of channels that are in the REALANDPSEUDO conference mode. These channels
+ * are processed from data in the current sample chunk (conf_sums), being
+ * that this is a "transmit" function (for the pseudo part).
+ *
+ * 2. rotate_sums() is called.
+ *
+ * 3. All pseudo channel receive chunks are processed. This data is loaded into
+ * the current sample chunk accumulators (conf_sums).
+ *
+ * 4. All conference links are processed (being that all receive data for this
+ * chunk has already been processed by now).
+ *
+ * 5. All pseudo channel transmit chunks are processed. This data is loaded from
+ * the current sample chunk accumulators (conf_sums).
+ *
+ * 6. All (real span) transmit chunks are processed (with getbuf).  This data is
+ * loaded from the current sample chunk accumulators (conf_sums). Keep in mind
+ * that getbuf is *also* a receive routine for the pseudo part of channels that
+ * are in the REALANDPSEUDO conference mode. These samples are loaded into
+ * the next sample chunk accumulators (conf_sums_next) to be processed as part
+ * of the next sample chunk's data (next time around the world).
+ *
+ */
 static void process_masterspan(void)
 {
 	unsigned long flags;
