@@ -1444,6 +1444,8 @@ static void close_channel(struct dahdi_chan *chan)
 	oldconf = chan->confna;
 	  /* initialize conference variables */
 	chan->_confn = 0;
+	chan->confna = 0;
+	chan->confmode = 0;
 	if ((chan->sig & __DAHDI_SIG_DACS) != __DAHDI_SIG_DACS)
 		chan->dacs_chan = NULL;
 
@@ -2084,7 +2086,8 @@ static unsigned long _chan_cleanup(struct dahdi_chan *pos, unsigned long data)
 
 	if (((pos->confna == chan->channo) &&
 	    is_monitor_mode(pos->confmode)) ||
-	    (pos->dacs_chan == chan)) {
+	    (pos->dacs_chan == chan) ||
+	    (pos->conf_chan == chan)) {
 		/* Take them out of conference with us */
 		/* release conference resource if any */
 		if (pos->confna)
@@ -6974,6 +6977,30 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				txb[x] = DAHDI_LIN2X(getlin[x], ms);
 			break;
+		case DAHDI_CONF_DIGITALMON:
+			/* Real digital monitoring, but still echo cancel if
+			 * desired */
+			if (!conf_chan)
+				break;
+			if (is_pseudo_chan(conf_chan)) {
+				if (ms->ec_state) {
+					for (x = 0; x < DAHDI_CHUNKSIZE; x++)
+						txb[x] = DAHDI_LIN2X(conf_chan->getlin[x], ms);
+				} else {
+					memcpy(txb, conf_chan->getraw, DAHDI_CHUNKSIZE);
+				}
+			} else {
+				if (ms->ec_state) {
+					for (x = 0; x < DAHDI_CHUNKSIZE; x++)
+						txb[x] = DAHDI_LIN2X(conf_chan->putlin[x], ms);
+				} else {
+					memcpy(txb, conf_chan->putraw,
+					       DAHDI_CHUNKSIZE);
+				}
+			}
+			for (x = 0; x < DAHDI_CHUNKSIZE; x++)
+				getlin[x] = DAHDI_XLAW(txb[x], ms);
+			break;
 		}
 	}
 	if (ms->confmute || (ms->ec_state && (ms->ec_state->status.mode) & __ECHO_MODE_MUTE)) {
@@ -8048,6 +8075,16 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 				memset(ms->conflast, 0, DAHDI_CHUNKSIZE * sizeof(short));
 			for (x=0;x<DAHDI_CHUNKSIZE;x++)
 				rxb[x] = DAHDI_LIN2X((int)conf_sums_prev[ms->_confn][x], ms);
+			break;
+		case DAHDI_CONF_DIGITALMON:
+			  /* if not a pseudo-channel, ignore */
+			if (!is_pseudo_chan(ms))
+				break;
+			/* Add monitored channel */
+			if (is_pseudo_chan(conf_chan))
+				memcpy(rxb, conf_chan->getraw, DAHDI_CHUNKSIZE);
+			else
+				memcpy(rxb, conf_chan->putraw, DAHDI_CHUNKSIZE);
 			break;
 		}
 	}
