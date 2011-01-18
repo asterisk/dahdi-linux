@@ -1228,7 +1228,7 @@ static u_char *__buf_peek(struct confq *q)
 
 /* Push something onto the queue, or assume what
    is there is valid if data is NULL */
-static int __buf_push(struct confq *q, u_char *data)
+static int __buf_push(struct confq *q, const u_char *data)
 {
 	int oldinbuf = q->inbuf;
 	if (q->inbuf < 0) {
