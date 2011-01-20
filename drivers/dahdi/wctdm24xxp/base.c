@@ -982,82 +982,95 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechun
 	}
 }
 
-static inline int wctdm_setreg_full(struct wctdm *wc, int card, int addr, int val, int inisr)
+static bool
+stuff_command(struct wctdm *wc, int card, unsigned int cmd, int *hit)
 {
 	unsigned long flags;
-	int hit=0;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	*hit = empty_slot(wc, card);
+	if (*hit > -1)
+		wc->cmdq[card].cmds[*hit] = cmd;
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	return (*hit > -1);
+}
+
+static int
+wctdm_setreg_full(struct wctdm *wc, int card, int addr, int val, int inisr)
+{
+	int ret;
+	int hit;
+	const unsigned int cmd = CMD_WR(addr, val);
 
 	/* QRV and BRI cards are only addressed at their first "port" */
 	if ((card & 0x03) && ((wc->modtype[card] ==  MOD_TYPE_QRV) ||
 	    (wc->modtype[card] ==  MOD_TYPE_BRI)))
 		return 0;
 
-	do {
-		spin_lock_irqsave(&wc->reglock, flags);
-		hit = empty_slot(wc, card);
-		if (hit > -1) {
-			wc->cmdq[card].cmds[hit] = CMD_WR(addr, val);
-		}
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		if (inisr)
-			break;
-		if (hit < 0) {
-			interruptible_sleep_on(&wc->regq);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
-		}
-	} while (hit < 0);
-	return (hit > -1) ? 0 : -1;
+	if (inisr) {
+		stuff_command(wc, card, cmd, &hit);
+		return 0;
+	}
+
+	ret = wait_event_interruptible(wc->regq,
+			stuff_command(wc, card, cmd, &hit));
+	return ret;
 }
 
-static inline int wctdm_setreg_intr(struct wctdm *wc, int card, int addr, int val)
+static inline void
+wctdm_setreg_intr(struct wctdm *wc, int card, int addr, int val)
 {
-	return wctdm_setreg_full(wc, card, addr, val, 1);
+	wctdm_setreg_full(wc, card, addr, val, 1);
 }
-inline int wctdm_setreg(struct wctdm *wc, int card, int addr, int val)
+
+int wctdm_setreg(struct wctdm *wc, int card, int addr, int val)
 {
 	return wctdm_setreg_full(wc, card, addr, val, 0);
 }
 
-inline int wctdm_getreg(struct wctdm *wc, int card, int addr)
+static bool cmd_finished(struct wctdm *wc, int card, int hit, u8 *val)
 {
+	bool ret;
 	unsigned long flags;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	if (wc->cmdq[card].cmds[hit] & __CMD_FIN) {
+		*val = wc->cmdq[card].cmds[hit] & 0xff;
+		wc->cmdq[card].cmds[hit] = 0x00000000;
+		ret = true;
+	} else {
+		ret = false;
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	return ret;
+}
+
+int wctdm_getreg(struct wctdm *wc, int card, int addr)
+{
+	const unsigned int cmd = CMD_RD(addr);
+	u8 val = 0;
 	int hit;
-	int ret=0;
+	int ret;
 
 	/* if a QRV card, use only its first channel */  
-	if (wc->modtype[card] ==  MOD_TYPE_QRV)
-	{
-		if (card & 3) return(0);
+	if (wc->modtype[card] ==  MOD_TYPE_QRV) {
+		if (card & 3)
+			return 0;
 	}
-	do {
-		spin_lock_irqsave(&wc->reglock, flags);
-		hit = empty_slot(wc, card);
-		if (hit > -1) {
-			wc->cmdq[card].cmds[hit] = CMD_RD(addr);
-		}
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		if (hit < 0) {
-			interruptible_sleep_on(&wc->regq);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
-		}
-	} while (hit < 0);
-	do {
-		spin_lock_irqsave(&wc->reglock, flags);
-		if (wc->cmdq[card].cmds[hit] & __CMD_FIN) {
-			ret = wc->cmdq[card].cmds[hit] & 0xff;
-			wc->cmdq[card].cmds[hit] = 0x00000000;
-			hit = -1;
-		}
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		if (hit > -1) {
-			interruptible_sleep_on(&wc->regq);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
-		}
-	} while (hit > -1);
-	return ret;
+
+	ret = wait_event_interruptible(wc->regq,
+			stuff_command(wc, card, cmd, &hit));
+	if (ret)
+		return ret;
+
+	ret = wait_event_interruptible(wc->regq,
+			cmd_finished(wc, card, hit, &val));
+	if (ret)
+		return ret;
+
+	return val;
 }
 
 
