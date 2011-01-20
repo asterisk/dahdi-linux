@@ -4882,7 +4882,7 @@ static int t4_hardware_stop(struct t4 *wc)
 	return 0;
 }
 
-static void __devexit _t4_remove_one(struct t4 *wc)
+static void _t4_remove_one(struct t4 *wc)
 {
 	struct dahdi_span *span;
 	int basesize;
