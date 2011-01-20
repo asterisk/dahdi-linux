@@ -323,7 +323,7 @@ sub pri_set_fromconfig($$) {
 	}
 	push(@pri_specs , 'SPAN/* TE');		# Default
 	my @patlist = ( "SPAN/" . $span->num );
-	my $xpd = $span->{XPD};
+	my $xpd = Dahdi::Xpp::xpd_of_span($span);
 	if(defined $xpd) {
 		my $xbus = $xpd->xbus;
 		my $xbus_name = $xbus->name;
