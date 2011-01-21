@@ -629,19 +629,6 @@ vb_setsdi(struct voicebus *vb, int addr, u16 val)
 	spin_unlock_irqrestore(&vb->lock, flags);
 }
 
-static void
-vb_enable_io_access(struct voicebus *vb)
-{
-	u32 reg;
-	unsigned long flags;
-	BUG_ON(!vb->pdev);
-	spin_lock_irqsave(&vb->lock, flags);
-	pci_read_config_dword(vb->pdev, 0x0004, &reg);
-	reg |= 0x00000007;
-	pci_write_config_dword(vb->pdev, 0x0004, reg);
-	spin_unlock_irqrestore(&vb->lock, flags);
-}
-
 /*! \brief Resets the voicebus hardware interface. */
 static int
 vb_reset_interface(struct voicebus *vb)
@@ -1799,7 +1786,6 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 	}
 
 	pci_set_master(vb->pdev);
-	vb_enable_io_access(vb);
 
 	if (vb_reset_interface(vb)) {
 		retval = -EIO;
