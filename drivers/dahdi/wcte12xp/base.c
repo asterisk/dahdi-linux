@@ -580,7 +580,7 @@ static int t1_getreg(struct t1 *wc, int addr)
 	cmd->data = 0x00;
 	cmd->flags = __CMD_RD;
 	submit_cmd(wc, cmd);
-	ret = wait_for_completion_timeout(&cmd->complete, HZ*10);
+	ret = wait_for_completion_interruptible_timeout(&cmd->complete, HZ*10);
 	if (unlikely(!ret)) {
 		spin_lock_irqsave(&wc->cmd_list_lock, flags);
 		if (!list_empty(&cmd->node)) {
@@ -588,12 +588,15 @@ static int t1_getreg(struct t1 *wc, int addr)
 			 * can go ahead and free it right away. */
 			list_del_init(&cmd->node);
 			spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-			if (printk_ratelimit()) {
-				dev_warn(&wc->vb.pdev->dev,
-					 "Timeout in %s\n", __func__);
-			}
 			free_cmd(wc, cmd);
-			return -EIO;
+			if (-ERESTARTSYS != ret) {
+				if (printk_ratelimit()) {
+					dev_warn(&wc->vb.pdev->dev,
+						 "Timeout in %s\n", __func__);
+				}
+				ret = -EIO;
+			}
+			return ret;
 		} else {
 			/* Looks like this command was removed from the list by
 			 * someone else already. Let's wait for them to complete
@@ -638,17 +641,20 @@ static inline int t1_getpins(struct t1 *wc, int inisr)
 	cmd->data = 0x00;
 	cmd->flags = __CMD_PINS;
 	submit_cmd(wc, cmd);
-	ret = wait_for_completion_timeout(&cmd->complete, HZ*2);
+	ret = wait_for_completion_interruptible_timeout(&cmd->complete, HZ*2);
 	if (unlikely(!ret)) {
 		spin_lock_irqsave(&wc->cmd_list_lock, flags);
 		list_del_init(&cmd->node);
 		spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-		if (printk_ratelimit()) {
-			dev_warn(&wc->vb.pdev->dev,
-				 "Timeout in %s\n", __func__);
-		}
 		free_cmd(wc, cmd);
-		return -EIO;
+		if (-ERESTARTSYS != ret) {
+			if (printk_ratelimit()) {
+				dev_warn(&wc->vb.pdev->dev,
+					 "Timeout in %s\n", __func__);
+			}
+			ret = -EIO;
+		}
+		return ret;
 	}
 	ret = cmd->data;
 	free_cmd(wc, cmd);
