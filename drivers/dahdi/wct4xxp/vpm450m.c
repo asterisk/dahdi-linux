@@ -511,6 +511,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 #ifdef CONFIG_4KSTACKS
 		local_irq_restore(flags);
 #endif
+		vfree(vpm450m->pApiInstance);
 		kfree(vpm450m);
 		kfree(ChipOpen);
 		kfree(ChannelOpen);
