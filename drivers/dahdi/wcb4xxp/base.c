@@ -1831,8 +1831,10 @@ static int hdlc_tx_frame(struct b4xxp_span *bspan)
 		for (i=0; i < size; i++)
 			printk("%02x%c", buf[i], (i < (size - 1)) ? ' ' : '\n');
 
-		if (size && res != 0)
-			pr_info("Transmitted frame %d on span %d\n", bspan->frames_out - 1, bspan->port);
+		if (size && res != 0) {
+			pr_info("Transmitted frame %d on span %d\n",
+				bspan->frames_out - 1, bspan->port + 1);
+		}
 	}
 
 	return(res == 0);
@@ -2321,7 +2323,7 @@ static int b4xxp_open(struct dahdi_chan *chan)
 	if (DBG_FOPS && DBG_SPANFILTER)
 		dev_info(b4->dev, "open() on chan %s (%i/%i)\n", chan->name, chan->channo, chan->chanpos);
 
-	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos], 0, 0);
+	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos - 1], 0, 0);
 	return 0;
 }
 
@@ -2334,7 +2336,7 @@ static int b4xxp_close(struct dahdi_chan *chan)
 	if (DBG_FOPS && DBG_SPANFILTER)
 		dev_info(b4->dev, "close() on chan %s (%i/%i)\n", chan->name, chan->channo, chan->chanpos);
 
-	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos], 1, 1);
+	hfc_reset_fifo_pair(b4, bspan->fifos[chan->chanpos - 1], 1, 1);
 	return 0;
 }
 
