@@ -80,7 +80,7 @@ dahdi-fw-%.tar.gz:
 		echo "Attempting to download $@"; \
 		if test ! -f $@; then $(DOWNLOAD) $(WGET_ARGS) $(FIRMWARE_URL)/$@; fi; \
 		if test ! -f $@; then exit 1; fi; \
-		(cat $@ | gzip -d | tar -xof -) \
+		(cat $@ | gzip -d | tar --no-same-owner -xf -) \
 	fi
 
 firmware-loaders: $(FWLOADERS)
@@ -89,7 +89,7 @@ firmware-loaders: $(FWLOADERS)
 dahdi-fwload-vpmadt032-$(VPMADT032_VERSION).tar.gz:
 	@if test ! -f $@; then echo "Attempting to download $@"; $(DOWNLOAD) $(WGET_ARGS) $(FIRMWARE_URL)/$@; fi; \
 	if test ! -f $@; then exit 1; fi; \
-	(cd ../../..; cat drivers/dahdi/firmware/$@ | gzip -d | tar -xof -) 
+	(cd ../../..; cat drivers/dahdi/firmware/$@ | gzip -d | tar --no-same-owner -xf -)
 
 # Create object files suitable for linking against
 object-build: $(FIRMWARE) $(OBJECT_FILES)
