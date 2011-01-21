@@ -2789,6 +2789,7 @@ static int dahdi_specchan_open(struct file *file, int unit)
 			res = -EBUSY;
 		else if (!test_and_set_bit(DAHDI_FLAGBIT_OPEN, &chan->flags)) {
 			unsigned long flags;
+			const struct dahdi_span_ops *ops;
 			res = initialize_channel(chan);
 			if (res) {
 				/* Reallocbufs must have failed */
@@ -2799,10 +2800,14 @@ static int dahdi_specchan_open(struct file *file, int unit)
 			if (chan->flags & DAHDI_FLAG_PSEUDO)
 				chan->flags |= DAHDI_FLAG_AUDIO;
 			if (chan->span) {
-				if (!try_module_get(chan->span->ops->owner))
+				ops = chan->span->ops;
+				if (!try_module_get(ops->owner)) {
 					res = -ENXIO;
-				else if (chan->span->ops->open)
-					res = chan->span->ops->open(chan);
+				} else if (ops->open) {
+					res = ops->open(chan);
+					if (res)
+						module_put(ops->owner);
+				}
 			}
 			if (!res) {
 				chan->file = file;
