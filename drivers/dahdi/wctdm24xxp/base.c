@@ -2653,16 +2653,6 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	reg16 |= (fxo_modes[_opermode].rt);
 	wctdm_setreg(wc, card, 16, reg16);
 
-	if (fwringdetect || neonmwi_monitor) {
-		/* Enable ring detector full-wave rectifier mode */
-		wctdm_setreg(wc, card, 18, 2);
-		wctdm_setreg(wc, card, 24, 0);
-	} else { 
-		/* Set to the device defaults */
-		wctdm_setreg(wc, card, 18, 0);
-		wctdm_setreg(wc, card, 24, 0x19);
-	}
-	
 	/* Enable ring detector full-wave rectifier mode */
 	wctdm_setreg(wc, card, 18, 2);
 	wctdm_setreg(wc, card, 24, 0);
