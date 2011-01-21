@@ -1115,7 +1115,7 @@ static void vb_stop_txrx_processors(struct voicebus *vb)
  */
 void voicebus_stop(struct voicebus *vb)
 {
-	static DECLARE_MUTEX(stop);
+	static DEFINE_SEMAPHORE(stop);
 
 	down(&stop);
 

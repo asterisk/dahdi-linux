@@ -115,7 +115,7 @@ static void echo_can_process(struct dahdi_echocan_state *ec, short *isig, const 
 	hpec_channel_update(pvt->hpec, isig, iref);
 }
 
-DECLARE_MUTEX(license_lock);
+DEFINE_SEMAPHORE(license_lock);
 
 static int echo_can_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 			   struct dahdi_echocanparam *p, struct dahdi_echocan_state **ec)

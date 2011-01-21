@@ -248,7 +248,7 @@ static unsigned bus_count = 0;
 
 
 /* prevent races between open() and disconnect() */
-static DECLARE_MUTEX (disconnect_sem);
+static DEFINE_SEMAPHORE(disconnect_sem);
 
 /*
  * AsteriskNow kernel has backported the "lean" callback from 2.6.20
@@ -690,7 +690,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 		retval = -ENOMEM;
 		goto probe_failed;
 	}
-	init_MUTEX (&xusb->sem);
+	sema_init(&xusb->sem, 1);
 	atomic_set(&xusb->pending_writes, 0);
 	atomic_set(&xusb->pending_reads, 0);
 	atomic_set(&xusb->pcm_tx_drops, 0);

@@ -207,7 +207,7 @@ static inline bool is_hx8(const struct wctdm *wc)
 }
 
 struct wctdm *ifaces[WC_MAX_IFACES];
-DECLARE_MUTEX(ifacelock);
+DEFINE_SEMAPHORE(ifacelock);
 
 static void wctdm_release(struct wctdm *wc);
 
@@ -4921,7 +4921,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	/* This is to insure that the analog span is given lowest priority */
 	wc->oldsync = -1;
-	init_MUTEX(&wc->syncsem);
+	sema_init(&wc->syncsem, 1);
 	INIT_LIST_HEAD(&wc->frame_list);
 	spin_lock_init(&wc->frame_list_lock);
 
