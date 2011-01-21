@@ -218,6 +218,7 @@ static unsigned int battthresh;
 static int debug = 0;
 #ifdef DEBUG
 static int robust = 0;
+static int digitalloopback;
 #endif
 static int lowpower = 0;
 static int boostringer = 0;
@@ -2708,6 +2709,15 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	wctdm_set_hwgain(wc, card, fxotxgain, 1);
 	wctdm_set_hwgain(wc, card, fxorxgain, 0);
 
+#ifdef DEBUG
+	if (digitalloopback) {
+		dev_info(&wc->vb.pdev->dev,
+			 "Turning on digital loopback for port %d.\n",
+			 card + 1);
+		wctdm_setreg(wc, card, 10, 0x01);
+	}
+#endif
+
 	if (debug)
 		dev_info(&wc->vb.pdev->dev, "DEBUG fxotxgain:%i.%i fxorxgain:%i.%i\n", (wctdm_getreg(wc, card, 38)/16) ? -(wctdm_getreg(wc, card, 38) - 16) : wctdm_getreg(wc, card, 38), (wctdm_getreg(wc, card, 40)/16) ? -(wctdm_getreg(wc, card, 40) - 16) : wctdm_getreg(wc, card, 40), (wctdm_getreg(wc, card, 39)/16) ? -(wctdm_getreg(wc, card, 39) - 16): wctdm_getreg(wc, card, 39), (wctdm_getreg(wc, card, 41)/16)?-(wctdm_getreg(wc, card, 41) - 16) : wctdm_getreg(wc, card, 41));
 	
@@ -3890,9 +3900,13 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 				 y, s->chans[y]);
 		}
 		if (wc->modtype[x] == MOD_TYPE_FXO) {
+			int val;
 			s->chans[y++]->sigcap = DAHDI_SIG_FXSKS | DAHDI_SIG_FXSLS | DAHDI_SIG_SF | DAHDI_SIG_CLEAR;
-			wctdm_setreg(wc, x, 33,
-				     (should_set_alaw(wc) ? 0x20 : 0x28));
+			val = should_set_alaw(wc) ? 0x20 : 0x28;
+#ifdef DEBUG
+			val = (digitalloopback) ? 0x30 : val;
+#endif
+			wctdm_setreg(wc, x, 33, val);
 		} else if (wc->modtype[x] == MOD_TYPE_FXS) {
 			s->chans[y++]->sigcap = DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS | DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
 			wctdm_setreg(wc, x, 1,
@@ -5316,6 +5330,9 @@ module_param(loopcurrent, int, 0600);
 module_param(reversepolarity, int, 0600);
 #ifdef DEBUG
 module_param(robust, int, 0600);
+module_param(digitalloopback, int, 0400);
+MODULE_PARM_DESC(digitalloopback, "Set to 1 to place FXO modules into " \
+		 "loopback mode for troubleshooting.");
 #endif
 module_param(opermode, charp, 0600);
 module_param(lowpower, int, 0600);
