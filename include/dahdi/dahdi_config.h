@@ -75,7 +75,7 @@
 #endif
 #endif
 
-#ifdef CONFIG_PPP
+#if defined(CONFIG_PPP) || defined(CONFIG_PPP_MODULE)
 #define CONFIG_DAHDI_PPP
 #endif
 
