@@ -1507,6 +1507,12 @@ static int PRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 		case DAHDI_ONHOOKTRANSFER:
 			LINE_DBG(SIGNAL, xpd, pos, "PRI: ONHOOKTRANSFER\n");
 			return -ENOTTY;
+		case DAHDI_VMWI:
+			LINE_DBG(SIGNAL, xpd, pos, "PRI: VMWI\n");
+			return -ENOTTY;
+		case DAHDI_VMWI_CONFIG:
+			LINE_DBG(SIGNAL, xpd, pos, "PRI: VMWI_CONFIG\n");
+			return -ENOTTY;
 		default:
 			report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
 			return -ENOTTY;
