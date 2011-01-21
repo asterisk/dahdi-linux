@@ -564,27 +564,45 @@ int vpmadt032_reset(struct vpmadt032 *vpm)
 	int res;
 	gpakPingDspStat_t pingstatus;
 	u16 version;
+	unsigned long stoptime;
+	struct device *const dev = &vpm->vb->pdev->dev;
 
 	might_sleep();
 
 	set_bit(VPM150M_HPIRESET, &vpm->control);
 	msleep(2000);
-	while (test_bit(VPM150M_HPIRESET, &vpm->control))
+	/* It should never take longer than 5 seconds. */
+	stoptime = jiffies + 3*HZ;
+	while (test_bit(VPM150M_HPIRESET, &vpm->control) &&
+	       time_before(jiffies, stoptime))
 		msleep(1);
+
+	if (time_after(jiffies, stoptime)) {
+		dev_dbg(dev, "Detected failure to clear HPIRESET.\n");
+		return -EIO;
+	}
 
 	/* Set us up to page 0 */
 	vpmadt032_setpage(vpm, 0);
 
 	res = vpmadtreg_loadfirmware(vpm->vb);
 	if (res) {
-		dev_info(&vpm->vb->pdev->dev, "Failed to load the firmware.\n");
+		dev_err(dev, "Failed to load VPMADT032 firmware.\n");
 		return res;
 	}
 	vpm->curpage = -1;
 
+	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_SWRESET, &vpm->control);
-	while (test_bit(VPM150M_SWRESET, &vpm->control))
+	while (test_bit(VPM150M_SWRESET, &vpm->control) &&
+	       time_before(jiffies, stoptime))
 		msleep(1);
+
+	if (time_after(jiffies, stoptime)) {
+		dev_dbg(dev, "Detected failure to clear SWRESET.\n");
+		return -EIO;
+	}
+
 
 	/* Set us up to page 0 */
 	pingstatus = gpakPingDsp(vpm->dspid, &version);
@@ -606,6 +624,8 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 	int i;
 	u16 reg;
 	int res = -EFAULT;
+	unsigned long stoptime;
+	struct device *dev;
 	gpakPingDspStat_t pingstatus;
 
 	BUG_ON(!vpm->setchanconfig_from_state);
@@ -616,13 +636,15 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 
 	might_sleep();
 
+	dev = &vpm->vb->pdev->dev;
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&vpm->work, vpmadt032_bh, vpm);
 #else
 	INIT_WORK(&vpm->work, vpmadt032_bh);
 #endif
 	if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
-		dev_info(&vpm->vb->pdev->dev, "VPMADT032 Testing page access: ");
+		dev_info(dev, "VPMADT032 Testing page access: ");
 
 	for (i = 0; i < 0xf; i++) {
 		int x;
@@ -630,8 +652,12 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 			vpmadt032_setpage(vpm, i);
 			reg = vpmadt032_getpage(vpm);
 			if (reg != i) {
-				if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
-					dev_info(&vpm->vb->pdev->dev, "Failed: Sent %x != %x VPMADT032 Failed HI page test\n", i, reg);
+				if (vpm->options.debug &
+				    DEBUG_VPMADT032_ECHOCAN) {
+					dev_err(dev, "Failed: Sent %x != %x " \
+						"VPMADT032 Failed HI page " \
+						"test\n", i, reg);
+				}
 				res = -ENODEV;
 				goto failed_exit;
 			}
@@ -641,9 +667,17 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 	if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
 		dev_info(&vpm->vb->pdev->dev, "Passed\n");
 
+	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_HPIRESET, &vpm->control);
-	while (test_bit(VPM150M_HPIRESET, &vpm->control))
+	while (test_bit(VPM150M_HPIRESET, &vpm->control) &&
+	       time_before(jiffies, stoptime))
 		msleep(1);
+
+	if (time_after(jiffies, stoptime)) {
+		dev_dbg(dev, "Detected failure to clear HPIRESET.\n");
+		res = -EIO;
+		goto failed_exit;
+	}
 	msleep(250);
 
 	/* Set us up to page 0 */
@@ -666,9 +700,17 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 	if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
 		printk(KERN_CONT "Passed\n");
 
+	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_HPIRESET, &vpm->control);
-	while (test_bit(VPM150M_HPIRESET, &vpm->control))
+	while (test_bit(VPM150M_HPIRESET, &vpm->control) &&
+	       time_before(jiffies, stoptime))
 		msleep(1);
+
+	if (time_after(jiffies, stoptime)) {
+		dev_dbg(dev, "Detected failure to clear SWRESET.\n");
+		res = -EIO;
+		goto failed_exit;
+	}
 
 	res = vpmadtreg_loadfirmware(vb);
 	if (res) {
@@ -678,9 +720,18 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 	vpm->curpage = -1;
 
 	dev_info(&vb->pdev->dev, "Booting VPMADT032\n");
+
+	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_SWRESET, &vpm->control);
-	while (test_bit(VPM150M_SWRESET, &vpm->control))
+	while (test_bit(VPM150M_SWRESET, &vpm->control) &&
+	       time_before(jiffies, stoptime))
 		msleep(1);
+
+	if (time_after(jiffies, stoptime)) {
+		dev_dbg(dev, "Detected failure to clear SWRESET.\n");
+		res = -EIO;
+		goto failed_exit;
+	}
 
 	pingstatus = gpakPingDsp(vpm->dspid, &vpm->version);
 
