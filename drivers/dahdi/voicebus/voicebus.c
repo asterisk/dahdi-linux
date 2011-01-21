@@ -636,7 +636,7 @@ vb_reset_interface(struct voicebus *vb)
 	unsigned long timeout;
 	u32 reg;
 	u32 pci_access;
-	const u32 DEFAULT_PCI_ACCESS = 0xfffc0002;
+	const u32 DEFAULT_PCI_ACCESS = 0xffdc0002;
 	u8 cache_line_size;
 	BUG_ON(in_interrupt());
 
