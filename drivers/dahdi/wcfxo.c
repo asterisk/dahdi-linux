@@ -1031,7 +1031,7 @@ static void __devexit wcfxo_remove_one(struct pci_dev *pdev)
 	}
 }
 
-static struct pci_device_id wcfxo_pci_tbl[] = {
+static DEFINE_PCI_DEVICE_TABLE(wcfxo_pci_tbl) = {
 	{ 0xe159, 0x0001, 0x8084, PCI_ANY_ID, 0, 0, (unsigned long) &generic },
 	{ 0xe159, 0x0001, 0x8085, PCI_ANY_ID, 0, 0, (unsigned long) &wcx101p },
 	{ 0xe159, 0x0001, 0x8086, PCI_ANY_ID, 0, 0, (unsigned long) &generic },

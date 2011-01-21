@@ -108,7 +108,7 @@
 #define PCI_VENDOR_ID_PLX	0x10b5
 
 #ifdef __KERNEL__
-static struct pci_device_id tor2_pci_ids[] =
+static DEFINE_PCI_DEVICE_TABLE(tor2_pci_ids) =
 #else
 #define PCI_ANY_ID -1
 static struct tor2_pci_id {

@@ -2406,7 +2406,7 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	t1_release(wc);
 }
 
-static struct pci_device_id te12xp_pci_tbl[] = {
+static DEFINE_PCI_DEVICE_TABLE(te12xp_pci_tbl) = {
 	{ 0xd161, 0x0120, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &te120p},
 	{ 0xd161, 0x8000, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &te121},
 	{ 0xd161, 0x8001, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &te122},
