@@ -348,7 +348,7 @@ sub port_setup($) {
 	} else {
 		my $file = sprintf "/sys/bus/xpds/devices/%02d:%1d:%1d/pri_protocol",
 				$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER}, $portno;
-		open(F, $file) || die "$0: Failed opening '$file'";
+		open(F, $file) || return;
 		$sysfs_pri_protocol = <F>;
 		close F;
 		chomp $sysfs_pri_protocol;
