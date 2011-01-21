@@ -1267,6 +1267,12 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 	struct semaphore name = __SEMAPHORE_INITIALIZER(name, 1)
 #endif
 
+#ifndef DEFINE_MUTEX
+#define DEFINE_MUTEX DEFINE_SEMAPHORE
+#define mutex_lock(_x) down(_x)
+#define mutex_unlock(_x) up(_x)
+#endif
+
 #ifndef DMA_BIT_MASK
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
