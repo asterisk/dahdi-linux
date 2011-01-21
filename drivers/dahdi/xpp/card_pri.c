@@ -1282,7 +1282,6 @@ static const struct dahdi_span_ops PRI_span_ops = {
 	.rbsbits = pri_rbsbits,
 	.open = xpp_open,
 	.close = xpp_close,
-	.hooksig = xpp_hooksig,	/* Only with RBS bits */
 	.ioctl = xpp_ioctl,
 	.maint = xpp_maint,
 #ifdef	DAHDI_SYNC_TICK
