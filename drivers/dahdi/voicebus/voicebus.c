@@ -1486,12 +1486,19 @@ static void vb_tasklet_normal(unsigned long data)
 
 	if (unlikely(softunderrun)) {
 		int i;
-		vb_increase_latency(vb, behind, &buffers);
+		unsigned long flags;
 
+		/* Disable interrupts on the local processor.  We don't want
+		 * the following process interrupted. We're 'racing' against
+		 * the hardware here.... */
+		local_irq_save(flags);
+		vb_increase_latency(vb, behind, &buffers);
 		d = vb_descriptor(dl, dl->head);
 		while (!OWNED(d)) {
-			if (d->buffer1 != vb->idle_vbb_dma_addr)
+			if (d->buffer1 != vb->idle_vbb_dma_addr) {
+				local_irq_restore(flags);
 				goto tx_error_exit;
+			}
 			SET_OWNED(d);
 			dl->head = (dl->head + 1) & DRING_MASK;
 			d = vb_descriptor(dl, dl->head);
@@ -1506,6 +1513,7 @@ static void vb_tasklet_normal(unsigned long data)
 			dl->head = (dl->head + 1) & DRING_MASK;
 		}
 		dl->tail = dl->head;
+		local_irq_restore(flags);
 	}
 
 	d = vb_descriptor(dl, dl->tail);
