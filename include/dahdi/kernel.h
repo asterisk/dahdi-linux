@@ -42,6 +42,7 @@
 #include <linux/config.h>
 #endif
 #include <linux/fs.h>
+#include <linux/kobject.h>
 #include <linux/ioctl.h>
 
 #ifdef CONFIG_DAHDI_NET	
