@@ -140,8 +140,9 @@ sub scan_devices_sysfs($) {
 
 		# Older kernels, e.g. 2.6.9, don't have the attribute
 		# busnum:
-		m|/(\d+)-[\d.]+$|;
-		my $busnum = $1 || next;
+		m|/((\d+)-[\d.]+)$|;
+		my $busnum = $2 || next;
+		my $dev_sys_name = $1;
 		my $vendor = _get_attr("$_/idVendor");
 		my $product = _get_attr("$_/idProduct");
 		my $model = $usb_ids{"$vendor:$product"};
@@ -149,6 +150,12 @@ sub scan_devices_sysfs($) {
 		my $devnum = _get_attr("$_/devnum");
 		my $serial = _get_attr_optional("$_/serial", '');
 		my $devname = sprintf("%03d/%03d", $busnum, $devnum);
+		# Get driver for first interface of the device:
+		my $iface = "$_/$dev_sys_name:1.0";
+		my $loaded = readlink("$iface/driver");
+		if (defined $loaded) {
+			$loaded =~ s|.*/||;
+		}
 		my $d = Dahdi::Hardware::USB->new(
 			IS_ASTRIBANK		=> ($model->{DRIVER} eq 'xpp_usb')?1:0,
 			PRIV_DEVICE_NAME	=> $devname,
@@ -157,6 +164,7 @@ sub scan_devices_sysfs($) {
 			SERIAL			=> $serial,
 			DESCRIPTION		=> $model->{DESCRIPTION},
 			DRIVER			=> $model->{DRIVER},
+			LOADED			=> $loaded,
 			);
 		push(@devices, $d);
 	}
