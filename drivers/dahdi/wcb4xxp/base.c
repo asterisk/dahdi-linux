@@ -1149,8 +1149,12 @@ static int b4xxp_find_sync(struct b4xxp *b4)
 	src = -1;		/* default to automatic */
 
 	for (i=0; i < b4->numspans; i++) {
+		if (DBG)
+			dev_info(b4->dev, "Checking sync pos %d, have span %d\n", i, b4->spans[i].sync);
 		psrc = b4->spans[i].sync;
 		if (psrc > 0 && !b4->spans[psrc - 1].span.alarms) {
+			if (DBG)
+				dev_info(b4->dev, "chosen\n");
 			src = psrc;
 			break;
 		}
@@ -1322,12 +1326,16 @@ static void hfc_update_st_timers(struct b4xxp *b4)
 		}
 
 		if (s->newalarm != s->span.alarms && time_after_eq(b4->ticks, s->alarmtimer)) {
-			if (!s->te_mode || !teignorered) {
-				s->span.alarms = s->newalarm;
+			s->span.alarms = s->newalarm;
+			if ((!s->newalarm && teignorered) || (!teignorered)) {
 				dahdi_alarm_notify(&s->span);
-				if (DBG_ALARM)
-					dev_info(b4->dev, "span %d: alarm %d debounced\n", i + 1, s->newalarm);
-				b4xxp_set_sync_src(b4, b4xxp_find_sync(b4));
+			}
+			b4xxp_set_sync_src(b4, b4xxp_find_sync(b4));
+			if (DBG_ALARM) {
+				dev_info(b4->dev,
+					 "span %d: alarm %d "
+					 "debounced\n",
+					 i + 1, s->newalarm);
 			}
 		}
 	}
@@ -1422,7 +1430,7 @@ static void hfc_handle_state(struct b4xxp_span *s)
 /* read in R_BERT_STA to determine where our current sync source is */
 	newsync = b4xxp_getreg8(b4, R_BERT_STA) & 0x07;
 	if (newsync != b4->syncspan) {
-		if (printk_ratelimit())
+		if (printk_ratelimit() || DBG)
 			dev_info(b4->dev, "new card sync source: port %d\n", newsync + 1);
 		b4->syncspan = newsync;
 	}
@@ -2235,7 +2243,7 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 	struct b4xxp *b4 = bspan->parent;
 
 	if (DBG)
-		dev_info(b4->dev, "Configuring span %d\n", span->spanno);
+		dev_info(b4->dev, "Configuring span %d offset %d to be sync %d\n", span->spanno, span->offset, lc->sync);
 
 #if 0
 	if (lc->sync > 0 && !bspan->te_mode) {
@@ -2251,7 +2259,7 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 
 	/* remove this span number from the current sync sources, if there */
 	for (i = 0; i < b4->numspans; i++) {
-		if (b4->spans[i].sync == span->spanno) {
+		if (b4->spans[i].sync == (span->offset + 1)) {
 			b4->spans[i].sync = 0;
 		}
 	}
@@ -2259,7 +2267,7 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 	/* if a sync src, put it in proper place */
 	b4->spans[span->offset].syncpos = lc->sync;
 	if (lc->sync) {
-		b4->spans[lc->sync - 1].sync = span->spanno;
+		b4->spans[lc->sync - 1].sync = (span->offset + 1);
 	}
 
 	b4xxp_reset_span(bspan);
