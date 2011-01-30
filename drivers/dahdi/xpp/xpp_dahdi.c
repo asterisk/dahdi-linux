@@ -67,6 +67,8 @@ static DEF_PARM_BOOL(prefmaster, 0, 0644, "Do we want to be dahdi preferred sync
 
 #include "dahdi_debug.h"
 
+static void phonedev_cleanup(xpd_t *xpd);
+
 #ifdef	DEBUG_SYNC_PARPORT
 /*
  * Use parallel port to sample our PCM sync and diagnose quality and
@@ -238,7 +240,6 @@ err:
 void xpd_free(xpd_t *xpd)
 {
 	xbus_t		*xbus = NULL;
-	unsigned int	x;
 
 	if(!xpd)
 		return;
@@ -251,10 +252,7 @@ void xpd_free(xpd_t *xpd)
 	XPD_DBG(DEVICES, xpd, "\n");
 	xpd_proc_remove(xbus, xpd);
 	xbus_xpd_unbind(xbus, xpd);
-	for (x = 0; x < PHONEDEV(xpd).channels; x++) {
-		if (PHONEDEV(xpd).chans[x])
-			KZFREE(PHONEDEV(xpd).chans[x]);
-	}
+	phonedev_cleanup(xpd);
 	KZFREE(xpd);
 	DBG(DEVICES, "refcount_xbus=%d\n", refcount_xbus(xbus));
 	/*
