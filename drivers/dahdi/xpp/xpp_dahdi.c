@@ -510,7 +510,7 @@ static void phonedev_cleanup(xpd_t *xpd)
 
 	for (x = 0; x < phonedev->channels; x++) {
 		if (phonedev->chans[x]) {
-			kfree(phonedev->chans[x]);
+			KZFREE(phonedev->chans[x]);
 		}
 	}
 }
@@ -531,7 +531,7 @@ __must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_ta
 	atomic_set(&phonedev->dahdi_registered, 0);
 	atomic_set(&phonedev->open_counter, 0);
 	for (x = 0; x < phonedev->channels; x++) {
-		if (!(phonedev->chans[x] = kmalloc(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
+		if (!(phonedev->chans[x] = KZALLOC(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
 			ERR("%s: Unable to allocate channel %d\n", __FUNCTION__, x);
 			goto err;
 		}
