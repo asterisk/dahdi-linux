@@ -1319,6 +1319,7 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	PHONEDEV(xpd).span.spantype = pri_protocol_name(priv->pri_protocol);
 	PHONEDEV(xpd).span.linecompat = pri_linecompat(priv->pri_protocol);
 	PHONEDEV(xpd).span.deflaw = priv->deflaw;
+	PHONEDEV(xpd).span.alarms = DAHDI_ALARM_NONE;
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*cur_chan = XPD_CHAN(xpd, i);
 		bool		is_dchan = i == PRI_DCHAN_IDX(priv);
