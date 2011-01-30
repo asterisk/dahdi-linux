@@ -420,11 +420,18 @@ const char *xproto_name(xpd_type_t xpd_type)
 			return -EINVAL;	\
 		}
 
+#define	CHECK_PHONEOP(phoneops, f)	\
+		if(!(phoneops)->f) { \
+			ERR("%s: missing phone method %s [%s (%d)]\n", __FUNCTION__, #f, name, type);	\
+			return -EINVAL;	\
+		}
+
 int xproto_register(const xproto_table_t *proto_table)
 {
 	int			type;
 	const char		*name;
 	const struct xops	*xops;
+	const struct phoneops	*phoneops;
 	
 	BUG_ON(!proto_table);
 	type = proto_table->type;
@@ -441,17 +448,18 @@ int xproto_register(const xproto_table_t *proto_table)
 	CHECK_XOP(xops, card_init);
 	CHECK_XOP(xops, card_remove);
 	CHECK_XOP(xops, card_tick);
-#if 0
-	/* FIXME: check PHONE_METHOD() */
-	CHECK_XOP(card_pcm_recompute);
-	CHECK_XOP(card_pcm_fromspan);
-	CHECK_XOP(card_pcm_tospan);
-	CHECK_XOP(card_dahdi_preregistration);
-	CHECK_XOP(card_dahdi_postregistration);
-	// CHECK_XOP(card_ioctl);	// optional method -- call after testing
-	CHECK_XOP(card_register_reply);
-	CHECK_XOP(XPD_STATE);
-#endif
+	CHECK_XOP(xops, card_register_reply);
+
+	phoneops = proto_table->phoneops;
+	if (phoneops) {
+		CHECK_PHONEOP(phoneops, card_pcm_recompute);
+		CHECK_PHONEOP(phoneops, card_pcm_fromspan);
+		CHECK_PHONEOP(phoneops, card_pcm_tospan);
+		CHECK_PHONEOP(phoneops, card_dahdi_preregistration);
+		CHECK_PHONEOP(phoneops, card_dahdi_postregistration);
+		/* optional method -- call after testing: */
+		/*CHECK_PHONEOP(phoneops, card_ioctl);*/
+	}
 
 	xprotocol_tables[type] = proto_table;
 	return 0;
