@@ -1127,21 +1127,21 @@ int dahdi_register_xpd(xpd_t *xpd)
 		XPD_ERR(xpd, "Already registered\n");
 		return -EEXIST;
 	}
- 	cn = PHONEDEV(xpd).channels;
+	cn = PHONEDEV(xpd).channels;
 	XPD_DBG(DEVICES, xpd, "Initializing span: %d channels.\n", cn);
- 	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
+	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
 	for(i = 0; i < cn; i++) {
 		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
 	}
 
- 	span = &PHONEDEV(xpd).span;
+	span = &PHONEDEV(xpd).span;
 	snprintf(span->name, MAX_SPANNAME, "%s/%s", xbus->busname, xpd->xpdname);
 	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
 	span->channels = cn;
- 	span->chans = PHONEDEV(xpd).chans;
+	span->chans = PHONEDEV(xpd).chans;
 
 	span->flags = DAHDI_FLAG_RBS;
- 	if(PHONEDEV(xpd).phoneops->card_hooksig)
+	if(PHONEDEV(xpd).phoneops->card_hooksig)
 		span->ops = &xpp_rbs_span_ops;	/* Only with RBS bits */
 	else
 		span->ops = &xpp_span_ops;
