@@ -348,6 +348,11 @@ sub port_setup($) {
 	} else {
 		my $file = sprintf "/sys/bus/xpds/devices/%02d:%1d:%1d/pri_protocol",
 				$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER}, $portno;
+		# The 'open' will fail if the port does not exist.
+		# (or rather: the XPD for it does not exist). While
+		# we only read this file to get the default E1/T1 value,
+		# if it does not exist, it also implies the commands sent would
+		# get nowhere. So we might as well quit now.
 		open(F, $file) || return;
 		$sysfs_pri_protocol = <F>;
 		close F;
