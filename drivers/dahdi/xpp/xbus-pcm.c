@@ -630,7 +630,7 @@ void elect_syncer(const char *msg)
 
 				if(!xpd || !xpd->card_present || !IS_PHONEDEV(xpd))
 					continue;
-				prio = PHONE_METHOD(xpd, card_timing_priority)(xbus, xpd);
+				prio = CALL_PHONE_METHOD(card_timing_priority, xpd);
 				if (prio < 0) {
 					DBG(SYNC, "%s/%s: skip sync\n",
 						xbus->busname, xpd->xpdname);
@@ -679,7 +679,7 @@ void update_wanted_pcm_mask(xpd_t *xpd, xpp_line_t new_mask, uint new_pcm_len)
  * channels which should be *added* to the automatic calculation.
  * Normally, this argument is 0.
  */
-void generic_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd, xpp_line_t pcm_mask)
+void generic_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask)
 {
 	int		i;
 	int		line_count = 0;
@@ -854,14 +854,13 @@ dropit:
  * Generic implementations of card_pcmfromspan()/card_pcmtospan()
  * For FXS/FXO
  */
-void generic_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
 	byte		*pcm;
 	unsigned long	flags;
 	xpp_line_t	wanted_lines;
 	int		i;
 
-	BUG_ON(!xbus);
 	BUG_ON(!xpd);
 	BUG_ON(!pack);
 	wanted_lines = PHONEDEV(xpd).wanted_pcm_mask;
@@ -890,7 +889,7 @@ void generic_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
 
-void generic_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
 	byte		*pcm;
 	xpp_line_t	pcm_mask;
@@ -993,7 +992,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		if(SPAN_REGISTERED(xpd)) {
 			XBUS_COUNTER(xbus, RX_PACK_PCM)++;
-			PHONE_METHOD(xpd, card_pcm_tospan)(xbus, xpd, pack);
+			CALL_PHONE_METHOD(card_pcm_tospan, xpd, pack);
 		}
 	} while(p < xframe_end);
 	ret = 0;	/* all good */
@@ -1003,7 +1002,7 @@ out:
 	return ret;
 }
 
-int generic_timing_priority(xbus_t *xbus, xpd_t *xpd)
+int generic_timing_priority(xpd_t *xpd)
 {
 	return PHONEDEV(xpd).timing_priority;
 }
@@ -1080,7 +1079,7 @@ static void xbus_tick(xbus_t *xbus)
 					XPACKET_ADDR_SYNC(pack) = 1;
 					sent_sync_bit = 1;
 				}
-				PHONE_METHOD(xpd, card_pcm_fromspan)(xbus, xpd, pack);
+				CALL_PHONE_METHOD(card_pcm_fromspan, xpd, pack);
 				XBUS_COUNTER(xbus, TX_PACK_PCM)++;
 			}
 		}
@@ -1131,7 +1130,7 @@ static void xbus_tick(xbus_t *xbus)
 		 * Must be called *after* tx/rx so
 		 * D-Chan counters may be cleared
 		 */
-		CALL_XMETHOD(card_tick, xbus, xpd);
+		CALL_XMETHOD(card_tick, xpd);
 	}
 }
 

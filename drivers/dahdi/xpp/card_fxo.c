@@ -482,7 +482,7 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 		do_led(xpd, i, LED_GREEN, 0);
 		msleep(50);
 	}
-	PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	return 0;
 }
 
@@ -555,7 +555,7 @@ static int FXO_card_dahdi_postregistration(xpd_t *xpd, bool on)
 	return 0;
 }
 
-static int FXO_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig txsig)
+static int FXO_card_hooksig(xpd_t *xpd, int pos, enum dahdi_txsig txsig)
 {
 	struct FXO_priv_data	*priv;
 	int			ret = 0;
@@ -1111,6 +1111,11 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	return 0;
 }
 
+static int FXO_card_state(xpd_t *xpd, bool on)
+{
+	return CALL_PROTO(FXO, XPD_STATE, xpd->xbus, xpd, on);
+}
+
 static const struct xops	fxo_xops = {
 	.card_new	= FXO_card_new,
 	.card_init	= FXO_card_init,
@@ -1129,8 +1134,7 @@ static const struct phoneops	fxo_phoneops = {
 	.card_timing_priority	= generic_timing_priority,
 	.card_ioctl	= FXO_card_ioctl,
 	.card_open	= FXO_card_open,
-
-	.XPD_STATE	= XPROTO_CALLER(FXO, XPD_STATE),
+	.card_state	= FXO_card_state,
 };
 
 static xproto_table_t PROTO_TABLE(FXO) = {

@@ -552,7 +552,7 @@ static bool valid_pri_modes(const xpd_t *xpd)
 	return 1;
 }
 
-static void PRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
+static void PRI_card_pcm_recompute(xpd_t *xpd,
 		xpp_line_t pcm_mask)
 {
 	struct PRI_priv_data	*priv;
@@ -652,7 +652,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	priv->is_cas = -1;
 	PHONEDEV(xpd).channels = pri_num_channels(set_proto);
 	PHONEDEV(xpd).offhook_state = BITMASK(PHONEDEV(xpd).channels);
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	priv->deflaw = deflaw;
 	priv->dchan_num = dchan_num;
 	priv->local_loopback = 0;
@@ -1037,7 +1037,7 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 		force_cas = 1;
 		set_mode_cas(xpd, 1);
 	}
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	/*
 	 * E1's can enable CRC checking
 	 * CRC4 is legal only for E1, and it is checked by pri_linecompat()
@@ -1545,7 +1545,7 @@ static int pri_startup(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "STARTUP\n");
 	// Turn on all channels
-	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);
+	CALL_PHONE_METHOD(card_state, xpd, 1);
 	set_rbslines(xpd, 0);
 	write_subunit(xpd, REG_XPM2, 0x00);
 	return 0;
@@ -1569,7 +1569,7 @@ static int pri_shutdown(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "SHUTDOWN\n");
 	// Turn off all channels
-	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_state, xpd, 0);
 	return 0;
 }
 
@@ -1728,7 +1728,7 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
  * send 31 channels to the device, but they should be called 1-31 rather
  * than 0-30 .
  */
-static void PRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
 	struct PRI_priv_data	*priv;
 	byte			*pcm;
@@ -1738,7 +1738,6 @@ static void PRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	int			physical_chan;
 	int			physical_mask = 0;
 
-	BUG_ON(!xbus);
 	BUG_ON(!xpd);
 	BUG_ON(!pack);
 	priv = xpd->priv;
@@ -1802,7 +1801,7 @@ static void PRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
  *
  * \see PRI_card_pcm_fromspan
  */
-static void PRI_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+static void PRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
 	struct PRI_priv_data	*priv;
 	byte			*pcm;
@@ -1855,7 +1854,7 @@ static void PRI_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
 
-int PRI_timing_priority(xbus_t *xbus, xpd_t *xpd)
+int PRI_timing_priority(xpd_t *xpd)
 {
 	struct PRI_priv_data	*priv;
 
@@ -2169,6 +2168,11 @@ end:
 	return 0;
 }
 
+static int PRI_card_state(xpd_t *xpd, bool on)
+{
+	return CALL_PROTO(PRI, XPD_STATE, xpd->xbus, xpd, on);
+}
+
 static const struct xops	pri_xops = {
 	.card_new	= PRI_card_new,
 	.card_init	= PRI_card_init,
@@ -2186,8 +2190,7 @@ static const struct phoneops	pri_phoneops = {
 	.card_timing_priority	= PRI_timing_priority,
 	.card_ioctl	= PRI_card_ioctl,
 	.card_close	= PRI_card_close,
-
-	.XPD_STATE	= XPROTO_CALLER(PRI, XPD_STATE),
+	.card_state	= PRI_card_state,
 };
 
 static xproto_table_t PROTO_TABLE(PRI) = {

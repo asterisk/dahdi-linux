@@ -932,7 +932,7 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 			cur_chan->sigcap = BRI_BCHAN_SIGCAP;
 		}
 	}
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	PHONEDEV(xpd).span.ops = &BRI_span_ops;
 	return 0;
 }
@@ -950,7 +950,7 @@ static int BRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
 	return(0);
 }
 
-static int BRI_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig txsig)
+static int BRI_card_hooksig(xpd_t *xpd, int pos, enum dahdi_txsig txsig)
 {
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", txsig2str(txsig));
 	return 0;
@@ -1154,7 +1154,7 @@ static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 		BIT_SET(PHONEDEV(xpd).offhook_state, 0);
 		BIT_SET(PHONEDEV(xpd).offhook_state, 1);
 		BIT_SET(PHONEDEV(xpd).offhook_state, 2);
-		PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+		CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	}
 	return 0;
 }
@@ -1176,7 +1176,7 @@ static int BRI_card_close(xpd_t *xpd, lineno_t pos)
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 0);
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 1);
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 2);
-		PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+		CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	}
 	return 0;
 }
@@ -1257,7 +1257,7 @@ static int bri_startup(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "STARTUP\n");
 	// Turn on all channels
-	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);
+	CALL_PHONE_METHOD(card_state, xpd, 1);
 	if(SPAN_REGISTERED(xpd)) {
 		dchan = XPD_CHAN(xpd, 2);
 		span->flags |= DAHDI_FLAG_RUNNING;
@@ -1293,11 +1293,11 @@ static int bri_shutdown(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "SHUTDOWN\n");
 	// Turn off all channels
-	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_state, xpd, 0);
 	return 0;
 }
 
-static void BRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
+static void BRI_card_pcm_recompute(xpd_t *xpd,
 		xpp_line_t dont_care)
 {
 	int		i;
@@ -1308,7 +1308,7 @@ static void BRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
 	unsigned long	flags;
 
 	BUG_ON(!xpd);
-	main_xpd = xpd_byaddr(xbus, xpd->addr.unit, 0);
+	main_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, 0);
 	if(!main_xpd) {
 		XPD_DBG(DEVICES, xpd, "Unit 0 is already gone. Ignore request\n");
 		return;
@@ -1321,7 +1321,7 @@ static void BRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
 	line_count = 0;
 	pcm_mask = 0;
 	for(i = 0; i < MAX_SUBUNIT; i++) {
-		xpd_t		*sub_xpd = xpd_byaddr(xbus, main_xpd->addr.unit, i);
+		xpd_t		*sub_xpd = xpd_byaddr(xpd->xbus, main_xpd->addr.unit, i);
 
 		if(sub_xpd) {
 			xpp_line_t	lines =
@@ -1355,7 +1355,7 @@ static void BRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
 	spin_unlock_irqrestore(&PHONEDEV(main_xpd).lock_recompute_pcm, flags);
 }
 
-static void BRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+static void BRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
 	byte		*pcm;
 	unsigned long	flags;
@@ -1365,14 +1365,13 @@ static void BRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	xpp_line_t	wanted_lines;
 
 
-	BUG_ON(!xbus);
 	BUG_ON(!xpd);
 	BUG_ON(!pack);
 	pcm = RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, pcm);
 	for(subunit = 0; subunit < MAX_SUBUNIT; subunit++) {
 		xpd_t		*tmp_xpd;
 
-		tmp_xpd = xpd_byaddr(xbus, xpd->addr.unit, subunit);
+		tmp_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, subunit);
 		if(!tmp_xpd || !tmp_xpd->card_present)
 			continue;
 		spin_lock_irqsave(&tmp_xpd->lock, flags);
@@ -1402,7 +1401,7 @@ static void BRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, lines) = pcm_mask;
 }
 
-static void BRI_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
+static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
 	byte		*pcm;
 	xpp_line_t	pcm_mask;
@@ -1424,7 +1423,7 @@ static void BRI_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 
 		if(!pcm_mask)
 			break;	/* optimize */
-		tmp_xpd = xpd_byaddr(xbus, xpd->addr.unit, subunit);
+		tmp_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, subunit);
 		if(!tmp_xpd || !tmp_xpd->card_present || !SPAN_REGISTERED(tmp_xpd))
 			continue;
 		spin_lock_irqsave(&tmp_xpd->lock, flags);
@@ -1670,6 +1669,11 @@ end:
 	return 0;
 }
 
+static int BRI_card_state(xpd_t *xpd, bool on)
+{
+	return CALL_PROTO(BRI, XPD_STATE, xpd->xbus, xpd, on);
+}
+
 static const struct xops	bri_xops = {
 	.card_new	= BRI_card_new,
 	.card_init	= BRI_card_init,
@@ -1689,8 +1693,7 @@ static const struct phoneops	bri_phoneops = {
 	.card_ioctl	= BRI_card_ioctl,
 	.card_open	= BRI_card_open,
 	.card_close	= BRI_card_close,
-
-	.XPD_STATE	= XPROTO_CALLER(BRI, XPD_STATE),
+	.card_state	= BRI_card_state,
 };
 
 static xproto_table_t PROTO_TABLE(BRI) = {

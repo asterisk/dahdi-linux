@@ -900,14 +900,13 @@ static int xpd_initialize(xpd_t *xpd)
 {
 	int	ret = -ENODEV;
 
-	if(CALL_XMETHOD(card_init, xpd->xbus, xpd) < 0) {
+	if(CALL_XMETHOD(card_init, xpd) < 0) {
 		XPD_ERR(xpd, "Card Initialization failed\n");
 		goto out;
 	}
-	//CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 0);	/* Turn off all channels */
 	xpd->card_present = 1;
 	if (IS_PHONEDEV(xpd)) {
-		PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);	/* Turn on all channels */
+		CALL_PHONE_METHOD(card_state, xpd, 1);	/* Turn on all channels */
 	}
 	if(!xpd_setstate(xpd, XPD_STATE_READY)) {
 		goto out;

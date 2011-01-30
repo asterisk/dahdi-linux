@@ -685,7 +685,11 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 		dump_reg_cmd("REG_REPLY", 0, xbus, xpd->addr.unit, reg->portnum, reg);
 		dump_packet("REG_REPLY", pack, 1);
 	}
-	return CALL_XMETHOD(card_register_reply, xbus, xpd, reg);
+	if (! XMETHOD(card_register_reply, xpd)) {
+		XPD_ERR(xpd, "REGISTER_REPLY: without card_register_reply() method\n");
+		return -EINVAL;
+	}
+	return CALL_XMETHOD(card_register_reply, xpd, reg);
 }
 
 HANDLER_DEF(GLOBAL, SYNC_REPLY)

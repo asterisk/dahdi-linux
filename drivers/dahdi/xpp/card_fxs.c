@@ -455,7 +455,7 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 		msleep(50);
 	}
 	restore_leds(xpd);
-	PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	/*
 	 * We should query our offhook state long enough time after we
 	 * set the linefeed_control()
@@ -559,7 +559,7 @@ static void __do_mute_dtmf(xpd_t *xpd, int pos, bool muteit)
 		BIT_SET(PHONEDEV(xpd).mute_dtmf, pos);
 	else
 		BIT_CLR(PHONEDEV(xpd).mute_dtmf, pos);
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);	/* already spinlocked */
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);	/* already spinlocked */
 }
 
 static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
@@ -661,7 +661,7 @@ static int send_ring(xpd_t *xpd, lineno_t chan, bool on)
 	return ret;
 }
 
-static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig txsig)
+static int FXS_card_hooksig(xpd_t *xpd, int pos, enum dahdi_txsig txsig)
 {
 	struct FXS_priv_data	*priv;
 	int			ret = 0;
@@ -698,13 +698,13 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 				 * Restore state after KEWL hangup.
 				 */
 				LINE_DBG(SIGNAL, xpd, pos, "KEWL STOP\n");
-				linefeed_control(xbus, xpd, pos, FXS_LINE_POL_ACTIVE);
+				linefeed_control(xpd->xbus, xpd, pos, FXS_LINE_POL_ACTIVE);
 				if(IS_OFFHOOK(xpd, pos))
 					MARK_ON(priv, pos, LED_GREEN);
 			}
 			ret = send_ring(xpd, pos, 0);			// RING off
 			if (!IS_OFFHOOK(xpd, pos))
-				start_stop_vm_led(xbus, xpd, pos);
+				start_stop_vm_led(xpd->xbus, xpd, pos);
 			txhook = priv->lasttxhook[pos];
 			if(chan) {
 				switch(chan->sig) {
@@ -718,7 +718,7 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 						break;
 				}
 			}
-			ret = linefeed_control(xbus, xpd, pos, txhook);
+			ret = linefeed_control(xpd->xbus, xpd, pos, txhook);
 			break;
 		case DAHDI_TXSIG_OFFHOOK:
 			if(IS_SET(PHONEDEV(xpd).digital_outputs, pos)) {
@@ -741,7 +741,7 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 						break;
 				}
 			}
-			ret = linefeed_control(xbus, xpd, pos, txhook);
+			ret = linefeed_control(xpd->xbus, xpd, pos, txhook);
 			break;
 		case DAHDI_TXSIG_START:
 			PHONEDEV(xpd).ringing[pos] = 1;
@@ -759,7 +759,7 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 				LINE_DBG(SIGNAL, xpd, pos, "%s -> Is digital output. Ignored\n", txsig2str(txsig));
 				return -EINVAL;
 			}
-			linefeed_control(xbus, xpd, pos, FXS_LINE_OPEN);
+			linefeed_control(xpd->xbus, xpd, pos, FXS_LINE_OPEN);
 			MARK_OFF(priv, pos, LED_GREEN);
 			break;
 		default:
@@ -847,7 +847,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 				priv->ohttimer[pos] = val;
 				priv->idletxhookstate[pos] = FXS_LINE_POL_OHTRANS;
 				vmwi_search(xpd, pos, 1);
-				PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, priv->search_fsk_pattern);
+				CALL_PHONE_METHOD(card_pcm_recompute, xpd, priv->search_fsk_pattern);
 				LINE_DBG(SIGNAL, xpd, pos, "Start OHT_TIMER. wanted_pcm_mask=0x%X\n", PHONEDEV(xpd).wanted_pcm_mask);
 			}
 			if (VMWI_NEON(priv, pos) && !IS_OFFHOOK(xpd, pos))
@@ -1394,6 +1394,11 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	return 0;
 }
 
+static int FXS_card_state(xpd_t *xpd, bool on)
+{
+	return CALL_PROTO(FXS, XPD_STATE, xpd->xbus, xpd, on);
+}
+
 static const struct xops	fxs_xops = {
 	.card_new	= FXS_card_new,
 	.card_init	= FXS_card_init,
@@ -1413,8 +1418,7 @@ static const struct phoneops	fxs_phoneops = {
 	.card_open	= FXS_card_open,
 	.card_close	= FXS_card_close,
 	.card_ioctl	= FXS_card_ioctl,
-
-	.XPD_STATE	= XPROTO_CALLER(FXS, XPD_STATE),
+	.card_state	= FXS_card_state,
 };
 
 static xproto_table_t PROTO_TABLE(FXS) = {

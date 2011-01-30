@@ -213,24 +213,34 @@ xproto_handler_t xproto_card_handler(const xproto_table_t *table, byte opcode);
 const xproto_entry_t *xproto_global_entry(byte opcode);
 xproto_handler_t xproto_global_handler(byte opcode);
 
-#define	CALL_XMETHOD(name, xbus, xpd, ...)				\
-			(xpd)->xops->name(xbus, xpd, ## __VA_ARGS__ )
+/*
+ * XMETHOD() resolve to method pointer (NULL for optional methods)
+ * CALL_XMETHOD() calls the method, passing mandatory arguments
+ */
+#define	XMETHOD(name, xpd)	((xpd)->xops->name)
+#define	CALL_XMETHOD(name, xpd, ...)                              \
+		(XMETHOD(name, (xpd))((xpd)->xbus, (xpd), ## __VA_ARGS__ ))
 
-#define	PHONE_METHOD(xpd, name)	PHONEDEV(xpd).phoneops->name
+/*
+ * PHONE_METHOD() resolve to method pointer (NULL for optional methods)
+ * CALL_PHONE_METHOD() calls the method, passing mandatory arguments
+ */
+#define	PHONE_METHOD(name, xpd)	(PHONEDEV(xpd).phoneops->name)
+#define	CALL_PHONE_METHOD(name, xpd, ...)                              \
+		(PHONE_METHOD(name, (xpd))((xpd), ## __VA_ARGS__ ))
 
 struct phoneops {
-	void (*card_pcm_recompute)(xbus_t *xbus, xpd_t *xpd, xpp_line_t pcm_mask);
-	void (*card_pcm_fromspan)(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack);
-	void (*card_pcm_tospan)(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack);
-	int (*card_timing_priority)(xbus_t *xbus, xpd_t *xpd);
+	void (*card_pcm_recompute)(xpd_t *xpd, xpp_line_t pcm_mask);
+	void (*card_pcm_fromspan)(xpd_t *xpd, xpacket_t *pack);
+	void (*card_pcm_tospan)(xpd_t *xpd, xpacket_t *pack);
+	int (*card_timing_priority)(xpd_t *xpd);
 	int (*card_dahdi_preregistration)(xpd_t *xpd, bool on);
 	int (*card_dahdi_postregistration)(xpd_t *xpd, bool on);
-	int (*card_hooksig)(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig txsig);
+	int (*card_hooksig)(xpd_t *xpd, int pos, enum dahdi_txsig txsig);
 	int (*card_ioctl)(xpd_t *xpd, int pos, unsigned int cmd, unsigned long arg);
 	int (*card_open)(xpd_t *xpd, lineno_t pos);
 	int (*card_close)(xpd_t *xpd, lineno_t pos);
-
-	int (*XPD_STATE)(xbus_t *xbus, xpd_t *xpd, bool on);
+	int (*card_state)(xpd_t *xpd, bool on);
 };
 
 struct xops {

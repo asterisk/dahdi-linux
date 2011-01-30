@@ -661,7 +661,7 @@ void xpd_remove(xpd_t *xpd)
 	xbus = xpd->xbus;
 	XPD_INFO(xpd, "Remove\n");
 	dahdi_unregister_xpd(xpd);
-	CALL_XMETHOD(card_remove, xbus, xpd);
+	CALL_XMETHOD(card_remove, xpd);
 	xpd_free(xpd);
 }
 
@@ -702,7 +702,7 @@ void oht_pcm(xpd_t *xpd, int pos, bool pass)
 		LINE_DBG(SIGNAL, xpd, pos, "OHT PCM: block\n");
 		BIT_CLR(PHONEDEV(xpd).oht_pcm_pass, pos);
 	}
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 }
 
 /*
@@ -717,7 +717,7 @@ void mark_offhook(xpd_t *xpd, int pos, bool to_offhook)
 		LINE_DBG(SIGNAL, xpd, pos, "ONHOOK\n");
 		BIT_CLR(PHONEDEV(xpd).offhook_state, pos);
 	}
-	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 }
 
 /*
@@ -907,8 +907,8 @@ int xpp_open(struct dahdi_chan *chan)
 		current->comm, current->pid,
 		atomic_read(&PHONEDEV(xpd).open_counter));
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	if(PHONE_METHOD(xpd, card_open))
-		PHONE_METHOD(xpd, card_open)(xpd, pos);
+	if(PHONE_METHOD(card_open, xpd))
+		CALL_PHONE_METHOD(card_open, xpd, pos);
 	return 0;
 }
 
@@ -921,8 +921,8 @@ int xpp_close(struct dahdi_chan *chan)
 
 	spin_lock_irqsave(&xbus->lock, flags);
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	if(PHONE_METHOD(xpd, card_close))
-		PHONE_METHOD(xpd, card_close)(xpd, pos);
+	if(PHONE_METHOD(card_close, xpd))
+		CALL_PHONE_METHOD(card_close, xpd, pos);
 	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n",
 		current->comm, current->pid,
 		atomic_read(&PHONEDEV(xpd).open_counter));
@@ -958,8 +958,8 @@ int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		default:
 			/* Some span-specific commands before we give up: */
-			if (PHONE_METHOD(xpd, card_ioctl)) {
-				return PHONE_METHOD(xpd, card_ioctl)(xpd, pos, cmd, arg);
+			if (PHONE_METHOD(card_ioctl, xpd)) {
+				return CALL_PHONE_METHOD(card_ioctl, xpd, pos, cmd, arg);
 			}
 			report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
 			return -ENOTTY;
@@ -978,7 +978,7 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 			__FUNCTION__, pos);
 		return -ENODEV;
 	}
-	if(!PHONE_METHOD(xpd, card_hooksig)) {
+	if(!PHONE_METHOD(card_hooksig, xpd)) {
 		LINE_ERR(xpd, pos,
 			"%s: No hooksig method for this channel. Ignore.\n",
 			__FUNCTION__);
@@ -987,7 +987,7 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 	xbus = xpd->xbus;
 	BUG_ON(!xbus);
 	DBG(SIGNAL, "Setting %s to %s (%d)\n", chan->name, txsig2str(txsig), txsig);
-	return PHONE_METHOD(xpd, card_hooksig)(xbus, xpd, pos, txsig);
+	return CALL_PHONE_METHOD(card_hooksig, xpd, pos, txsig);
 }
 EXPORT_SYMBOL(xpp_hooksig);
 
@@ -1018,7 +1018,6 @@ int xpp_maint(struct dahdi_span *span, int cmd)
 			break;
 		case DAHDI_MAINT_LOOPUP:
 			INFO("XXX Send loopup code XXX\n");
-			// CALL_XMETHOD(LOOPBACK_AX, xpd->xbus, xpd, loopback_data, ARRAY_SIZE(loopback_data));
 			break;
 		case DAHDI_MAINT_LOOPDOWN:
 			INFO("XXX Send loopdown code XXX\n");
@@ -1085,12 +1084,12 @@ int dahdi_unregister_xpd(xpd_t *xpd)
 	mdelay(2);	// FIXME: This is to give chance for transmit/receiveprep to finish.
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	if(xpd->card_present)
-		PHONE_METHOD(xpd, card_dahdi_preregistration)(xpd, 0);
+		CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 0);
 	atomic_dec(&PHONEDEV(xpd).dahdi_registered);
 	atomic_dec(&num_registered_spans);
 	dahdi_unregister(&PHONEDEV(xpd).span);
 	if(xpd->card_present)
-		PHONE_METHOD(xpd, card_dahdi_postregistration)(xpd, 0);
+		CALL_PHONE_METHOD(card_dahdi_postregistration, xpd, 0);
 	return 0;
 }
 
@@ -1185,14 +1184,14 @@ int dahdi_register_xpd(xpd_t *xpd)
 	snprintf(PHONEDEV(xpd).span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
 			xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
 	XPD_DBG(GENERAL, xpd, "Registering span '%s'\n", PHONEDEV(xpd).span.desc);
-	PHONE_METHOD(xpd, card_dahdi_preregistration)(xpd, 1);
+	CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 1);
 	if(dahdi_register(&PHONEDEV(xpd).span, prefmaster)) {
 		XPD_ERR(xpd, "Failed to dahdi_register span\n");
 		return -ENODEV;
 	}
 	atomic_inc(&num_registered_spans);
 	atomic_inc(&PHONEDEV(xpd).dahdi_registered);
-	PHONE_METHOD(xpd, card_dahdi_postregistration)(xpd, 1);
+	CALL_PHONE_METHOD(card_dahdi_postregistration, xpd, 1);
 	/*
 	 * Update dahdi about our state:
 	 *   - Since asterisk didn't open the channel yet,
