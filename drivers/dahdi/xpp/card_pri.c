@@ -1690,9 +1690,6 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 	pos = chan->chanpos - 1;
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(!priv->layer1_up) {
-		XPD_DBG(SIGNAL, xpd, "RBS: TX: No layer1 yet. Keep going.\n");
-	}
 	if(!priv->is_cas) {
 		XPD_DBG(SIGNAL, xpd, "RBS: TX: not in CAS mode. Ignore.\n");
 		return 0;
@@ -1702,6 +1699,9 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 				"RBS: TX: sigtyp=%s. , bits=0x%X. Ignore.\n", 
 				sig2str(chan->sig), bits);
 		return 0;
+	}
+	if(!priv->layer1_up) {
+		XPD_DBG(SIGNAL, xpd, "RBS: TX: No layer1 yet. Keep going.\n");
 	}
 	if(priv->pri_protocol == PRI_PROTO_E1) {
 		if(encode_rbsbits_e1(xpd, pos, bits) < 0)
