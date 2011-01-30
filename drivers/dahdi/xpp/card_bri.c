@@ -1443,26 +1443,9 @@ static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 	}
 }
 
+
+
 /*---------------- BRI: HOST COMMANDS -------------------------------------*/
-
-static /* 0x0F */ HOSTCMD(BRI, XPD_STATE, bool on)
-{
-	struct BRI_priv_data	*priv;
-
-	BUG_ON(!xpd);
-	priv = xpd->priv;
-	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"ON":"OFF");
-	if(on) {
-		if(!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags)) {
-			if( ! IS_NT(xpd))
-				te_activation(xpd, 1);
-			else
-				nt_activation(xpd, 1);
-		}
-	} else if(IS_NT(xpd))
-		nt_activation(xpd, 0);
-	return 0;
-}
 
 static /* 0x33 */ HOSTCMD(BRI, SET_LED, enum bri_led_names which_led, enum led_state to_led_state)
 {
@@ -1671,7 +1654,21 @@ end:
 
 static int BRI_card_state(xpd_t *xpd, bool on)
 {
-	return CALL_PROTO(BRI, XPD_STATE, xpd->xbus, xpd, on);
+	struct BRI_priv_data	*priv;
+
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"ON":"OFF");
+	if(on) {
+		if(!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags)) {
+			if( ! IS_NT(xpd))
+				te_activation(xpd, 1);
+			else
+				nt_activation(xpd, 1);
+		}
+	} else if(IS_NT(xpd))
+		nt_activation(xpd, 0);
+	return 0;
 }
 
 static const struct xops	bri_xops = {

@@ -1866,14 +1866,9 @@ int PRI_timing_priority(xpd_t *xpd)
 	return -ENOENT;
 }
 
-/*---------------- PRI: HOST COMMANDS -------------------------------------*/
 
-static /* 0x0F */ HOSTCMD(PRI, XPD_STATE, bool on)
-{
-	BUG_ON(!xpd);
-	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
-	return 0;
-}
+
+/*---------------- PRI: HOST COMMANDS -------------------------------------*/
 
 static /* 0x33 */ HOSTCMD(PRI, SET_LED, enum pri_led_selectors led_sel, enum pri_led_state to_led_state)
 {
@@ -2170,7 +2165,9 @@ end:
 
 static int PRI_card_state(xpd_t *xpd, bool on)
 {
-	return CALL_PROTO(PRI, XPD_STATE, xpd->xbus, xpd, on);
+	BUG_ON(!xpd);
+	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
+	return 0;
 }
 
 static const struct xops	pri_xops = {
@@ -2628,7 +2625,6 @@ static DEVICE_ATTR_READER(pri_clocking_show, dev, buf)
 }
 
 static	DEVICE_ATTR(pri_clocking, S_IRUGO, pri_clocking_show, NULL);
-
 
 static int pri_xpd_probe(struct device *dev)
 {

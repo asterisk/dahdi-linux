@@ -83,8 +83,6 @@ enum fxo_leds {
 
 /*---------------- FXO Protocol Commands ----------------------------------*/
 
-static /* 0x0F */ DECLARE_CMD(FXO, XPD_STATE, bool on);
-
 static bool fxo_packet_is_valid(xpacket_t *pack);
 static void fxo_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef CONFIG_PROC_FS
@@ -511,7 +509,7 @@ static int FXO_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	BUG_ON(!priv);
 	timer_count = xpd->timer_count;
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"ON":"OFF");
- 	PHONEDEV(xpd).span.spantype = "FXO";
+	PHONEDEV(xpd).span.spantype = "FXO";
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*cur_chan = XPD_CHAN(xpd, i);
 
@@ -832,19 +830,6 @@ static int FXO_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 
 /*---------------- FXO: HOST COMMANDS -------------------------------------*/
 
-static /* 0x0F */ HOSTCMD(FXO, XPD_STATE, bool on)
-{
-	int			ret = 0;
-	struct FXO_priv_data	*priv;
-
-	BUG_ON(!xbus);
-	BUG_ON(!xpd);
-	priv = xpd->priv;
-	BUG_ON(!priv);
-	XPD_DBG(GENERAL, xpd, "%s\n", (on) ? "on" : "off");
-	return ret;
-}
-
 /*---------------- FXO: Astribank Reply Handlers --------------------------*/
 
 HANDLER_DEF(FXO, SIG_CHANGED)
@@ -1113,7 +1098,14 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 
 static int FXO_card_state(xpd_t *xpd, bool on)
 {
-	return CALL_PROTO(FXO, XPD_STATE, xpd->xbus, xpd, on);
+	int			ret = 0;
+	struct FXO_priv_data	*priv;
+
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	XPD_DBG(GENERAL, xpd, "%s\n", (on) ? "on" : "off");
+	return ret;
 }
 
 static const struct xops	fxo_xops = {

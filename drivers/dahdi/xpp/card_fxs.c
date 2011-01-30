@@ -104,8 +104,6 @@ enum fxs_state {
 
 /*---------------- FXS Protocol Commands ----------------------------------*/
 
-static /* 0x0F */ DECLARE_CMD(FXS, XPD_STATE, bool on);
-
 static bool fxs_packet_is_valid(xpacket_t *pack);
 static void fxs_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef CONFIG_PROC_FS
@@ -1159,14 +1157,6 @@ static int FXS_card_tick(xbus_t *xbus, xpd_t *xpd)
 
 /*---------------- FXS: HOST COMMANDS -------------------------------------*/
 
-static /* 0x0F */ HOSTCMD(FXS, XPD_STATE, bool on)
-{
-	BUG_ON(!xbus);
-	BUG_ON(!xpd);
-	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
-	return 0;
-}
-
 /*---------------- FXS: Astribank Reply Handlers --------------------------*/
 
 /*
@@ -1396,7 +1386,9 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 
 static int FXS_card_state(xpd_t *xpd, bool on)
 {
-	return CALL_PROTO(FXS, XPD_STATE, xpd->xbus, xpd, on);
+	BUG_ON(!xpd);
+	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
+	return 0;
 }
 
 static const struct xops	fxs_xops = {
