@@ -215,7 +215,7 @@ static int do_led(xpd_t *xpd, lineno_t chan, byte which, bool on)
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	which = which % NUM_LEDS;
-	if(IS_SET(xpd->digital_outputs, chan) || IS_SET(xpd->digital_inputs, chan))
+	if(IS_SET(PHONEDEV(xpd).digital_outputs, chan) || IS_SET(PHONEDEV(xpd).digital_inputs, chan))
 		goto out;
 	if(chan == PORT_BROADCAST) {
 		priv->ledstate[which] = (on) ? ~0 : 0;
@@ -251,7 +251,7 @@ static void handle_fxo_leds(xpd_t *xpd)
 	timer_count = xpd->timer_count;
 	for(color = 0; color < ARRAY_SIZE(colors); color++) {
 		for_each_line(xpd, i) {
-			if(IS_SET(xpd->digital_outputs, i) || IS_SET(xpd->digital_inputs, i))
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, i) || IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				continue;
 			if((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {		// Blinking
 				int	mod_value = LED_COUNTER(priv, i, color);
@@ -302,16 +302,16 @@ static void mark_ring(xpd_t *xpd, lineno_t pos, bool on, bool update_dahdi)
 	 * due to voltage fluctuations.
 	 */
 	reset_battery_readings(xpd, pos);
-	if(on && !xpd->ringing[pos]) {
+	if(on && !PHONEDEV(xpd).ringing[pos]) {
 		LINE_DBG(SIGNAL, xpd, pos, "START\n");
-		xpd->ringing[pos] = 1;
+		PHONEDEV(xpd).ringing[pos] = 1;
 		priv->cidtimer[pos] = xpd->timer_count;
 		MARK_BLINK(priv, pos, LED_GREEN, LED_BLINK_RING);
 		if(update_dahdi)
 			update_dahdi_ring(xpd, pos, on);
-	} else if(!on && xpd->ringing[pos]) {
+	} else if(!on && PHONEDEV(xpd).ringing[pos]) {
 		LINE_DBG(SIGNAL, xpd, pos, "STOP\n");
-		xpd->ringing[pos] = 0;
+		PHONEDEV(xpd).ringing[pos] = 0;
 		priv->cidtimer[pos] = xpd->timer_count;
 		if(IS_BLINKING(priv, pos, LED_GREEN))
 			MARK_BLINK(priv, pos, LED_GREEN, 0);
@@ -329,7 +329,7 @@ static int do_sethook(xpd_t *xpd, int pos, bool to_offhook)
 	byte			value;
 
 	BUG_ON(!xpd);
-	BUG_ON(xpd->direction == TO_PHONE);		// We can SETHOOK state only on PSTN
+	BUG_ON(PHONEDEV(xpd).direction == TO_PHONE);		// We can SETHOOK state only on PSTN
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	BUG_ON(!priv);
@@ -443,7 +443,7 @@ static xpd_t *FXO_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	xpd = xpd_alloc(xbus, unit, subunit, subtype, subunits, sizeof(struct FXO_priv_data), proto_table, channels);
 	if(!xpd)
 		return NULL;
-	xpd->direction = TO_PSTN;
+	PHONEDEV(xpd).direction = TO_PSTN;
 	xpd->type_name = "FXO";
 	if(fxo_proc_create(xbus, xpd) < 0)
 		goto err;
@@ -482,7 +482,7 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 		do_led(xpd, i, LED_GREEN, 0);
 		msleep(50);
 	}
-	CALL_XMETHOD(card_pcm_recompute, xbus, xpd, 0);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, 0);
 	return 0;
 }
 
@@ -511,6 +511,7 @@ static int FXO_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	BUG_ON(!priv);
 	timer_count = xpd->timer_count;
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"ON":"OFF");
+ 	PHONEDEV(xpd).span.spantype = "FXO";
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*cur_chan = XPD_CHAN(xpd, i);
 
@@ -562,7 +563,7 @@ static int FXO_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", txsig2str(txsig));
-	BUG_ON(xpd->direction != TO_PSTN);
+	BUG_ON(PHONEDEV(xpd).direction != TO_PSTN);
 	/* XXX Enable hooksig for FXO XXX */
 	switch(txsig) {
 		case DAHDI_TXSIG_START:
@@ -661,7 +662,7 @@ static void handle_fxo_power_denial(xpd_t *xpd)
 		return;		/* Ignore power denials */
 	priv = xpd->priv;
 	for_each_line(xpd, i) {
-		if(xpd->ringing[i] || !IS_OFFHOOK(xpd, i)) {
+		if(PHONEDEV(xpd).ringing[i] || !IS_OFFHOOK(xpd, i)) {
 			priv->power_denial_delay[i] = 0;
 			continue;
 		}
@@ -726,7 +727,7 @@ static void check_etsi_dtmf(xpd_t *xpd)
 	timer_count = xpd->timer_count;
 	for_each_line(xpd, portno) {
 		/* Skip offhook and ringing ports */
-		if(IS_OFFHOOK(xpd, portno) || xpd->ringing[portno])
+		if(IS_OFFHOOK(xpd, portno) || PHONEDEV(xpd).ringing[portno])
 			continue;
 		if(IS_SET(priv->cidfound, portno)) {
 			if(timer_count > priv->cidtimer[portno] + 4000) {
@@ -900,7 +901,7 @@ static void update_battery_voltage(xpd_t *xpd, byte data_low, xportno_t portno)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	priv->battery_voltage[portno] = volts;
-	if(xpd->ringing[portno])
+	if(PHONEDEV(xpd).ringing[portno])
 		goto ignore_reading;	/* ring voltage create false alarms */
 	if(abs(volts) < battery_threshold) {
 		/*
@@ -1017,7 +1018,7 @@ static void update_battery_current(xpd_t *xpd, byte data_low, xportno_t portno)
 	 * During ringing, current is not stable.
 	 * During onhook there should not be current anyway.
 	 */
-	if(xpd->ringing[portno] || !IS_OFFHOOK(xpd, portno))
+	if(PHONEDEV(xpd).ringing[portno] || !IS_OFFHOOK(xpd, portno))
 		goto ignore_it;
 	/*
 	 * Power denial with no battery voltage is meaningless
@@ -1110,6 +1111,27 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	return 0;
 }
 
+static const struct xops	fxo_xops = {
+	.card_new	= FXO_card_new,
+	.card_init	= FXO_card_init,
+	.card_remove	= FXO_card_remove,
+	.card_tick	= FXO_card_tick,
+	.card_register_reply	= FXO_card_register_reply,
+};
+
+static const struct phoneops	fxo_phoneops = {
+	.card_dahdi_preregistration	= FXO_card_dahdi_preregistration,
+	.card_dahdi_postregistration	= FXO_card_dahdi_postregistration,
+	.card_hooksig	= FXO_card_hooksig,
+	.card_pcm_recompute	= generic_card_pcm_recompute,
+	.card_pcm_fromspan	= generic_card_pcm_fromspan,
+	.card_pcm_tospan	= generic_card_pcm_tospan,
+	.card_timing_priority	= generic_timing_priority,
+	.card_ioctl	= FXO_card_ioctl,
+	.card_open	= FXO_card_open,
+
+	.XPD_STATE	= XPROTO_CALLER(FXO, XPD_STATE),
+};
 
 static xproto_table_t PROTO_TABLE(FXO) = {
 	.owner = THIS_MODULE,
@@ -1120,24 +1142,8 @@ static xproto_table_t PROTO_TABLE(FXO) = {
 	.name = "FXO",	/* protocol name */
 	.ports_per_subunit = 8,
 	.type = XPD_TYPE_FXO,
-	.xops = {
-		.card_new	= FXO_card_new,
-		.card_init	= FXO_card_init,
-		.card_remove	= FXO_card_remove,
-		.card_dahdi_preregistration	= FXO_card_dahdi_preregistration,
-		.card_dahdi_postregistration	= FXO_card_dahdi_postregistration,
-		.card_hooksig	= FXO_card_hooksig,
-		.card_tick	= FXO_card_tick,
-		.card_pcm_recompute	= generic_card_pcm_recompute,
-		.card_pcm_fromspan	= generic_card_pcm_fromspan,
-		.card_pcm_tospan	= generic_card_pcm_tospan,
-		.card_timing_priority	= generic_timing_priority,
-		.card_ioctl	= FXO_card_ioctl,
-		.card_open	= FXO_card_open,
-		.card_register_reply	= FXO_card_register_reply,
-
-		.XPD_STATE	= XPROTO_CALLER(FXO, XPD_STATE),
-	},
+	.xops = &fxo_xops,
+	.phoneops = &fxo_phoneops,
 	.packet_is_valid = fxo_packet_is_valid,
 	.packet_dump = fxo_packet_dump,
 };
@@ -1174,20 +1180,20 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count, in
 	BUG_ON(!priv);
 	len += sprintf(page + len, "\t%-17s: ", "Channel");
 	for_each_line(xpd, i) {
-		if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+		if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			len += sprintf(page + len, "%4d ", i % 10);
 	}
 	len += sprintf(page + len, "\nLeds:");
 	len += sprintf(page + len, "\n\t%-17s: ", "state");
 	for_each_line(xpd, i) {
-		if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+		if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			len += sprintf(page + len, "  %d%d ",
 				IS_SET(priv->ledstate[LED_GREEN], i),
 				IS_SET(priv->ledstate[LED_RED], i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "blinking");
 	for_each_line(xpd, i) {
-		if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+		if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			len += sprintf(page + len, "  %d%d ",
 				IS_BLINKING(priv,i,LED_GREEN),
 				IS_BLINKING(priv,i,LED_RED));

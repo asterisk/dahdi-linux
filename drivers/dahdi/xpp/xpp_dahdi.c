@@ -251,9 +251,9 @@ void xpd_free(xpd_t *xpd)
 	XPD_DBG(DEVICES, xpd, "\n");
 	xpd_proc_remove(xbus, xpd);
 	xbus_xpd_unbind(xbus, xpd);
-	for (x = 0; x < xpd->channels; x++) {
-		if (xpd->chans[x])
-			KZFREE(xpd->chans[x]);
+	for (x = 0; x < PHONEDEV(xpd).channels; x++) {
+		if (PHONEDEV(xpd).chans[x])
+			KZFREE(PHONEDEV(xpd).chans[x]);
 	}
 	KZFREE(xpd);
 	DBG(DEVICES, "refcount_xbus=%d\n", refcount_xbus(xbus));
@@ -293,7 +293,7 @@ int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
 			subunit_ports, unit, subunit);
 		return 0;
 	}
-	xpd = proto_table->xops.card_new(xbus, unit, subunit, proto_table, subtype, subunits, subunit_ports, to_phone);
+	xpd = proto_table->xops->card_new(xbus, unit, subunit, proto_table, subtype, subunits, subunit_ports, to_phone);
 	if(!xpd) {
 		XBUS_NOTICE(xbus, "card_new(%d,%d,%d,%d,%d) failed. Ignored.\n",
 			unit, subunit, proto_table->type, subtype, to_phone);
@@ -337,28 +337,28 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 			,
 			xpd->xpdname, xpd->type_name,
 			(xpd->card_present) ? "present" : "missing",
-			(SPAN_REGISTERED(xpd)) ? xpd->span.spanno : 0,
-			xpd->timing_priority,
-			xpd->timer_count, xpd->span.mainttimer
+			(SPAN_REGISTERED(xpd)) ? PHONEDEV(xpd).span.spanno : 0,
+			PHONEDEV(xpd).timing_priority,
+			xpd->timer_count, PHONEDEV(xpd).span.mainttimer
 			);
 	len += sprintf(page + len, "xpd_state: %s (%d)\n",
 		xpd_statename(xpd->xpd_state), xpd->xpd_state);
 	len += sprintf(page + len, "open_counter=%d refcount=%d\n",
-		atomic_read(&xpd->open_counter), refcount_xpd(xpd));
+		atomic_read(&PHONEDEV(xpd).open_counter), refcount_xpd(xpd));
 	len += sprintf(page + len, "Address: U=%d S=%d\n", xpd->addr.unit, xpd->addr.subunit);
 	len += sprintf(page + len, "Subunits: %d\n", xpd->subunits);
 	len += sprintf(page + len, "Type: %d.%d\n\n", xpd->type, xpd->subtype);
-	len += sprintf(page + len, "pcm_len=%d\n\n", xpd->pcm_len);
-	len += sprintf(page + len, "wanted_pcm_mask=0x%04X\n\n", xpd->wanted_pcm_mask);
-	len += sprintf(page + len, "mute_dtmf=0x%04X\n\n", xpd->mute_dtmf);
+	len += sprintf(page + len, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
+	len += sprintf(page + len, "wanted_pcm_mask=0x%04X\n\n", PHONEDEV(xpd).wanted_pcm_mask);
+	len += sprintf(page + len, "mute_dtmf=0x%04X\n\n", PHONEDEV(xpd).mute_dtmf);
 	len += sprintf(page + len, "STATES:");
 	len += sprintf(page + len, "\n\t%-17s: ", "output_relays");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(xpd->digital_outputs, i));
+		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).digital_outputs, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "input_relays");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(xpd->digital_inputs, i));
+		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).digital_inputs, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "offhook");
 	for_each_line(xpd, i) {
@@ -366,19 +366,19 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "oht_pcm_pass");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(xpd->oht_pcm_pass, i));
+		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).oht_pcm_pass, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "msg_waiting");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", xpd->msg_waiting[i]);
+		len += sprintf(page + len, "%d ", PHONEDEV(xpd).msg_waiting[i]);
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "ringing");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", xpd->ringing[i]);
+		len += sprintf(page + len, "%d ", PHONEDEV(xpd).ringing[i]);
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "no_pcm");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(xpd->no_pcm, i));
+		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).no_pcm, i));
 	}
 #if 1
 	if(SPAN_REGISTERED(xpd)) {
@@ -391,11 +391,11 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 			byte	*wp;
 			int j;
 
-			if(IS_SET(xpd->digital_outputs, i))
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, i))
 				continue;
-			if(IS_SET(xpd->digital_inputs, i))
+			if(IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				continue;
-			if(IS_SET(xpd->digital_signalling, i))
+			if(IS_SET(PHONEDEV(xpd).digital_signalling, i))
 				continue;
 			rp = chan->readchunk;
 			wp = chan->writechunk;
@@ -410,9 +410,9 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 				len += sprintf(page + len, "%02X ", wchunk[j]);
 			}
 			len += sprintf(page + len, " | %c",
-				(IS_SET(xpd->wanted_pcm_mask, i))?'+':' ');
+				(IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))?'+':' ');
 			len += sprintf(page + len, " %c",
-				(IS_SET(xpd->mute_dtmf, i))?'-':' ');
+				(IS_SET(PHONEDEV(xpd).mute_dtmf, i))?'-':' ');
 		}
 	}
 #endif
@@ -503,6 +503,48 @@ badstate:
 
 
 /*
+ * Cleanup/initialize phonedev
+ */
+static void phonedev_cleanup(xpd_t *xpd)
+{
+	struct phonedev	*phonedev = &PHONEDEV(xpd);
+	unsigned int	x;
+
+	for (x = 0; x < phonedev->channels; x++) {
+		if (phonedev->chans[x]) {
+			kfree(phonedev->chans[x]);
+		}
+	}
+}
+
+__must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_table,
+	int channels, xpp_line_t no_pcm)
+{
+	struct phonedev	*phonedev = &PHONEDEV(xpd);
+	unsigned int	x;
+
+	spin_lock_init(&phonedev->lock_recompute_pcm);
+	phonedev->channels = channels;
+	phonedev->no_pcm = no_pcm;
+	phonedev->offhook_state = 0x0;	/* ONHOOK */
+	phonedev->phoneops = proto_table->phoneops;
+	phonedev->digital_outputs = 0;
+	phonedev->digital_inputs = 0;
+	atomic_set(&phonedev->dahdi_registered, 0);
+	atomic_set(&phonedev->open_counter, 0);
+	for (x = 0; x < phonedev->channels; x++) {
+		if (!(phonedev->chans[x] = kmalloc(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
+			ERR("%s: Unable to allocate channel %d\n", __FUNCTION__, x);
+			goto err;
+		}
+	}
+	return 0;
+err:
+	phonedev_cleanup(xpd);
+	return -ENOMEM;
+}
+
+/*
  * xpd_alloc - Allocator for new XPD's
  *
  */
@@ -514,7 +556,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 	xpd_t		*xpd = NULL;
 	size_t		alloc_size = sizeof(xpd_t) + privsize;
 	int		type = proto_table->type;
-	unsigned int	x;
+	xpp_line_t	no_pcm = 0;
 
 	BUG_ON(!proto_table);
 	XBUS_DBG(DEVICES, xbus, "type=%d channels=%d (alloc_size=%zd)\n",
@@ -532,38 +574,23 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 	}
 	xpd->priv = (byte *)xpd + sizeof(xpd_t);
 	spin_lock_init(&xpd->lock);
-	spin_lock_init(&xpd->lock_recompute_pcm);
-	xpd->channels = channels;
 	xpd->card_present = 0;
-	xpd->offhook_state = 0x0;	/* ONHOOK */
 	xpd->type = proto_table->type;
 	xpd->xproto = proto_table;
-	xpd->xops = &proto_table->xops;
-	xpd->digital_outputs = 0;
-	xpd->digital_inputs = 0;
+	xpd->xops = proto_table->xops;
 	xpd->xpd_state = XPD_STATE_START;
 	xpd->subtype = subtype;
 	xpd->subunits = subunits;
-
-	atomic_set(&xpd->dahdi_registered, 0);
-	atomic_set(&xpd->open_counter, 0);
 	kref_init(&xpd->kref);
 
 	/* For USB-1 disable some channels */
 	if(MAX_SEND_SIZE(xbus) < RPACKET_SIZE(GLOBAL, PCM_WRITE)) {
-		xpp_line_t	no_pcm;
-
-		no_pcm = 0x7F | xpd->digital_outputs | xpd->digital_inputs;
-		xpd->no_pcm = no_pcm;
+		no_pcm = 0x7F | PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).digital_inputs;
 		XBUS_NOTICE(xbus, "max xframe size = %d, disabling some PCM channels. no_pcm=0x%04X\n",
-				MAX_SEND_SIZE(xbus), xpd->no_pcm);
+				MAX_SEND_SIZE(xbus), PHONEDEV(xpd).no_pcm);
 	}
-	for (x = 0; x < xpd->channels; x++) {
-		if (!(xpd->chans[x] = kmalloc(sizeof(*xpd->chans[x]), GFP_KERNEL))) {
-			ERR("%s: Unable to allocate channel %d\n", __FUNCTION__, x);
-			goto err;
-		}
-	}
+	if (phonedev_init(xpd, proto_table, channels, no_pcm) < 0)
+		goto err;
 	xbus_xpd_bind(xbus, xpd, unit, subunit);
 	if(xpd_proc_create(xbus, xpd) < 0)
 		goto err;
@@ -577,11 +604,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 err:
 	if(xpd) {
 		xpd_proc_remove(xbus, xpd);
-		for (x = 0; x < xpd->channels; x++) {
-			if (xpd->chans[x]) {
-				kfree(xpd->chans[x]);
-			}
-		}
+		phonedev_cleanup(xpd);
 		KZFREE(xpd);
 	}
 	return NULL;
@@ -606,7 +629,7 @@ void xbus_request_removal(xbus_t *xbus)
 			spin_lock_irqsave(&xpd->lock, flags);
 			xpd->card_present = 0;
 			xpd_setstate(xpd, XPD_STATE_NOHW);
-			xpd->span.alarms = DAHDI_ALARM_NOTOPEN;
+			PHONEDEV(xpd).span.alarms = DAHDI_ALARM_NOTOPEN;
 			spin_unlock_irqrestore(&xpd->lock, flags);
 		}
 	}
@@ -617,9 +640,9 @@ void xbus_request_removal(xbus_t *xbus)
 			if(SPAN_REGISTERED(xpd)) {
 				int j;
 
-				dahdi_alarm_notify(&xpd->span);
+				dahdi_alarm_notify(&PHONEDEV(xpd).span);
 				XPD_DBG(DEVICES, xpd, "Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
-				for (j=0; j<xpd->span.channels; j++) {
+				for (j=0; j<PHONEDEV(xpd).span.channels; j++) {
 					dahdi_qevent_lock(XPD_CHAN(xpd, j),DAHDI_EVENT_REMOVED);
 				}
 			}
@@ -644,7 +667,7 @@ void xpd_remove(xpd_t *xpd)
 
 void update_xpd_status(xpd_t *xpd, int alarm_flag)
 {
-	struct dahdi_span *span = &xpd->span;
+	struct dahdi_span *span = &PHONEDEV(xpd).span;
 
 	if(!SPAN_REGISTERED(xpd)) {
 		// XPD_NOTICE(xpd, "%s: XPD is not registered. Skipping.\n", __FUNCTION__);
@@ -660,7 +683,7 @@ void update_xpd_status(xpd_t *xpd, int alarm_flag)
 	}
 	if(span->alarms == alarm_flag)
 		return;
-	XPD_DBG(GENERAL, xpd, "Update XPD alarms: %s -> %02X\n", xpd->span.name, alarm_flag);
+	XPD_DBG(GENERAL, xpd, "Update XPD alarms: %s -> %02X\n", PHONEDEV(xpd).span.name, alarm_flag);
 	span->alarms = alarm_flag;
 	dahdi_alarm_notify(span);
 }
@@ -674,12 +697,12 @@ void oht_pcm(xpd_t *xpd, int pos, bool pass)
 {
 	if(pass) {
 		LINE_DBG(SIGNAL, xpd, pos, "OHT PCM: pass\n");
-		BIT_SET(xpd->oht_pcm_pass, pos);
+		BIT_SET(PHONEDEV(xpd).oht_pcm_pass, pos);
 	} else {
 		LINE_DBG(SIGNAL, xpd, pos, "OHT PCM: block\n");
-		BIT_CLR(xpd->oht_pcm_pass, pos);
+		BIT_CLR(PHONEDEV(xpd).oht_pcm_pass, pos);
 	}
-	CALL_XMETHOD(card_pcm_recompute, xpd->xbus, xpd, 0);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
 }
 
 /*
@@ -689,12 +712,12 @@ void mark_offhook(xpd_t *xpd, int pos, bool to_offhook)
 {
 	if(to_offhook) {
 		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK\n");
-		BIT_SET(xpd->offhook_state, pos);
+		BIT_SET(PHONEDEV(xpd).offhook_state, pos);
 	} else {
 		LINE_DBG(SIGNAL, xpd, pos, "ONHOOK\n");
-		BIT_CLR(xpd->offhook_state, pos);
+		BIT_CLR(PHONEDEV(xpd).offhook_state, pos);
 	}
-	CALL_XMETHOD(card_pcm_recompute, xpd->xbus, xpd, 0);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
 }
 
 /*
@@ -730,7 +753,7 @@ void hookstate_changed(xpd_t *xpd, int pos, bool to_offhook)
 		 *
 		 * This bit will be cleared on the next tick.
 		 */
-		BIT_SET(xpd->silence_pcm, pos);
+		BIT_SET(PHONEDEV(xpd).silence_pcm, pos);
 	}
 	notify_rxsig(xpd, pos, (to_offhook) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
 }
@@ -879,13 +902,13 @@ int xpp_open(struct dahdi_chan *chan)
 		return -ENODEV;
 	}
 	spin_lock_irqsave(&xbus->lock, flags);
-	atomic_inc(&xpd->open_counter);
+	atomic_inc(&PHONEDEV(xpd).open_counter);
 	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n",
 		current->comm, current->pid,
-		atomic_read(&xpd->open_counter));
+		atomic_read(&PHONEDEV(xpd).open_counter));
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	if(xpd->xops->card_open)
-		xpd->xops->card_open(xpd, pos);
+	if(PHONE_METHOD(xpd, card_open))
+		PHONE_METHOD(xpd, card_open)(xpd, pos);
 	return 0;
 }
 
@@ -898,12 +921,12 @@ int xpp_close(struct dahdi_chan *chan)
 
 	spin_lock_irqsave(&xbus->lock, flags);
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	if(xpd->xops->card_close)
-		xpd->xops->card_close(xpd, pos);
+	if(PHONE_METHOD(xpd, card_close))
+		PHONE_METHOD(xpd, card_close)(xpd, pos);
 	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n",
 		current->comm, current->pid,
-		atomic_read(&xpd->open_counter));
-	atomic_dec(&xpd->open_counter);		/* from xpp_open() */
+		atomic_read(&PHONEDEV(xpd).open_counter));
+	atomic_dec(&PHONEDEV(xpd).open_counter);		/* from xpp_open() */
 	put_xpd(__FUNCTION__, xpd);					/* from xpp_open() */
 	return 0;
 }
@@ -935,8 +958,8 @@ int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		default:
 			/* Some span-specific commands before we give up: */
-			if (xpd->xops->card_ioctl != NULL) {
-				return xpd->xops->card_ioctl(xpd, pos, cmd, arg);
+			if (PHONE_METHOD(xpd, card_ioctl)) {
+				return PHONE_METHOD(xpd, card_ioctl)(xpd, pos, cmd, arg);
 			}
 			report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
 			return -ENOTTY;
@@ -955,7 +978,7 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 			__FUNCTION__, pos);
 		return -ENODEV;
 	}
-	if(!xpd->xops->card_hooksig) {
+	if(!PHONE_METHOD(xpd, card_hooksig)) {
 		LINE_ERR(xpd, pos,
 			"%s: No hooksig method for this channel. Ignore.\n",
 			__FUNCTION__);
@@ -964,7 +987,7 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 	xbus = xpd->xbus;
 	BUG_ON(!xbus);
 	DBG(SIGNAL, "Setting %s to %s (%d)\n", chan->name, txsig2str(txsig), txsig);
-	return CALL_XMETHOD(card_hooksig, xbus, xpd, pos, txsig);
+	return PHONE_METHOD(xpd, card_hooksig)(xbus, xpd, pos, txsig);
 }
 EXPORT_SYMBOL(xpp_hooksig);
 
@@ -975,7 +998,8 @@ int xpp_setchunksize(struct dahdi_span *span, int chunksize);
 /* Enable maintenance modes */
 int xpp_maint(struct dahdi_span *span, int cmd)
 {
-	xpd_t		*xpd = container_of(span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	int		ret = 0;
 #if 0
 	char		loopback_data[] = "THE-QUICK-BROWN-FOX-JUMPED-OVER-THE-LAZY-DOG";
@@ -1049,20 +1073,20 @@ int dahdi_unregister_xpd(xpd_t *xpd)
 	}
 	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
 	/* We should now have only a ref from the xbus (from create_xpd()) */
-	if(atomic_read(&xpd->open_counter)) {
-		XPD_NOTICE(xpd, "Busy (open_counter=%d). Skipping.\n", atomic_read(&xpd->open_counter));
+	if(atomic_read(&PHONEDEV(xpd).open_counter)) {
+		XPD_NOTICE(xpd, "Busy (open_counter=%d). Skipping.\n", atomic_read(&PHONEDEV(xpd).open_counter));
 		spin_unlock_irqrestore(&xpd->lock, flags);
 		return -EBUSY;
 	}
 	mdelay(2);	// FIXME: This is to give chance for transmit/receiveprep to finish.
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	if(xpd->card_present)
-		xpd->xops->card_dahdi_preregistration(xpd, 0);
-	atomic_dec(&xpd->dahdi_registered);
+		PHONE_METHOD(xpd, card_dahdi_preregistration)(xpd, 0);
+	atomic_dec(&PHONEDEV(xpd).dahdi_registered);
 	atomic_dec(&num_registered_spans);
-	dahdi_unregister(&xpd->span);
+	dahdi_unregister(&PHONEDEV(xpd).span);
 	if(xpd->card_present)
-		xpd->xops->card_dahdi_postregistration(xpd, 0);
+		PHONE_METHOD(xpd, card_dahdi_postregistration)(xpd, 0);
 	return 0;
 }
 
@@ -1089,32 +1113,30 @@ int dahdi_register_xpd(xpd_t *xpd)
 	xbus_t		*xbus;
 	int		cn;
 	int		i;
-	const xops_t	*xops;
 
 	BUG_ON(!xpd);
 
-	xops = xpd->xops;
 	xbus = xpd->xbus;
 
 	if (SPAN_REGISTERED(xpd)) {
 		XPD_ERR(xpd, "Already registered\n");
 		return -EEXIST;
 	}
-	cn = xpd->channels;
+ 	cn = PHONEDEV(xpd).channels;
 	XPD_DBG(DEVICES, xpd, "Initializing span: %d channels.\n", cn);
-	memset(&xpd->span, 0, sizeof(struct dahdi_span));
+ 	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
 	for(i = 0; i < cn; i++) {
 		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
 	}
 
-	span = &xpd->span;
+ 	span = &PHONEDEV(xpd).span;
 	snprintf(span->name, MAX_SPANNAME, "%s/%s", xbus->busname, xpd->xpdname);
 	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
 	span->channels = cn;
-	span->chans = xpd->chans;
+ 	span->chans = PHONEDEV(xpd).chans;
 
 	span->flags = DAHDI_FLAG_RBS;
-	if(xops->card_hooksig)
+ 	if(PHONEDEV(xpd).phoneops->card_hooksig)
 		span->ops = &xpp_rbs_span_ops;	/* Only with RBS bits */
 	else
 		span->ops = &xpp_span_ops;
@@ -1152,17 +1174,17 @@ int dahdi_register_xpd(xpd_t *xpd)
 	 */
 	span->irq = 0;
 
-	snprintf(xpd->span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
+	snprintf(PHONEDEV(xpd).span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
 			xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
-	XPD_DBG(GENERAL, xpd, "Registering span '%s'\n", xpd->span.desc);
-	xpd->xops->card_dahdi_preregistration(xpd, 1);
-	if(dahdi_register(&xpd->span, prefmaster)) {
+	XPD_DBG(GENERAL, xpd, "Registering span '%s'\n", PHONEDEV(xpd).span.desc);
+	PHONE_METHOD(xpd, card_dahdi_preregistration)(xpd, 1);
+	if(dahdi_register(&PHONEDEV(xpd).span, prefmaster)) {
 		XPD_ERR(xpd, "Failed to dahdi_register span\n");
 		return -ENODEV;
 	}
 	atomic_inc(&num_registered_spans);
-	atomic_inc(&xpd->dahdi_registered);
-	xpd->xops->card_dahdi_postregistration(xpd, 1);
+	atomic_inc(&PHONEDEV(xpd).dahdi_registered);
+	PHONE_METHOD(xpd, card_dahdi_postregistration)(xpd, 1);
 	/*
 	 * Update dahdi about our state:
 	 *   - Since asterisk didn't open the channel yet,

@@ -236,7 +236,7 @@ static int do_led(xpd_t *xpd, lineno_t chan, byte which, bool on)
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	which = which % NUM_LEDS;
-	if(IS_SET(xpd->digital_outputs, chan) || IS_SET(xpd->digital_inputs, chan))
+	if(IS_SET(PHONEDEV(xpd).digital_outputs, chan) || IS_SET(PHONEDEV(xpd).digital_inputs, chan))
 		goto out;
 	if(chan == PORT_BROADCAST) {
 		priv->ledstate[which] = (on) ? ~0 : 0;
@@ -271,7 +271,7 @@ static void handle_fxs_leds(xpd_t *xpd)
 	timer_count = xpd->timer_count;
 	for(color = 0; color < ARRAY_SIZE(colors); color++) {
 		for_each_line(xpd, i) {
-			if(IS_SET(xpd->digital_outputs | xpd->digital_inputs, i))
+			if(IS_SET(PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).digital_inputs, i))
 				continue;
 			if((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {		// Blinking
 				int	mod_value = LED_COUNTER(priv, i, color);
@@ -406,10 +406,10 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 		return NULL;
 	if(unit == 0) {
 		XBUS_DBG(GENERAL, xbus, "First XPD detected. Initialize digital outputs/inputs\n");
-		xpd->digital_outputs = BITMASK(LINES_DIGI_OUT) << regular_channels;
-		xpd->digital_inputs = BITMASK(LINES_DIGI_INP) << (regular_channels + LINES_DIGI_OUT);
+		PHONEDEV(xpd).digital_outputs = BITMASK(LINES_DIGI_OUT) << regular_channels;
+		PHONEDEV(xpd).digital_inputs = BITMASK(LINES_DIGI_INP) << (regular_channels + LINES_DIGI_OUT);
 	}
-	xpd->direction = TO_PHONE;
+	PHONEDEV(xpd).direction = TO_PHONE;
 	xpd->type_name = "FXS";
 	if(fxs_proc_create(xbus, xpd) < 0)
 		goto err;
@@ -455,14 +455,14 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 		msleep(50);
 	}
 	restore_leds(xpd);
-	CALL_XMETHOD(card_pcm_recompute, xbus, xpd, 0);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, 0);
 	/*
 	 * We should query our offhook state long enough time after we
 	 * set the linefeed_control()
 	 * So we do this after the LEDs
 	 */
 	for_each_line(xpd, i) {
-		if(IS_SET(xpd->digital_outputs | xpd->digital_inputs, i))
+		if(IS_SET(PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).digital_inputs, i))
 			continue;
 		SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_LOOPCLOSURE, 0);
 	}
@@ -496,15 +496,15 @@ static int FXS_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
-	xpd->span.spantype = "FXS";
+	PHONEDEV(xpd).span.spantype = "FXS";
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*cur_chan = XPD_CHAN(xpd, i);
 
 		XPD_DBG(GENERAL, xpd, "setting FXS channel %d\n", i);
-		if(IS_SET(xpd->digital_outputs, i)) {
+		if(IS_SET(PHONEDEV(xpd).digital_outputs, i)) {
 			snprintf(cur_chan->name, MAX_CHANNAME, "XPP_OUT/%02d/%1d%1d/%d",
 				xbus->num, xpd->addr.unit, xpd->addr.subunit, i);
-		} else if(IS_SET(xpd->digital_inputs, i)) {
+		} else if(IS_SET(PHONEDEV(xpd).digital_inputs, i)) {
 			snprintf(cur_chan->name, MAX_CHANNAME, "XPP_IN/%02d/%1d%1d/%d",
 				xbus->num, xpd->addr.unit, xpd->addr.subunit, i);
 		} else {
@@ -556,10 +556,10 @@ static void __do_mute_dtmf(xpd_t *xpd, int pos, bool muteit)
 {
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (muteit) ? "MUTE" : "UNMUTE");
 	if(muteit)
-		BIT_SET(xpd->mute_dtmf, pos);
+		BIT_SET(PHONEDEV(xpd).mute_dtmf, pos);
 	else
-		BIT_CLR(xpd->mute_dtmf, pos);
-	CALL_XMETHOD(card_pcm_recompute, xpd->xbus, xpd, 0);	/* already spinlocked */
+		BIT_CLR(PHONEDEV(xpd).mute_dtmf, pos);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);	/* already spinlocked */
 }
 
 static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
@@ -607,10 +607,10 @@ static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos)
 	unsigned int		msgs;
 
 	BUG_ON(!xpd);
-	if (IS_SET(xpd->digital_outputs | xpd->digital_inputs, pos))
+	if (IS_SET(PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).digital_inputs, pos))
 		return;
 	priv = xpd->priv;
-	msgs = xpd->msg_waiting[pos];
+	msgs = PHONEDEV(xpd).msg_waiting[pos];
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (msgs) ? "ON" : "OFF");
 	set_vm_led_mode(xbus, xpd, pos, msgs);
 	do_chan_power(xbus, xpd, pos, msgs > 0);
@@ -671,8 +671,8 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", txsig2str(txsig));
 	priv = xpd->priv;
-	BUG_ON(xpd->direction != TO_PHONE);
-	if (IS_SET(xpd->digital_inputs, pos)) {
+	BUG_ON(PHONEDEV(xpd).direction != TO_PHONE);
+	if (IS_SET(PHONEDEV(xpd).digital_inputs, pos)) {
 		LINE_DBG(SIGNAL, xpd, pos, "Ignoring signal sent to digital input line\n");
 		return 0;
 	}
@@ -681,14 +681,14 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 	switch(txsig) {
 		case DAHDI_TXSIG_ONHOOK:
 			spin_lock_irqsave(&xpd->lock, flags);
-			xpd->ringing[pos] = 0;
+			PHONEDEV(xpd).ringing[pos] = 0;
 			oht_pcm(xpd, pos, 0);
 			vmwi_search(xpd, pos, 0);
 			BIT_CLR(priv->want_dtmf_events, pos);
 			BIT_CLR(priv->want_dtmf_mute, pos);
 			__do_mute_dtmf(xpd, pos, 0);
 			spin_unlock_irqrestore(&xpd->lock, flags);
-			if(IS_SET(xpd->digital_outputs, pos)) {
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, pos)) {
 				LINE_DBG(SIGNAL, xpd, pos, "%s -> digital output OFF\n", txsig2str(txsig));
 				ret = relay_out(xpd, pos, 0);
 				return ret;
@@ -721,16 +721,16 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 			ret = linefeed_control(xbus, xpd, pos, txhook);
 			break;
 		case DAHDI_TXSIG_OFFHOOK:
-			if(IS_SET(xpd->digital_outputs, pos)) {
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, pos)) {
 				LINE_NOTICE(xpd, pos, "%s -> Is digital output. Ignored\n", txsig2str(txsig));
 				return -EINVAL;
 			}
 			txhook = priv->lasttxhook[pos];
-			if(xpd->ringing[pos]) {
+			if(PHONEDEV(xpd).ringing[pos]) {
 				oht_pcm(xpd, pos, 1);
 				txhook = FXS_LINE_OHTRANS;
 			}
-			xpd->ringing[pos] = 0;
+			PHONEDEV(xpd).ringing[pos] = 0;
 			if(chan) {
 				switch(chan->sig) {
 					case DAHDI_SIG_EM:
@@ -744,10 +744,10 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 			ret = linefeed_control(xbus, xpd, pos, txhook);
 			break;
 		case DAHDI_TXSIG_START:
-			xpd->ringing[pos] = 1;
+			PHONEDEV(xpd).ringing[pos] = 1;
 			oht_pcm(xpd, pos, 0);
 			vmwi_search(xpd, pos, 0);
-			if(IS_SET(xpd->digital_outputs, pos)) {
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, pos)) {
 				LINE_DBG(SIGNAL, xpd, pos, "%s -> digital output ON\n", txsig2str(txsig));
 				ret = relay_out(xpd, pos, 1);
 				return ret;
@@ -755,7 +755,7 @@ static int FXS_card_hooksig(xbus_t *xbus, xpd_t *xpd, int pos, enum dahdi_txsig 
 			ret = send_ring(xpd, pos, 1);			// RING on
 			break;
 		case DAHDI_TXSIG_KEWL:
-			if(IS_SET(xpd->digital_outputs, pos)) {
+			if(IS_SET(PHONEDEV(xpd).digital_outputs, pos)) {
 				LINE_DBG(SIGNAL, xpd, pos, "%s -> Is digital output. Ignored\n", txsig2str(txsig));
 				return -EINVAL;
 			}
@@ -807,7 +807,7 @@ static int set_vmwi(xpd_t *xpd, int pos, unsigned long arg)
 		;	/* Disable VMWI */
 	}
 	priv->vmwisetting[pos] = vmwisetting;
-	set_vm_led_mode(xpd->xbus, xpd, pos, xpd->msg_waiting[pos]);
+	set_vm_led_mode(xpd->xbus, xpd, pos, PHONEDEV(xpd).msg_waiting[pos]);
 	return 0;
 }
 
@@ -829,7 +829,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 	BUG_ON(!xbus);
 	if(!XBUS_IS(xbus, READY))
 		return -ENODEV;
-	if (pos < 0 || pos >= xpd->channels) {
+	if (pos < 0 || pos >= PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "Bad channel number %d in %s(), cmd=%u\n",
 			pos, __FUNCTION__, cmd);
 		return -EINVAL;
@@ -840,15 +840,15 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 			if (get_user(val, (int __user *)arg))
 				return -EFAULT;
 			LINE_DBG(SIGNAL, xpd, pos, "DAHDI_ONHOOKTRANSFER (%d millis)\n", val);
-			if (IS_SET(xpd->digital_inputs | xpd->digital_outputs, pos))
+			if (IS_SET(PHONEDEV(xpd).digital_inputs | PHONEDEV(xpd).digital_outputs, pos))
 				return 0;	/* Nothing to do */
 			oht_pcm(xpd, pos, 1);	/* Get ready of VMWI FSK tones */
 			if(priv->lasttxhook[pos] == FXS_LINE_POL_ACTIVE) {
 				priv->ohttimer[pos] = val;
 				priv->idletxhookstate[pos] = FXS_LINE_POL_OHTRANS;
 				vmwi_search(xpd, pos, 1);
-				CALL_XMETHOD(card_pcm_recompute, xbus, xpd, priv->search_fsk_pattern);
-				LINE_DBG(SIGNAL, xpd, pos, "Start OHT_TIMER. wanted_pcm_mask=0x%X\n", xpd->wanted_pcm_mask);
+				PHONE_METHOD(xpd, card_pcm_recompute)(xbus, xpd, priv->search_fsk_pattern);
+				LINE_DBG(SIGNAL, xpd, pos, "Start OHT_TIMER. wanted_pcm_mask=0x%X\n", PHONEDEV(xpd).wanted_pcm_mask);
 			}
 			if (VMWI_NEON(priv, pos) && !IS_OFFHOOK(xpd, pos))
 				start_stop_vm_led(xbus, xpd, pos);
@@ -935,9 +935,9 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 				return 0;
 			}
 			/* Digital inputs/outputs don't have VM leds */
-			if (IS_SET(xpd->digital_inputs | xpd->digital_outputs, pos))
+			if (IS_SET(PHONEDEV(xpd).digital_inputs | PHONEDEV(xpd).digital_outputs, pos))
 				return 0;
-			xpd->msg_waiting[pos] = val;
+			PHONEDEV(xpd).msg_waiting[pos] = val;
 			LINE_DBG(SIGNAL, xpd, pos, "DAHDI_VMWI: %s\n",
 					(val) ? "yes" : "no");
 			return 0;
@@ -1065,11 +1065,11 @@ static void detect_vmwi(xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	ignore_mask =
-		xpd->offhook_state |
-		~xpd->oht_pcm_pass |
-		~priv->search_fsk_pattern |
-		xpd->digital_inputs |
-		xpd->digital_outputs;
+		PHONEDEV(xpd).offhook_state |
+		~(PHONEDEV(xpd).oht_pcm_pass) |
+		~(priv->search_fsk_pattern) |
+		PHONEDEV(xpd).digital_inputs |
+		PHONEDEV(xpd).digital_outputs;
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
 		byte		*writechunk = chan->writechunk;
@@ -1097,11 +1097,11 @@ static void detect_vmwi(xpd_t *xpd)
 			oht_pcm(xpd, i, 0);
 			if(unlikely(mem_equal(writechunk, FSK_ON_PATTERN, DAHDI_CHUNKSIZE))) {
 				LINE_DBG(SIGNAL, xpd, i, "MSG WAITING ON\n");
-				xpd->msg_waiting[i] = 1;
+				PHONEDEV(xpd).msg_waiting[i] = 1;
 				start_stop_vm_led(xbus, xpd, i);
 			} else if(unlikely(mem_equal(writechunk, FSK_OFF_PATTERN, DAHDI_CHUNKSIZE))) {
 				LINE_DBG(SIGNAL, xpd, i, "MSG WAITING OFF\n");
-				xpd->msg_waiting[i] = 0;
+				PHONEDEV(xpd).msg_waiting[i] = 0;
 				start_stop_vm_led(xbus, xpd, i);
 			} else {
 				int	j;
@@ -1179,15 +1179,15 @@ static void process_hookstate(xpd_t *xpd, xpp_line_t offhook, xpp_line_t change_
 	int			i;
 
 	BUG_ON(!xpd);
-	BUG_ON(xpd->direction != TO_PHONE);
+	BUG_ON(PHONEDEV(xpd).direction != TO_PHONE);
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	XPD_DBG(SIGNAL, xpd, "offhook=0x%X change_mask=0x%X\n", offhook, change_mask);
 	for_each_line(xpd, i) {
-		if(IS_SET(xpd->digital_outputs, i) || IS_SET(xpd->digital_inputs, i))
+		if(IS_SET(PHONEDEV(xpd).digital_outputs, i) || IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			continue;
 		if(IS_SET(change_mask, i)) {
-			xpd->ringing[i] = 0;		/* No more ringing... */
+			PHONEDEV(xpd).ringing[i] = 0;		/* No more ringing... */
 #ifdef	WITH_METERING
 			metering_gen(xpd, i, 0);	/* Stop metering... */
 #endif
@@ -1222,7 +1222,7 @@ HANDLER_DEF(FXS, SIG_CHANGED)
 	unsigned long		flags;
 
 	BUG_ON(!xpd);
-	BUG_ON(xpd->direction != TO_PHONE);
+	BUG_ON(PHONEDEV(xpd).direction != TO_PHONE);
 	XPD_DBG(SIGNAL, xpd, "(PHONE) sig_toggles=0x%04X sig_status=0x%04X\n", sig_toggles, sig_status);
 #if 0
 	Is this needed?
@@ -1250,10 +1250,10 @@ static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 		int		newchanno;
 
 		if(IS_SET(lines, channo)) {
-			newchanno = xpd->channels - LINES_DIGI_INP + i;
+			newchanno = PHONEDEV(xpd).channels - LINES_DIGI_INP + i;
 			BIT_CLR(lines, channo);
 			BIT_SET(lines, newchanno);
-			xpd->ringing[newchanno] = 0;			// Stop ringing. No leds for digital inputs.
+			PHONEDEV(xpd).ringing[newchanno] = 0;			// Stop ringing. No leds for digital inputs.
 			if(offhook && !IS_OFFHOOK(xpd, newchanno)) {		// OFFHOOK
 				LINE_DBG(SIGNAL, xpd, newchanno, "OFFHOOK\n");
 				hookstate_changed(xpd, newchanno, 1);
@@ -1394,6 +1394,29 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	return 0;
 }
 
+static const struct xops	fxs_xops = {
+	.card_new	= FXS_card_new,
+	.card_init	= FXS_card_init,
+	.card_remove	= FXS_card_remove,
+	.card_tick	= FXS_card_tick,
+	.card_register_reply	= FXS_card_register_reply,
+};
+
+static const struct phoneops	fxs_phoneops = {
+	.card_dahdi_preregistration	= FXS_card_dahdi_preregistration,
+	.card_dahdi_postregistration	= FXS_card_dahdi_postregistration,
+	.card_hooksig	= FXS_card_hooksig,
+	.card_pcm_recompute	= generic_card_pcm_recompute,
+	.card_pcm_fromspan	= generic_card_pcm_fromspan,
+	.card_pcm_tospan	= generic_card_pcm_tospan,
+	.card_timing_priority	= generic_timing_priority,
+	.card_open	= FXS_card_open,
+	.card_close	= FXS_card_close,
+	.card_ioctl	= FXS_card_ioctl,
+
+	.XPD_STATE	= XPROTO_CALLER(FXS, XPD_STATE),
+};
+
 static xproto_table_t PROTO_TABLE(FXS) = {
 	.owner = THIS_MODULE,
 	.entries = {
@@ -1403,25 +1426,8 @@ static xproto_table_t PROTO_TABLE(FXS) = {
 	.name = "FXS",	/* protocol name */
 	.ports_per_subunit = 8,
 	.type = XPD_TYPE_FXS,
-	.xops = {
-		.card_new	= FXS_card_new,
-		.card_init	= FXS_card_init,
-		.card_remove	= FXS_card_remove,
-		.card_dahdi_preregistration	= FXS_card_dahdi_preregistration,
-		.card_dahdi_postregistration	= FXS_card_dahdi_postregistration,
-		.card_hooksig	= FXS_card_hooksig,
-		.card_tick	= FXS_card_tick,
-		.card_pcm_recompute	= generic_card_pcm_recompute,
-		.card_pcm_fromspan	= generic_card_pcm_fromspan,
-		.card_pcm_tospan	= generic_card_pcm_tospan,
-		.card_timing_priority	= generic_timing_priority,
-		.card_open	= FXS_card_open,
-		.card_close	= FXS_card_close,
-		.card_ioctl	= FXS_card_ioctl,
-		.card_register_reply	= FXS_card_register_reply,
-
-		.XPD_STATE	= XPROTO_CALLER(FXS, XPD_STATE),
-	},
+	.xops = &fxs_xops,
+	.phoneops = &fxs_phoneops,
 	.packet_is_valid = fxs_packet_is_valid,
 	.packet_dump = fxs_packet_dump,
 };
@@ -1466,9 +1472,9 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 	for_each_line(xpd, i) {
 		char	pref;
 
-		if(IS_SET(xpd->digital_outputs, i))
+		if(IS_SET(PHONEDEV(xpd).digital_outputs, i))
 			pref = 'O';
-		else if(IS_SET(xpd->digital_inputs, i))
+		else if(IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			pref = 'I';
 		else
 			pref = ' ';
@@ -1485,17 +1491,17 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 		len += sprintf(page + len, "LED #%d", led);
 		len += sprintf(page + len, "\n\t%-17s: ", "ledstate");
 		for_each_line(xpd, i) {
-			if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+			if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				len += sprintf(page + len, "%d ", IS_SET(priv->ledstate[led], i));
 		}
 		len += sprintf(page + len, "\n\t%-17s: ", "ledcontrol");
 		for_each_line(xpd, i) {
-			if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+			if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				len += sprintf(page + len, "%d ", IS_SET(priv->ledcontrol[led], i));
 		}
 		len += sprintf(page + len, "\n\t%-17s: ", "led_counter");
 		for_each_line(xpd, i) {
-			if(!IS_SET(xpd->digital_outputs, i) && !IS_SET(xpd->digital_inputs, i))
+			if(!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				len += sprintf(page + len, "%d ", LED_COUNTER(priv,i,led));
 		}
 		len += sprintf(page + len, "\n");

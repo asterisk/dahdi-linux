@@ -820,7 +820,7 @@ int run_initialize_registers(xpd_t *xpd)
 				xpd->subunits, i);
 			continue;
 		}
-		direction_mask |= (su->direction == TO_PHONE) ? BIT(i) : 0;
+		direction_mask |= (PHONEDEV(su).direction == TO_PHONE) ? BIT(i) : 0;
 	}
 	snprintf(busstr, MAX_ENV_STR, "XBUS_NAME=%s", xbus->busname);
 	snprintf(busnumstr, MAX_ENV_STR, "XBUS_NUMBER=%d", xbus->num);

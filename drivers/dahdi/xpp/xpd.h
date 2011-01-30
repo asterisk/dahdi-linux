@@ -149,21 +149,15 @@ enum xpd_state {
 bool		xpd_setstate(xpd_t *xpd, enum xpd_state newstate);
 const char	*xpd_statename(enum xpd_state st);
 
-/*
- * An XPD is a single Xorcom Protocol Device
- */
-struct xpd {
-	char xpdname[XPD_NAMELEN];
+#define	PHONEDEV(xpd)	((xpd)->phonedev)
+
+struct phonedev {
+	const struct phoneops	*phoneops;	/* Card level operations */
 	struct dahdi_span	span;
 	struct dahdi_chan	*chans[32];
-#define	XPD_CHAN(xpd,chan)	((xpd)->chans[(chan)])
-
+#define	XPD_CHAN(xpd,chan)	(PHONEDEV(xpd).chans[(chan)])
 	int		channels;
-	xpd_type_t	type;
-	const char	*type_name;
-	byte		subtype;
 	xpd_direction_t	direction;		/* TO_PHONE, TO_PSTN */
-	int		subunits;		/* all siblings */
 	xpp_line_t	no_pcm;			/* Temporary: disable PCM (for USB-1) */
 	xpp_line_t	offhook_state;		/* Actual chip state: 0 - ONHOOK, 1 - OFHOOK */
 	xpp_line_t	oht_pcm_pass;		/* Transfer on-hook PCM */
@@ -173,12 +167,6 @@ struct xpd {
 	xpp_line_t	digital_inputs;		/* 0 - no, 1 - yes */
 	xpp_line_t	digital_signalling;	/* BRI signalling channels */
 	uint		timing_priority;	/* from 'span' directives in chan_dahdi.conf */
-
-	enum xpd_state	xpd_state;
-	struct device	xpd_dev;
-#define	dev_to_xpd(dev)	container_of(dev, struct xpd, xpd_dev)
-	struct kref		kref;
-#define kref_to_xpd(k) container_of(k, struct xpd, kref)
 
 	/* Assure atomicity of changes to pcm_len and wanted_pcm_mask */
 	spinlock_t	lock_recompute_pcm;
@@ -190,11 +178,35 @@ struct xpd {
 
 	bool		ringing[CHANNELS_PERXPD];
 
+	atomic_t	dahdi_registered;	/* Am I fully registered with dahdi */
+	atomic_t	open_counter;	/* Number of open channels */
+
+	/* Echo cancelation */
+	u_char ec_chunk1[CHANNELS_PERXPD][DAHDI_CHUNKSIZE];
+	u_char ec_chunk2[CHANNELS_PERXPD][DAHDI_CHUNKSIZE];
+};
+
+/*
+ * An XPD is a single Xorcom Protocol Device
+ */
+struct xpd {
+	char xpdname[XPD_NAMELEN];
+	struct phonedev	phonedev;
+
+	const struct xops	*xops;
+	xpd_type_t	type;
+	const char	*type_name;
+	byte		subtype;
+	int		subunits;		/* all siblings */
+	enum xpd_state	xpd_state;
+	struct device	xpd_dev;
+#define	dev_to_xpd(dev)	container_of(dev, struct xpd, xpd_dev)
+	struct kref		kref;
+#define kref_to_xpd(k) container_of(k, struct xpd, kref)
+
 	xbus_t *xbus;			/* The XBUS we are connected to */
 
 	spinlock_t	lock;
-	atomic_t	dahdi_registered;	/* Am I fully registered with dahdi */
-	atomic_t	open_counter;	/* Number of open channels */
 
 	int		flags;
 	unsigned long	blink_mode;	/* bitmask of blinking ports */
@@ -213,7 +225,6 @@ struct xpd {
 	int		counters[XPD_COUNTER_MAX];
 
 	const xproto_table_t	*xproto;	/* Card level protocol table */
-	const xops_t	*xops;			/* Card level operations */
 	void		*priv;			/* Card level private data */
 	bool		card_present;
 	reg_cmd_t	requested_reply;
@@ -224,12 +235,9 @@ struct xpd {
 	struct xpd_addr	addr;
 	struct list_head xpd_list;
 	unsigned int	timer_count;
-	/* Echo cancelation */
-	u_char ec_chunk1[CHANNELS_PERXPD][DAHDI_CHUNKSIZE];
-	u_char ec_chunk2[CHANNELS_PERXPD][DAHDI_CHUNKSIZE];
 };
 
-#define	for_each_line(xpd,i)	for((i) = 0; (i) < (xpd)->channels; (i)++)
+#define	for_each_line(xpd,i)	for((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
 #define	IS_BRI(xpd)		((xpd)->type == XPD_TYPE_BRI)
 #define	TICK_TOLERANCE		500 /* usec */
 

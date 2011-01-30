@@ -414,7 +414,7 @@ const char *xproto_name(xpd_type_t xpd_type)
 	return proto_table->name;
 }
 
-#define	CHECK_XOP(f)	\
+#define	CHECK_XOP(xops, f)	\
 		if(!(xops)->f) { \
 			ERR("%s: missing xmethod %s [%s (%d)]\n", __FUNCTION__, #f, name, type);	\
 			return -EINVAL;	\
@@ -422,9 +422,9 @@ const char *xproto_name(xpd_type_t xpd_type)
 
 int xproto_register(const xproto_table_t *proto_table)
 {
-	int		type;
-	const char	*name;
-	const xops_t	*xops;
+	int			type;
+	const char		*name;
+	const struct xops	*xops;
 	
 	BUG_ON(!proto_table);
 	type = proto_table->type;
@@ -436,11 +436,13 @@ int xproto_register(const xproto_table_t *proto_table)
 	DBG(GENERAL, "%s (%d)\n", name, type);
 	if(xprotocol_tables[type])
 		NOTICE("%s: overriding registration of %s (%d)\n", __FUNCTION__, name, type);
-	xops = &proto_table->xops;
-	CHECK_XOP(card_new);
-	CHECK_XOP(card_init);
-	CHECK_XOP(card_remove);
-	CHECK_XOP(card_tick);
+	xops = proto_table->xops;
+	CHECK_XOP(xops, card_new);
+	CHECK_XOP(xops, card_init);
+	CHECK_XOP(xops, card_remove);
+	CHECK_XOP(xops, card_tick);
+#if 0
+	/* FIXME: check PHONE_METHOD() */
 	CHECK_XOP(card_pcm_recompute);
 	CHECK_XOP(card_pcm_fromspan);
 	CHECK_XOP(card_pcm_tospan);
@@ -449,6 +451,7 @@ int xproto_register(const xproto_table_t *proto_table)
 	// CHECK_XOP(card_ioctl);	// optional method -- call after testing
 	CHECK_XOP(card_register_reply);
 	CHECK_XOP(XPD_STATE);
+#endif
 
 	xprotocol_tables[type] = proto_table;
 	return 0;

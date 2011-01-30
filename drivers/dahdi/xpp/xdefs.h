@@ -159,7 +159,6 @@ typedef struct xbus		xbus_t;
 typedef	struct xpd		xpd_t;
 typedef	struct xframe		xframe_t;
 typedef	struct xpacket		xpacket_t;
-typedef struct xops		xops_t;
 typedef	__u32			xpp_line_t;	/* at most 31 lines for E1 */
 typedef	byte			lineno_t;
 typedef byte			xportno_t;

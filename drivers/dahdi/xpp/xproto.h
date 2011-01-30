@@ -216,13 +216,9 @@ xproto_handler_t xproto_global_handler(byte opcode);
 #define	CALL_XMETHOD(name, xbus, xpd, ...)				\
 			(xpd)->xops->name(xbus, xpd, ## __VA_ARGS__ )
 
-struct xops {
-	 xpd_t *(*card_new)(xbus_t *xbus, int unit, int subunit,
-		const xproto_table_t *proto_table, byte subtype,
-		int subunits, int subunit_ports, bool to_phone);
-	int (*card_init)(xbus_t *xbus, xpd_t *xpd);
-	int (*card_remove)(xbus_t *xbus, xpd_t *xpd);
-	int (*card_tick)(xbus_t *xbus, xpd_t *xpd);
+#define	PHONE_METHOD(xpd, name)	PHONEDEV(xpd).phoneops->name
+
+struct phoneops {
 	void (*card_pcm_recompute)(xbus_t *xbus, xpd_t *xpd, xpp_line_t pcm_mask);
 	void (*card_pcm_fromspan)(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack);
 	void (*card_pcm_tospan)(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack);
@@ -233,9 +229,18 @@ struct xops {
 	int (*card_ioctl)(xpd_t *xpd, int pos, unsigned int cmd, unsigned long arg);
 	int (*card_open)(xpd_t *xpd, lineno_t pos);
 	int (*card_close)(xpd_t *xpd, lineno_t pos);
-	int (*card_register_reply)(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *reg);
 
 	int (*XPD_STATE)(xbus_t *xbus, xpd_t *xpd, bool on);
+};
+
+struct xops {
+	 xpd_t *(*card_new)(xbus_t *xbus, int unit, int subunit,
+		const xproto_table_t *proto_table, byte subtype,
+		int subunits, int subunit_ports, bool to_phone);
+	int (*card_init)(xbus_t *xbus, xpd_t *xpd);
+	int (*card_remove)(xbus_t *xbus, xpd_t *xpd);
+	int (*card_tick)(xbus_t *xbus, xpd_t *xpd);
+	int (*card_register_reply)(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *reg);
 };
 
 struct xproto_entry {
@@ -246,9 +251,11 @@ struct xproto_entry {
 };
 
 struct xproto_table {
-	struct module	*owner;
-	xproto_entry_t	entries[256];	/* Indexed by opcode */
-	xops_t		xops;
+	struct module		*owner;
+	xproto_entry_t		entries[256];	/* Indexed by opcode */
+	const struct xops	*xops;		/* Card level operations */
+	const struct phoneops	*phoneops;	/* DAHDI operations */
+	//const struct echoops	*echo;
 	xpd_type_t	type;
 	byte		ports_per_subunit;
 	const char	*name;

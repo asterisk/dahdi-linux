@@ -496,7 +496,8 @@ static void global_tick(void)
 #ifdef	DAHDI_SYNC_TICK
 void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 {
-	xpd_t		*xpd = container_of(span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	static int	redundant_ticks;	/* for extra spans */
 	struct timeval	now;
 
@@ -629,8 +630,7 @@ void elect_syncer(const char *msg)
 
 				if(!xpd || !xpd->card_present)
 					continue;
-				prio = CALL_XMETHOD(card_timing_priority,
-						xbus, xpd);
+				prio = PHONE_METHOD(xpd, card_timing_priority)(xbus, xpd);
 				if (prio < 0) {
 					DBG(SYNC, "%s/%s: skip sync\n",
 						xbus->busname, xpd->xpdname);
@@ -668,10 +668,10 @@ void elect_syncer(const char *msg)
  */
 void update_wanted_pcm_mask(xpd_t *xpd, xpp_line_t new_mask, uint new_pcm_len)
 {
-	xpd->pcm_len = new_pcm_len;
-	xpd->wanted_pcm_mask = new_mask;
+	PHONEDEV(xpd).pcm_len = new_pcm_len;
+	PHONEDEV(xpd).wanted_pcm_mask = new_mask;
 	XPD_DBG(SIGNAL, xpd, "pcm_len=%d wanted_pcm_mask=0x%X\n",
-		xpd->pcm_len, xpd->wanted_pcm_mask);
+		PHONEDEV(xpd).pcm_len, PHONEDEV(xpd).wanted_pcm_mask);
 }
 
 /*
@@ -686,13 +686,13 @@ void generic_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd, xpp_line_t pcm_mask)
 	unsigned long	flags;
 	uint		pcm_len;
 
-	spin_lock_irqsave(&xpd->lock_recompute_pcm, flags);
+	spin_lock_irqsave(&PHONEDEV(xpd).lock_recompute_pcm, flags);
 	//XPD_DBG(SIGNAL, xpd, "pcm_mask=0x%X\n", pcm_mask);
 	/* Add/remove all the trivial cases */
-	pcm_mask |= xpd->offhook_state;
-	pcm_mask |= xpd->oht_pcm_pass;
-	pcm_mask &= ~xpd->digital_inputs;
-	pcm_mask &= ~xpd->digital_outputs;
+	pcm_mask |= PHONEDEV(xpd).offhook_state;
+	pcm_mask |= PHONEDEV(xpd).oht_pcm_pass;
+	pcm_mask &= ~(PHONEDEV(xpd).digital_inputs);
+	pcm_mask &= ~(PHONEDEV(xpd).digital_outputs);
 	for_each_line(xpd, i)
 		if(IS_SET(pcm_mask, i))
 			line_count++;
@@ -708,7 +708,7 @@ void generic_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd, xpp_line_t pcm_mask)
 		? RPACKET_HEADERSIZE + sizeof(xpp_line_t) + line_count * DAHDI_CHUNKSIZE
 		: 0L;
 	update_wanted_pcm_mask(xpd, pcm_mask, pcm_len);
-	spin_unlock_irqrestore(&xpd->lock_recompute_pcm, flags);
+	spin_unlock_irqrestore(&PHONEDEV(xpd).lock_recompute_pcm, flags);
 }
 
 void fill_beep(u_char *buf, int num, int duration)
@@ -741,16 +741,16 @@ static void do_ec(xpd_t *xpd)
 {
 	int	i;
 
-	for (i = 0;i < xpd->span.channels; i++) {
+	for (i = 0;i < PHONEDEV(xpd).span.channels; i++) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
 
-		if(unlikely(IS_SET(xpd->digital_signalling, i)))	/* Don't echo cancel BRI D-chans */
+		if(unlikely(IS_SET(PHONEDEV(xpd).digital_signalling, i)))	/* Don't echo cancel BRI D-chans */
 			continue;
-		if(!IS_SET(xpd->wanted_pcm_mask, i))			/* No ec for unwanted PCM */
+		if(!IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))			/* No ec for unwanted PCM */
 			continue;
-		dahdi_ec_chunk(chan, chan->readchunk, xpd->ec_chunk2[i]);
-		memcpy(xpd->ec_chunk2[i], xpd->ec_chunk1[i], DAHDI_CHUNKSIZE);
-		memcpy(xpd->ec_chunk1[i], chan->writechunk, DAHDI_CHUNKSIZE);
+		dahdi_ec_chunk(chan, chan->readchunk, PHONEDEV(xpd).ec_chunk2[i]);
+		memcpy(PHONEDEV(xpd).ec_chunk2[i], PHONEDEV(xpd).ec_chunk1[i], DAHDI_CHUNKSIZE);
+		memcpy(PHONEDEV(xpd).ec_chunk1[i], chan->writechunk, DAHDI_CHUNKSIZE);
 	}
 }
 
@@ -864,11 +864,11 @@ void generic_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	BUG_ON(!xbus);
 	BUG_ON(!xpd);
 	BUG_ON(!pack);
-	wanted_lines = xpd->wanted_pcm_mask;
+	wanted_lines = PHONEDEV(xpd).wanted_pcm_mask;
 	RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, lines) = wanted_lines;
 	pcm = RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, pcm);
 	spin_lock_irqsave(&xpd->lock, flags);
-	for (i = 0; i < xpd->channels; i++) {
+	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
 
 		if(IS_SET(wanted_lines, i)) {
@@ -904,11 +904,11 @@ void generic_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	/*
 	 * Calculate the channels we want to mute
 	 */
-	pcm_mute = ~xpd->wanted_pcm_mask;
-	pcm_mute |= xpd->mute_dtmf | xpd->silence_pcm;
+	pcm_mute = ~(PHONEDEV(xpd).wanted_pcm_mask);
+	pcm_mute |= PHONEDEV(xpd).mute_dtmf | PHONEDEV(xpd).silence_pcm;
 	if(!SPAN_REGISTERED(xpd))
 		goto out;
-	for (i = 0; i < xpd->channels; i++) {
+	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
 		volatile u_char	*r = XPD_CHAN(xpd, i)->readchunk;
 		bool		got_data = IS_SET(pcm_mask, i);
 
@@ -916,16 +916,16 @@ void generic_card_pcm_tospan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 			/* We have and want real data */
 			// memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);	// DEBUG
 			memcpy((u_char *)r, pcm, DAHDI_CHUNKSIZE);
-		} else if(IS_SET(xpd->wanted_pcm_mask | xpd->silence_pcm, i)) {
+		} else if(IS_SET(PHONEDEV(xpd).wanted_pcm_mask | PHONEDEV(xpd).silence_pcm, i)) {
 			/* Inject SILENCE */
 			memset((u_char *)r, 0x7F, DAHDI_CHUNKSIZE);
-			if(IS_SET(xpd->silence_pcm, i)) {
+			if(IS_SET(PHONEDEV(xpd).silence_pcm, i)) {
 				/*
 				 * This will clear the EC buffers until next tick
 				 * So we don't have noise residues from the past.
 				 */
-				memset(xpd->ec_chunk2[i], 0x7F, DAHDI_CHUNKSIZE);
-				memset(xpd->ec_chunk1[i], 0x7F, DAHDI_CHUNKSIZE);
+				memset(PHONEDEV(xpd).ec_chunk2[i], 0x7F, DAHDI_CHUNKSIZE);
+				memset(PHONEDEV(xpd).ec_chunk1[i], 0x7F, DAHDI_CHUNKSIZE);
 			}
 		}
 		if(got_data)
@@ -993,7 +993,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		if(SPAN_REGISTERED(xpd)) {
 			XBUS_COUNTER(xbus, RX_PACK_PCM)++;
-			CALL_XMETHOD(card_pcm_tospan, xbus, xpd, pack);
+			PHONE_METHOD(xpd, card_pcm_tospan)(xbus, xpd, pack);
 		}
 	} while(p < xframe_end);
 	ret = 0;	/* all good */
@@ -1005,7 +1005,7 @@ out:
 
 int generic_timing_priority(xbus_t *xbus, xpd_t *xpd)
 {
-	return xpd->timing_priority;
+	return PHONEDEV(xpd).timing_priority;
 }
 
 static void xbus_tick(xbus_t *xbus)
@@ -1024,10 +1024,10 @@ static void xbus_tick(xbus_t *xbus)
 		if(xpd && SPAN_REGISTERED(xpd)) {
 #ifdef	OPTIMIZE_CHANMUTE
 			int		j;
-			xpp_line_t	xmit_mask = xpd->wanted_pcm_mask;
+			xpp_line_t	xmit_mask = PHONEDEV(xpd).wanted_pcm_mask;
 			
-			xmit_mask |= xpd->silence_pcm;
-			xmit_mask |= xpd->digital_signalling;
+			xmit_mask |= PHONEDEV(xpd).silence_pcm;
+			xmit_mask |= PHONEDEV(xpd).digital_signalling;
 			for_each_line(xpd, j) {
 				XPD_CHAN(xpd, j)->chanmute = (optimize_chanmute)
 					? !IS_SET(xmit_mask, j)
@@ -1038,7 +1038,7 @@ static void xbus_tick(xbus_t *xbus)
 			 * calls to dahdi_transmit should be out of spinlocks, as it may call back
 			 * our hook setting methods.
 			 */
-			dahdi_transmit(&xpd->span);
+			dahdi_transmit(&PHONEDEV(xpd).span);
 		}
 	}
 	/*
@@ -1049,7 +1049,7 @@ static void xbus_tick(xbus_t *xbus)
 
 		if((xpd = xpd_of(xbus, i)) == NULL)
 			continue;
-		pcm_len = xpd->pcm_len;
+		pcm_len = PHONEDEV(xpd).pcm_len;
 		if(SPAN_REGISTERED(xpd)) {
 			if(pcm_len && xpd->card_present) {
 				do {
@@ -1079,7 +1079,7 @@ static void xbus_tick(xbus_t *xbus)
 					XPACKET_ADDR_SYNC(pack) = 1;
 					sent_sync_bit = 1;
 				}
-				CALL_XMETHOD(card_pcm_fromspan, xbus, xpd, pack);
+				PHONE_METHOD(xpd, card_pcm_fromspan)(xbus, xpd, pack);
 				XBUS_COUNTER(xbus, TX_PACK_PCM)++;
 			}
 		}
@@ -1120,9 +1120,9 @@ static void xbus_tick(xbus_t *xbus)
 			continue;
 		if(SPAN_REGISTERED(xpd)) {
 			do_ec(xpd);
-			dahdi_receive(&xpd->span);
+			dahdi_receive(&PHONEDEV(xpd).span);
 		}
-		xpd->silence_pcm = 0;	/* silence was injected */
+		PHONEDEV(xpd).silence_pcm = 0;	/* silence was injected */
 		xpd->timer_count = xbus->global_counter;
 		/*
 		 * Must be called *after* tx/rx so

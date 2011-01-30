@@ -784,7 +784,6 @@ static int new_card(xbus_t *xbus,
 		byte port_dir)
 {
 	const xproto_table_t	*proto_table;
-	const xops_t		*xops;
 	int			i;
 	int			subunits;
 	int			ret = 0;
@@ -810,8 +809,7 @@ static int new_card(xbus_t *xbus,
 			subunits,
 			port_dir
 		);
-	xops = &proto_table->xops;
-	BUG_ON(!xops);
+	BUG_ON(!proto_table->phoneops);
 	xbus->worker.num_units += subunits - 1;
 	for(i = 0; i < subunits; i++) {
 		int	subunit_ports = proto_table->ports_per_subunit;
@@ -915,7 +913,7 @@ static int xpd_initialize(xpd_t *xpd)
 	}
 	//CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 0);	/* Turn off all channels */
 	xpd->card_present = 1;
-	CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 1);		/* Turn on all channels */
+	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);		/* Turn on all channels */
 	if(!xpd_setstate(xpd, XPD_STATE_READY)) {
 		goto out;
 	}

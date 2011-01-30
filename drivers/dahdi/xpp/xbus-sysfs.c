@@ -621,7 +621,7 @@ static DEVICE_ATTR_READER(span_show, dev, buf)
 	if(!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
-	len += sprintf(buf, "%d\n", SPAN_REGISTERED(xpd) ? xpd->span.spanno : 0);
+	len += sprintf(buf, "%d\n", SPAN_REGISTERED(xpd) ? PHONEDEV(xpd).span.spanno : 0);
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	return len;
 }
@@ -693,7 +693,7 @@ static DEVICE_ATTR_READER(timing_priority_show, dev, buf)
 	if(!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
-	len += sprintf(buf + len, "%d\n", xpd->timing_priority);
+	len += sprintf(buf + len, "%d\n", PHONEDEV(xpd).timing_priority);
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	return len;
 }

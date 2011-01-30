@@ -563,10 +563,10 @@ static void PRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
-	spin_lock_irqsave(&xpd->lock_recompute_pcm, flags);
+	spin_lock_irqsave(&PHONEDEV(xpd).lock_recompute_pcm, flags);
 	//XPD_DBG(SIGNAL, xpd, "pcm_mask=0x%X\n", pcm_mask);
 	/* Add/remove all the trivial cases */
-	pcm_mask |= xpd->offhook_state;
+	pcm_mask |= PHONEDEV(xpd).offhook_state;
 	for_each_line(xpd, i)
 		if (IS_SET(pcm_mask, i))
 			line_count++;
@@ -590,7 +590,7 @@ static void PRI_card_pcm_recompute(xbus_t *xbus, xpd_t *xpd,
 			line_count * DAHDI_CHUNKSIZE
 		: 0L;
 	update_wanted_pcm_mask(xpd, pcm_mask, pcm_len);
-	spin_unlock_irqrestore(&xpd->lock_recompute_pcm, flags);
+	spin_unlock_irqrestore(&PHONEDEV(xpd).lock_recompute_pcm, flags);
 }
 
 /*
@@ -610,7 +610,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	priv = xpd->priv;
 	if(SPAN_REGISTERED(xpd)) {
 		XPD_NOTICE(xpd, "Registered as span %d. Cannot do setup pri protocol (%s)\n",
-			xpd->span.spanno, __FUNCTION__);
+			PHONEDEV(xpd).span.spanno, __FUNCTION__);
 		return -EBUSY;
 	}
 	if(priv->pri_protocol != PRI_PROTO_0) {
@@ -650,16 +650,16 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	}
 	priv->pri_protocol = set_proto;
 	priv->is_cas = -1;
-	xpd->channels = pri_num_channels(set_proto);
-	xpd->offhook_state = BITMASK(xpd->channels);
-	CALL_XMETHOD(card_pcm_recompute, xpd->xbus, xpd, 0);
+	PHONEDEV(xpd).channels = pri_num_channels(set_proto);
+	PHONEDEV(xpd).offhook_state = BITMASK(PHONEDEV(xpd).channels);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
 	priv->deflaw = deflaw;
 	priv->dchan_num = dchan_num;
 	priv->local_loopback = 0;
 	xpd->type_name = type_name(priv->pri_protocol);
 	XPD_DBG(GENERAL, xpd, "%s, channels=%d, dchan_num=%d, deflaw=%d\n",
 			pri_protocol_name(set_proto),
-			xpd->channels,
+			PHONEDEV(xpd).channels,
 			priv->dchan_num,
 			priv->deflaw
 			);
@@ -692,18 +692,18 @@ static void dahdi_update_syncsrc(xpd_t *xpd)
 		if(priv->clock_source && priv->alarms == 0) {
 			if(best_spanno)
 				XPD_ERR(xpd, "Duplicate XPD's with clock_source=1\n");
-			best_spanno = subxpd->span.spanno;
+			best_spanno = PHONEDEV(subxpd).span.spanno;
 		}
 	}
 	for(i = 0; i < MAX_SLAVES; i++) {
 		subxpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, i);
 		if(!subxpd)
 			continue;
-		if(subxpd->span.syncsrc == best_spanno)
+		if(PHONEDEV(subxpd).span.syncsrc == best_spanno)
 			XPD_DBG(SYNC, xpd, "Setting SyncSource to span %d\n", best_spanno);
 		else
 			XPD_DBG(SYNC, xpd, "Slaving to span %d\n", best_spanno);
-		subxpd->span.syncsrc = best_spanno;
+		PHONEDEV(subxpd).span.syncsrc = best_spanno;
 	}
 }
 
@@ -734,10 +734,10 @@ static void set_clocking(xpd_t *xpd)
 		priv = subxpd->priv;
 		if(priv->alarms != 0)
 			continue;
-		if(subxpd->timing_priority > 0 && subxpd->timing_priority < best_subunit_prio) {
+		if(PHONEDEV(subxpd).timing_priority > 0 && PHONEDEV(subxpd).timing_priority < best_subunit_prio) {
 			best_xpd = subxpd;
 			best_subunit = i;
-			best_subunit_prio = subxpd->timing_priority;
+			best_subunit_prio = PHONEDEV(subxpd).timing_priority;
 		}
 	}
 	/* Now set it */
@@ -779,7 +779,7 @@ static void set_reg_lim0(const char *msg, xpd_t *xpd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	is_master_mode = xpd->timing_priority == 0;
+	is_master_mode = PHONEDEV(xpd).timing_priority == 0;
 	localloop = priv->local_loopback;
 	lim0 |= (localloop) ? REG_LIM0_LL : 0;
 	if(is_master_mode)
@@ -819,7 +819,7 @@ static int set_localloop(xpd_t *xpd, bool localloop)
 	priv = xpd->priv;
 	if(SPAN_REGISTERED(xpd)) {
 		XPD_NOTICE(xpd, "Registered as span %d. Cannot do %s\n",
-			xpd->span.spanno, __FUNCTION__);
+			PHONEDEV(xpd).span.spanno, __FUNCTION__);
 		return -EBUSY;
 	}
 	priv->local_loopback = localloop;
@@ -869,7 +869,7 @@ static void set_rbslines(xpd_t *xpd, int channo)
 		else
 			BIT_SET(new_rbslines, i);
 	}
-	new_rbslines &= BITMASK(xpd->channels);
+	new_rbslines &= BITMASK(PHONEDEV(xpd).channels);
 	modified_lines = priv->rbslines ^ new_rbslines;
 	XPD_DBG(DEVICES, xpd, "RBSLINES-%d(%s): 0x%X\n",
 		channo, pri_protocol_name(priv->pri_protocol), new_rbslines);
@@ -1037,7 +1037,7 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 		force_cas = 1;
 		set_mode_cas(xpd, 1);
 	}
-	CALL_XMETHOD(card_pcm_recompute, xpd->xbus, xpd, 0);
+	PHONE_METHOD(xpd, card_pcm_recompute)(xpd->xbus, xpd, 0);
 	/*
 	 * E1's can enable CRC checking
 	 * CRC4 is legal only for E1, and it is checked by pri_linecompat()
@@ -1092,15 +1092,16 @@ bad_lineconfig:
 
 static int pri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
 {
-	xpd_t			*xpd = container_of(span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	struct PRI_priv_data	*priv;
 	int			ret;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
-	if(lc->span != xpd->span.spanno) {
+	if(lc->span != PHONEDEV(xpd).span.spanno) {
 		XPD_ERR(xpd, "I am span %d but got spanconfig for span %d\n",
-			xpd->span.spanno, lc->span);
+			PHONEDEV(xpd).span.spanno, lc->span);
 		return -EINVAL;
 	}
 	/*
@@ -1112,7 +1113,7 @@ static int pri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
 	ret = pri_lineconfig(xpd, lc->lineconfig);
 	if(!ret) {
 		span->lineconfig = lc->lineconfig;
-		xpd->timing_priority = lc->sync;
+		PHONEDEV(xpd).timing_priority = lc->sync;
 		set_master_mode("spanconfig", xpd);
 		elect_syncer("PRI-master_mode");
 	}
@@ -1126,7 +1127,8 @@ static int pri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
  */
 static int pri_chanconfig(struct dahdi_chan *chan, int sigtype)
 {
-	xpd_t			*xpd = container_of(chan->span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(chan->span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	struct PRI_priv_data	*priv;
 
 	BUG_ON(!xpd);
@@ -1158,7 +1160,7 @@ static int pri_chanconfig(struct dahdi_chan *chan, int sigtype)
 		if(priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 1)
 			set_mode_cas(xpd, 1);
 	}
-	if(xpd->span.flags & DAHDI_FLAG_RUNNING) {
+	if(PHONEDEV(xpd).span.flags & DAHDI_FLAG_RUNNING) {
 		XPD_DBG(DEVICES, xpd, "Span is RUNNING. Updating rbslines.\n");
 		set_rbslines(xpd, chan->channo);
 	}
@@ -1227,9 +1229,9 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 		goto err;
 	}
 	xpd->type_name = type_name(priv->pri_protocol);
-	xpd->direction = TO_PSTN;
+	PHONEDEV(xpd).direction = TO_PSTN;
 	XPD_DBG(DEVICES, xpd, "%s\n", xpd->type_name);
-	xpd->timing_priority = 1;		/* High priority SLAVE */
+	PHONEDEV(xpd).timing_priority = 1;		/* High priority SLAVE */
 	set_master_mode(__FUNCTION__, xpd);
 	for(ret = 0; ret < NUM_LEDS; ret++) {
 		DO_LED(xpd, ret, PRI_LED_ON);
@@ -1308,15 +1310,15 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	XPD_DBG(GENERAL, xpd, "%s (proto=%s, channels=%d, deflaw=%d)\n",
 		(on)?"on":"off",
 		pri_protocol_name(priv->pri_protocol),
-		xpd->channels,
+		PHONEDEV(xpd).channels,
 		priv->deflaw);
 	if(!on) {
 		/* Nothing to do yet */
 		return 0;
 	}
-	xpd->span.spantype = pri_protocol_name(priv->pri_protocol);
-	xpd->span.linecompat = pri_linecompat(priv->pri_protocol);
-	xpd->span.deflaw = priv->deflaw;
+	PHONEDEV(xpd).span.spantype = pri_protocol_name(priv->pri_protocol);
+	PHONEDEV(xpd).span.linecompat = pri_linecompat(priv->pri_protocol);
+	PHONEDEV(xpd).span.deflaw = priv->deflaw;
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*cur_chan = XPD_CHAN(xpd, i);
 		bool		is_dchan = i == PRI_DCHAN_IDX(priv);
@@ -1333,8 +1335,8 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 			cur_chan->flags &= ~DAHDI_FLAG_HDLC;
 		}
 	}
-	xpd->offhook_state = xpd->wanted_pcm_mask;
-	xpd->span.ops = &PRI_span_ops;
+	PHONEDEV(xpd).offhook_state = PHONEDEV(xpd).wanted_pcm_mask;
+	PHONEDEV(xpd).span.ops = &PRI_span_ops;
 	return 0;
 }
 
@@ -1372,7 +1374,7 @@ static void dchan_state(xpd_t *xpd, bool up)
 	} else {
 		int	d = PRI_DCHAN_IDX(priv);
 
-		if(SPAN_REGISTERED(xpd) && d >= 0 && d < xpd->channels) {
+		if(SPAN_REGISTERED(xpd) && d >= 0 && d < PHONEDEV(xpd).channels) {
 			byte	*pcm;
 
 			pcm = (byte *)XPD_CHAN(xpd, d)->readchunk;
@@ -1406,7 +1408,7 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(xpd->timing_priority == 0) {
+	if(PHONEDEV(xpd).timing_priority == 0) {
 		which_led = TOP_RED_LED;
 		other_led = BOTTOM_GREEN_LED;
 	} else {
@@ -1530,7 +1532,8 @@ static int PRI_card_close(xpd_t *xpd, lineno_t pos)
  */
 static int pri_startup(struct dahdi_span *span)
 {
-	xpd_t			*xpd = container_of(span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	struct PRI_priv_data	*priv;
 
 	BUG_ON(!xpd);
@@ -1542,7 +1545,7 @@ static int pri_startup(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "STARTUP\n");
 	// Turn on all channels
-	CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 1);
+	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);
 	set_rbslines(xpd, 0);
 	write_subunit(xpd, REG_XPM2, 0x00);
 	return 0;
@@ -1553,7 +1556,8 @@ static int pri_startup(struct dahdi_span *span)
  */
 static int pri_shutdown(struct dahdi_span *span)
 {
-	xpd_t			*xpd = container_of(span, struct xpd, span);
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
 	struct PRI_priv_data	*priv;
 
 	BUG_ON(!xpd);
@@ -1565,7 +1569,7 @@ static int pri_shutdown(struct dahdi_span *span)
 	}
 	XPD_DBG(GENERAL, xpd, "SHUTDOWN\n");
 	// Turn off all channels
-	CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 0);
+	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 0);
 	return 0;
 }
 
@@ -1614,7 +1618,7 @@ static int encode_rbsbits_t1(xpd_t *xpd, int pos, int bits)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	BUG_ON(priv->pri_protocol != PRI_PROTO_T1);
-	if(pos < 0 || pos >= xpd->channels) {
+	if(pos < 0 || pos >= PHONEDEV(xpd).channels) {
 		XPD_ERR(xpd, "%s: Bad pos=%d\n", __FUNCTION__, pos);
 		return 0;
 	}
@@ -1741,7 +1745,7 @@ static void PRI_card_pcm_fromspan(xbus_t *xbus, xpd_t *xpd, xpacket_t *pack)
 	BUG_ON(!priv);
 	pcm = RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, pcm);
 	spin_lock_irqsave(&xpd->lock, flags);
-	wanted_lines = xpd->wanted_pcm_mask;
+	wanted_lines = PHONEDEV(xpd).wanted_pcm_mask;
 	physical_chan = 0;
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
@@ -1858,7 +1862,7 @@ int PRI_timing_priority(xbus_t *xbus, xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	if (priv->layer1_up)
-		return xpd->timing_priority;
+		return PHONEDEV(xpd).timing_priority;
 	XPD_DBG(SYNC, xpd, "No timing priority (no layer1)\n");
 	return -ENOENT;
 }
@@ -1937,24 +1941,24 @@ static void layer1_state(xpd_t *xpd, byte data_low)
 			query_subunit(xpd, regbase + i);
 	}
 
-	if(SPAN_REGISTERED(xpd) && xpd->span.alarms != alarms) {
+	if(SPAN_REGISTERED(xpd) && PHONEDEV(xpd).span.alarms != alarms) {
 		char	str1[MAX_PROC_WRITE];
 		char	str2[MAX_PROC_WRITE];
 
-		alarm2str(xpd->span.alarms, str1, sizeof(str1));
+		alarm2str(PHONEDEV(xpd).span.alarms, str1, sizeof(str1));
 		alarm2str(alarms, str2, sizeof(str2));
 		XPD_NOTICE(xpd, "Alarms: 0x%X (%s) => 0x%X (%s)\n",
-				xpd->span.alarms, str1,
+				PHONEDEV(xpd).span.alarms, str1,
 				alarms, str2);
 		if (priv->is_cas) {
 			if (alarms == DAHDI_ALARM_NONE)
 				send_oldbits(xpd);
-			else if (xpd->span.alarms == DAHDI_ALARM_NONE)
+			else if (PHONEDEV(xpd).span.alarms == DAHDI_ALARM_NONE)
 				send_idlebits(xpd, 1);
 		}
-		xpd->span.alarms = alarms;
+		PHONEDEV(xpd).span.alarms = alarms;
 		elect_syncer("LAYER1");
-		dahdi_alarm_notify(&xpd->span);
+		dahdi_alarm_notify(&PHONEDEV(xpd).span);
 		set_clocking(xpd);
 	}
 	priv->reg_frs0 = data_low;
@@ -1980,14 +1984,14 @@ static int decode_cas_e1(xpd_t *xpd, byte regnum, byte data_low)
 		XPD_ERR(xpd, "%s: got bad pos=%d [0-%d]\n", __FUNCTION__, pos, NUM_CAS_RS_E);
 		return -EINVAL;
 	}
-	if(chan1 < 0 || chan1 > xpd->channels) {
+	if(chan1 < 0 || chan1 > PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "%s: %s CAS: Bad chan1 number (%d)\n",
 			__FUNCTION__,
 			pri_protocol_name(priv->pri_protocol),
 			chan1);
 		return -EINVAL;
 	}
-	if(chan2 < 0 || chan2 > xpd->channels) {
+	if(chan2 < 0 || chan2 > PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "%s: %s CAS: Bad chan2 number (%d)\n",
 			__FUNCTION__,
 			pri_protocol_name(priv->pri_protocol),
@@ -2038,7 +2042,7 @@ static int decode_cas_t1(xpd_t *xpd, byte regnum, byte data_low)
 		if (!priv->is_esf)
 			rxsig <<= 2;
 		pos = rsnum * chan_per_reg + chan_per_reg - i - 1;
-		if(pos < 0 || pos >= xpd->channels) {
+		if(pos < 0 || pos >= PHONEDEV(xpd).channels) {
 			XPD_ERR(xpd, "%s: Bad pos=%d\n", __FUNCTION__, pos);
 			continue;
 		}
@@ -2165,6 +2169,27 @@ end:
 	return 0;
 }
 
+static const struct xops	pri_xops = {
+	.card_new	= PRI_card_new,
+	.card_init	= PRI_card_init,
+	.card_remove	= PRI_card_remove,
+	.card_tick	= PRI_card_tick,
+	.card_register_reply	= PRI_card_register_reply,
+};
+
+static const struct phoneops	pri_phoneops = {
+	.card_dahdi_preregistration	= PRI_card_dahdi_preregistration,
+	.card_dahdi_postregistration	= PRI_card_dahdi_postregistration,
+	.card_pcm_recompute	= PRI_card_pcm_recompute,
+	.card_pcm_fromspan	= PRI_card_pcm_fromspan,
+	.card_pcm_tospan	= PRI_card_pcm_tospan,
+	.card_timing_priority	= PRI_timing_priority,
+	.card_ioctl	= PRI_card_ioctl,
+	.card_close	= PRI_card_close,
+
+	.XPD_STATE	= XPROTO_CALLER(PRI, XPD_STATE),
+};
+
 static xproto_table_t PROTO_TABLE(PRI) = {
 	.owner = THIS_MODULE,
 	.entries = {
@@ -2173,23 +2198,8 @@ static xproto_table_t PROTO_TABLE(PRI) = {
 	.name = "PRI",	/* protocol name */
 	.ports_per_subunit = 1,
 	.type = XPD_TYPE_PRI,
-	.xops = {
-		.card_new	= PRI_card_new,
-		.card_init	= PRI_card_init,
-		.card_remove	= PRI_card_remove,
-		.card_dahdi_preregistration	= PRI_card_dahdi_preregistration,
-		.card_dahdi_postregistration	= PRI_card_dahdi_postregistration,
-		.card_tick	= PRI_card_tick,
-		.card_pcm_recompute	= PRI_card_pcm_recompute,
-		.card_pcm_fromspan	= PRI_card_pcm_fromspan,
-		.card_pcm_tospan	= PRI_card_pcm_tospan,
-		.card_timing_priority	= PRI_timing_priority,
-		.card_ioctl	= PRI_card_ioctl,
-		.card_close	= PRI_card_close,
-		.card_register_reply	= PRI_card_register_reply,
-
-		.XPD_STATE	= XPROTO_CALLER(PRI, XPD_STATE),
-	},
+	.xops = &pri_xops,
+	.phoneops = &pri_phoneops,
 	.packet_is_valid = pri_packet_is_valid,
 	.packet_dump = pri_packet_dump,
 };
