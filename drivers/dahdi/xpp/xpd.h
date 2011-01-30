@@ -149,7 +149,8 @@ enum xpd_state {
 bool		xpd_setstate(xpd_t *xpd, enum xpd_state newstate);
 const char	*xpd_statename(enum xpd_state st);
 
-#define	PHONEDEV(xpd)	((xpd)->phonedev)
+#define	PHONEDEV(xpd)		((xpd)->phonedev)
+#define	IS_PHONEDEV(xpd)	(PHONEDEV(xpd).phoneops)
 
 struct phonedev {
 	const struct phoneops	*phoneops;	/* Card level operations */

@@ -628,7 +628,7 @@ void elect_syncer(const char *msg)
 				xpd_t	*xpd = xpd_of(xbus, j);
 				int	prio;
 
-				if(!xpd || !xpd->card_present)
+				if(!xpd || !xpd->card_present || !IS_PHONEDEV(xpd))
 					continue;
 				prio = PHONE_METHOD(xpd, card_timing_priority)(xbus, xpd);
 				if (prio < 0) {
@@ -1045,12 +1045,13 @@ static void xbus_tick(xbus_t *xbus)
 	 * Fill xframes
 	 */
 	for(i = 0; i < MAX_XPDS; i++) {
-		size_t		pcm_len;
-
 		if((xpd = xpd_of(xbus, i)) == NULL)
 			continue;
-		pcm_len = PHONEDEV(xpd).pcm_len;
+		if (!IS_PHONEDEV(xpd))
+			continue;
 		if(SPAN_REGISTERED(xpd)) {
+			size_t	pcm_len = PHONEDEV(xpd).pcm_len;
+
 			if(pcm_len && xpd->card_present) {
 				do {
 					// pack = NULL;		/* FORCE single packet frames */
@@ -1118,11 +1119,13 @@ static void xbus_tick(xbus_t *xbus)
 		xpd = xpd_of(xbus, i);
 		if(!xpd || !xpd->card_present)
 			continue;
-		if(SPAN_REGISTERED(xpd)) {
-			do_ec(xpd);
-			dahdi_receive(&PHONEDEV(xpd).span);
+		if (IS_PHONEDEV(xpd)) {
+			if(SPAN_REGISTERED(xpd)) {
+				do_ec(xpd);
+				dahdi_receive(&PHONEDEV(xpd).span);
+			}
+			PHONEDEV(xpd).silence_pcm = 0;	/* silence was injected */
 		}
-		PHONEDEV(xpd).silence_pcm = 0;	/* silence was injected */
 		xpd->timer_count = xbus->global_counter;
 		/*
 		 * Must be called *after* tx/rx so

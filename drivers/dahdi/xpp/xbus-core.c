@@ -809,7 +809,6 @@ static int new_card(xbus_t *xbus,
 			subunits,
 			port_dir
 		);
-	BUG_ON(!proto_table->phoneops);
 	xbus->worker.num_units += subunits - 1;
 	for(i = 0; i < subunits; i++) {
 		int	subunit_ports = proto_table->ports_per_subunit;
@@ -841,12 +840,6 @@ static int new_card(xbus_t *xbus,
 				i,
 				type,
 				subtype, subunit_ports);
-		if(!XBUS_IS(xbus, RECVD_DESC)) {
-			XBUS_ERR(xbus, "Aborting creation -- In bad state %s\n",
-				xbus_statename(XBUS_STATE(xbus)));
-			ret = -ENODEV;
-			goto out;
-		}
 		ret = create_xpd(xbus, proto_table, unit, i, type, subtype, subunits, subunit_ports, port_dir);
 		if(ret < 0) {
 			XBUS_ERR(xbus, "Creation of XPD=%d%d failed %d\n",
@@ -913,7 +906,9 @@ static int xpd_initialize(xpd_t *xpd)
 	}
 	//CALL_XMETHOD(XPD_STATE, xpd->xbus, xpd, 0);	/* Turn off all channels */
 	xpd->card_present = 1;
-	PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);		/* Turn on all channels */
+	if (IS_PHONEDEV(xpd)) {
+		PHONE_METHOD(xpd, XPD_STATE)(xpd->xbus, xpd, 1);	/* Turn on all channels */
+	}
 	if(!xpd_setstate(xpd, XPD_STATE_READY)) {
 		goto out;
 	}

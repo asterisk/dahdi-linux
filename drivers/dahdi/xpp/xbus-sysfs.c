@@ -677,8 +677,8 @@ static DEVICE_ATTR_READER(offhook_show, dev, buf)
 	}
 	if(len) {
 		len--;	/* backout last space */
-		len += sprintf(buf + len, "\n");
 	}
+	len += sprintf(buf + len, "\n");
 	return len;
 }
 

@@ -1066,6 +1066,10 @@ int dahdi_unregister_xpd(xpd_t *xpd)
 	BUG_ON(!xpd);
 	spin_lock_irqsave(&xpd->lock, flags);
 
+	if (!IS_PHONEDEV(xpd)) {
+		XPD_ERR(xpd, "Not a telephony device\n");
+		return -EBADF;
+	}
 	if(!SPAN_REGISTERED(xpd)) {
 		XPD_NOTICE(xpd, "Already unregistered\n");
 		spin_unlock_irqrestore(&xpd->lock, flags);
@@ -1118,6 +1122,10 @@ int dahdi_register_xpd(xpd_t *xpd)
 
 	xbus = xpd->xbus;
 
+	if (!IS_PHONEDEV(xpd)) {
+		XPD_ERR(xpd, "Not a telephony device\n");
+		return -EBADF;
+	}
 	if (SPAN_REGISTERED(xpd)) {
 		XPD_ERR(xpd, "Already registered\n");
 		return -EEXIST;

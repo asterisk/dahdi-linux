@@ -255,7 +255,6 @@ struct xproto_table {
 	xproto_entry_t		entries[256];	/* Indexed by opcode */
 	const struct xops	*xops;		/* Card level operations */
 	const struct phoneops	*phoneops;	/* DAHDI operations */
-	//const struct echoops	*echo;
 	xpd_type_t	type;
 	byte		ports_per_subunit;
 	const char	*name;
