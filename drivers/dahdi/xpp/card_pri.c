@@ -1140,16 +1140,16 @@ static int pri_chanconfig(struct dahdi_chan *chan, int sigtype)
 	 *        and prevent DChan definitions with CAS.
 	 */
 	if(is_sigtype_dchan(sigtype)) {
-		if(VALID_DCHAN(priv) && DCHAN(priv) != chan->channo) {
+		if (VALID_DCHAN(priv) && DCHAN(priv) != chan->channo) {
 			ERR("channel %d (%s) marked DChan but also channel %d.\n",
 				chan->channo, chan->name, DCHAN(priv));
 			return -EINVAL;
-		} else {
-			XPD_DBG(GENERAL, xpd, "channel %d (%s) marked as DChan\n", chan->channo, chan->name);
-			SET_DCHAN(priv, chan->channo);
-			/* In T1, we don't know before-hand */
-			if(priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 0)
-				set_mode_cas(xpd, 0);
+		}
+		XPD_DBG(GENERAL, xpd, "channel %d (%s) marked as DChan\n", chan->channo, chan->name);
+		SET_DCHAN(priv, chan->channo);
+		/* In T1, we don't know before-hand */
+		if(priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 0) {
+			set_mode_cas(xpd, 0);
 		}
 	} else {
 		if(chan->channo == 1) {
