@@ -48,8 +48,9 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/delay.h>
+#include <linux/mutex.h>
 
-#ifdef HAVE_UNLOCKED_IOCTL
+#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 #include <linux/smp_lock.h>
 #endif
 
@@ -91,7 +92,7 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
 #ifndef CONFIG_BKL
-#error You must have CONFIG_BKL lock defined to build DAHDI
+#warning "No CONFIG_BKL is an experimental configuration."
 #endif
 #endif
 
@@ -316,6 +317,8 @@ static struct dahdi_dialparams global_dialparams = {
 	.mfv1_tonelen = DEFAULT_MFR1_LENGTH,
 	.mfr2_tonelen = DEFAULT_MFR2_LENGTH,
 };
+
+static DEFINE_MUTEX(global_dialparamslock);
 
 static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long data, int unit);
 
@@ -3069,7 +3072,7 @@ static int ioctl_load_zone(unsigned long data)
 	size_t size;
 	int res;
 	int x;
-	void *slab, *ptr;
+	void *slab = NULL, *ptr;
 	struct dahdi_zone *z;
 	struct dahdi_tone *t;
 	void __user * user_data = (void __user *)data;
@@ -3087,21 +3090,21 @@ static int ioctl_load_zone(unsigned long data)
 
 	if ((work->th.count < 0) || (work->th.count > MAX_TONES)) {
 		module_printk(KERN_NOTICE, "Too many tones included\n");
-		kfree(work);
-		return -EINVAL;
+		res = -EINVAL;
+		goto error_exit;
 	}
 
 	space = size = sizeof(*z) + work->th.count * sizeof(*t);
 
 	if (size > MAX_SIZE) {
-		kfree(work);
-		return -E2BIG;
+		res = -E2BIG;
+		goto error_exit;
 	}
 
 	z = ptr = slab = kzalloc(size, GFP_KERNEL);
 	if (!z) {
-		kfree(work);
-		return -ENOMEM;
+		res = -ENOMEM;
+		goto error_exit;
 	}
 
 	ptr = (char *) ptr + sizeof(*z);
@@ -3112,8 +3115,8 @@ static int ioctl_load_zone(unsigned long data)
 	for (x = 0; x < DAHDI_MAX_CADENCE; x++)
 		z->ringcadence[x] = work->th.ringcadence[x];
 
+	mutex_lock(&global_dialparamslock);
 	atomic_set(&z->refcount, 0);
-
 	for (x = 0; x < work->th.count; x++) {
 		enum {
 			REGULAR_TONE,
@@ -3124,18 +3127,16 @@ static int ioctl_load_zone(unsigned long data)
 		} tone_type;
 
 		if (space < sizeof(*t)) {
-			kfree(slab);
-			kfree(work);
 			module_printk(KERN_NOTICE, "Insufficient tone zone space\n");
-			return -EINVAL;
+			res = -EINVAL;
+			goto unlock_error_exit;
 		}
 
 		res = copy_from_user(&work->td, user_data,
 				     sizeof(work->td));
 		if (res) {
-			kfree(slab);
-			kfree(work);
-			return -EFAULT;
+			res = -EFAULT;
+			goto unlock_error_exit;
 		}
 
 		user_data += sizeof(work->td);
@@ -3157,9 +3158,8 @@ static int ioctl_load_zone(unsigned long data)
 				module_printk(KERN_NOTICE,
 					      "Invalid 'next' pointer: %d\n",
 					      work->next[x]);
-				kfree(slab);
-				kfree(work);
-				return -EINVAL;
+				res = -EINVAL;
+				goto unlock_error_exit;
 			}
 		} else if ((work->td.tone >= DAHDI_TONE_DTMF_BASE) &&
 			   (work->td.tone <= DAHDI_TONE_DTMF_MAX)) {
@@ -3185,9 +3185,8 @@ static int ioctl_load_zone(unsigned long data)
 			module_printk(KERN_NOTICE,
 				      "Invalid tone (%d) defined\n",
 				      work->td.tone);
-			kfree(slab);
-			kfree(work);
-			return -EINVAL;
+			res = -EINVAL;
+			goto unlock_error_exit;
 		}
 
 		t->fac1 = work->td.fac1;
@@ -3243,6 +3242,7 @@ static int ioctl_load_zone(unsigned long data)
 			break;
 		}
 	}
+	mutex_unlock(&global_dialparamslock);
 
 	for (x = 0; x < work->th.count; x++) {
 		if (work->samples[x])
@@ -3259,6 +3259,14 @@ static int ioctl_load_zone(unsigned long data)
 	}
 
 	kfree(work);
+	return 0;
+
+unlock_error_exit:
+	mutex_unlock(&global_dialparamslock);
+
+error_exit:
+	kfree(work);
+	kfree(slab);
 	return res;
 }
 
@@ -4542,6 +4550,8 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		if (copy_from_user(&tdp, user_data, sizeof(tdp)))
 			return -EFAULT;
 
+		mutex_lock(&global_dialparamslock);
+
 		if ((tdp.dtmf_tonelen >= 10) && (tdp.dtmf_tonelen <= 4000)) {
 			global_dialparams.dtmf_tonelen = tdp.dtmf_tonelen;
 		}
@@ -4583,13 +4593,17 @@ static int dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long da
 		mfr1_silence.tonesamples = global_dialparams.mfv1_tonelen * DAHDI_CHUNKSIZE;
 		mfr2_silence.tonesamples = global_dialparams.mfr2_tonelen * DAHDI_CHUNKSIZE;
 
+		mutex_unlock(&global_dialparamslock);
+
 		break;
 	}
 	case DAHDI_GET_DIALPARAMS:
 	{
 		struct dahdi_dialparams tdp;
 
+		mutex_lock(&global_dialparamslock);
 		tdp = global_dialparams;
+		mutex_unlock(&global_dialparamslock);
 		if (copy_to_user(user_data, &tdp, sizeof(tdp)))
 			return -EFAULT;
 		break;
@@ -5904,19 +5918,15 @@ static int dahdi_prechan_ioctl(struct file *file, unsigned int cmd, unsigned lon
 	return 0;
 }
 
-#ifdef HAVE_UNLOCKED_IOCTL
-static long dahdi_ioctl(struct file *file, unsigned int cmd, unsigned long data)
-#else
-static int dahdi_ioctl(struct inode *inode, struct file *file,
-		unsigned int cmd, unsigned long data)
-#endif
+static long
+dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	int unit = UNIT(file);
 	struct dahdi_chan *chan;
 	struct dahdi_timer *timer;
 	int ret;
 
-#ifdef HAVE_UNLOCKED_IOCTL
+#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 	lock_kernel();
 #endif
 
@@ -5968,11 +5978,19 @@ static int dahdi_ioctl(struct inode *inode, struct file *file,
 	ret = dahdi_chan_ioctl(file, cmd, data, unit);
 
 unlock_exit:
-#ifdef HAVE_UNLOCKED_IOCTL
+#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 	unlock_kernel();
 #endif
 	return ret;
 }
+
+#ifndef HAVE_UNLOCKED_IOCTL
+static int dahdi_ioctl(struct inode *inode, struct file *file,
+		unsigned int cmd, unsigned long data)
+{
+	return dahdi_unlocked_ioctl(file, cmd, data);
+}
+#endif
 
 #ifdef HAVE_COMPAT_IOCTL
 static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
@@ -5981,7 +5999,7 @@ static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
 	if (cmd == DAHDI_SFCONFIG)
 		return -ENOTTY; /* Not supported yet */
 
-	return dahdi_ioctl(file, cmd, data);
+	return dahdi_unlocked_ioctl(file, cmd, data);
 }
 #endif
 
@@ -8678,7 +8696,7 @@ static struct file_operations dahdi_fops = {
 	.open    = dahdi_open,
 	.release = dahdi_release,
 #ifdef HAVE_UNLOCKED_IOCTL
-	.unlocked_ioctl  = dahdi_ioctl,
+	.unlocked_ioctl  = dahdi_unlocked_ioctl,
 #ifdef HAVE_COMPAT_IOCTL
 	.compat_ioctl = dahdi_ioctl_compat,
 #endif
