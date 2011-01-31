@@ -160,21 +160,7 @@ static alpha  indirect_regs[] =
 {43,66,"LOOP_CLOSE_TRES_LOW",0x1000},
 };
 
-#ifdef FANCY_ECHOCAN
-static char ectab[] = {
-0, 0, 0, 1, 2, 3, 4, 6, 8, 9, 11, 13, 16, 18, 20, 22, 24, 25, 27, 28, 29, 30, 31, 31, 32, 
-32, 32, 32, 32, 32, 32, 32, 32, 32, 32 ,32 ,32, 32,
-32, 32, 32, 32, 32, 32, 32, 32, 32, 32 ,32 ,32, 32,
-32, 32, 32, 32, 32, 32, 32, 32, 32, 32 ,32 ,32, 32,
-31, 31, 30, 29, 28, 27, 25, 23, 22, 20, 18, 16, 13, 11, 9, 8, 6, 4, 3, 2, 1, 0, 0, 
-};
-static int ectrans[4] = { 0, 1, 3, 2 };
-#define EC_SIZE (sizeof(ectab))
-#define EC_SIZE_Q (sizeof(ectab) / 4)
-#endif
-
 /* names of HWEC modules */
-static const char *vpm100m_name = "VPM100M";
 static const char *vpmadt032_name = "VPMADT032";
 static const char *noec_name = "NONE";
 
@@ -598,12 +584,6 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int 
 	unsigned int curcmd=0;
 	int x;
 	int subaddr = card & 0x3;
-#ifdef FANCY_ECHOCAN
-	int ecval;
-	ecval = wc->echocanpos;
-	ecval += EC_SIZE_Q * ectrans[(card & 0x3)];
-	ecval = ecval % EC_SIZE;
-#endif
 
 	/* QRV and BRI modules only use commands relating to the first channel */
 	if ((card & 0x03) && (wc->modtype[card] ==  MOD_TYPE_QRV)) {
@@ -638,16 +618,6 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int 
 			curcmd = 0x101010;
 		else if (wc->modtype[card] == MOD_TYPE_QRV)
 			curcmd = CMD_RD(3);
-		else if (wc->modtype[card] == MOD_TYPE_VPM) {
-#ifdef FANCY_ECHOCAN
-			if (wc->blinktimer >= 0xf) {
-				curcmd = CMD_WR(0x1ab, 0x0f);
-			} else if (wc->blinktimer == (ectab[ecval] >> 1)) {
-				curcmd = CMD_WR(0x1ab, 0x00);
-			} else
-#endif
-			curcmd = CMD_RD(0x1a0);
-		}
 	}
 
 	if (wc->modtype[card] == MOD_TYPE_FXS) {
@@ -688,13 +658,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int 
 			writechunk[CMD_BYTE(card, 0, 0)] = 0x10;
 		writechunk[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
 		writechunk[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
-	} else if (wc->modtype[card] == MOD_TYPE_VPM) {
-		if (curcmd & __CMD_WR)
-			writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = ((card & 0x3) << 4) | 0xc | ((curcmd >> 16) & 0x1);
-		else
-			writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = ((card & 0x3) << 4) | 0xa | ((curcmd >> 16) & 0x1);
-		writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0xff;
-		writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+
 	} else if (wc->modtype[card] == MOD_TYPE_QRV) {
  
 		writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
@@ -830,10 +794,6 @@ static inline void cmd_checkisr(struct wctdm *wc, int card)
 			wc->cmdq[card & 0xfc].cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
 		} else if (wc->modtype[card] == MOD_TYPE_BRI) {
 			wc->cmdq[card].cmds[USER_COMMANDS + 0] = wctdm_bri_checkisr(wc, card, 0);
-#ifdef VPM_SUPPORT
-		} else if (wc->modtype[card] == MOD_TYPE_VPM) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 0] = CMD_RD(0xb9); /* DTMF interrupt */
-#endif
 		}
 	}
 	if (!wc->cmdq[card].cmds[USER_COMMANDS + 1]) {
@@ -849,10 +809,6 @@ static inline void cmd_checkisr(struct wctdm *wc, int card)
 			wc->cmdq[card & 0xfc].cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
 		} else if (wc->modtype[card] == MOD_TYPE_BRI) {
 			wc->cmdq[card].cmds[USER_COMMANDS + 1] = wctdm_bri_checkisr(wc, card, 1);
-#ifdef VPM_SUPPORT
-		} else if (wc->modtype[card] == MOD_TYPE_VPM) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 1] = CMD_RD(0xbd); /* DTMF interrupt */
-#endif
 		}
 	}
 }
@@ -947,36 +903,19 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechun
 			if (y < wc->mods_per_board)
 				cmd_dequeue(wc, writechunk, y, x);
 		}
-		if (!x)
-			wc->blinktimer++;
-		if (wc->vpm100) {
-			for (y = NUM_MODULES; y < NUM_MODULES + NUM_EC; y++) {
-				if (!x)
-					cmd_checkisr(wc, y);
-				cmd_dequeue(wc, writechunk, y, x);
-			}
-#ifdef FANCY_ECHOCAN
-			if (wc->vpm100 && wc->blinktimer >= 0xf) {
-				wc->blinktimer = -1;
-				wc->echocanpos++;
-			}
-#endif			
-		} else if (wc->vpmadt032) {
+
+		if (wc->vpmadt032)
 			cmd_dequeue_vpmadt032(wc, writechunk);
-		}
 
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			writechunk[EFRAME_SIZE] = wc->ctlreg;
 			writechunk[EFRAME_SIZE + 1] = wc->txident++;
 
-			if ((wc->desc->ports == 4) && ((wc->ctlreg & 0x10) || (wc->modtype[NUM_MODULES] == MOD_TYPE_NONE))) {
+			if ((wc->desc->ports == 4) && ((wc->ctlreg & 0x10))) {
 				writechunk[EFRAME_SIZE + 2] = 0;
-				for (y = 0; y < 4; y++) {
-					if (wc->modtype[y] == MOD_TYPE_NONE)
-						writechunk[EFRAME_SIZE + 2] |= (1 << y);
-				}
-			} else
-				writechunk[EFRAME_SIZE + 2] = 0xf;
+				for (y = 0; y < 4; y++)
+					writechunk[EFRAME_SIZE + 2] |= (1 << y);
+			}
 		}
 		writechunk += (EFRAME_SIZE + EFRAME_GAP);
 	}
@@ -1181,10 +1120,8 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *readchunk)
 		for (y = 0; y < wc->avchannels; y++) {
 			cmd_decipher(wc, readchunk, y);
 		}
-		if (wc->vpm100) {
-			for (y = NUM_MODULES; y < NUM_MODULES + NUM_EC; y++)
-				cmd_decipher(wc, readchunk, y);
-		} else if (wc->vpmadt032)
+
+		if (wc->vpmadt032)
 			cmd_decipher_vpmadt032(wc, readchunk);
 
 		readchunk += (EFRAME_SIZE + EFRAME_GAP);
@@ -1973,9 +1910,7 @@ static inline void wctdm_vpm_check(struct wctdm *wc, int x)
 static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
 {
 	struct wctdm *wc = chan->pvt;
-	if (wc->vpm100)
-		return vpm100m_name;
-	else if (wc->vpmadt032)
+	if (wc->vpmadt032)
 		return vpmadt032_name;
 	return noec_name;
 }
@@ -1989,53 +1924,28 @@ static int wctdm_echocan_create(struct dahdi_chan *chan,
 	struct wctdm_chan *wchan = container_of(chan, struct wctdm_chan, chan);
 	const struct dahdi_echocan_ops *ops;
 	const struct dahdi_echocan_features *features;
+	enum adt_companding comp;
+
 
 #ifdef VPM_SUPPORT
 	if (!vpmsupport)
 		return -ENODEV;
 #endif
-	if (!wc->vpm100 && !wc->vpmadt032)
+	if (!wc->vpmadt032)
 		return -ENODEV;
 
 	ops = &vpm_ec_ops;
 	features = &vpm_ec_features;
 
-	if (wc->vpm100 && (ecp->param_count > 0)) {
-		dev_warn(&wc->vb.pdev->dev, "%s echo canceller does not "
-			 "support parameters; failing request\n",
-			 chan->ec_factory->get_name(chan));
-		return -EINVAL;
-	}
-
 	*ec = &wchan->ec;
 	(*ec)->ops = ops;
 	(*ec)->features = *features;
 
-	if (wc->vpm100) {
-		int channel;
-		int unit;
+	comp = (DAHDI_LAW_ALAW == chan->span->deflaw) ?
+				ADT_COMP_ALAW : ADT_COMP_ULAW;
 
-		channel = wchan->timeslot;
-		unit = wchan->timeslot & 0x3;
-		if (wc->vpm100 < 2)
-			channel >>= 2;
-	
-		if (debug & DEBUG_ECHOCAN)
-			dev_info(&wc->vb.pdev->dev, "echocan: Unit is %d, Channel is %d length %d\n", unit, channel, ecp->tap_length);
-
-		wctdm_vpm_out(wc, unit, channel, 0x3e);
-		return 0;
-	} else if (wc->vpmadt032) {
-		enum adt_companding comp;
-
-		comp = (DAHDI_LAW_ALAW == chan->span->deflaw) ?
-					ADT_COMP_ALAW : ADT_COMP_ULAW;
-
-		return vpmadt032_echocan_create(wc->vpmadt032,
-						wchan->timeslot, comp, ecp, p);
-	} else {
-		return -ENODEV;
-	}
+	return vpmadt032_echocan_create(wc->vpmadt032, wchan->timeslot,
+					comp, ecp, p);
 }
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec)
@@ -2043,21 +1953,8 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 	struct wctdm *wc = chan->pvt;
 	struct wctdm_chan *wchan = container_of(chan, struct wctdm_chan, chan);
 
-	memset(ec, 0, sizeof(*ec));
-	if (wc->vpm100) {
-		int channel;
-		int unit;
-
-		channel = wchan->timeslot;
-		unit = wchan->timeslot & 0x3;
-		if (wc->vpm100 < 2)
-			channel >>= 2;
-
-		if (debug & DEBUG_ECHOCAN)
-			dev_info(&wc->vb.pdev->dev, "echocan: Unit is %d, Channel is %d length 0\n",
-			       unit, channel);
-		wctdm_vpm_out(wc, unit, channel, 0x01);
-	} else if (wc->vpmadt032) {
+	if (wc->vpmadt032) {
+		memset(ec, 0, sizeof(*ec));
 		vpmadt032_echocan_free(wc->vpmadt032, wchan->timeslot, ec);
 	}
 }
@@ -2151,10 +2048,6 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 				wctdm_qrvdri_check_hook(wc, x);
 			}
 		}
-	}
-	if (wc->vpm100 > 0) {
-		for (x = NUM_MODULES; x < NUM_MODULES+NUM_EC; x++)
-			wctdm_vpm_check(wc, x);
 	}
 }
 
@@ -2262,7 +2155,7 @@ static int wctdm_proslic_insane(struct wctdm *wc, int card)
 
 	/* let's be really sure this is an FXS before we continue */
 	reg1 = wctdm_getreg(wc, card, 1);
-	if ((0x80 != (blah & 0xf0)) || ((0x88 != reg1) && (0x08 != reg1))) {
+	if ((0x80 != (blah & 0xf0)) || (0x88 != reg1)) {
 		if (debug & DEBUG_CARD)
 			dev_info(&wc->vb.pdev->dev, "DEBUG: not FXS b/c reg0=%x or reg1 != 0x88 (%x).\n", blah, reg1);
 		return -1;
@@ -3900,149 +3793,9 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 	for (x = 0; x < MAX_SPANS; x++) {
 		if (!wc->spans[x])
 			continue;
-		if (wc->vpm100)
-			strncat(wc->spans[x]->span.devicetype, " (VPM100M)", sizeof(wc->spans[x]->span.devicetype) - 1);
-		else if (wc->vpmadt032)
+		if (wc->vpmadt032)
 			strncat(wc->spans[x]->span.devicetype, " (VPMADT032)", sizeof(wc->spans[x]->span.devicetype) - 1);
 	}
-}
-
-static int wctdm_vpm_init(struct wctdm *wc)
-{
-	unsigned char reg;
-	unsigned int mask;
-	unsigned int ver;
-	unsigned char vpmver=0;
-	unsigned int i, x, y;
-
-	for (x=0;x<NUM_EC;x++) {
-		ver = wctdm_vpm_in(wc, x, 0x1a0); /* revision */
-		if (debug & DEBUG_ECHOCAN)
-			dev_info(&wc->vb.pdev->dev, "VPM100: Chip %d: ver %02x\n", x, ver);
-		if (ver != 0x33) {
-			if (x)
-				dev_info(&wc->vb.pdev->dev,
-						"VPM100: Inoperable\n");
-			wc->vpm100 = 0;
-			return -ENODEV;
-		}	
-
-		if (!x) {
-			vpmver = wctdm_vpm_in(wc, x, 0x1a6) & 0xf;
-			dev_info(&wc->vb.pdev->dev, "VPM Revision: %02x\n", vpmver);
-		}
-
-
-		/* Setup GPIO's */
-		for (y=0;y<4;y++) {
-			wctdm_vpm_out(wc, x, 0x1a8 + y, 0x00); /* GPIO out */
-			if (y == 3)
-				wctdm_vpm_out(wc, x, 0x1ac + y, 0x00); /* GPIO dir */
-			else
-				wctdm_vpm_out(wc, x, 0x1ac + y, 0xff); /* GPIO dir */
-			wctdm_vpm_out(wc, x, 0x1b0 + y, 0x00); /* GPIO sel */
-		}
-
-		/* Setup TDM path - sets fsync and tdm_clk as inputs */
-		reg = wctdm_vpm_in(wc, x, 0x1a3); /* misc_con */
-		wctdm_vpm_out(wc, x, 0x1a3, reg & ~2);
-
-		/* Setup Echo length (256 taps) */
-		wctdm_vpm_out(wc, x, 0x022, 0);
-
-		/* Setup timeslots */
-		if (vpmver == 0x01) {
-			wctdm_vpm_out(wc, x, 0x02f, 0x00); 
-			wctdm_vpm_out(wc, x, 0x023, 0xff);
-			mask = 0x11111111 << x;
-		} else {
-			wctdm_vpm_out(wc, x, 0x02f, 0x20  | (x << 3)); 
-			wctdm_vpm_out(wc, x, 0x023, 0x3f);
-			mask = 0x0000003f;
-		}
-
-		/* Setup the tdm channel masks for all chips*/
-		for (i = 0; i < 4; i++)
-			wctdm_vpm_out(wc, x, 0x33 - i, (mask >> (i << 3)) & 0xff);
-
-		/* Setup convergence rate */
-		reg = wctdm_vpm_in(wc,x,0x20);
-		reg &= 0xE0;
-
-		if (wc->companding == DAHDI_LAW_DEFAULT) {
-			if (wc->digi_mods)
-				/* If we have a BRI module, Auto set to alaw */
-				reg |= 0x01;
-			else
-				/* Auto set to ulaw */
-				reg &= ~0x01;
-		} else if (wc->companding == DAHDI_LAW_ALAW) {
-			/* Force everything to alaw */
-			reg |= 0x01;
-		} else {
-			/* Auto set to ulaw */
-			reg &= ~0x01;
-		}
-
-		wctdm_vpm_out(wc,x,0x20,(reg | 0x20));
-
-		/* Initialize echo cans */
-		for (i = 0 ; i < MAX_TDM_CHAN; i++) {
-			if (mask & (0x00000001 << i))
-				wctdm_vpm_out(wc,x,i,0x00);
-		}
-
-		msleep(30);
-
-		/* Put in bypass mode */
-		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
-			if (mask & (0x00000001 << i)) {
-				wctdm_vpm_out(wc,x,i,0x01);
-			}
-		}
-
-		/* Enable bypass */
-		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
-			if (mask & (0x00000001 << i))
-				wctdm_vpm_out(wc,x,0x78 + i,0x01);
-		}
-      
-		/* Enable DTMF detectors (always DTMF detect all spans) */
-		for (i = 0; i < 6; i++) {
-			if (vpmver == 0x01) 
-				wctdm_vpm_out(wc, x, 0x98 + i, 0x40 | (i << 2) | x);
-			else
-				wctdm_vpm_out(wc, x, 0x98 + i, 0x40 | i);
-		}
-
-		for (i = 0xB8; i < 0xC0; i++)
-			wctdm_vpm_out(wc, x, i, 0xFF);
-		for (i = 0xC0; i < 0xC4; i++)
-			wctdm_vpm_out(wc, x, i, 0xff);
-
-	} 
-	
-	/* TODO: What do the different values for vpm100 mean? */
-	if (vpmver == 0x01) {
-		wc->vpm100 = 2;
-	} else {
-		wc->vpm100 = 1;
-	}
-
-	dev_info(&wc->vb.pdev->dev, "Enabling VPM100 gain adjustments on any FXO ports found\n");
-	for (i = 0; i < wc->desc->ports; i++) {
-		if (wc->modtype[i] == MOD_TYPE_FXO) {
-			/* Apply negative Tx gain of 4.5db to DAA */
-			wctdm_setreg(wc, i, 38, 0x14);	/* 4db */
-			wctdm_setreg(wc, i, 40, 0x15);	/* 0.5db */
-
-			/* Apply negative Rx gain of 4.5db to DAA */
-			wctdm_setreg(wc, i, 39, 0x14);	/* 4db */
-			wctdm_setreg(wc, i, 41, 0x15);	/* 0.5db */
-		}
-	}
-
-	return 0;
 }
 
 static void get_default_portconfig(GpakPortConfig_t *portconfig)
@@ -4118,17 +3871,10 @@ static void get_default_portconfig(GpakPortConfig_t *portconfig)
 
 static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 {
-	int x;
 	int res;
-	unsigned long flags;
 	struct vpmadt032_options options;
 
 	GpakPortConfig_t portconfig;
-
-	spin_lock_irqsave(&wc->reglock, flags);
-	for (x = NUM_MODULES; x < NUM_MODULES + NUM_EC; x++)
-		wc->modtype[x] = MOD_TYPE_NONE;
-	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	options.debug = debug;
 	options.vpmnlptype = vpmnlptype;
@@ -4164,22 +3910,18 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	return 0;
 }
 
-static int wctdm_initialize_vpm(struct wctdm *wc)
+static void wctdm_initialize_vpm(struct wctdm *wc)
 {
 	int res = 0;
 
 	if (!vpmsupport) {
 		dev_notice(&wc->vb.pdev->dev, "VPM: Support Disabled\n");
-	} else if (!wctdm_vpm_init(wc)) {
-		dev_info(&wc->vb.pdev->dev, "VPM: Present and operational (Rev %c)\n",
-		       'A' + wc->vpm100 - 1);
-		wc->ctlreg |= 0x10;
-	} else {
-		res = wctdm_initialize_vpmadt032(wc);
-		if (!res)
-			wc->ctlreg |= 0x10;
+		return;
 	}
-	return res;
+
+	res = wctdm_initialize_vpmadt032(wc);
+	if (!res)
+		wc->ctlreg |= 0x10;
 }
 
 static int wctdm_identify_modules(struct wctdm *wc)
@@ -4219,10 +3961,6 @@ static int wctdm_identify_modules(struct wctdm *wc)
 
 	for (x = 0; x < wc->mods_per_board; x++)
 		wc->modtype[x] = MOD_TYPE_FXSINIT;
-
-	wc->vpm100 = -1;
-	for (x = wc->mods_per_board; x < wc->mods_per_board+NUM_EC; x++)
-		wc->modtype[x] = MOD_TYPE_VPM;
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 

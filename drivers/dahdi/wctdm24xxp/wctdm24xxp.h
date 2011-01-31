@@ -63,9 +63,7 @@
 #define MOD_TYPE_FXS		1
 #define MOD_TYPE_FXO		2
 #define MOD_TYPE_FXSINIT	3
-#define MOD_TYPE_VPM		4
 #define MOD_TYPE_QRV		5
-#define MOD_TYPE_VPM150M	6
 #define MOD_TYPE_BRI		7
 
 #define MINPEGTIME	10 * 8		/* 30 ms peak to peak gets us no more than 100 Hz */
@@ -90,9 +88,7 @@
 			+ ((card) >> 2) + (altcs) + ((altcs) ? -21 : 0))
 #endif
 #define NUM_MODULES		24
-#define NUM_EC			4
 #define NUM_SLOTS		6
-#define MAX_TDM_CHAN		31
 #define MAX_SPANS		9
 
 #define NUM_CAL_REGS		12
@@ -108,17 +104,7 @@
 #define VPM150M_HPI_DATA	0x03
 
 #define VPM_SUPPORT
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 #define VPM150M_SUPPORT
-#endif
-
-#ifdef VPM_SUPPORT
-
-/* Define to get more attention-grabbing but slightly more CPU using echocan status */
-#define FANCY_ECHOCAN
-
-#endif
 
 #ifdef VPM150M_SUPPORT
 #include "voicebus/GpakCust.h"
@@ -185,7 +171,7 @@ struct wctdm {
 	int avchannels;				/* active "voice" (voice, B and D) channels */
 	int modmap;				/* Bit-map of present cards (1=present) */
 
-	int altcs[NUM_MODULES + NUM_EC];
+	int altcs[NUM_MODULES];
 
 /* FIXME: why are all of these QRV-only members part of the main card structure? */
 	char qrvhook[NUM_MODULES];
@@ -252,18 +238,13 @@ struct wctdm {
 		struct b400m *bri;
 	} mods[NUM_MODULES];
 
-	struct cmdq cmdq[NUM_MODULES + NUM_EC];
-	int modtype[NUM_MODULES + NUM_EC];		/* type of module (FXO/FXS/QRV/VPM/etc.) in this position */
-	int sethook[NUM_MODULES + NUM_EC];		/* pending hook state command for each module */
+	struct cmdq cmdq[NUM_MODULES];
+	int modtype[NUM_MODULES]; /* type of module (FXO/FXS/QRV/etc.) */
+	int sethook[NUM_MODULES]; /* pending hook state command */
 	int dacssrc[NUM_MODULES];
 
-	int vpm100;
-
 	struct vpmadt032 *vpmadt032;
-#ifdef FANCY_ECHOCAN
-	int echocanpos;
-	int blinktimer;
-#endif
+
 	struct voicebus vb;
 	struct wctdm_span *aspan;			/* pointer to the spans[] holding the analog span */
 	struct wctdm_span *spans[MAX_SPANS];
