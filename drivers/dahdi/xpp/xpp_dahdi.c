@@ -1065,6 +1065,7 @@ int dahdi_unregister_xpd(xpd_t *xpd)
 
 	if (!IS_PHONEDEV(xpd)) {
 		XPD_ERR(xpd, "Not a telephony device\n");
+		spin_unlock_irqrestore(&xpd->lock, flags);
 		return -EBADF;
 	}
 	if(!SPAN_REGISTERED(xpd)) {
