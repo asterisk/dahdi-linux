@@ -3595,6 +3595,11 @@ void dahdi_alarm_channel(struct dahdi_chan *chan, int alarms)
 	spin_unlock_irqrestore(&chan->lock, flags);
 }
 
+static inline bool is_analog_span(const struct dahdi_span *s)
+{
+	return (s->linecompat == 0);
+}
+
 static void __dahdi_find_master_span(void)
 {
 	struct dahdi_span *s;
@@ -3606,7 +3611,8 @@ static void __dahdi_find_master_span(void)
 	list_for_each_entry(s, &span_list, node) {
 		if (s->alarms)
 			continue;
-		if (!test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
+		if (!is_analog_span(s) &&
+		    !test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
 			continue;
 		if (!can_provide_timing(s))
 			continue;
