@@ -229,7 +229,7 @@ sub battery($) {
 	return undef unless defined $self->type && $self->type eq 'FXO';
 	return $self->{BATTERY} if defined $self->{BATTERY};
 
-	my $xpd = $span->xpd;
+	my $xpd = Dahdi::Xpp::xpd_of_span($span);
 	my $index = $self->index;
 	return undef if !$xpd;
 
@@ -251,7 +251,7 @@ sub blink($$) {
 	my $on = shift;
 	my $span = $self->span or die;
 
-	my $xpd = $span->xpd;
+	my $xpd = Dahdi::Xpp::xpd_of_span($span);
 	my $index = $self->index;
 	return undef if !$xpd;
 

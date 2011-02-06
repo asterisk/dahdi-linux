@@ -137,7 +137,7 @@ sub gen_digital($$$) {
 	if ($span->is_bri()) {
 		my $use_bristuff = 0;
 		my $cfg_hardhdlc = $gconfig->{'bri_hardhdlc'};
-		my $xpd = $span->xpd();
+		my $xpd = Dahdi::Xpp::xpd_of_span($span);
 		if(!defined($cfg_hardhdlc) || $cfg_hardhdlc =~ /AUTO/i) {
 			# Autodetect
 			if(defined($xpd)) {
