@@ -3798,83 +3798,10 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 	}
 }
 
-static void get_default_portconfig(GpakPortConfig_t *portconfig)
-{
-	memset(portconfig, 0, sizeof(GpakPortConfig_t));
-
-	/* First Serial Port config */
-	portconfig->SlotsSelect1 = SlotCfgNone;
-	portconfig->FirstBlockNum1 = 0;
-	portconfig->FirstSlotMask1 = 0x0000;
-	portconfig->SecBlockNum1 = 1;
-	portconfig->SecSlotMask1 = 0x0000;
-	portconfig->SerialWordSize1 = SerWordSize8;
-	portconfig->CompandingMode1 = cmpNone;
-	portconfig->TxFrameSyncPolarity1 = FrameSyncActHigh;
-	portconfig->RxFrameSyncPolarity1 = FrameSyncActHigh;
-	portconfig->TxClockPolarity1 = SerClockActHigh;
-	portconfig->RxClockPolarity1 = SerClockActHigh;
-	portconfig->TxDataDelay1 = DataDelay0;
-	portconfig->RxDataDelay1 = DataDelay0;
-	portconfig->DxDelay1 = Disabled;
-	portconfig->ThirdSlotMask1 = 0x0000;
-	portconfig->FouthSlotMask1 = 0x0000;
-	portconfig->FifthSlotMask1 = 0x0000;
-	portconfig->SixthSlotMask1 = 0x0000;
-	portconfig->SevenSlotMask1 = 0x0000;
-	portconfig->EightSlotMask1 = 0x0000;
-
-	/* Second Serial Port config */
-	portconfig->SlotsSelect2 = SlotCfg2Groups;
-	portconfig->FirstBlockNum2 = 0;
-	portconfig->FirstSlotMask2 = 0xffff;
-	portconfig->SecBlockNum2 = 1;
-	portconfig->SecSlotMask2 = 0xffff;
-	portconfig->SerialWordSize2 = SerWordSize8;
-	portconfig->CompandingMode2 = cmpNone;
-	portconfig->TxFrameSyncPolarity2 = FrameSyncActHigh;
-	portconfig->RxFrameSyncPolarity2 = FrameSyncActHigh;
-	portconfig->TxClockPolarity2 = SerClockActHigh;
-	portconfig->RxClockPolarity2 = SerClockActLow;
-	portconfig->TxDataDelay2 = DataDelay0;
-	portconfig->RxDataDelay2 = DataDelay0;
-	portconfig->DxDelay2 = Disabled;
-	portconfig->ThirdSlotMask2 = 0x0000;
-	portconfig->FouthSlotMask2 = 0x0000;
-	portconfig->FifthSlotMask2 = 0x0000;
-	portconfig->SixthSlotMask2 = 0x0000;
-	portconfig->SevenSlotMask2 = 0x0000;
-	portconfig->EightSlotMask2 = 0x0000;
-
-	/* Third Serial Port Config */
-	portconfig->SlotsSelect3 = SlotCfg2Groups;
-	portconfig->FirstBlockNum3 = 0;
-	portconfig->FirstSlotMask3 = 0xffff;
-	portconfig->SecBlockNum3 = 1;
-	portconfig->SecSlotMask3 = 0xffff;
-	portconfig->SerialWordSize3 = SerWordSize8;
-	portconfig->CompandingMode3 = cmpNone;
-	portconfig->TxFrameSyncPolarity3 = FrameSyncActHigh;
-	portconfig->RxFrameSyncPolarity3 = FrameSyncActHigh;
-	portconfig->TxClockPolarity3 = SerClockActHigh;
-	portconfig->RxClockPolarity3 = SerClockActLow;
-	portconfig->TxDataDelay3 = DataDelay0;
-	portconfig->RxDataDelay3 = DataDelay0;
-	portconfig->DxDelay3 = Disabled;
-	portconfig->ThirdSlotMask3 = 0x0000;
-	portconfig->FouthSlotMask3 = 0x0000;
-	portconfig->FifthSlotMask3 = 0x0000;
-	portconfig->SixthSlotMask3 = 0x0000;
-	portconfig->SevenSlotMask3 = 0x0000;
-	portconfig->EightSlotMask3 = 0x0000;
-}
-
 static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 {
 	int res;
 	struct vpmadt032_options options;
-
-	GpakPortConfig_t portconfig;
 
 	options.debug = debug;
 	options.vpmnlptype = vpmnlptype;
@@ -3890,7 +3817,6 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	/* wc->vpmadt032->context = wc; */
 	/* Pull the configuration information from the span holding
 	 * the analog channels. */
-	get_default_portconfig(&portconfig);
 	res = vpmadt032_init(wc->vpmadt032, &wc->vb);
 	if (res) {
 		vpmadt032_free(wc->vpmadt032);
