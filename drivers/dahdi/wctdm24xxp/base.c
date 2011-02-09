@@ -3000,11 +3000,36 @@ static void qrv_dosetup(struct dahdi_chan *chan,struct wctdm *wc)
 	return;
 }
 
+static void wctdm24xxp_get_fxs_regs(struct wctdm *wc, struct dahdi_chan *chan,
+				    struct wctdm_regs *regs)
+{
+	int  x;
+	for (x = 0; x < NUM_INDIRECT_REGS; x++)
+		regs->indirect[x] = wctdm_proslic_getreg_indirect(wc,
+							chan->chanpos - 1, x);
+	for (x = 0; x < NUM_REGS; x++)
+		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+}
+
+static void wctdm24xxp_get_fxo_regs(struct wctdm *wc, struct dahdi_chan *chan,
+				    struct wctdm_regs *regs)
+{
+	int  x;
+	for (x = 0; x < NUM_FXO_REGS; x++)
+		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+}
+
+static void wctdm24xxp_get_qrv_regs(struct wctdm *wc, struct dahdi_chan *chan,
+				    struct wctdm_regs *regs)
+{
+	int  x;
+	for (x = 0; x < 0x32; x++)
+		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+}
 
 static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long data)
 {
 	struct wctdm_stats stats;
-	struct wctdm_regs regs;
 	struct wctdm_regop regop;
 	struct wctdm_echo_coefs echoregs;
 	struct dahdi_hwgain hwgain;
@@ -3086,23 +3111,26 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			return -EFAULT;
 		break;
 	case WCTDM_GET_REGS:
-		if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXS) {
-			for (x=0;x<NUM_INDIRECT_REGS;x++)
-				regs.indirect[x] = wctdm_proslic_getreg_indirect(wc, chan->chanpos -1, x);
-			for (x=0;x<NUM_REGS;x++)
-				regs.direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
-		} else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_QRV) {
-			memset(&regs, 0, sizeof(regs));
-			for (x=0;x<0x32;x++)
-				regs.direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
-		} else {
-			memset(&regs, 0, sizeof(regs));
-			for (x=0;x<NUM_FXO_REGS;x++)
-				regs.direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
-		}
-		if (copy_to_user((__user void *)data, &regs, sizeof(regs)))
+	{
+		struct wctdm_regs *regs = kzalloc(sizeof(*regs), GFP_KERNEL);
+		if (!regs)
+			return -ENOMEM;
+
+		if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXS)
+			wctdm24xxp_get_fxs_regs(wc, chan, regs);
+		else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_QRV)
+			wctdm24xxp_get_qrv_regs(wc, chan, regs);
+		else
+			wctdm24xxp_get_fxo_regs(wc, chan, regs);
+
+		if (copy_to_user((__user void *)data, regs, sizeof(*regs))) {
+			kfree(regs);
 			return -EFAULT;
+		}
+
+		kfree(regs);
 		break;
+	}
 	case WCTDM_SET_REG:
 		if (copy_from_user(&regop, (__user void *) data, sizeof(regop)))
 			return -EFAULT;
