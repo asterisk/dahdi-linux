@@ -250,7 +250,7 @@ export PATH
 dahdiconfdir="${DESTDIR}/etc/dahdi"
 export dahdiconfdir
 EOF
-	ln -s ../../../etc/dahdi/xpp.conf "$DESTDIR/usr/share/dahdi/
+	ln -s ../../../etc/dahdi/xpp.conf "$DESTDIR/usr/share/dahdi/"
 	;;
 rsync)
 	if [ $# -ne 2 ]; then
