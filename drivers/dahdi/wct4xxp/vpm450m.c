@@ -425,9 +425,6 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	UINT32 ulResult;
 	struct vpm450m *vpm450m;
 	int x,y,law;
-#ifdef CONFIG_4KSTACKS
-	unsigned long flags;
-#endif
 	
 	if (!(vpm450m = kmalloc(sizeof(struct vpm450m), GFP_KERNEL)))
 		return NULL;
@@ -502,20 +499,9 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		return NULL;
 	}
 
-	/* I don't know what to curse more in this comment, the problems caused by
-	 * the 4K kernel stack limit change or the octasic API for being so darn
-	 * stack unfriendly.  Stupid, stupid, stupid.  So we disable IRQs so we
-	 * don't run the risk of overflowing the stack while we initialize the
-	 * octasic. */
-#ifdef CONFIG_4KSTACKS
-	local_irq_save(flags);
-#endif
 	ulResult = Oct6100ChipOpen(vpm450m->pApiInstance, ChipOpen);
 	if (ulResult != cOCT6100_ERR_OK) {
 		printk(KERN_NOTICE "Failed to open chip, code %08x!\n", ulResult);
-#ifdef CONFIG_4KSTACKS
-		local_irq_restore(flags);
-#endif
 		vfree(vpm450m->pApiInstance);
 		kfree(vpm450m);
 		kfree(ChipOpen);
@@ -572,9 +558,6 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		}
 	}
 
-#ifdef CONFIG_4KSTACKS
-	local_irq_restore(flags);
-#endif
 	kfree(ChipOpen);
 	kfree(ChannelOpen);
 	return vpm450m;
