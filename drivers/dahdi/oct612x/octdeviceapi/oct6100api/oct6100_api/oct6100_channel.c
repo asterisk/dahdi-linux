@@ -8777,6 +8777,70 @@ UINT32 Oct6100ApiWriteVqeMemory(
 }
 #endif
 
+UINT32 oct6100_retrieve_nlp_conf_dword(tPOCT6100_INSTANCE_API f_pApiInst,
+								tPOCT6100_API_CHANNEL f_pChanEntry,
+								UINT32 f_ulAddress,
+								UINT32 *f_pulConfigDword)
+{
+	tOCT6100_READ_PARAMS	_ReadParams;
+	UINT16					_usReadData;
+	UINT32 ulResult = cOCT6100_ERR_FATAL_8E;
+	(*f_pulConfigDword) = cOCT6100_INVALID_VALUE;
+
+	_ReadParams.pProcessContext = f_pApiInst->pProcessContext;
+	mOCT6100_ASSIGN_USER_READ_WRITE_OBJ(f_pApiInst, _ReadParams);
+	_ReadParams.ulUserChipId = f_pApiInst->pSharedInfo->ChipConfig.ulUserChipId;
+	_ReadParams.pusReadData = &_usReadData;
+
+	/* Read the first 16 bits.*/
+	_ReadParams.ulReadAddress = f_ulAddress;
+	mOCT6100_DRIVER_READ_API(_ReadParams, ulResult);
+	if (ulResult == cOCT6100_ERR_OK) {
+		/* Save data.*/
+		(*f_pulConfigDword) = _usReadData << 16;
+
+		/* Read the last 16 bits .*/
+		_ReadParams.ulReadAddress += 2;
+		mOCT6100_DRIVER_READ_API(_ReadParams, ulResult);
+		if (ulResult == cOCT6100_ERR_OK) {
+			/* Save data.*/
+			(*f_pulConfigDword) |= _usReadData;
+			ulResult = cOCT6100_ERR_OK;
+		}
+	}
+	return ulResult;
+}
+
+UINT32 oct6100_save_nlp_conf_dword(tPOCT6100_INSTANCE_API f_pApiInst,
+								tPOCT6100_API_CHANNEL f_pChanEntry,
+								UINT32 f_ulAddress,
+								UINT32 f_ulConfigDword)
+{
+	UINT32 ulResult;
+
+	/* Write the config DWORD. */
+	tOCT6100_WRITE_PARAMS	_WriteParams;
+
+	_WriteParams.pProcessContext = f_pApiInst->pProcessContext;
+	mOCT6100_ASSIGN_USER_READ_WRITE_OBJ(f_pApiInst, _WriteParams)
+	_WriteParams.ulUserChipId = f_pApiInst->pSharedInfo->ChipConfig.ulUserChipId;
+
+	/* Write the first 16 bits. */
+	_WriteParams.ulWriteAddress = f_ulAddress;
+	_WriteParams.usWriteData = (UINT16)((f_ulConfigDword >> 16) & 0xFFFF);
+	mOCT6100_DRIVER_WRITE_API(_WriteParams, ulResult);
+
+	if (ulResult == cOCT6100_ERR_OK) {
+		/* Write the last word. */
+		_WriteParams.ulWriteAddress = f_ulAddress + 2;
+		_WriteParams.usWriteData = (UINT16)(f_ulConfigDword & 0xFFFF);
+		mOCT6100_DRIVER_WRITE_API(_WriteParams, ulResult);
+	}
+	return ulResult;
+}
+
+
+
 /*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*\
 
 Function:		Oct6100ApiWriteVqeNlpMemory
@@ -8841,8 +8905,7 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 	ulTempData = 0;
 
 	/* Configure Adaptive Noise Reduction.*/
-	if ( pSharedInfo->ImageInfo.fAdaptiveNoiseReduction == TRUE )
-	{
+	if (pSharedInfo->ImageInfo.fAdaptiveNoiseReduction == TRUE) {
 		/* Check if the configuration has been changed. */
 		if ( ( f_fModifyOnly == FALSE ) 
 			|| ( ( f_fModifyOnly == TRUE ) 
@@ -8854,11 +8917,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AdaptiveNoiseReductionOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AdaptiveNoiseReductionOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -8874,19 +8936,17 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fSoutNoiseBleaching ) << ulFeatureBitOffset );
 
 			/* First read the DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
 	}
 
 	/* Configure Rout Noise Reduction. */
-	if ( pSharedInfo->ImageInfo.fRoutNoiseReduction == TRUE )
-	{
+	if (pSharedInfo->ImageInfo.fRoutNoiseReduction == TRUE) {
 		/* Check if the configuration has been changed. */
 		if ( ( f_fModifyOnly == FALSE )
 			|| ( ( f_fModifyOnly == TRUE ) 
@@ -8896,11 +8956,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.RinAnrOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.RinAnrOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -8913,15 +8972,15 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fRoutNoiseReduction ) << ulFeatureBitOffset );
 
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
 	}
+
 	if (pSharedInfo->ImageInfo.fRoutNoiseReductionLevel == TRUE)
 	{
 		/* Check if the configuration has been changed. */
@@ -8934,11 +8993,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.RinAnrValOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.RinAnrValOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -8967,11 +9025,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 				ulTempData |= ( 0 << ulFeatureBitOffset );
 
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -8990,11 +9047,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AnrSnrEnhancementOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AnrSnrEnhancementOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -9026,11 +9082,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			}
 
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9048,11 +9103,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AnrVoiceNoiseSegregationOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AnrVoiceNoiseSegregationOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -9065,11 +9119,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->ulAnrVoiceNoiseSegregation ) << ulFeatureBitOffset );
 
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9088,11 +9141,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.ToneDisablerVqeActivationDelayOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.ToneDisablerVqeActivationDelayOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -9109,11 +9161,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 				ulTempData |= ( 0 ) << ulFeatureBitOffset;
 
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9132,11 +9183,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.ConferencingNoiseReductionOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.ConferencingNoiseReductionOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -9152,11 +9202,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= (f_pVqeConfig->fSoutNoiseBleaching << ulFeatureBitOffset );
 
 			/* Save the DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 		}
@@ -9174,11 +9223,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.RinDcOffsetRemovalOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.RinDcOffsetRemovalOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9191,11 +9239,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fRinDcOffsetRemoval ) << ulFeatureBitOffset );
 
 			/* The write the new DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9214,11 +9261,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.SinDcOffsetRemovalOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9231,11 +9277,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fSinDcOffsetRemoval ) << ulFeatureBitOffset );
 
 			/* Save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9272,11 +9317,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.ComfortNoiseModeOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9287,11 +9331,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( f_pVqeConfig->ulComfortNoiseMode << ulFeatureBitOffset );
 
 			/* Save the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9310,11 +9353,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.NlpControlFieldOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9327,11 +9369,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 				ulTempData |= 0x1 << ulFeatureBitOffset;
 
 			/* Save the new DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 		}
@@ -9361,11 +9402,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.DefaultErlFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.DefaultErlFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9392,11 +9432,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( usTempData << ulFeatureBitOffset );
 
 			/* Save the new DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9414,11 +9453,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AecFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AecFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9429,11 +9467,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fAcousticEcho ) << ulFeatureBitOffset );
 
 			/* Then save the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9452,11 +9489,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AecDefaultErlFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AecDefaultErlFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9483,11 +9519,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( usTempData << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9505,11 +9540,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.ToneRemovalFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.ToneRemovalFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9520,11 +9554,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fDtmfToneRemoval ) << ulFeatureBitOffset );
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9547,11 +9580,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.PcmLeakFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.PcmLeakFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9574,11 +9606,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 				ulTempData |= ( ausLookupTable[ f_pVqeConfig->ulNonLinearityBehaviorA ] << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 		}
@@ -9628,11 +9659,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 		ulFeatureFieldLength = pSharedInfo->MemoryMap.ToneDisablerControlOfst.byFieldSize;
 
 		/* First read the DWORD where the field is located.*/
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 
@@ -9646,11 +9676,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= 0x1 << ulFeatureBitOffset;
 
 		/* Save the DWORD where the field is located. */
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pChanEntry,
 										ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 	}
@@ -9672,11 +9701,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 		ulFeatureFieldLength = pSharedInfo->MemoryMap.NlpTrivialFieldOfst.byFieldSize;
 
 		/* First read the DWORD where the field is located.*/
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 
@@ -9692,11 +9720,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 
 
 		/* Then write the DWORD where the field is located. */
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pChanEntry,
 										ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 	}
@@ -9717,11 +9744,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.DoubleTalkBehaviorFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.DoubleTalkBehaviorFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9732,11 +9758,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulTempData |= (f_pVqeConfig->ulDoubleTalkBehavior  << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}			
@@ -9758,11 +9783,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.MusicProtectionFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.MusicProtectionFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9774,11 +9798,10 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 				ulTempData |= ( 1 << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9867,11 +9890,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.ChanMainIoMaxEchoPointOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9897,11 +9919,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulTempData |= usTempData << ulFeatureBitOffset;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9922,11 +9943,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.NlpConvCapFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.NlpConvCapFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -9937,11 +9957,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulTempData |= (f_pVqeConfig->ulNonLinearityBehaviorB  << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -9964,11 +9983,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AdaptiveAleOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AdaptiveAleOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -10003,11 +10021,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			}
 
 			/* Now write the DWORD where the field is located containing the new configuration. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -10030,11 +10047,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.IdleCodeDetectionFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.IdleCodeDetectionFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -10046,11 +10062,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 				ulTempData |= ( 1 << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -10071,11 +10086,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AftControlOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AftControlOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfigBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -10096,11 +10110,10 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 			}
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfigBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -12670,11 +12683,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 		ulFeatureFieldLength = pSharedInfo->MemoryMap.RinLevelControlOfst.byFieldSize;
 
 		/* First read the DWORD where the field is located.*/
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 
@@ -12708,11 +12720,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 		}
 
 		/* Save the DWORD where the field is located.*/
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pChanEntry,
 										ulBaseAddress + ulFeatureBytesOffset,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 
@@ -12722,11 +12733,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 		ulFeatureFieldLength = pSharedInfo->MemoryMap.SoutLevelControlOfst.byFieldSize;
 
 		/* First read the DWORD where the field is located.*/
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 
@@ -12762,11 +12772,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 		}
 
 		/* Save the DWORD where the field is located.*/
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pChanEntry,
 										ulBaseAddress + ulFeatureBytesOffset,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 		
@@ -12791,11 +12800,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 					ulFeatureFieldLength = pSharedInfo->MemoryMap.RinAutoLevelControlTargetOfst.byFieldSize;
 
 					/* First read the DWORD where the field is located.*/
-					mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+					ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 														pChanEntry,
 														ulBaseAddress + ulFeatureBytesOffset,
-														&ulTempData,
-														ulResult );
+														&ulTempData);
 					if ( ulResult != cOCT6100_ERR_OK )
 						return ulResult;
 
@@ -12819,11 +12827,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 					}
 
 					/* Save the DWORD where the field is located.*/
-					mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+					ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 													pChanEntry,
 													ulBaseAddress + ulFeatureBytesOffset,
-													ulTempData,
-													ulResult );
+													ulTempData);
 					if ( ulResult != cOCT6100_ERR_OK )
 						return ulResult;	
 				}
@@ -12838,11 +12845,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 					ulFeatureFieldLength = pSharedInfo->MemoryMap.RinHighLevelCompensationThresholdOfst.byFieldSize;
 
 					/* First read the DWORD where the field is located.*/
-					mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+					ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 														pChanEntry,
 														ulBaseAddress + ulFeatureBytesOffset,
-														&ulTempData,
-														ulResult );
+														&ulTempData);
 					if ( ulResult != cOCT6100_ERR_OK )
 						return ulResult;
 
@@ -12866,11 +12872,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 					}
 
 					/* Save the DWORD where the field is located.*/
-					mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+					ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 													pChanEntry,
 													ulBaseAddress + ulFeatureBytesOffset,
-													ulTempData,
-													ulResult );
+													ulTempData);
 					if ( ulResult != cOCT6100_ERR_OK )
 						return ulResult;	
 				}
@@ -12885,11 +12890,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.SoutAutoLevelControlTargetOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -12913,11 +12917,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			}
 
 			/* Save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -12930,11 +12933,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.SoutHighLevelCompensationThresholdOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -12947,11 +12949,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			ulTempData |= ( 0xFFFF << ulFeatureBitOffset ); 
 
 			/* Save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -12967,11 +12968,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AlcHlcStatusOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -12994,11 +12994,10 @@ UINT32 Oct6100ApiSetChannelLevelControl(
 			ulTempData |= ( byLastStatus << ulFeatureBitOffset ); 
 
 			/* Save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;			
 		}
@@ -13080,11 +13079,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 				ulFeatureFieldLength = pSharedInfo->MemoryMap.PerChanTailDisplacementFieldOfst.byFieldSize;
 
 				/* First read the DWORD where the field is located.*/
-				mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 													pChanEntry,
 													ulNlpConfBaseAddress + ulFeatureBytesOffset,
-													&ulTempData,
-													ulResult );
+													&ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;
 
@@ -13146,11 +13144,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 				}
 
 				/* Then save the new DWORD where the field is located.*/
-				mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfBaseAddress + ulFeatureBytesOffset,
-												ulTempData,
-												ulResult );
+												ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;	
 			}
@@ -13163,11 +13160,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 				ulFeatureFieldLength = pSharedInfo->MemoryMap.AfTailDisplacementFieldOfst.byFieldSize;
 
 				/* First read the DWORD where the field is located.*/
-				mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 													pChanEntry,
 													ulAfConfBaseAddress + ulFeatureBytesOffset,
-													&ulTempData,
-													ulResult );
+													&ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;
 
@@ -13186,11 +13182,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 				}
 
 				/* Then save the DWORD where the field is located.*/
-				mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfBaseAddress + ulFeatureBytesOffset,
-												ulTempData,
-												ulResult );
+												ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;
 			}
@@ -13200,11 +13195,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.TailDisplEnableOfst.byFieldSize;
 
 			/* First read the DWORD where the field is located.*/
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -13215,11 +13209,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			ulTempData |= ( ( (UINT32)f_pVqeConfig->fEnableTailDisplacement ) << ulFeatureBitOffset );
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -13237,11 +13230,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.PerChanTailLengthFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.PerChanTailLengthFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulAfConfBaseAddress + ulFeatureBytesOffset,
-												&ulTempData, 
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -13260,11 +13252,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			}
 
 			/* Then save the DWORD where the field is located.*/
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulAfConfBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -13284,11 +13275,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			ulFeatureBitOffset	 = pSharedInfo->MemoryMap.AecTailLengthFieldOfst.byBitOffset;
 			ulFeatureFieldLength = pSharedInfo->MemoryMap.AecTailLengthFieldOfst.byFieldSize;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pChanEntry,
 												ulNlpConfBaseAddress + ulFeatureBytesOffset,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -13366,11 +13356,10 @@ UINT32 Oct6100ApiSetChannelTailConfiguration(
 			}
 			
 			/* Write the new DWORD where the field is located. */
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulNlpConfBaseAddress + ulFeatureBytesOffset,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;	
 		}
@@ -13686,11 +13675,10 @@ UINT32 Oct6100ApiMuteSinWithFeatures(
 		ulFeatureBitOffset	 = pSharedInfo->MemoryMap.SinMuteOfst.byBitOffset;
 		ulFeatureFieldLength = pSharedInfo->MemoryMap.SinMuteOfst.byFieldSize;
 
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pChanEntry,
 											ulBaseAddress + ulFeatureBytesOffset,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 		
@@ -13705,11 +13693,10 @@ UINT32 Oct6100ApiMuteSinWithFeatures(
 			ulTempData |= ( 0x1 << ulFeatureBitOffset );
 
 		/* Write the new DWORD where the field is located. */
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pChanEntry,
 										ulBaseAddress + ulFeatureBytesOffset,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;	
 	}
