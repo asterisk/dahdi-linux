@@ -56,7 +56,7 @@ $Octasic_Revision: 171 $
 #define cOCT6100_INVALID_HANDLE				cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_TIMESLOT			cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_STREAM				cOCT6100_FFFFFFFF
-#define cOCT6100_INVALID_VALUE				cOCT6100_FFFFFFFF
+#define cOCT6100_INVALID_VALUE				-1
 #define cOCT6100_INVALID_STAT				cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_STAT_W				cOCT6100_FFFF
 #define cOCT6100_INVALID_PCM_LAW			cOCT6100_FF
@@ -249,7 +249,7 @@ $Octasic_Revision: 171 $
 
 /* Chip open defines.*/
 #define cOCT6100_INTERNAL_TONE_ARRAY_SIZE	256		/* in words.*/
-#define cOCT6100_INTERNAL_SUPER_ARRAY_SIZE	1024	/* in words.*/
+#define cOCT6100_INTERNAL_SUPER_ARRAY_SIZE	128		/* in words.*/
 
 /* Internal memory mapping.*/
 
@@ -358,7 +358,7 @@ $Octasic_Revision: 171 $
 #define cOCT6100_CHANNEL_ROOT_GLOBAL_CONF_OFFSET	0x0000
 
 #define cOCT6100_NUM_WORDS_PER_TONE_EVENT			32
-#define cOCT6100_NUM_PGSP_EVENT_OUT					2048
+#define cOCT6100_NUM_PGSP_EVENT_OUT					2048 /* CPTAG: Must not be modified, represents number of events stored in hardware. */
 #define cOCT6100_VALID_TONE_EVENT					0x8000
 #define cOCT6100_LOCAL_TIMESTAMP_INCREMENT			32	/* 4 ms increment. */
 #define cOCT6100_ABSOLUTE_MAX_NUM_PGSP_EVENT_OUT	65535
@@ -394,7 +394,7 @@ $Octasic_Revision: 171 $
 #define cOCT6100_IMAGE_AF_CST_OFFSET			0x1000;
 
 /* Max defines.*/
-#define cOCT6100_MAX_ECHO_CHANNELS				672
+#define cOCT6100_MAX_ECHO_CHANNELS				128
 #define cOCT6100_MAX_TSI_CNCTS					1530
 #define cOCT6100_MAX_CALLER_ID_PLAYOUT_BUFFERS	( 3328 + 6 )
 #define cOCT6100_MAX_PLAYOUT_BUFFERS			( 1344 + cOCT6100_MAX_CALLER_ID_PLAYOUT_BUFFERS )
@@ -474,20 +474,23 @@ $Octasic_Revision: 171 $
 /* TSST defines.*/
 #define cOCT6100_UNASSIGNED						cOCT6100_FFFD
 
-#define cOCT6100_MAX_TSSTS						4096
+#define cOCT6100_MAX_TSSTS						(cOCT6100_MAX_ECHO_CHANNELS*4)	/* cOCT6100_MAX_ECHO_CHANNELS channels, 4 TSSTs per channel. */
 #define cOCT6100_TWO_TSSTS_INDEX_MASK			0x8000
 #define cOCT6100_TSST_INDEX_MASK				0x7FFF
 #define cOCT6100_INPUT_TSST						0
 #define cOCT6100_OUTPUT_TSST					1
 
 /* Conference bridges defines.*/
-#define cOCT6100_MAX_MIXER_EVENTS						1344
+/* CPTAG:  No application needs for mixer events.  */
+/* 2 needed for head and tail nodes.  2 more needed to get through channel modify function. */
+/* Careful.  This value cannot be zero.  */
+#define cOCT6100_MAX_MIXER_EVENTS						4
 #define cOCT6100_MAX_FLEX_CONF_PARTICIPANTS_PER_BRIDGE	32
 #define cOCT6100_CONF_DOMINANT_SPEAKER_UNASSIGNED		672
 #define cOCT6100_CONF_NO_DOMINANT_SPEAKER_HNDL			cOCT6100_FFFFFFFE
 
 /* Conversion memory defines.*/
-#define cOCT6100_MAX_CONVERSION_MEMORY_BLOCKS	1344
+#define cOCT6100_MAX_CONVERSION_MEMORY_BLOCKS	(cOCT6100_MAX_ECHO_CHANNELS*2)	/* CPTAG: Max this out to the expected max number of channels * 2, was 1344 */
 
 /* Tone detection defines.*/
 #define cOCT6100_MAX_TONE_NUMBER				55
@@ -585,8 +588,6 @@ $Octasic_Revision: 171 $
 #define cOCT6100_TONE_INFO_START_STRING			"[ToneDetectorInfo]"
 #define cOCT6100_TONE_INFO_STOP_STRING			"[~ToneDetectorInfo]"
 #define cOCT6100_TONE_INFO_EVENT_STRING			"TONEEVENT=0x"
-
-#define cOCT6100_MAX_NLP_CONF_DWORD				20
 
 /* Tail displacement info.*/
 #define cOCT6100_MAX_TAIL_DISPLACEMENT			896

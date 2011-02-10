@@ -200,7 +200,7 @@ UINT32 Oct6100ChipOpenDef(
 	f_pChipOpen->fEnableAcousticEcho = FALSE;
 
 	/* Resource allocation parameters. */
-	f_pChipOpen->ulMaxChannels = 672;
+	f_pChipOpen->ulMaxChannels = 256;
 	f_pChipOpen->ulMaxTsiCncts = 0;
 	f_pChipOpen->ulMaxBiDirChannels = 0;
 	f_pChipOpen->ulMaxConfBridges = 0;
@@ -219,7 +219,7 @@ UINT32 Oct6100ChipOpenDef(
 	f_pChipOpen->fEnableFastH100Mode = FALSE;
 
 	/* Configure the soft tone event buffer. */
-	f_pChipOpen->ulSoftToneEventsBufSize = 2048;
+	f_pChipOpen->ulSoftToneEventsBufSize = 128;
 	f_pChipOpen->fEnableExtToneDetection = FALSE;
 	f_pChipOpen->fEnable2100StopEvent = FALSE;
 
@@ -240,7 +240,7 @@ UINT32 Oct6100ChipOpenDef(
 	f_pChipOpen->InterruptConfig.ulFatalMemoryTimeout = 100;
 	f_pChipOpen->InterruptConfig.ulErrorH100Timeout = 100;
 	f_pChipOpen->InterruptConfig.ulErrorOverflowToneEventsTimeout = 100;
-	f_pChipOpen->ulMaxRemoteDebugSessions = 1;
+	f_pChipOpen->ulMaxRemoteDebugSessions = 0;
 	f_pChipOpen->ulTdmSampling = cOCT6100_TDM_SAMPLE_AT_3_QUARTERS;
 	for ( i = 0; i < cOCT6100_TDM_STREAM_MAX_GROUPS; i++ )
 		f_pChipOpen->aulTdmStreamFreqs[ i ] = cOCT6100_TDM_STREAM_FREQ_8MHZ;
@@ -321,6 +321,7 @@ UINT32 Oct6100ChipOpen(
 	InstanceSizes = kmalloc(sizeof(tOCT6100_API_INSTANCE_SIZES), GFP_ATOMIC);
 	if (!InstanceSizes)
 		return cOCT6100_ERR_FATAL_0;
+
 	/* Calculate the amount of memory needed for the API instance structure. */
 	ulResult = Oct6100ApiCalculateInstanceSizes( f_pChipOpen, InstanceSizes );
 	if ( ulResult != cOCT6100_ERR_OK ) {
@@ -1180,7 +1181,7 @@ UINT32 Oct6100ApiCheckChipConfiguration(
 
 	/*-----------------------------------------------------------------------------*/
 	/* Check soft buffer for tone events size. */
-	if ( f_pChipOpen->ulSoftToneEventsBufSize < cOCT6100_NUM_PGSP_EVENT_OUT ||
+	if (f_pChipOpen->ulSoftToneEventsBufSize < 64 ||
 		 f_pChipOpen->ulSoftToneEventsBufSize > cOCT6100_ABSOLUTE_MAX_NUM_PGSP_EVENT_OUT )
 		return cOCT6100_ERR_OPEN_SOFT_TONE_EVENT_SIZE;
 
@@ -1678,6 +1679,7 @@ UINT32 Oct6100ApiCalculateInstanceSizes(
 	/*-----------------------------------------------------------------------------*/
 	/* Calculate memory needed for the conference bridges. */
 	ulResult = Oct6100ApiGetConfBridgeSwSizes( f_pChipOpen, f_pInstSizes );
+	/* Calculate memory needed for list and allocation software serialization. */
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 
@@ -1686,8 +1688,6 @@ UINT32 Oct6100ApiCalculateInstanceSizes(
 	ulResult = Oct6100ApiGetPlayoutBufferSwSizes( f_pChipOpen, f_pInstSizes );
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
-
-
 
 	/*-----------------------------------------------------------------------------*/
 	/* Memory needed by soft Rx Event buffers. */
@@ -1741,7 +1741,6 @@ UINT32 Oct6100ApiCalculateInstanceSizes(
 
 	ulApiInstProcessSpecific = sizeof( tOCT6100_INSTANCE_API );
 	mOCT6100_ROUND_MEMORY_SIZE( ulApiInstProcessSpecific, ulTempVar )
-
 	f_pInstSizes->ulApiInstTotal = 
 									f_pInstSizes->ulChannelList +
 									f_pInstSizes->ulChannelAlloc +

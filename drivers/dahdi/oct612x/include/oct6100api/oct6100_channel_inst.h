@@ -43,10 +43,15 @@ $Octasic_Revision: 90 $
 typedef struct _OCT6100_API_CHANNEL_TDM_
 {
 	/* Laws. */
-	UINT8	byRinPcmLaw;
-	UINT8	bySinPcmLaw;
-	UINT8	byRoutPcmLaw;
-	UINT8	bySoutPcmLaw;
+	UINT8	byRinPcmLaw : 1;
+	UINT8	bySinPcmLaw : 1;
+	UINT8	byRoutPcmLaw : 1;
+	UINT8	bySoutPcmLaw : 1;
+
+	UINT8	byRinNumTssts : 1;
+	UINT8	bySinNumTssts : 1;
+	UINT8	byRoutNumTssts : 1;
+	UINT8	bySoutNumTssts : 1;
 
 	/* RIN port. */
 	UINT16	usRinTimeslot;
@@ -72,86 +77,71 @@ typedef struct _OCT6100_API_CHANNEL_TDM_
 	UINT16	usSoutBrdcastTsstFirstEntry;
 	UINT16	usSoutBrdcastTsstNumEntry;
 
-	UINT8	byRinNumTssts;
-	UINT8	bySinNumTssts;
-	UINT8	byRoutNumTssts;
-	UINT8	bySoutNumTssts;
-
 } tOCT6100_API_CHANNEL_TDM, *tPOCT6100_API_CHANNEL_TDM;
 
 typedef struct _OCT6100_API_CHANNEL_VQE_
 {
-	UINT8	fEnableNlp;
-	UINT8	fEnableTailDisplacement;
-	UINT16	usTailDisplacement;
-	UINT16	usTailLength;
+	UINT8	fEnableNlp : 1;
+	UINT8	fEnableTailDisplacement : 1;
+	UINT8	fSinDcOffsetRemoval : 1;
+	UINT8	fRinDcOffsetRemoval : 1;
+	UINT8	fRinLevelControl : 1;
+	UINT8	fSoutLevelControl : 1;
+	UINT8	fRinAutomaticLevelControl : 1;
+	UINT8	fSoutAutomaticLevelControl : 1;
+	UINT8	fRinHighLevelCompensation : 1;
+	UINT8	fSoutAdaptiveNoiseReduction : 1;
+	UINT8	fDtmfToneRemoval : 1;
+	UINT8	fAcousticEcho : 1;
+	UINT8	byComfortNoiseMode : 1;
+	UINT8	fSoutNaturalListenerEnhancement : 1;
+	UINT8	fRoutNoiseReduction : 1;
+	UINT8	fEnableMusicProtection : 1;
+	UINT8	fIdleCodeDetection : 1;
+	UINT8	byAnrVoiceNoiseSegregation : 1;
+	UINT8	byDoubleTalkBehavior : 1;
+	UINT8	fSoutNoiseBleaching : 1;
+	UINT8	fSoutConferencingNoiseReduction : 1;
+	UINT8	bySoutAutomaticListenerEnhancementGainDb : 1;
+	UINT8	byNonLinearityBehaviorA : 1;
+	UINT8	byNonLinearityBehaviorB : 1;
+	UINT8	bySoutNaturalListenerEnhancementGainDb : 1;
 
-	UINT8	fSinDcOffsetRemoval;
-	UINT8	fRinDcOffsetRemoval;
-	UINT8	fRinLevelControl;
-	UINT8	fSoutLevelControl;
-	
-	UINT8	fRinAutomaticLevelControl;
-	UINT8	fSoutAutomaticLevelControl;
 	OCT_INT8	chRinAutomaticLevelControlTargetDb;
 	OCT_INT8	chSoutAutomaticLevelControlTargetDb;
 	
-	UINT8	fRinHighLevelCompensation;
 	OCT_INT8	chRinHighLevelCompensationThresholdDb;
 	
-	UINT8	bySoutAutomaticListenerEnhancementGainDb;
-	UINT8	fSoutNaturalListenerEnhancement;
-
-	UINT8	fSoutAdaptiveNoiseReduction;
-	UINT8	fDtmfToneRemoval;
-	UINT8	fAcousticEcho;
-	UINT8	byComfortNoiseMode;
-
-	UINT8	byNonLinearityBehaviorA;
-	UINT8	byNonLinearityBehaviorB;
 	OCT_INT8	chRinLevelControlGainDb;
 	OCT_INT8	chSoutLevelControlGainDb;
 
 	OCT_INT8	chDefaultErlDb;
 	OCT_INT8	chAecDefaultErlDb;
 
-	UINT8	fRoutNoiseReduction;
 	OCT_INT8	chRoutNoiseReductionLevelGainDb;
 	OCT_INT8	chAnrSnrEnhancementDb;
 
-	UINT8	fEnableMusicProtection;
-	UINT8	fIdleCodeDetection;
-
-	UINT8	byAnrVoiceNoiseSegregation;
-	UINT8	bySoutNaturalListenerEnhancementGainDb;
-	
 	UINT16	usToneDisablerVqeActivationDelay;
 	UINT16	usAecTailLength;
 
-	UINT8	byDoubleTalkBehavior;
-	UINT8	fSoutNoiseBleaching;
-	
-
-
-	UINT8	fSoutConferencingNoiseReduction;
-
-
+	UINT16	usTailDisplacement;
+	UINT16	usTailLength;
 
 } tOCT6100_API_CHANNEL_VQE, *tPOCT6100_API_CHANNEL_VQE;
 
 typedef struct _OCT6100_API_CHANNEL_CODEC_
 {
-	UINT8	byAdpcmNibblePosition;
-	UINT8	fEnableSilenceSuppression;
+	UINT8	byAdpcmNibblePosition : 1;
+	UINT8	fEnableSilenceSuppression : 1;
 
-	UINT8	byEncoderPort;
-	UINT8	byEncodingRate;
+	UINT8	byEncoderPort : 1;
+	UINT8	byEncodingRate : 1;
 
-	UINT8	byDecoderPort;
-	UINT8	byDecodingRate;
+	UINT8	byDecoderPort : 1;
+	UINT8	byDecodingRate : 1;
 	
-	UINT8	byPhase;
-	UINT8	byPhasingType;
+	UINT8	byPhase : 1;
+	UINT8	byPhasingType : 1;
 
 } tOCT6100_API_CHANNEL_CODEC, *tPOCT6100_API_CHANNEL_CODEC;
 
@@ -161,16 +151,54 @@ typedef struct _OCT6100_API_CHANNEL_
 	/* Channel configuration. */
 
 	/* Flag specifying whether the entry is used or not. */
-	UINT8	fReserved;
+	UINT8	fReserved : 1;
 
 	/* Count used to manage entry handles allocated to user. */
-	UINT8	byEntryOpenCnt;
+	UINT8	byEntryOpenCnt : 1;
 
 	/* Is this a bidirectionnal channel? */
-	UINT8	fBiDirChannel;
+	UINT8	fBiDirChannel : 1;
 
 	/* Enable tone disabler? */
-	UINT8	fEnableToneDisabler;
+	UINT8	fEnableToneDisabler : 1;
+
+	/* Current echo operation mode. */
+	UINT8	byEchoOperationMode : 1;
+
+	UINT8	byToneDisablerStatus : 1;
+
+	UINT8	fMute : 1;
+	UINT8	fTap : 1;
+	UINT8	fBeingTapped : 1;
+	UINT8	fCopyEventCreated : 1;
+
+	UINT8	fSoutBufPlaying : 1;
+	UINT8	fRinBufPlaying : 1;
+
+	UINT8	fRinBufPlayoutNotifyOnStop : 1;
+	UINT8	fRinBufPlayoutRepeatUsed : 1;
+
+
+	UINT8	fSoutBufPlayoutNotifyOnStop : 1;
+	UINT8	fSoutBufPlayoutRepeatUsed : 1;
+
+	UINT8	fRinHardStop : 1;
+	UINT8	fSoutHardStop : 1;
+
+	UINT8	byRinPlayoutStopEventType : 1;
+	UINT8	bySoutPlayoutStopEventType : 1;
+
+	UINT8	fRinBufAdded : 1;
+	UINT8	fSoutBufAdded : 1;
+
+	UINT8	fBufPlayoutActive : 1;
+
+	/* Enable extended tone detection. */
+	UINT8	fEnableExtToneDetection : 1;
+
+	/* State of the codec structure associated to this channel. */
+	UINT8	fSinSoutCodecActive : 1;
+	UINT8	fRinRoutCodecActive : 1;
 
 	/* TSI chariot memory entry for the Rin/Rout stream. */
 	UINT16	usRinRoutTsiMemIndex;
@@ -202,9 +230,6 @@ typedef struct _OCT6100_API_CHANNEL_
 	/* Active mixer events count to test for last event. */
 	UINT16	usMixerEventCnt;
 
-	/* User channel ID, transparently passed to the user. */
-	UINT32	ulUserChanId;
-
 	/* Copy events. */
 	UINT16	usSinCopyEventIndex;
 	UINT16	usSoutCopyEventIndex;
@@ -219,15 +244,11 @@ typedef struct _OCT6100_API_CHANNEL_
 	/* VQE configuration. */
 	tOCT6100_API_CHANNEL_VQE	VqeConfig;
 
-	/* Current echo operation mode. */
-	UINT8	byEchoOperationMode;
-
 	/* Currently muted ports. */
 	UINT16	usMutedPorts;
 
 	/*=======================================================================*/
 
-	
 	/*=======================================================================*/
 	/* Statistics section. */
 
@@ -251,8 +272,6 @@ typedef struct _OCT6100_API_CHANNEL_
 	INT16	sRinAppliedGain;
 	INT16	sSoutAppliedGain;
 
-	UINT8	byToneDisablerStatus;
-
 	/*=======================================================================*/
 
 
@@ -260,11 +279,6 @@ typedef struct _OCT6100_API_CHANNEL_
 	/* Bridge information. */
 
 	UINT16	usBridgeIndex;
-
-	UINT8	fMute;
-	UINT8	fTap;
-	UINT8	fBeingTapped;
-	UINT8	fCopyEventCreated;
 
 	UINT16	usLoadEventIndex;
 	UINT16	usSubStoreEventIndex;
@@ -279,34 +293,12 @@ typedef struct _OCT6100_API_CHANNEL_
 	/*=======================================================================*/
 	/* Buffer playout information. */
 
-	UINT32	ulRinBufWritePtr;
-	UINT32	ulRinBufSkipPtr;
-	
-	UINT8	fSoutBufPlaying;
-	UINT8	fRinBufPlaying;
-	
-	UINT8	fRinBufPlayoutNotifyOnStop;
-	UINT8	fRinBufPlayoutRepeatUsed;
+	UINT16	ulRinBufWritePtr;
+	UINT16	ulRinBufSkipPtr;
+	UINT16	ulSoutBufWritePtr;
+	UINT16	ulSoutBufSkipPtr;
 
-	UINT32	ulSoutBufWritePtr;
-	UINT32	ulSoutBufSkipPtr;
-
-	UINT8	fSoutBufPlayoutNotifyOnStop;
-	UINT8	fSoutBufPlayoutRepeatUsed;
-
-	UINT8	fRinHardStop;
-	UINT8	fSoutHardStop;
-
-	UINT32	ulRinUserBufPlayoutEventId;
-	UINT32	ulSoutUserBufPlayoutEventId;
-	
-	UINT8	byRinPlayoutStopEventType;
-	UINT8	bySoutPlayoutStopEventType;
-	
-	UINT8	fRinBufAdded;
-	UINT8	fSoutBufAdded;
-	
-	UINT8	fBufPlayoutActive;
+	/* User channel ID, transparently passed to the user. */
 	
 	/*=======================================================================*/
 
@@ -323,51 +315,39 @@ typedef struct _OCT6100_API_CHANNEL_
 	/*=======================================================================*/
 	/* Extended tone detection info. */
 
-	/* Enable extended tone detection. */
-	UINT8	fEnableExtToneDetection;
 	
 	UINT16	usExtToneChanIndex;
 	UINT16	usExtToneMixerIndex;
 	UINT16	usExtToneTsiIndex;
 
+	/* Index of the phasing TSST */
+	UINT16	usPhasingTsstIndex;
+
 	/* Mode of operation of the channel based on the extended tone detection configuration. */
-	UINT32	ulExtToneChanMode;
+	UINT16	ulExtToneChanMode;
 
 	/*=======================================================================*/
 
 	/* Tone detection state. */
 	/* This array is configured as follow. */
 	/* Index 0 contain event 0 to 31 and Index 1 contains event 32 - 55 */
-	UINT32	aulToneConf[ 2 ];
-	UINT32	ulLastSSToneDetected;
-	UINT32	ulLastSSToneTimestamp;
+	UINT16	ulLastSSToneDetected;
+	UINT16	ulLastSSToneTimestamp;
 
+
+	UINT16	ulRinUserBufPlayoutEventId;
+	UINT16	ulSoutUserBufPlayoutEventId;
+
+	UINT32	aulToneConf[2];
+	UINT32	ulUserChanId;
 	/*=======================================================================*/
 
 
 	/*=======================================================================*/
 
-	/* Index of the phasing TSST */
-	UINT16	usPhasingTsstIndex;
-	
-	/* State of the codec structure associated to this channel. */
-	UINT8	fSinSoutCodecActive;
-	UINT8	fRinRoutCodecActive;
 
 	/* Codec configuration. */
 	tOCT6100_API_CHANNEL_CODEC	CodecConfig;
-
-	/*=======================================================================*/
-	
-
-
-
-
-
-
-	/* Nlp Conf Dword, index 0 contains the dword where the dword is located. and
-	   index 1 is the actual value of the dword.*/
-	UINT32	aulNlpConfDword[ cOCT6100_MAX_NLP_CONF_DWORD ][ 2 ];
 
 } tOCT6100_API_CHANNEL, *tPOCT6100_API_CHANNEL;
 
@@ -377,12 +357,9 @@ typedef struct _OCT6100_API_BIDIR_CHANNEL_
 	UINT16	usSecondChanIndex;
 	
 	/* Flag specifying whether the entry is used or not. */
-	UINT8	fReserved;
-
+	UINT8	fReserved : 1;
 	/* Count used to manage entry handles allocated to user. */
-	UINT8	byEntryOpenCnt;
-
-
+	UINT8	byEntryOpenCnt : 1;
 
 } tOCT6100_API_BIDIR_CHANNEL, *tPOCT6100_API_BIDIR_CHANNEL;
 

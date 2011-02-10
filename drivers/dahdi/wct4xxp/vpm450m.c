@@ -172,7 +172,7 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 
 struct vpm450m {
 	tPOCT6100_INSTANCE_API pApiInstance;
-	UINT32 aulEchoChanHndl[ 128 ];
+	UINT32 aulEchoChanHndl[128];
 	int chanflags[128];
 	int ecmode[128];
 	int numchans;
@@ -237,7 +237,7 @@ static void vpm450m_setecmode(struct vpm450m *vpm450m, int channel, int mode)
 	modify->ulChannelHndl = vpm450m->aulEchoChanHndl[channel];
 	ulResult = Oct6100ChannelModify(vpm450m->pApiInstance, modify);
 	if (ulResult != GENERIC_OK) {
-		printk(KERN_NOTICE "Failed to apply echo can changes on channel %d!\n", channel);
+		printk(KERN_NOTICE "Failed to apply echo can changes on channel %d %08x!\n", channel, ulResult);
 	} else {
 #ifdef OCTASIC_DEBUG
 		printk(KERN_DEBUG "Echo can on channel %d set to %d\n", channel, mode);
@@ -449,7 +449,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 
 	memset(ChannelOpen, 0, sizeof(tOCT6100_CHANNEL_OPEN));
 
-	for (x=0;x<128;x++)
+	for (x = 0; x < ARRAY_SIZE(vpm450m->ecmode); x++)
 		vpm450m->ecmode[x] = -1;
 
 	vpm450m->numchans = numspans * 32;
@@ -474,6 +474,12 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	ChipOpen->ulMaxTdmStreams = 4;
 	ChipOpen->aulTdmStreamFreqs[0] = cOCT6100_TDM_STREAM_FREQ_8MHZ;
 	ChipOpen->ulTdmSampling = cOCT6100_TDM_SAMPLE_AT_FALLING_EDGE;
+	ChipOpen->ulMaxFlexibleConfParticipants = 0;
+	ChipOpen->ulMaxConfBridges = 0;
+	ChipOpen->ulMaxRemoteDebugSessions = 0;
+	ChipOpen->fEnableChannelRecording = FALSE;
+	ChipOpen->ulSoftToneEventsBufSize = 64;
+
 #if 0
 	ChipOpen->fEnableAcousticEcho = TRUE;
 #endif		
@@ -486,7 +492,6 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		kfree(ChannelOpen);
 		return NULL;
 	}
-	
 	
 	vpm450m->pApiInstance = vmalloc(InstanceSize.ulApiInstanceSize);
 	if (!vpm450m->pApiInstance) {
@@ -517,7 +522,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		kfree(ChannelOpen);
 		return NULL;
 	}
-	for (x=0;x<128;x++) {
+	for (x = 0; x < ARRAY_SIZE(vpm450m->aulEchoChanHndl); x++) {
 		/* execute this loop always on 4 span cards but
 		*  on 2 span cards only execute for the channels related to our spans */
 		if (( numspans > 2) || ((x & 0x03) <2)) {
@@ -554,8 +559,9 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 			ulResult = Oct6100ChannelOpen(vpm450m->pApiInstance, ChannelOpen);
 			if (ulResult != GENERIC_OK) {
 				printk(KERN_NOTICE "Failed to open channel %d!\n", x);
+				continue;
 			}
-			for (y=0;y<sizeof(tones) / sizeof(tones[0]); y++) {
+			for (y = 0; y < ARRAY_SIZE(tones); y++) {
 				tOCT6100_TONE_DETECTION_ENABLE enable;
 				Oct6100ToneDetectionEnableDef(&enable);
 				enable.ulChannelHndl = vpm450m->aulEchoChanHndl[x];

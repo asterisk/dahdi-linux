@@ -5481,7 +5481,7 @@ UINT32 Oct6100ApiModifyChannelStructs(
 	if ( f_pChannelModify->fDisableToneDetection == TRUE )
 	{
 		/* Check if tone detection has been enabled on this channel. */
-		for ( ulToneConfIndex = 0; ulToneConfIndex < ( sizeof( pChanEntry->aulToneConf ) / sizeof(UINT32) ); ulToneConfIndex ++ )
+		for (ulToneConfIndex = 0; ulToneConfIndex < ARRAY_SIZE(pChanEntry->aulToneConf); ulToneConfIndex++)
 		{
 			/* Check if some tone has been activated on this channel. */
 			if ( pChanEntry->aulToneConf[ ulToneConfIndex ] != 0 )
