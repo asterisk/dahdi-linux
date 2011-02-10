@@ -2398,11 +2398,10 @@ UINT32 Oct6100ApiWriteChanPlayoutStructs(
 			/* Cleared! */
 			ulTempData &= ( ~ulMask );
 
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pEchoChannel,
 											ulAddress,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -2422,11 +2421,10 @@ UINT32 Oct6100ApiWriteChanPlayoutStructs(
 			/* Cleared! */
 			ulTempData &= ( ~ulMask );
 
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pEchoChannel,
 											ulAddress,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 		}
@@ -2471,11 +2469,10 @@ UINT32 Oct6100ApiWriteChanPlayoutStructs(
 		ulTempData &= ( ~ulMask );
 		ulTempData |= *pulSkipPtr << ulSkipPtrBitOfst;
 		
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pEchoChannel,
 										ulAddress,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 
@@ -2501,11 +2498,10 @@ UINT32 Oct6100ApiWriteChanPlayoutStructs(
 	ulTempData &= ( ~ulMask );
 	ulTempData |= ulWritePtr << ulWritePtrBitOfst;
 	
-	mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 									pEchoChannel,
 									ulAddress,
-									ulTempData,
-									ulResult );
+									ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 	
@@ -2912,7 +2908,7 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 			/* Get the write pointer in the chip. */
 			ulAddress = ulPlayoutBaseAddress + ulWritePtrBytesOfst;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD( f_pApiInstance, pEchoChannel, ulAddress, &ulReadData, ulResult );
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance, pEchoChannel, ulAddress, &ulReadData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
@@ -2984,11 +2980,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 	{
 		ulAddress = ulPlayoutBaseAddress + ulIgnoreBytesOfst;
 
-		mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 											pEchoChannel,
 											ulAddress,
-											&ulTempData,
-											ulResult );
+											&ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 		
@@ -3000,11 +2995,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 		if ( f_pBufferPlayoutStop->fStopCleanly == FALSE )
 			ulTempData |= 0x1 << ulIgnoreBitOfst;
 		
-		mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+		ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 										pEchoChannel,
 										ulAddress,
-										ulTempData,
-										ulResult );
+										ulTempData);
 		if ( ulResult != cOCT6100_ERR_OK )
 			return ulResult;
 	}
@@ -3017,7 +3011,7 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 
 	ulAddress = ulPlayoutBaseAddress + ulWritePtrBytesOfst;
 
-	mOCT6100_RETRIEVE_NLP_CONF_DWORD( f_pApiInstance, pEchoChannel, ulAddress, &ulTempData, ulResult );
+	ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance, pEchoChannel, ulAddress, &ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 	
@@ -3026,11 +3020,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 	ulTempData &= ( ~ulMask );
 	ulTempData |= ulWritePtr << ulWritePtrBitOfst;
 	
-	mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 									pEchoChannel,
 									ulAddress,
-									ulTempData,
-									ulResult );
+									ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 	
@@ -3042,11 +3035,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 
 	ulAddress = ulPlayoutBaseAddress + ulSkipPtrBytesOfst;
 
-	mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 										pEchoChannel,
 										ulAddress,
-										&ulTempData,
-										ulResult );
+										&ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 	
@@ -3055,11 +3047,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 	ulTempData &= ( ~ulMask );
 	ulTempData |= ulSkipPtr << ulSkipPtrBitOfst;
 	
-	mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 									pEchoChannel,
 									ulAddress,
-									ulTempData,
-									ulResult );
+									ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 	
@@ -3076,11 +3067,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 		{
 			ulAddress = ulPlayoutBaseAddress + ulHardSkipBytesOfst;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pEchoChannel,
 												ulAddress,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -3092,22 +3082,20 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 			if ( f_pBufferPlayoutStop->fStopCleanly == FALSE )
 				ulTempData |= 0x1 << ulHardSkipBitOfst;
 			
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pEchoChannel,
 											ulAddress,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 
 			/* Now is the appropriate time to skip! */
 			ulAddress = ulPlayoutBaseAddress + ulIgnoreBytesOfst;
 
-			mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 												pEchoChannel,
 												ulAddress,
-												&ulTempData,
-												ulResult );
+												&ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 			
@@ -3118,11 +3106,10 @@ UINT32 Oct6100ApiInvalidateChanPlayoutStructs(
 			/* Set the skip bit. */
 			ulTempData |= 0x1 << ulIgnoreBitOfst;
 			
-			mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+			ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 											pEchoChannel,
 											ulAddress,
-											ulTempData,
-											ulResult );
+											ulTempData);
 			if ( ulResult != cOCT6100_ERR_OK )
 				return ulResult;
 		}

@@ -52,6 +52,7 @@ $Octasic_Revision: 46 $
 #include "oct6100api/oct6100_chip_open_pub.h"
 #include "oct6100api/oct6100_channel_pub.h"
 #include "oct6100api/oct6100_phasing_tsst_pub.h"
+#include "oct6100api/oct6100_channel_inst.h"
 
 #include "oct6100_chip_open_priv.h"
 #include "oct6100_miscellaneous_priv.h"

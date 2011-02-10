@@ -1241,11 +1241,10 @@ UINT32 Oct6100BufferPlayoutCheckForSpecificEvent(
 	}
 
 	/* Retrieve the current write pointer. */
-	mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance, 
+	ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 										pEchoChannel, 
 										ulPlayoutBaseAddress + ulWritePtrBytesOfst, 
-										&ulTempData,
-										ulResult );
+										&ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 

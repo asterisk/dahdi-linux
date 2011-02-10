@@ -51,6 +51,7 @@ $Octasic_Revision: 81 $
 #include "oct6100api/oct6100_events_pub.h"
 #include "oct6100api/oct6100_channel_pub.h"
 #include "oct6100api/oct6100_interrupts_pub.h"
+#include "oct6100api/oct6100_channel_inst.h"
 
 #include "oct6100_chip_open_priv.h"
 #include "oct6100_miscellaneous_priv.h"

@@ -2703,11 +2703,10 @@ UINT32 Oct6100ApiBridgeEventAdd(
 				UINT32 ulFeatureBitOffset	 = pSharedInfo->MemoryMap.RinLevelControlOfst.byBitOffset;
 				UINT32 ulFeatureFieldLength = pSharedInfo->MemoryMap.RinLevelControlOfst.byFieldSize;
 
-				mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 													pEchoChanEntry,
 													ulBaseAddress + ulFeatureBytesOffset,
-													&ulTempData,
-													ulResult );
+													&ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;
 
@@ -2720,11 +2719,10 @@ UINT32 Oct6100ApiBridgeEventAdd(
 				ulTempData |= ( cOCT6100_PASS_THROUGH_LEVEL_CONTROL << ulFeatureBitOffset );
 
 				/* First read the DWORD where the field is located. */
-				mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+				ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 												pEchoChanEntry,
 												ulBaseAddress + ulFeatureBytesOffset,
-												ulTempData,
-												ulResult );
+												ulTempData);
 				if ( ulResult != cOCT6100_ERR_OK )
 					return ulResult;
 			}
@@ -7583,11 +7581,10 @@ UINT32 Oct6100ApiBridgeSetDominantSpeaker(
 	ulFeatureFieldLength = f_pApiInstance->pSharedInfo->MemoryMap.DominantSpeakerFieldOfst.byFieldSize;
 
 	/* Retrieve the current configuration. */
-	mOCT6100_RETRIEVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_retrieve_nlp_conf_dword(f_pApiInstance,
 										pEchoChanEntry,
 										ulBaseAddress + ulFeatureBytesOffset,
-										&ulTempData,
-										ulResult );
+										&ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;
 
@@ -7598,11 +7595,10 @@ UINT32 Oct6100ApiBridgeSetDominantSpeaker(
 	ulTempData |= ( ( f_usDominantSpeakerIndex ) << ulFeatureBitOffset );
 
 	/* Save the new dominant speaker. */
-	mOCT6100_SAVE_NLP_CONF_DWORD(	f_pApiInstance,
+	ulResult = oct6100_save_nlp_conf_dword(f_pApiInstance,
 									pEchoChanEntry,
 									ulBaseAddress + ulFeatureBytesOffset,
-									ulTempData,
-									ulResult );
+									ulTempData);
 	if ( ulResult != cOCT6100_ERR_OK )
 		return ulResult;	
 

@@ -47,6 +47,7 @@ $Octasic_Revision: 89 $
 #include "oct6100api/oct6100_remote_debug_inst.h"
 #include "oct6100api/oct6100_debug_inst.h"
 #include "oct6100api/oct6100_api_inst.h"
+#include "oct6100api/oct6100_channel_inst.h"
 
 #include "oct6100api/oct6100_interrupts_pub.h"
 #include "oct6100api/oct6100_chip_open_pub.h"
