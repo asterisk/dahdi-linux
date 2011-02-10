@@ -129,8 +129,6 @@ typedef struct _OCT6100_API_MISCELLANEOUS_
 	   allocate on the stack. The size of this array MUST NOT CHANGE (it's
 	   used everywhere). */
 	UINT16	ausSuperArray[ cOCT6100_INTERNAL_SUPER_ARRAY_SIZE ];
-	UINT16	ausSuperArray1[ cOCT6100_INTERNAL_SUPER_ARRAY_SIZE ];
-	UINT16	ausSuperArray2[ cOCT6100_INTERNAL_SUPER_ARRAY_SIZE ];
 
 	/* Chip ID and revision.*/
 	UINT16	usChipId;
