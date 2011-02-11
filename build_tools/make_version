@@ -4,7 +4,7 @@ if [ -f ${1}/.version ]; then
 	cat ${1}.version
 elif [ -f ${1}/.svnrevision ]; then
 	echo SVN-`cat ${1}/.svnbranch`-r`cat ${1}/.svnrevision`
-elif [ -d .svn ]; then
+elif [ -d ${1}/.svn ]; then
     PARTS=`LANG=C svn info ${1} | grep URL | awk '{print $2;}' | sed -e s:^.*/svn/${2}/:: | sed -e 's:/: :g'`
     BRANCH=0
     TEAM=0
@@ -53,7 +53,7 @@ elif [ -d .svn ]; then
     done
     
     echo SVN-${RESULT##-}-r${REV}
-elif [ -d .git ]; then
+elif [ -d ${1}/.git ]; then
     # If the first log commit messages indicates that this is checked into
     # subversion, we'll just use the SVN- form of the revision.
     MODIFIED=""
