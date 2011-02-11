@@ -69,6 +69,10 @@ ifneq ($(wildcard .version),)
 else
 ifneq ($(wildcard .svn),)
   DAHDIVERSION:=$(shell build_tools/make_version . dahdi/linux)
+else
+ifneq ($(wildcard .git),)
+  DAHDIVERSION:=$(shell build_tools/make_version . dahdi/linux)
+endif
 endif
 endif
 
