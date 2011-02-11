@@ -66,7 +66,7 @@ elif [ -d ${1}/.git ]; then
             fi
             # Some older versions of git do not support all the above
             # options.
-            VERSION=GIT-`git log --abbrev-commit -1 --pretty=oneline --abbrev=7 | cut -f 1 -d .`${MODIFIED}
+            VERSION=GIT-`git rev-parse --short --verify HEAD`${MODIFIED}
         fi
         echo ${VERSION}
     else
