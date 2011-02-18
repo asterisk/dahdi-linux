@@ -468,7 +468,7 @@ static inline bool is_good_frame(const u8 *sframe)
         return a != b;
 }
 
-static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk)
+static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 {
 	unsigned long flags;
 	struct vpmadt032_cmd *curcmd = NULL;
@@ -477,7 +477,7 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk)
 	unsigned char leds = ~((wc->intcount / 1000) % 8) & 0x7;
 
 	/* Skip audio */
-	writechunk += 24;
+	eframe += 24;
 
 	if (test_bit(VPM150M_SPIRESET, &vpmadt032->control) || test_bit(VPM150M_HPIRESET, &vpmadt032->control)) {
 		if (debug & DEBUG_ECHOCAN)
@@ -486,13 +486,13 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk)
 		for (x = 24; x < 28; x++) {
 			if (x == 24) {
 				if (test_and_clear_bit(VPM150M_SPIRESET, &vpmadt032->control))
-					writechunk[CMD_BYTE(x, 0, 0)] = 0x08;
+					eframe[CMD_BYTE(x, 0, 0)] = 0x08;
 				else if (test_and_clear_bit(VPM150M_HPIRESET, &vpmadt032->control))
-					writechunk[CMD_BYTE(x, 0, 0)] = 0x0b;
+					eframe[CMD_BYTE(x, 0, 0)] = 0x0b;
 			} else
-				writechunk[CMD_BYTE(x, 0, 0)] = 0x00 | leds;
-			writechunk[CMD_BYTE(x, 1, 0)] = 0;
-			writechunk[CMD_BYTE(x, 2, 0)] = 0x00;
+				eframe[CMD_BYTE(x, 0, 0)] = 0x00 | leds;
+			eframe[CMD_BYTE(x, 1, 0)] = 0;
+			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
 		}
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		return;
@@ -506,79 +506,79 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *writechunk)
 #endif
 		if (curcmd->desc & __VPM150M_RWPAGE) {
 			/* Set CTRL access to page*/
-			writechunk[CMD_BYTE(24, 0, 0)] = (0x8 << 4);
-			writechunk[CMD_BYTE(24, 1, 0)] = 0;
-			writechunk[CMD_BYTE(24, 2, 0)] = 0x20;
+			eframe[CMD_BYTE(24, 0, 0)] = (0x8 << 4);
+			eframe[CMD_BYTE(24, 1, 0)] = 0;
+			eframe[CMD_BYTE(24, 2, 0)] = 0x20;
 
 			/* Do a page write */
 			if (curcmd->desc & __VPM150M_WR)
-				writechunk[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4) << 4);
+				eframe[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4) << 4);
 			else
-				writechunk[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4 | 0x1) << 4);
-			writechunk[CMD_BYTE(25, 1, 0)] = 0;
+				eframe[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4 | 0x1) << 4);
+			eframe[CMD_BYTE(25, 1, 0)] = 0;
 			if (curcmd->desc & __VPM150M_WR)
-				writechunk[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xf;
+				eframe[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xf;
 			else
-				writechunk[CMD_BYTE(25, 2, 0)] = 0;
+				eframe[CMD_BYTE(25, 2, 0)] = 0;
 
 			/* Clear XADD */
-			writechunk[CMD_BYTE(26, 0, 0)] = (0x8 << 4);
-			writechunk[CMD_BYTE(26, 1, 0)] = 0;
-			writechunk[CMD_BYTE(26, 2, 0)] = 0;
+			eframe[CMD_BYTE(26, 0, 0)] = (0x8 << 4);
+			eframe[CMD_BYTE(26, 1, 0)] = 0;
+			eframe[CMD_BYTE(26, 2, 0)] = 0;
 
 			/* Fill in to buffer to size */
-			writechunk[CMD_BYTE(27, 0, 0)] = 0;
-			writechunk[CMD_BYTE(27, 1, 0)] = 0;
-			writechunk[CMD_BYTE(27, 2, 0)] = 0;
+			eframe[CMD_BYTE(27, 0, 0)] = 0;
+			eframe[CMD_BYTE(27, 1, 0)] = 0;
+			eframe[CMD_BYTE(27, 2, 0)] = 0;
 
 		} else {
 			/* Set address */
-			writechunk[CMD_BYTE(24, 0, 0)] = ((0x8 | 0x4) << 4);
-			writechunk[CMD_BYTE(24, 1, 0)] = (curcmd->address >> 8) & 0xff;
-			writechunk[CMD_BYTE(24, 2, 0)] = curcmd->address & 0xff;
+			eframe[CMD_BYTE(24, 0, 0)] = ((0x8 | 0x4) << 4);
+			eframe[CMD_BYTE(24, 1, 0)] = (curcmd->address >> 8) & 0xff;
+			eframe[CMD_BYTE(24, 2, 0)] = curcmd->address & 0xff;
 
 			/* Send/Get our data */
-			writechunk[CMD_BYTE(25, 0, 0)] = (curcmd->desc & __VPM150M_WR) ?
+			eframe[CMD_BYTE(25, 0, 0)] = (curcmd->desc & __VPM150M_WR) ?
 				((0x8 | (0x3 << 1)) << 4) : ((0x8 | (0x3 << 1) | 0x1) << 4);
-			writechunk[CMD_BYTE(25, 1, 0)] = (curcmd->data >> 8) & 0xff;
-			writechunk[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xff;
+			eframe[CMD_BYTE(25, 1, 0)] = (curcmd->data >> 8) & 0xff;
+			eframe[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xff;
 			
-			writechunk[CMD_BYTE(26, 0, 0)] = 0;
-			writechunk[CMD_BYTE(26, 1, 0)] = 0;
-			writechunk[CMD_BYTE(26, 2, 0)] = 0;
+			eframe[CMD_BYTE(26, 0, 0)] = 0;
+			eframe[CMD_BYTE(26, 1, 0)] = 0;
+			eframe[CMD_BYTE(26, 2, 0)] = 0;
 
 			/* Fill in the rest */
-			writechunk[CMD_BYTE(27, 0, 0)] = 0;
-			writechunk[CMD_BYTE(27, 1, 0)] = 0;
-			writechunk[CMD_BYTE(27, 2, 0)] = 0;
+			eframe[CMD_BYTE(27, 0, 0)] = 0;
+			eframe[CMD_BYTE(27, 1, 0)] = 0;
+			eframe[CMD_BYTE(27, 2, 0)] = 0;
 		}
 	} else if (test_and_clear_bit(VPM150M_SWRESET, &vpmadt032->control)) {
 		for (x = 24; x < 28; x++) {
 			if (x == 24)
-				writechunk[CMD_BYTE(x, 0, 0)] = (0x8 << 4);
+				eframe[CMD_BYTE(x, 0, 0)] = (0x8 << 4);
 			else
-				writechunk[CMD_BYTE(x, 0, 0)] = 0x00;
-			writechunk[CMD_BYTE(x, 1, 0)] = 0;
+				eframe[CMD_BYTE(x, 0, 0)] = 0x00;
+			eframe[CMD_BYTE(x, 1, 0)] = 0;
 			if (x == 24)
-				writechunk[CMD_BYTE(x, 2, 0)] = 0x01;
+				eframe[CMD_BYTE(x, 2, 0)] = 0x01;
 			else
-				writechunk[CMD_BYTE(x, 2, 0)] = 0x00;
+				eframe[CMD_BYTE(x, 2, 0)] = 0x00;
 		}
 	} else {
 		for (x = 24; x < 28; x++) {
-			writechunk[CMD_BYTE(x, 0, 0)] = 0x00;
-			writechunk[CMD_BYTE(x, 1, 0)] = 0x00;
-			writechunk[CMD_BYTE(x, 2, 0)] = 0x00;
+			eframe[CMD_BYTE(x, 0, 0)] = 0x00;
+			eframe[CMD_BYTE(x, 1, 0)] = 0x00;
+			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
 		}
 	}
 
 	/* Add our leds in */
 	for (x = 24; x < 28; x++) {
-		writechunk[CMD_BYTE(x, 0, 0)] |= leds;
+		eframe[CMD_BYTE(x, 0, 0)] |= leds;
 	}
 }
 
-static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int card, int pos)
+static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card, int pos)
 {
 	unsigned long flags;
 	unsigned int curcmd=0;
@@ -594,7 +594,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int 
 		subaddr = 0;
 
 	/* Skip audio */
-	writechunk += 24;
+	eframe += 24;
 	spin_lock_irqsave(&wc->reglock, flags);
 	/* Search for something waiting to transmit */
 	if (pos) {
@@ -621,75 +621,65 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *writechunk, int 
 	}
 
 	if (wc->modtype[card] == MOD_TYPE_FXS) {
-		writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = (1 << (subaddr));
+		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = (1 << (subaddr));
 		if (curcmd & __CMD_WR)
-			writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0x7f;
+			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0x7f;
 		else
-			writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0x80 | ((curcmd >> 8) & 0x7f);
-		writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x80 | ((curcmd >> 8) & 0x7f);
+		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
 
 	} else if (wc->modtype[card] == MOD_TYPE_FXO) {
 		static const int FXO_ADDRS[4] = { 0x00, 0x08, 0x04, 0x0c };
 		int idx = CMD_BYTE(card, 0, wc->altcs[card]);
 		if (curcmd & __CMD_WR)
-			writechunk[idx] = 0x20 | FXO_ADDRS[subaddr];
+			eframe[idx] = 0x20 | FXO_ADDRS[subaddr];
 		else
-			writechunk[idx] = 0x60 | FXO_ADDRS[subaddr];
-		writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0xff;
-		writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+			eframe[idx] = 0x60 | FXO_ADDRS[subaddr];
+		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0xff;
+		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
 
 	} else if (wc->modtype[card] == MOD_TYPE_FXSINIT) {
 		/* Special case, we initialize the FXS's into the three-byte command mode then
 		   switch to the regular mode.  To send it into thee byte mode, treat the path as
 		   6 two-byte commands and in the last one we initialize register 0 to 0x80. All modules
 		   read this as the command to switch to daisy chain mode and we're done.  */
-		writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
-		writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
+		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
+		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
 		if ((card & 0x1) == 0x1) 
-			writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = 0x80;
+			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x80;
 		else
-			writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
+			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
 
 	} else if (wc->modtype[card] == MOD_TYPE_BRI) {
 
 		if (unlikely((curcmd != 0x101010) && (curcmd & 0x1010) == 0x1010)) /* b400m CPLD */
-			writechunk[CMD_BYTE(card, 0, 0)] = 0x55;
+			eframe[CMD_BYTE(card, 0, 0)] = 0x55;
 		else /* xhfc */
-			writechunk[CMD_BYTE(card, 0, 0)] = 0x10;
-		writechunk[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
-		writechunk[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
-
+			eframe[CMD_BYTE(card, 0, 0)] = 0x10;
+		eframe[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
+		eframe[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
 	} else if (wc->modtype[card] == MOD_TYPE_QRV) {
  
-		writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
+		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
 		if (!curcmd) {
-			writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
-			writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
+			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
+			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
 		} else {
 			if (curcmd & __CMD_WR)
-				writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0x40 | ((curcmd >> 8) & 0x3f);
+				eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x40 | ((curcmd >> 8) & 0x3f);
 			else
-				writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0xc0 | ((curcmd >> 8) & 0x3f);
-			writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+				eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0xc0 | ((curcmd >> 8) & 0x3f);
+			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
 		}
 	} else if (wc->modtype[card] == MOD_TYPE_NONE) {
-		writechunk[CMD_BYTE(card, 0, wc->altcs[card])] = 0x10;
-		writechunk[CMD_BYTE(card, 1, wc->altcs[card])] = 0x10;
-		writechunk[CMD_BYTE(card, 2, wc->altcs[card])] = 0x10;
+		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x10;
+		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x10;
+		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x10;
 	}
-#if 0
-	/* XXX */
-	if (cmddesc < 40)
-		dev_info(&wc->vb.pdev->dev, "Pass %d, card = %d (modtype=%d), pos = %d, CMD_BYTES = %d,%d,%d, (%02x,%02x,%02x) curcmd = %08x\n", cmddesc, card, wc->modtype[card], pos, CMD_BYTE(card, 0), CMD_BYTE(card, 1), CMD_BYTE(card, 2), writechunk[CMD_BYTE(card, 0)], writechunk[CMD_BYTE(card, 1)], writechunk[CMD_BYTE(card, 2)], curcmd);
-#endif
 	spin_unlock_irqrestore(&wc->reglock, flags);
-#if 0
-	/* XXX */
-	cmddesc++;
-#endif
 }
 
-static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *readchunk)
+static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 {
 	unsigned long flags;
 	struct vpmadt032 *vpm = wc->vpmadt032;
@@ -717,11 +707,11 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *readchunk)
 	}
 
 	/* Skip audio */
-	readchunk += 24;
+	eframe += 24;
 
 	/* Store result */
-	cmd->data = (0xff & readchunk[CMD_BYTE(25, 1, 0)]) << 8;
-	cmd->data |= readchunk[CMD_BYTE(25, 2, 0)];
+	cmd->data = (0xff & eframe[CMD_BYTE(25, 1, 0)]) << 8;
+	cmd->data |= eframe[CMD_BYTE(25, 2, 0)];
 	if (cmd->desc & __VPM150M_WR) {
 		kfree(cmd);
 	} else {
@@ -730,7 +720,7 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *readchunk)
 	}
 }
 
-static inline void cmd_decipher(struct wctdm *wc, const u8 *readchunk, int card)
+static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 {
 	unsigned long flags;
 	unsigned char ident;
@@ -742,7 +732,7 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *readchunk, int card)
 	}
 
 	/* Skip audio */
-	readchunk += 24;
+	eframe += 24;
 	spin_lock_irqsave(&wc->reglock, flags);
 
 	/* Search for any pending results */
@@ -753,13 +743,9 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *readchunk, int card)
 		   	ident = (wc->cmdq[card].cmds[x] >> 24) & 0xff;
 		   	if (ident == wc->rxident) {
 				/* Store result */
-				wc->cmdq[card].cmds[x] |= readchunk[CMD_BYTE(card, 2, wc->altcs[card])];
+				wc->cmdq[card].cmds[x] |= eframe[CMD_BYTE(card, 2, wc->altcs[card])];
 				wc->cmdq[card].cmds[x] |= __CMD_FIN;
-/*
-				if (card == 0 && wc->cmdq[card].cmds[x] & __CMD_RD) {
-					dev_info(&wc->vb.pdev->dev, "decifer: got response %02x\n", wc->cmdq[card].cmds[x] & 0xff);
-				}
-*/
+
 				if (wc->cmdq[card].cmds[x] & __CMD_WR) {
 					/* Go ahead and clear out writes since they need no acknowledgement */
 					wc->cmdq[card].cmds[x] = 0x00000000;
@@ -772,11 +758,6 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *readchunk, int card)
 			}
 		}
 	}
-#if 0
-	/* XXX */
-	if (!pos && (cmddesc < 256))
-		dev_info(&wc->vb.pdev->dev, "Card %d: Command '%08x' => %02x\n",card,  wc->cmdq[card].lasttx[pos], wc->cmdq[card].lastrd[pos]);
-#endif
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
@@ -865,10 +846,11 @@ static void insert_tdm_data(const struct wctdm *wc, u8 *sframe)
 	}
 }
 
-static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechunk)
+static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 {
 	int x,y;
 	struct dahdi_span *s;
+	unsigned char *eframe = sframe;
 
 	/* Calculate Transmission */
 	if (likely(wc->initialized)) {
@@ -878,7 +860,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechun
 				dahdi_transmit(s);
 			}
 		}
-		insert_tdm_data(wc, writechunk);
+		insert_tdm_data(wc, sframe);
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 		for (x = 0; x < wc->avchannels; ++x) {
 			__dahdi_fifo_put(wc->ec_reference[x],
@@ -901,23 +883,26 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *writechun
 			}
 
 			if (y < wc->mods_per_board)
-				cmd_dequeue(wc, writechunk, y, x);
+				cmd_dequeue(wc, eframe, y, x);
 		}
 
-		if (wc->vpmadt032)
-			cmd_dequeue_vpmadt032(wc, writechunk);
+		if (wc->vpmadt032) {
+			cmd_dequeue_vpmadt032(wc, eframe);
+		} else if (wc->vpmadt032) {
+			cmd_dequeue_vpmadt032(wc, eframe);
+		}
 
 		if (x < DAHDI_CHUNKSIZE - 1) {
-			writechunk[EFRAME_SIZE] = wc->ctlreg;
-			writechunk[EFRAME_SIZE + 1] = wc->txident++;
+			eframe[EFRAME_SIZE] = wc->ctlreg;
+			eframe[EFRAME_SIZE + 1] = wc->txident++;
 
 			if ((wc->desc->ports == 4) && ((wc->ctlreg & 0x10))) {
-				writechunk[EFRAME_SIZE + 2] = 0;
+				eframe[EFRAME_SIZE + 2] = 0;
 				for (y = 0; y < 4; y++)
-					writechunk[EFRAME_SIZE + 2] |= (1 << y);
+					eframe[EFRAME_SIZE + 2] |= (1 << y);
 			}
 		}
-		writechunk += (EFRAME_SIZE + EFRAME_GAP);
+		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
 }
 
@@ -1096,35 +1081,39 @@ static void extract_tdm_data(struct wctdm *wc, const u8 *sframe)
 	}
 }
 
-static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *readchunk)
+static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 {
 	int x,y;
 	bool irqmiss = 0;
 	unsigned char expected;
+	const u8 *eframe = sframe;
 
-	if (unlikely(!is_good_frame(readchunk)))
+	if (unlikely(!is_good_frame(sframe)))
 		return;
 
 	if (likely(wc->initialized))
-		extract_tdm_data(wc, readchunk);
+		extract_tdm_data(wc, sframe);
 
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			expected = wc->rxident+1;
-			wc->rxident = readchunk[EFRAME_SIZE + 1];
+			wc->rxident = eframe[EFRAME_SIZE + 1];
 			if (wc->rxident != expected) {
 				irqmiss = 1;
 				cmd_retransmit(wc);
 			}
 		}
 		for (y = 0; y < wc->avchannels; y++) {
-			cmd_decipher(wc, readchunk, y);
+			cmd_decipher(wc, eframe, y);
 		}
 
-		if (wc->vpmadt032)
-			cmd_decipher_vpmadt032(wc, readchunk);
+		if (wc->vpmadt032) {
+			cmd_decipher_vpmadt032(wc, eframe);
+		} else if (wc->vpmadt032) {
+			cmd_decipher_vpmadt032(wc, eframe);
+		}
 
-		readchunk += (EFRAME_SIZE + EFRAME_GAP);
+		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
 
 	/* XXX We're wasting 8 taps.  We should get closer :( */
