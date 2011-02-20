@@ -39,6 +39,7 @@
 #include <linux/errno.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <linux/pci.h>
 #include <linux/init.h>
 #include <linux/version.h>
@@ -780,162 +781,135 @@ static int fill_alarm_string(char *buf, int count, int alarms)
 	return len;
 }
 
-static int dahdi_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
+/*
+ * Sequential proc interface
+ */
+
+static void seq_fill_alarm_string(struct seq_file *sfile, int alarms)
 {
-	int x, len = 0, real_count;
-	long spanno;
+	char tmp[70];
+
+	if (fill_alarm_string(tmp, sizeof(tmp), alarms))
+		seq_printf(sfile, "%s", tmp);
+}
+
+static int dahdi_seq_show(struct seq_file *sfile, void *v)
+{
+	long spanno = (long)sfile->private;
+	int x;
 	struct dahdi_span *s;
-
-
-	/* In Linux 2.6, page is always PROC_BLOCK_SIZE=(PAGE_SIZE-1024) bytes.
-	 * 0<count<=PROC_BLOCK_SIZE . count=1 will produce an error in
-	 * vsnprintf ('head -c 1 /proc/dahdi/1', 'dd bs=1').
-	 * An ugly hack. Good way: seq_printf (seq_file.c). */
-        real_count = count;
-	count = PAGE_SIZE-1024;
-	spanno = (long)data;
-	if (!spanno)
-		return 0;
 
 	s = span_find_and_get(spanno);
 	if (!s)
 		return -ENODEV;
 
 	if (s->name)
-		len += snprintf(page + len, count - len, "Span %d: %s ",
-				s->spanno, s->name);
+		seq_printf(sfile, "Span %d: %s ", s->spanno, s->name);
 	if (s->desc)
-		len += snprintf(page + len, count - len, "\"%s\"",
-				s->desc);
+		seq_printf(sfile, "\"%s\"", s->desc);
 	else
-		len += snprintf(page + len, count - len, "\"\"");
+		seq_printf(sfile, "\"\"");
 
 	if (s == master)
-		len += snprintf(page + len, count - len, " (MASTER)");
+		seq_printf(sfile, " (MASTER)");
 
 	if (s->lineconfig) {
 		/* framing first */
 		if (s->lineconfig & DAHDI_CONFIG_B8ZS)
-			len += snprintf(page + len, count - len, " B8ZS/");
+			seq_printf(sfile, " B8ZS/");
 		else if (s->lineconfig & DAHDI_CONFIG_AMI)
-			len += snprintf(page + len, count - len, " AMI/");
+			seq_printf(sfile, " AMI/");
 		else if (s->lineconfig & DAHDI_CONFIG_HDB3)
-			len += snprintf(page + len, count - len, " HDB3/");
+			seq_printf(sfile, " HDB3/");
 		/* then coding */
 		if (s->lineconfig & DAHDI_CONFIG_ESF)
-			len += snprintf(page + len, count - len, "ESF");
+			seq_printf(sfile, "ESF");
 		else if (s->lineconfig & DAHDI_CONFIG_D4)
-			len += snprintf(page + len, count - len, "D4");
+			seq_printf(sfile, "D4");
 		else if (s->lineconfig & DAHDI_CONFIG_CCS)
-			len += snprintf(page + len, count - len, "CCS");
+			seq_printf(sfile, "CCS");
 		/* E1's can enable CRC checking */
 		if (s->lineconfig & DAHDI_CONFIG_CRC4)
-			len += snprintf(page + len, count - len, "/CRC4");
+			seq_printf(sfile, "/CRC4");
 	}
 
-	len += snprintf(page + len, count - len, " ");
+	seq_printf(sfile, " ");
 
 	/* list alarms */
-	len += fill_alarm_string(page + len, count - len, s->alarms);
+	seq_fill_alarm_string(sfile, s->alarms);
 	if (s->syncsrc &&
 		(s->syncsrc == s->spanno))
-		len += snprintf(page + len, count - len, "ClockSource ");
-	len += snprintf(page + len, count - len, "\n");
+		seq_printf(sfile, "ClockSource ");
+	seq_printf(sfile, "\n");
 	if (s->count.bpv)
-		len += snprintf(page + len, count - len, "\tBPV count: %d\n",
-				s->count.bpv);
+		seq_printf(sfile, "\tBPV count: %d\n", s->count.bpv);
 	if (s->count.crc4)
-		len += snprintf(page + len, count - len,
-				"\tCRC4 error count: %d\n",
-				s->count.crc4);
+		seq_printf(sfile, "\tCRC4 error count: %d\n", s->count.crc4);
 	if (s->count.ebit)
-		len += snprintf(page + len, count - len,
-				"\tE-bit error count: %d\n",
-				s->count.ebit);
+		seq_printf(sfile, "\tE-bit error count: %d\n", s->count.ebit);
 	if (s->count.fas)
-		len += snprintf(page + len, count - len,
-				"\tFAS error count: %d\n",
-				s->count.fas);
+		seq_printf(sfile, "\tFAS error count: %d\n", s->count.fas);
 	if (s->irqmisses)
-		len += snprintf(page + len, count - len,
-				"\tIRQ misses: %d\n",
-				s->irqmisses);
+		seq_printf(sfile, "\tIRQ misses: %d\n", s->irqmisses);
 	if (s->timingslips)
-		len += snprintf(page + len, count - len,
-				"\tTiming slips: %d\n",
-				s->timingslips);
-	len += snprintf(page + len, count - len, "\n");
+		seq_printf(sfile, "\tTiming slips: %d\n", s->timingslips);
+	seq_printf(sfile, "\n");
 
 	for (x = 0; x < s->channels; x++) {
 		struct dahdi_chan *chan = s->chans[x];
 
 		if (chan->name)
-			len += snprintf(page + len, count - len,
-					"\t%4d %s ", chan->channo, chan->name);
+			seq_printf(sfile, "\t%4d %s ", chan->channo,
+					chan->name);
 
 		if (chan->sig) {
 			if (chan->sig == DAHDI_SIG_SLAVE)
-				len += snprintf(page+len, count-len, "%s ",
+				seq_printf(sfile, "%s ",
 						sigstr(chan->master->sig));
 			else {
-				len += snprintf(page+len, count-len, "%s ",
-						sigstr(chan->sig));
+				seq_printf(sfile, "%s ", sigstr(chan->sig));
 				if (chan->nextslave &&
 					(chan->master->channo == chan->channo))
-					len += snprintf(page+len, count-len,
-							"Master ");
+					seq_printf(sfile, "Master ");
 			}
 		} else if (!chan->sigcap) {
-			len += snprintf(page+len, count-len, "Reserved ");
+			seq_printf(sfile, "Reserved ");
 		}
 
 		if (test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags))
-			len += snprintf(page + len, count - len, "(In use) ");
+			seq_printf(sfile, "(In use) ");
 
 #ifdef	OPTIMIZE_CHANMUTE
 		if (chan->chanmute)
-			len += snprintf(page+len, count-len, "(no pcm) ");
+			seq_printf(sfile, "(no pcm) ");
 #endif
 
-		len += fill_alarm_string(page+len, count-len,
-				chan->chan_alarms);
+		seq_fill_alarm_string(sfile, chan->chan_alarms);
 
 		if (chan->ec_factory)
-			len += snprintf(page+len, count-len, "(EC: %s - %s) ",
+			seq_printf(sfile, "(EC: %s - %s) ",
 					chan->ec_factory->get_name(chan),
 					chan->ec_state ? "ACTIVE" : "INACTIVE");
 
-		len += snprintf(page+len, count-len, "\n");
-
-		/* If everything printed so far is before beginning 
-		 * of request */
-		if (len <= off) {
-			off -= len;
-			len = 0;
-		}
-
-		/* stop if we've already generated enough */
-		if (len > off + count)
-			break;
-		/* stop if we're NEAR danger limit. let it be -128 bytes. */
-		if (len > count-128)
-			break;
+		seq_printf(sfile, "\n");
 	}
-	count = real_count;
-	/* If everything printed so far is before beginning of request */
-	if (len <= off) {
-		off = 0;
-		len = 0;
-	}
-	*start = page + off;
-	len -= off;		/* un-count any remaining offset */
-	*eof = 1;
-	if (len > count)
-		len = count;	/* don't return bytes not asked for */
-
 	put_span(s);
-	return len;
+	return 0;
 }
+
+static int dahdi_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, dahdi_seq_show, PDE(inode)->data);
+}
+
+static const struct file_operations dahdi_proc_ops = {
+	.owner		= THIS_MODULE,
+	.open		= dahdi_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 #endif
 
 static int dahdi_first_empty_alias(void)
@@ -6471,14 +6445,15 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	{
 		char tempfile[17];
 		snprintf(tempfile, sizeof(tempfile), "%d", span->spanno);
-		span->proc_entry = create_proc_read_entry(tempfile, 0444,
-					root_proc_entry, dahdi_proc_read,
-					(int *) (long) span->spanno);
+		span->proc_entry = create_proc_entry(tempfile, 0444,
+					root_proc_entry);
 		if (!span->proc_entry) {
 			res = -EFAULT;
 			span_err(span, "Error creating procfs entry\n");
 			goto cleanup;
 		}
+		span->proc_entry->data = (void *)(long)span->spanno;
+		span->proc_entry->proc_fops = &dahdi_proc_ops;
 	}
 #endif
 
