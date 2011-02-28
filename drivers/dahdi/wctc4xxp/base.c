@@ -932,8 +932,8 @@ wctc4xxp_submit(struct wctc4xxp_descriptor_ring *dr, struct tcb *c)
 	}
 	d->des1 &= cpu_to_le32(~(BUFFER1_SIZE_MASK));
 	d->des1 |= cpu_to_le32(len & BUFFER1_SIZE_MASK);
-	d->buffer1 = pci_map_single(dr->pdev, c->data,
-			SFRAME_SIZE, dr->direction);
+	d->buffer1 = cpu_to_le32(pci_map_single(dr->pdev, c->data,
+			SFRAME_SIZE, dr->direction));
 
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	dr->pending[dr->tail] = c;
@@ -953,7 +953,7 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 	spin_lock_irqsave(&dr->lock, flags);
 	d = wctc4xxp_descriptor(dr, head);
 	if (d->buffer1 && !OWNED(d)) {
-		pci_unmap_single(dr->pdev, d->buffer1,
+		pci_unmap_single(dr->pdev, le32_to_cpu(d->buffer1),
 			SFRAME_SIZE, dr->direction);
 		c = dr->pending[head];
 		WARN_ON(!c);
@@ -961,7 +961,7 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 		d->buffer1 = 0;
 		--dr->count;
 		WARN_ON(!c);
-		c->data_len = (d->des0 >> 16) & BUFFER1_SIZE_MASK;
+		c->data_len = (le32_to_cpu(d->des0) >> 16) & BUFFER1_SIZE_MASK;
 		WARN_ON(c->data_len > SFRAME_SIZE);
 	} else {
 		c = NULL;
@@ -1312,8 +1312,8 @@ send_set_ip_hdr_channel_cmd(struct channel_pvt *pvt, struct tcb *cmd)
 	struct wcdte *wc = pvt->wc;
 	const u16 parameters[] = {0, 0x0045, 0, 0, 0x0040, 0x1180, 0,
 		0xa8c0, 0x0309, 0xa8c0, 0x0309,
-		cpu_to_be16(pvt->timeslot_out_num + 0x5000),
-		cpu_to_be16(pvt->timeslot_in_num + 0x5000),
+		swab16(pvt->timeslot_out_num + 0x5000),
+		swab16(pvt->timeslot_in_num + 0x5000),
 		0, 0};
 	create_channel_cmd(pvt, cmd, CONFIG_CHANGE_TYPE, CONFIG_CHANNEL_CLASS,
 		0x9000, parameters, ARRAY_SIZE(parameters));
