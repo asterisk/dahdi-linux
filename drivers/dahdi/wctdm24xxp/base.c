@@ -4212,7 +4212,7 @@ struct ha80000_firmware {
 	u8	major_ver;
 	u8	minor_ver;
 	u8	data[54648];
-	u32	chksum;
+	__le32	chksum;
 } __attribute__((packed));
 
 static void hx8_send_dummy(struct wctdm *wc)
@@ -4417,7 +4417,7 @@ static int hx8_check_firmware(struct wctdm *wc)
 	if ((fw->size != sizeof(*ha8_fw)) ||
 	    (0 != memcmp("DIGIUM", ha8_fw->header, sizeof(ha8_fw->header))) ||
 	    ((crc32(~0, (void *)ha8_fw, sizeof(*ha8_fw) - sizeof(u32)) ^ ~0) !=
-	      ha8_fw->chksum)) {
+	      le32_to_cpu(ha8_fw->chksum))) {
 		dev_warn(dev, "Firmware file is invalid. Skipping load.\n");
 		ret = 0;
 		goto cleanup;

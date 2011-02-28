@@ -92,7 +92,7 @@
 #define 	CSR9_MMC		0x00040000
 #define 	CSR9_MDI		0x00080000
 
-#define OWN_BIT (1 << 31)
+#define OWN_BIT cpu_to_le32(1 << 31)
 
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 
@@ -268,7 +268,7 @@ vb_initialize_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *
 	memset(dl->desc, 0, (sizeof(*d) + dl->padding) * DRING_SIZE);
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = vb_descriptor(dl, i);
-		d->des1 = des1;
+		d->des1 = cpu_to_le32(des1);
 	}
 	d->des1 |= cpu_to_le32(END_OF_RING);
 	atomic_set(&dl->count, 0);
@@ -321,7 +321,7 @@ vb_initialize_tx_descriptors(struct voicebus *vb)
 
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = vb_descriptor(dl, i);
-		d->des1 = des1;
+		d->des1 = cpu_to_le32(des1);
 		dl->pending[i] = NULL;
 		d->buffer1 = 0;
 	}
@@ -478,14 +478,15 @@ vb_cleanup_tx_descriptors(struct voicebus *vb)
 
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = vb_descriptor(dl, i);
-		if (d->buffer1 && (d->buffer1 != vb->idle_vbb_dma_addr)) {
+		if (d->buffer1 &&
+		    (d->buffer1 != le32_to_cpu(vb->idle_vbb_dma_addr))) {
 			WARN_ON(!dl->pending[i]);
 			vbb = dl->pending[i];
 			dma_pool_free(vb->pool, vbb, vbb->dma_addr);
 		}
 		if (NORMAL == vb->mode) {
-			d->des1 |= 0x80000000;
-			d->buffer1 = vb->idle_vbb_dma_addr;
+			d->des1 |= cpu_to_le32(0x80000000);
+			d->buffer1 = cpu_to_le32(vb->idle_vbb_dma_addr);
 			dl->pending[i] = vb->idle_vbb;
 			SET_OWNED(d);
 		} else {
@@ -724,7 +725,7 @@ vb_submit_rxb(struct voicebus *vb, struct vbb *vbb)
 
 	dl->pending[tail] = vbb;
 	dl->tail = (++tail) & DRING_MASK;
-	d->buffer1 = vbb->dma_addr;
+	d->buffer1 = cpu_to_le32(vbb->dma_addr);
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	atomic_inc(&dl->count);
 	return 0;
@@ -737,7 +738,8 @@ static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 
 	d = vb_descriptor(dl, dl->tail);
 
-	if (unlikely((d->buffer1 != vb->idle_vbb_dma_addr) && d->buffer1)) {
+	if (unlikely((le32_to_cpu(d->buffer1) != vb->idle_vbb_dma_addr) &&
+		      d->buffer1)) {
 		if (printk_ratelimit())
 			dev_warn(&vb->pdev->dev, "Dropping tx buffer buffer\n");
 		dma_pool_free(vb->pool, vbb, vbb->dma_addr);
@@ -748,7 +750,7 @@ static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 	}
 
 	dl->pending[dl->tail] = vbb;
-	d->buffer1 = vbb->dma_addr;
+	d->buffer1 = cpu_to_le32(vbb->dma_addr);
 	dl->tail = (dl->tail + 1) & DRING_MASK;
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	atomic_inc(&dl->count);
@@ -895,10 +897,10 @@ static void
 dump_descriptor(struct voicebus *vb, struct voicebus_descriptor *d)
 {
 	VB_PRINTK(vb, DEBUG, "Displaying descriptor at address %08x\n", (unsigned int)d);
-	VB_PRINTK(vb, DEBUG, "   des0:      %08x\n", d->des0);
-	VB_PRINTK(vb, DEBUG, "   des1:      %08x\n", d->des1);
-	VB_PRINTK(vb, DEBUG, "   buffer1:   %08x\n", d->buffer1);
-	VB_PRINTK(vb, DEBUG, "   container: %08x\n", d->container);
+	VB_PRINTK(vb, DEBUG, "   des0:      %08x\n", le32_to_cpu(d->des0));
+	VB_PRINTK(vb, DEBUG, "   des1:      %08x\n", le32_to_cpu(d->des1));
+	VB_PRINTK(vb, DEBUG, "   buffer1:   %08x\n", le32_to_cpu(d->buffer1));
+	VB_PRINTK(vb, DEBUG, "   container: %08x\n", le32_to_cpu(d->container));
 }
 
 static void
@@ -941,12 +943,13 @@ vb_get_completed_txb(struct voicebus *vb)
 
 	d = vb_descriptor(dl, head);
 
-	if (OWNED(d) || !d->buffer1 || (d->buffer1 == vb->idle_vbb_dma_addr))
+	if (OWNED(d) || !d->buffer1 ||
+	    (le32_to_cpu(d->buffer1) == vb->idle_vbb_dma_addr))
 		return NULL;
 
 	vbb = dl->pending[head];
 	if (NORMAL == vb->mode) {
-		d->buffer1 = vb->idle_vbb_dma_addr;
+		d->buffer1 = cpu_to_le32(vb->idle_vbb_dma_addr);
 		dl->pending[head] = vb->idle_vbb;
 		SET_OWNED(d);
 	} else {
@@ -1477,7 +1480,7 @@ static void vb_tasklet_normal(unsigned long data)
 
 		behind = 2;
 		while (!OWNED(d)) {
-			if (d->buffer1 != vb->idle_vbb_dma_addr)
+			if (le32_to_cpu(d->buffer1) != vb->idle_vbb_dma_addr)
 				goto tx_error_exit;
 			SET_OWNED(d);
 			dl->head = (dl->head + 1) & DRING_MASK;
@@ -1507,7 +1510,7 @@ static void vb_tasklet_normal(unsigned long data)
 		vb_increase_latency(vb, behind, &buffers);
 		d = vb_descriptor(dl, dl->head);
 		while (!OWNED(d)) {
-			if (d->buffer1 != vb->idle_vbb_dma_addr) {
+			if (le32_to_cpu(d->buffer1) != vb->idle_vbb_dma_addr) {
 				local_irq_restore(flags);
 				goto tx_error_exit;
 			}
@@ -1519,7 +1522,7 @@ static void vb_tasklet_normal(unsigned long data)
 		/* Now we'll get a little further ahead of the hardware. */
 		for (i = 0; i < 5; ++i) {
 			d = vb_descriptor(dl, dl->head);
-			d->buffer1 = vb->idle_vbb_dma_addr;
+			d->buffer1 = cpu_to_le32(vb->idle_vbb_dma_addr);
 			dl->pending[dl->head] = vb->idle_vbb;
 			d->des0 |= OWN_BIT;
 			dl->head = (dl->head + 1) & DRING_MASK;
@@ -1529,7 +1532,7 @@ static void vb_tasklet_normal(unsigned long data)
 	}
 
 	d = vb_descriptor(dl, dl->tail);
-	if (d->buffer1 != vb->idle_vbb_dma_addr)
+	if (le32_to_cpu(d->buffer1) != vb->idle_vbb_dma_addr)
 		goto tx_error_exit;
 
 	/* Now we can send all our buffers together in a group. */
