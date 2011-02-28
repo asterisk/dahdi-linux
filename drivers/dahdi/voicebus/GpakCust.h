@@ -72,10 +72,8 @@
 #define __VPM150M_TX		(1 << 0)
 
 /* Some Bit ops for different operations */
-#define VPM150M_SPIRESET		0
 #define VPM150M_HPIRESET		1
 #define VPM150M_SWRESET			2
-#define VPM150M_DTMFDETECT		3
 #define VPM150M_ACTIVE			4
 
 #define NLPTYPE_NONE		0

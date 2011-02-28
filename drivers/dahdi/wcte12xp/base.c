@@ -405,16 +405,19 @@ static void cmd_dequeue_vpmadt032(struct t1 *wc, unsigned char *eframe)
 	/* Skip audio */
 	eframe += 66;
 
-	if (test_bit(VPM150M_SPIRESET, &vpm->control) || test_bit(VPM150M_HPIRESET, &vpm->control)) {
+	if (test_bit(VPM150M_HPIRESET, &vpm->control)) {
 		debug_printk(wc, 1, "HW Resetting VPMADT032 ...\n");
 		for (x = 0; x < 4; x++) {
 			if (!x) {
-				if (test_and_clear_bit(VPM150M_SPIRESET, &vpm->control))
-					eframe[CMD_BYTE(x, 0, 1)] = 0x08;
-				else if (test_and_clear_bit(VPM150M_HPIRESET, &vpm->control))
-					eframe[CMD_BYTE(x, 0, 1)] = 0x0b;
-			} else
+				if (test_and_clear_bit(VPM150M_HPIRESET,
+						       &vpm->control)) {
+					eframe[CMD_BYTE(x, 0, 0)] = 0x0b;
+				} else {
+					eframe[CMD_BYTE(x, 0, 0)] = leds;
+				}
+			} else {
 				eframe[CMD_BYTE(x, 0, 1)] = 0x00 | leds;
+			}
 			eframe[CMD_BYTE(x, 1, 1)] = 0;
 			eframe[CMD_BYTE(x, 2, 1)] = 0x00;
 		}
@@ -2350,7 +2353,6 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 #ifdef VPM_SUPPORT
 	if(vpm) {
 		wc->vpmadt032 = NULL;
-		clear_bit(VPM150M_DTMFDETECT, &vpm->control);
 		clear_bit(VPM150M_ACTIVE, &vpm->control);
 		vpmadt032_free(vpm);
 	}

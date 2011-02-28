@@ -479,18 +479,21 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 	/* Skip audio */
 	eframe += 24;
 
-	if (test_bit(VPM150M_SPIRESET, &vpmadt032->control) || test_bit(VPM150M_HPIRESET, &vpmadt032->control)) {
+	if (test_bit(VPM150M_HPIRESET, &vpmadt032->control)) {
 		if (debug & DEBUG_ECHOCAN)
 			dev_info(&wc->vb.pdev->dev, "HW Resetting VPMADT032...\n");
 		spin_lock_irqsave(&wc->reglock, flags);
 		for (x = 24; x < 28; x++) {
 			if (x == 24) {
-				if (test_and_clear_bit(VPM150M_SPIRESET, &vpmadt032->control))
-					eframe[CMD_BYTE(x, 0, 0)] = 0x08;
-				else if (test_and_clear_bit(VPM150M_HPIRESET, &vpmadt032->control))
+				if (test_and_clear_bit(VPM150M_HPIRESET,
+						       &vpmadt032->control)) {
 					eframe[CMD_BYTE(x, 0, 0)] = 0x0b;
-			} else
-				eframe[CMD_BYTE(x, 0, 0)] = 0x00 | leds;
+				} else {
+					eframe[CMD_BYTE(x, 0, 0)] = leds;
+				}
+			} else {
+				eframe[CMD_BYTE(x, 0, 0)] = leds;
+			}
 			eframe[CMD_BYTE(x, 1, 0)] = 0;
 			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
 		}
@@ -4840,7 +4843,6 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 		remove_sysfs_files(wc);
 
 		if (vpm) {
-			clear_bit(VPM150M_DTMFDETECT, &vpm->control);
 			clear_bit(VPM150M_ACTIVE, &vpm->control);
 			flush_scheduled_work();
 		}
