@@ -997,17 +997,6 @@ int wctdm_getreg(struct wctdm *wc, int card, int addr)
 	return val;
 }
 
-
-static inline unsigned char wctdm_vpm_in(struct wctdm *wc, int unit, const unsigned int addr)
-{
-	return wctdm_getreg(wc, unit + NUM_MODULES, addr);
-}
-
-static inline void wctdm_vpm_out(struct wctdm *wc, int unit, const unsigned int addr, const unsigned char val)
-{
-	wctdm_setreg(wc, unit + NUM_MODULES, addr, val);
-}
-
 static inline void cmd_retransmit(struct wctdm *wc)
 {
 	int x,y;
@@ -1875,25 +1864,6 @@ static inline void wctdm_proslic_check_hook(struct wctdm *wc, const int card)
 		}
 	}
 	fxs->lastrxhook = hook;
-}
-
-static inline void wctdm_vpm_check(struct wctdm *wc, int x)
-{
-	if (wc->cmdq[x].isrshadow[0]) {
-		if (debug & DEBUG_ECHOCAN)
-			dev_info(&wc->vb.pdev->dev, "VPM: Detected dtmf ON channel %02x on chip %d!\n", wc->cmdq[x].isrshadow[0], x - NUM_MODULES);
-		wc->sethook[x] = CMD_WR(0xb9, wc->cmdq[x].isrshadow[0]);
-		wc->cmdq[x].isrshadow[0] = 0;
-		/* Cancel most recent lookup, if there is one */
-		wc->cmdq[x].cmds[USER_COMMANDS+0] = 0x00000000; 
-	} else if (wc->cmdq[x].isrshadow[1]) {
-		if (debug & DEBUG_ECHOCAN)
-			dev_info(&wc->vb.pdev->dev, "VPM: Detected dtmf OFF channel %02x on chip %d!\n", wc->cmdq[x].isrshadow[1], x - NUM_MODULES);
-		wc->sethook[x] = CMD_WR(0xbd, wc->cmdq[x].isrshadow[1]);
-		wc->cmdq[x].isrshadow[1] = 0;
-		/* Cancel most recent lookup, if there is one */
-		wc->cmdq[x].cmds[USER_COMMANDS+1] = 0x00000000; 
-	}
 }
 
 static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
