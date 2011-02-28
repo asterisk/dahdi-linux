@@ -4,7 +4,6 @@
 #include <dahdi/kernel.h>
 #include <linux/device.h>
 #include <linux/slab.h>
-#include <dahdi/version.h>
 
 #include "dahdi.h"
 
@@ -182,7 +181,7 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 	}
 	module_printk(KERN_INFO, "Telephony Interface Registered on major %d\n",
 			DAHDI_MAJOR);
-	module_printk(KERN_INFO, "Version: %s\n", DAHDI_VERSION);
+	module_printk(KERN_INFO, "Version: %s\n", dahdi_version);
 
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
 	if (!dahdi_class) {

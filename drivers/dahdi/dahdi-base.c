@@ -62,7 +62,6 @@
 #define DAHDI_PRINK_MACROS_USE_debug
 #define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 
-#include <dahdi/version.h>
 /* Grab fasthdlc with tables */
 #define FAST_HDLC_NEED_TABLES
 #include <dahdi/kernel.h>
@@ -4799,7 +4798,7 @@ static int dahdi_ioctl_get_version(unsigned long data)
 	size_t space = sizeof(vi.echo_canceller) - 1;
 
 	memset(&vi, 0, sizeof(vi));
-	strlcpy(vi.version, DAHDI_VERSION, sizeof(vi.version));
+	strlcpy(vi.version, dahdi_version, sizeof(vi.version));
 	spin_lock(&ecfactory_list_lock);
 	list_for_each_entry(cur, &ecfactory_list, list) {
 		strncat(vi.echo_canceller + strlen(vi.echo_canceller),
@@ -9148,7 +9147,6 @@ MODULE_LICENSE("GPL v2");
  * for that. So make dahdi provide it for now. This alias may be removed
  * in the future, and users are encouraged not to rely on it. */
 MODULE_ALIAS("dahdi_dummy");
-MODULE_VERSION(DAHDI_VERSION);
 
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Sets debugging verbosity as a bitfield, to see"\

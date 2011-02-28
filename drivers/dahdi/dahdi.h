@@ -25,6 +25,7 @@
  */
 
 extern int debug;
+extern const char *const dahdi_version;
 
 int dahdi_register_chardev(struct dahdi_chardev *dev);
 int dahdi_unregister_chardev(struct dahdi_chardev *dev);
