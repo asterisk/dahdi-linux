@@ -1,0 +1,237 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" /><title>Release Summary - dahdi-linux-2.4.1</title></head>
+<body>
+<h1 align="center"><a name="top">Release Summary</a></h1>
+<h3 align="center">dahdi-linux-2.4.1</h3>
+<h3 align="center">Date: 2011-03-03</h3>
+<h3 align="center">&lt;asteriskteam@digium.com&gt;</h3>
+<hr/>
+<h2 align="center">Table of Contents</h2>
+<ol>
+   <li><a href="#summary">Summary</a></li>
+   <li><a href="#contributors">Contributors</a></li>
+   <li><a href="#issues">Closed Issues</a></li>
+   <li><a href="#commits">Other Changes</a></li>
+   <li><a href="#diffstat">Diffstat</a></li>
+</ol>
+<hr/>
+<a name="summary"><h2 align="center">Summary</h2></a>
+<center><a href="#top">[Back to Top]</a></center><br/><p>This release includes only bug fixes.  The changes included were made only to address problems that have been identified in this release series.  Users should be able to safely upgrade to this version if this release series is already in use.  Users considering upgrading from a previous release series are strongly encouraged to review the UPGRADE.txt document as well as the CHANGES document for information about upgrading to this release series.</p>
+<p>The data in this summary reflects changes that have been made since the previous release, dahdi-linux-2.4.0.</p>
+<hr/>
+<a name="contributors"><h2 align="center">Contributors</h2></a>
+<center><a href="#top">[Back to Top]</a></center><br/><p>This table lists the people who have submitted code, those that have tested patches, as well as those that reported issues on the issue tracker that were resolved in this release.  For coders, the number is how many of their patches (of any size) were committed into this release.  For testers, the number is the number of times their name was listed as assisting with testing a patch.  Finally, for reporters, the number is the number of issues that they reported that were closed by commits that went into this release.</p>
+<table width="100%" border="0">
+<tr>
+<td width="33%"><h3>Coders</h3></td>
+<td width="33%"><h3>Testers</h3></td>
+<td width="33%"><h3>Reporters</h3></td>
+</tr>
+<tr valign="top">
+<td>
+51 sruffell<br/>
+1 bsexton<br/>
+1 jkroon<br/>
+1 mattf<br/>
+1 Max<br/>
+1 msink<br/>
+1 tzafrir<br/>
+1 vvv<br/>
+1 ys<br/>
+</td>
+<td>
+1 foxfire<br/>
+</td>
+<td>
+2 Max Khon<br/>
+1 avarvit<br/>
+1 bsexton<br/>
+1 foxfire<br/>
+1 glen201<br/>
+1 jkroon<br/>
+1 msink<br/>
+1 rde42<br/>
+1 tzafrir<br/>
+1 vvv<br/>
+1 ys<br/>
+</td>
+</tr>
+</table>
+<hr/>
+<a name="issues"><h2 align="center">Closed Issues</h2></a>
+<center><a href="#top">[Back to Top]</a></center><br/><p>This is a list of all issues from the issue tracker that were closed by changes that went into this release.</p>
+<h3>Category: General</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=16063">#16063</a>: [patch] tar fails to chown in centos 4.3<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9673">9673</a><br/>
+Reporter: tzafrir<br/>
+Coders: sruffell<br/>
+<br/>
+<h3>Category: dahdi (the module)</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=15908">#15908</a>: [patch] dahdi_echocan_events: anonymous member in dahdi_echocan_events union<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9665">9665</a><br/>
+Reporter: ys<br/>
+Coders: ys<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=15927">#15927</a>: [patch] Fix 'void *' pointer arithmetic warnings in echo cancellation drivers<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9664">9664</a><br/>
+Reporter: Max Khon<br/>
+Coders: Max<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=16143">#16143</a>: [patch] make_version scripts detects svn incorrectly<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9759">9759</a><br/>
+Reporter: Max Khon<br/>
+Coders: sruffell<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=17857">#17857</a>: [patch] CONFIG_DAHDI_NET compiling error<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9655">9655</a><br/>
+Reporter: msink<br/>
+Coders: msink<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=17990">#17990</a>: [patch] dahdi-linux fails to compile in ppp support if kernel ppp support compiled as a module<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9669">9669</a><br/>
+Reporter: jkroon<br/>
+Coders: jkroon<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=18422">#18422</a>: [patch] dahdi-base locks channel-exporting module in kernel if channel open fails<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9682">9682</a><br/>
+Reporter: avarvit<br/>
+Coders: sruffell<br/>
+<br/>
+<h3>Category: dahdi_dummy</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=17959">#17959</a>: dahdi_dummy fails compile on Fedora 13 64-bit with kzalloc implicit declaration error<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9658">9658</a><br/>
+Reporter: glen201<br/>
+Coders: sruffell<br/>
+<br/>
+<h3>Category: wcb4xxp</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=14834">#14834</a>: [patch] HDLC packets doesn't pass over D-channel (driver wcb4xxp, card B410)<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9689">9689</a><br/>
+Reporter: vvv<br/>
+Coders: vvv<br/>
+<br/>
+<h3>Category: wctdm24xxp</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=16894">#16894</a>: fwringdetect option is ineffective<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9674">9674</a><br/>
+Reporter: rde42<br/>
+Coders: sruffell<br/>
+<br/>
+<a href="https://issues.asterisk.org/view.php?id=18184">#18184</a>: [patch] FXS Module detection fails<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9675">9675</a><br/>
+Reporter: bsexton<br/>
+Coders: bsexton<br/>
+<br/>
+<h3>Category: wcte12xp</h3><br/>
+<a href="https://issues.asterisk.org/view.php?id=18142">#18142</a>: [patch] The TE122 and dadi produces an unusual high load<br/>
+Revision: <a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9683">9683</a><br/>
+Reporter: foxfire<br/>
+Testers: foxfire<br/>
+Coders: sruffell<br/>
+<br/>
+<hr/>
+<a name="commits"><h2 align="center">Commits Not Associated with an Issue</h2></a>
+<center><a href="#top">[Back to Top]</a></center><br/><p>This is a list of all changes that went into this release that did not directly close an issue from the issue tracker.  The commits may have been marked as being related to an issue.  If that is the case, the issue numbers are listed here, as well.</p>
+<table width="100%" border="1">
+<tr><td><b>Revision</b></td><td><b>Author</b></td><td><b>Summary</b></td><td><b>Issues Referenced</b></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9652">9652</a></td><td>sruffell</td><td>Creating 2.4 branch.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9653">9653</a></td><td>sruffell</td><td>Turning on merge tracking.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9654">9654</a></td><td>sruffell</td><td>wct4xxp: Update span-local struct with timing info</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9656">9656</a></td><td>sruffell</td><td>README: Remove references to dahdi_dummy.</td>
+<td><a href="https://issues.asterisk.org/view.php?id=17959">#17959</a></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9657">9657</a></td><td>sruffell</td><td>wcte11xp, wcte12xp: Fix a long-standing issue with shutdown</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9659">9659</a></td><td>sruffell</td><td>dahdi-base: All channels for a span are now unconfigured on shutdown</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9660">9660</a></td><td>sruffell</td><td>wcte12xp, wctdm24xxp: Remove redundant vb_enable_io_access.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9661">9661</a></td><td>sruffell</td><td>wcte12xp, wctdm24xxp: Add call to 'pci_set_mwi' on initialization.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9662">9662</a></td><td>sruffell</td><td>dahdi: Be more tolerant of surprise removal of channels.</td>
+<td><a href="https://issues.asterisk.org/view.php?id=17669">#17669</a></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9663">9663</a></td><td>sruffell</td><td>wctdm24xxp: Add optional FXO digital loopback if DEBUG is defined.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9666">9666</a></td><td>sruffell</td><td>xpp: Fixes init error for PRI devices with < 4 ports</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9667">9667</a></td><td>sruffell</td><td>vpmadt032: Honor the CONFIG_DAHDI_NO_ECHOCAN_DISABLE flag.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9668">9668</a></td><td>sruffell</td><td>vpmadt032: Remove potential endless waits when resetting.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9670">9670</a></td><td>sruffell</td><td>dahdi: Make CONFIG_DAHDI_PPP off by default.</td>
+<td><a href="https://issues.asterisk.org/view.php?id=17990">#17990</a></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9671">9671</a></td><td>sruffell</td><td>wct4xxp: Drop usage of 'volatile' qualifier.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9672">9672</a></td><td>sruffell</td><td>wcte12xp, wctdm24xxp: Do not rely on polling main memory.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9676">9676</a></td><td>sruffell</td><td>Remove mutex emulation</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9677">9677</a></td><td>sruffell</td><td>live_dahdi: only check for TOOLS_DIR when used</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9678">9678</a></td><td>sruffell</td><td>wctdm24xxp, wcte12xp: Close a few potential resource assignment leaks.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9679">9679</a></td><td>sruffell</td><td>xpd_pri: ignore DAHDI_VMWI and DAHDIVMWI_CONFIG</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9680">9680</a></td><td>sruffell</td><td>xpd_pri: Remove pointless hooksig span op</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9681">9681</a></td><td>sruffell</td><td>live_dahdi: fix usage of xpp.conf</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9684">9684</a></td><td>sruffell</td><td>wctdm24xxp, wcte12xp: Add more descriptive message on a failed reset.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9685">9685</a></td><td>sruffell</td><td>wctdm24xxp, wcte12xp: Lock interrupts when recovering from an underrun.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9686">9686</a></td><td>sruffell</td><td>wct4xxp: Close a memory leak in the VPM450 error path.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9687">9687</a></td><td>sruffell</td><td>wctdm24xxp, wcte12xp: Disable PCI read-line multiple command.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9688">9688</a></td><td>sruffell</td><td>wcte12xp, wctdm24xxp: Do not call pci_set_drvdata after device initialization.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9690">9690</a></td><td>sruffell</td><td>dahdi: If mutexes are not available use semaphores instead.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9691">9691</a></td><td>sruffell</td><td>"struct pci_device_id[]" -> "DEFINE_PCI_DEVICE_TABLE"</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9692">9692</a></td><td>sruffell</td><td>wcte12xp: Remove unused functions from t1_span_ops.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9693">9693</a></td><td>sruffell</td><td>dahdi: Add error if CONFIG_BKL is not defined</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9694">9694</a></td><td>sruffell</td><td>README: clarify required kernel configuration</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9695">9695</a></td><td>sruffell</td><td>wct4xxp: Perform an extended reset on PCI-Express cards by default.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9696">9696</a></td><td>sruffell</td><td>Updating the svnmerge-integrated information.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9702">9702</a></td><td>mattf</td><td>Fix for bugs in timing selection when B410P card is not the first configured card in system.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9723">9723</a></td><td>sruffell</td><td>dahdi: Add '+' on KMAKE definition to enable parallel make.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9724">9724</a></td><td>sruffell</td><td>wctdm24xxp: Remove code for unsupported modules.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9725">9725</a></td><td>sruffell</td><td>dahdi: Experimentally remove dependency on the Big Kernel Lock.</td>
+<td><a href="https://issues.asterisk.org/view.php?id=18604">#18604</a></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9726">9726</a></td><td>sruffell</td><td>syncing svnmerge-integrated.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9745">9745</a></td><td>tzafrir</td><td>live_dahdi: Fix regression from r9508</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9746">9746</a></td><td>sruffell</td><td>dahdi: Add '#include <linux/kobject.h>' in dahdi/kernel.h</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9753">9753</a></td><td>sruffell</td><td>wct4xxp: Reduce the memory footprint of the hardware echocanceler.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9754">9754</a></td><td>sruffell</td><td>wct4xxp: Reduce stack usage in oct612x API.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9755">9755</a></td><td>sruffell</td><td>wct4xxp: Do not lock interrupts while loading the VPM firmware.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9757">9757</a></td><td>sruffell</td><td>dahdi: Generate include/dahdi/version.h when building in a git repository.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9758">9758</a></td><td>sruffell</td><td>make_version: '[[' -> '[' since it's not a bash script.</td>
+<td></td></tr><tr><td><a href="http://svn.digium.com/view/dahdi/linux/branches/2.4?view=revision&revision=9760">9760</a></td><td>sruffell</td><td>make_version: Use 'git rev-parse' if only looking for a sha5.</td>
+<td></td></tr></table>
+<hr/>
+<a name="diffstat"><h2 align="center">Diffstat Results</h2></a>
+<center><a href="#top">[Back to Top]</a></center><br/><p>This is a summary of the changes to the source code that went into this release that was generated using the diffstat utility.</p>
+<pre>
+Makefile                                                                         |    6
+README                                                                           |   37
+build_tools/live_dahdi                                                           |   17
+build_tools/make_version                                                         |   64 +
+drivers/dahdi/dahdi-base.c                                                       |  213 +++-
+drivers/dahdi/dahdi_dummy.c                                                      |    1
+drivers/dahdi/dahdi_echocan_kb1.c                                                |    6
+drivers/dahdi/dahdi_echocan_mg2.c                                                |   12
+drivers/dahdi/firmware/Makefile                                                  |    4
+drivers/dahdi/hpec/dahdi_echocan_hpec.c                                          |    2
+drivers/dahdi/oct612x/include/oct6100api/oct6100_channel_inst.h                  |  233 ++---
+drivers/dahdi/oct612x/include/oct6100api/oct6100_chip_open_inst.h                |    2
+drivers/dahdi/oct612x/include/oct6100api/oct6100_defines.h                       |   19
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_channel.c      |  453 ++++------
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_chip_open.c    |   13
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_chip_stats.c   |    1
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_conf_bridge.c  |   20
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_events.c       |    5
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_interrupts.c   |    1
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_phasing_tsst.c |    1
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_playout_buf.c  |   69 -
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_api/oct6100_tlv.c          |    1
+drivers/dahdi/oct612x/octdeviceapi/oct6100api/oct6100_miscellaneous_priv.h       |  172 ---
+drivers/dahdi/pciradio.c                                                         |    2
+drivers/dahdi/tor2-hw.h                                                          |    2
+drivers/dahdi/voicebus/GpakCust.c                                                |   75 +
+drivers/dahdi/voicebus/voicebus.c                                                |   98 +-
+drivers/dahdi/vpmadt032_loader/dahdi_vpmadt032_loader.c                          |   28
+drivers/dahdi/wcb4xxp/base.c                                                     |   38
+drivers/dahdi/wcfxo.c                                                            |    2
+drivers/dahdi/wct1xxp.c                                                          |    2
+drivers/dahdi/wct4xxp/base.c                                                     |   70 -
+drivers/dahdi/wct4xxp/vpm450m.c                                                  |   36
+drivers/dahdi/wctc4xxp/base.c                                                    |    4
+drivers/dahdi/wctdm.c                                                            |    2
+drivers/dahdi/wctdm24xxp/base.c                                                  |  364 +-------
+drivers/dahdi/wctdm24xxp/wctdm24xxp.h                                            |   29
+drivers/dahdi/wctdm24xxp/xhfc.c                                                  |    4
+drivers/dahdi/wcte11xp.c                                                         |    3
+drivers/dahdi/wcte12xp/base.c                                                    |   53 -
+drivers/dahdi/xpp/card_pri.c                                                     |    7
+drivers/dahdi/xpp/init_card_4_30                                                 |    2
+drivers/dahdi/xpp/xbus-core.c                                                    |    2
+drivers/dahdi/xpp/xpp_usb.c                                                      |    4
+include/dahdi/dahdi_config.h                                                     |    8
+include/dahdi/kernel.h                                                           |   24
+46 files changed, 996 insertions(+), 1215 deletions(-)
+</pre><br/>
+<hr/>
+</body>
+</html>
