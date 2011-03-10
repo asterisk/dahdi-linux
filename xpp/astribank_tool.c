@@ -28,8 +28,10 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-#include "mpp_funcs.h"
-#include "debug.h"
+#include "astribank_usb.h"
+#include "mpptalk.h"
+#include <debug.h>
+#include <xusb.h>
 
 #define	DBG_MASK	0x80
 /* if enabled, adds support for resetting pre-MPP USB firmware - if we 
@@ -132,7 +134,7 @@ int old_reset(const char* devpath)
 		DBG("Failed re-opening astribank device for old_reset\n");
 		return -ENODEV;
 	}
-	ret = send_usb(astribank, buf, 1, 5000);
+	ret = xusb_send(astribank->xusb, buf, 1, 5000);
 
 	/* If we just had a reenumeration, we may get -ENODEV */
 	if(ret < 0 && ret != -ENODEV)
@@ -205,7 +207,7 @@ int main(int argc, char *argv[])
 		usage();
 	}
 	DBG("Startup %s\n", devpath);
-	if((astribank = mpp_init(devpath)) == NULL) {
+	if((astribank = mpp_init(devpath, 1)) == NULL) {
 		ERR("Failed initializing MPP\n");
 #ifdef SUPPORT_OLD_RESET
 		DBG("opt_reset = %s\n", opt_reset);

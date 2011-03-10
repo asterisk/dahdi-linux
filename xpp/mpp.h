@@ -26,6 +26,10 @@
  * MPP - Managment Processor Protocol definitions
  */
 
+#include <mpptalk_defs.h>
+#include <stdint.h>
+#include <xtalk.h>
+
 #ifdef	__GNUC__
 #define	PACKED	__attribute__((packed))
 #else
@@ -63,7 +67,8 @@ struct capabilities {
 	uint8_t		ports_bri;
 	uint8_t		ports_pri;
 	uint8_t		extra_features;	/* BIT(0) - TwinStar */
-	uint8_t		reserved[3];
+	uint8_t		ports_echo;
+	uint8_t		reserved[2];
 	uint32_t	timestamp;
 } PACKED;
 
@@ -81,53 +86,6 @@ struct extrainfo {
 	char		text[24];
 } PACKED;
 
-enum mpp_command_ops {
-	/* MSB of op signifies a reply from device */
-	MPP_ACK			= 0x80,
-
-	MPP_PROTO_QUERY	= 0x01,
-	MPP_PROTO_REPLY	= 0x81,
-
-	MPP_RENUM		= 0x0B,	/* Trigger USB renumeration */
-
-	MPP_EEPROM_SET		= 0x0D,
-
-	MPP_CAPS_GET		= 0x0E,
-	MPP_CAPS_GET_REPLY	= 0x8E,
-	MPP_CAPS_SET		= 0x0F,	/* Set AB capabilities	*/
-
-	MPP_DEV_SEND_START	= 0x05,
-	MPP_DEV_SEND_SEG	= 0x07,
-	MPP_DEV_SEND_END	= 0x09,
-
-	MPP_STATUS_GET		= 0x11,	/* Get Astribank Status	*/
-	MPP_STATUS_GET_REPLY	= 0x91,
-	MPP_STATUS_GET_REPLY_V13	= 0x91,	/* backward compat */
-
-	MPP_EXTRAINFO_GET	= 0x13,	/* Get extra vendor information	*/
-	MPP_EXTRAINFO_GET_REPLY	= 0x93,
-	MPP_EXTRAINFO_SET	= 0x15,	/* Set extra vendor information	*/
-
-	MPP_EEPROM_BLK_RD	= 0x27,
-	MPP_EEPROM_BLK_RD_REPLY	= 0xA7,
-
-	MPP_SER_SEND		= 0x37,
-	MPP_SER_RECV		= 0xB7,
-
-	MPP_RESET		= 0x45,	/* Reset both FPGA and USB firmwares */
-	MPP_HALF_RESET		= 0x47,	/* Reset only FPGA firmware */
-
-	/* Twinstar */
-	MPP_TWS_WD_MODE_SET	= 0x31,	/* Set watchdog off/on guard	*/
-	MPP_TWS_WD_MODE_GET	= 0x32,	/* Current watchdog mode 	*/
-	MPP_TWS_WD_MODE_GET_REPLY = 0xB2,	/* Current watchdog mode 	*/
-	MPP_TWS_PORT_SET	= 0x34,	/* USB-[0/1]			*/
-	MPP_TWS_PORT_GET	= 0x35,	/* USB-[0/1]			*/
-	MPP_TWS_PORT_GET_REPLY	= 0xB5,	/* USB-[0/1]			*/
-	MPP_TWS_PWR_GET		= 0x36,	/* Power: bits -> USB ports	*/
-	MPP_TWS_PWR_GET_REPLY	= 0xB6,	/* Power: bits -> USB ports	*/
-};
-
 struct mpp_header {
 	uint16_t	len;
 	uint16_t	seq;
@@ -141,33 +99,10 @@ enum mpp_ser_op {
 
 /* Individual commands structure */
 
-#define	CMD_DEF(name, ...)	struct d_ ## name { __VA_ARGS__ } PACKED d_ ## name
-
-CMD_DEF(ACK,
-	uint8_t	stat;
-	);
-
-CMD_DEF(PROTO_QUERY,
-	uint8_t	proto_version;
-	uint8_t	reserved;
-	);
-
-CMD_DEF(PROTO_REPLY,
-	uint8_t	proto_version;
-	uint8_t	reserved;
-	);
-
-CMD_DEF(STATUS_GET);
-
-CMD_DEF(STATUS_GET_REPLY_V13,
-	uint8_t	i2cs_data;
-
-#define	STATUS_FPGA_LOADED(x)	((x) & 0x01)
-	uint8_t	status;		/* BIT(0) - FPGA is loaded */
-	);
+CMD_DEF(MPP, STATUS_GET);
 
 
-CMD_DEF(STATUS_GET_REPLY,
+CMD_DEF(MPP, STATUS_GET_REPLY,
 	uint8_t	i2cs_data;
 
 #define	STATUS_FPGA_LOADED(x)	((x) & 0x01)
@@ -175,170 +110,90 @@ CMD_DEF(STATUS_GET_REPLY,
 	struct firmware_versions fw_versions;
 	);
 
-CMD_DEF(EEPROM_SET,
+CMD_DEF(MPP, EEPROM_SET,
 	struct eeprom_table	data;
 	);
 
-CMD_DEF(CAPS_GET);
+CMD_DEF(MPP, CAPS_GET);
 
-CMD_DEF(CAPS_GET_REPLY,
-	struct eeprom_table	data;
-	struct capabilities	capabilities;
-	struct capkey		key;
-	);
-
-CMD_DEF(CAPS_SET,
+CMD_DEF(MPP, CAPS_GET_REPLY,
 	struct eeprom_table	data;
 	struct capabilities	capabilities;
 	struct capkey		key;
 	);
 
-CMD_DEF(EXTRAINFO_GET);
+CMD_DEF(MPP, CAPS_SET,
+	struct eeprom_table	data;
+	struct capabilities	capabilities;
+	struct capkey		key;
+	);
 
-CMD_DEF(EXTRAINFO_GET_REPLY,
+CMD_DEF(MPP, EXTRAINFO_GET);
+
+CMD_DEF(MPP, EXTRAINFO_GET_REPLY,
 	struct extrainfo	info;
 	);
 
-CMD_DEF(EXTRAINFO_SET,
+CMD_DEF(MPP, EXTRAINFO_SET,
 	struct extrainfo	info;
 	);
 
-CMD_DEF(RENUM);
+CMD_DEF(MPP, RENUM);
 
-CMD_DEF(EEPROM_BLK_RD,
+CMD_DEF(MPP, EEPROM_BLK_RD,
 	uint16_t	offset;
 	uint16_t	len;
 	);
 
-CMD_DEF(EEPROM_BLK_RD_REPLY,
+CMD_DEF(MPP, EEPROM_BLK_RD_REPLY,
 	uint16_t	offset;
 	uint8_t		data[0];
 	);
 
-CMD_DEF(DEV_SEND_START,
+CMD_DEF(MPP, DEV_SEND_START,
 	uint8_t		dest;
 	char		ihex_version[VERSION_LEN];
 	);
 
-CMD_DEF(DEV_SEND_END);
+CMD_DEF(MPP, DEV_SEND_END);
 
-CMD_DEF(DEV_SEND_SEG,
+CMD_DEF(MPP, DEV_SEND_SEG,
 	uint16_t	offset;
 	uint8_t		data[0];
 	);
 
-CMD_DEF(RESET);
-CMD_DEF(HALF_RESET);
+CMD_DEF(MPP, RESET);
+CMD_DEF(MPP, HALF_RESET);
 
-CMD_DEF(SER_SEND,
+CMD_DEF(MPP, SER_SEND,
 	uint8_t	data[0];
 	);
 
-CMD_DEF(SER_RECV,
+CMD_DEF(MPP, SER_RECV,
 	uint8_t	data[0];
 	);
 
-CMD_DEF(TWS_WD_MODE_SET,
+CMD_DEF(MPP, TWS_WD_MODE_SET,
 	uint8_t		wd_active;
 	);
 
-CMD_DEF(TWS_WD_MODE_GET);
-CMD_DEF(TWS_WD_MODE_GET_REPLY,
+CMD_DEF(MPP, TWS_WD_MODE_GET);
+CMD_DEF(MPP, TWS_WD_MODE_GET_REPLY,
 	uint8_t		wd_active;
 	);
 
-CMD_DEF(TWS_PORT_SET,
+CMD_DEF(MPP, TWS_PORT_SET,
 	uint8_t		portnum;
 	);
 
-CMD_DEF(TWS_PORT_GET);
-CMD_DEF(TWS_PORT_GET_REPLY,
+CMD_DEF(MPP, TWS_PORT_GET);
+CMD_DEF(MPP, TWS_PORT_GET_REPLY,
 	uint8_t		portnum;
 	);
 
-CMD_DEF(TWS_PWR_GET);
-CMD_DEF(TWS_PWR_GET_REPLY,
+CMD_DEF(MPP, TWS_PWR_GET);
+CMD_DEF(MPP, TWS_PWR_GET_REPLY,
 	uint8_t		power;
 	);
-
-#undef	CMD_DEF
-
-#define	MEMBER(n)	struct d_ ## n d_ ## n
-
-struct mpp_command {
-	struct mpp_header	header;
-	union {
-		MEMBER(ACK);
-		MEMBER(PROTO_QUERY);
-		MEMBER(PROTO_REPLY);
-		MEMBER(STATUS_GET);
-		MEMBER(STATUS_GET_REPLY_V13);
-		MEMBER(STATUS_GET_REPLY);
-		MEMBER(EEPROM_SET);
-		MEMBER(CAPS_GET);
-		MEMBER(CAPS_GET_REPLY);
-		MEMBER(CAPS_SET);
-		MEMBER(EXTRAINFO_GET);
-		MEMBER(EXTRAINFO_GET_REPLY);
-		MEMBER(EXTRAINFO_SET);
-		MEMBER(RENUM);
-		MEMBER(EEPROM_BLK_RD);
-		MEMBER(EEPROM_BLK_RD_REPLY);
-		MEMBER(DEV_SEND_START);
-		MEMBER(DEV_SEND_SEG);
-		MEMBER(DEV_SEND_END);
-		MEMBER(RESET);
-		MEMBER(HALF_RESET);
-		MEMBER(SER_SEND);
-		MEMBER(SER_RECV);
-		/* Twinstar */
-		MEMBER(TWS_WD_MODE_SET);
-		MEMBER(TWS_WD_MODE_GET);
-		MEMBER(TWS_WD_MODE_GET_REPLY);
-		MEMBER(TWS_PORT_SET);
-		MEMBER(TWS_PORT_GET);
-		MEMBER(TWS_PORT_GET_REPLY);
-		MEMBER(TWS_PWR_GET);
-		MEMBER(TWS_PWR_GET_REPLY);
-		uint8_t	raw_data[0];
-	} PACKED alt;
-} PACKED;
-#undef MEMBER
-
-#define	CMD_FIELD(cmd, name, field)	((cmd)->alt.d_ ## name.field)
-
-enum mpp_ack_stat {
-	STAT_OK		= 0x00,	/* acknowledges previous command	*/
-	STAT_FAIL	= 0x01,	/* Last command failed		*/
-	STAT_RESET_FAIL	= 0x02,	/* reset failed				*/
-	STAT_NODEST	= 0x03,	/* No destination is selected		*/
-	STAT_MISMATCH	= 0x04,	/* Data mismatch			*/
-	STAT_NOACCESS	= 0x05,	/* No access				*/
-	STAT_BAD_CMD	= 0x06,	/* Bad command				*/
-	STAT_TOO_SHORT	= 0x07,	/* Packet is too short			*/
-	STAT_ERROFFS	= 0x08,	/* Offset error				*/
-	STAT_NOCODE	= 0x09,	/* Source was not burned before		*/
-	STAT_NO_LEEPROM	= 0x0A,	/* Large EEPROM was not found		*/
-	STAT_NO_EEPROM	= 0x0B,	/* No EEPROM was found			*/
-	STAT_WRITE_FAIL	= 0x0C,	/* Writing to device failed		*/
-	STAT_FPGA_ERR	= 0x0D,	/* FPGA error				*/
-	STAT_KEY_ERR	= 0x0E,	/* Bad Capabilities Key			*/
-	STAT_NOCAPS_ERR	= 0x0F,	/* No matching capability		*/
-	STAT_NOPWR_ERR	= 0x10,	/* No power on USB connector		*/
-	STAT_CAPS_FPGA_ERR	= 0x11,	/* Setting of the capabilities while FPGA is loaded */
-};
-
-enum eeprom_type {	/* EEPROM_QUERY: i2cs(ID1, ID0) */
-	EEPROM_TYPE_NONE	= 0,
-	EEPROM_TYPE_SMALL	= 1,
-	EEPROM_TYPE_LARGE	= 2,
-	EEPROM_TYPE_UNUSED	= 3,
-};
-
-enum dev_dest {
-	DEST_NONE	= 0x00,
-	DEST_FPGA	= 0x01,
-	DEST_EEPROM	= 0x02,
-};
 
 #endif	/* MPP_H */

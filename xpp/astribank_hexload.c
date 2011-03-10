@@ -27,9 +27,9 @@
 #include <errno.h>
 #include <assert.h>
 #include <arpa/inet.h>
-#include "debug.h"
+#include <debug.h>
 #include "hexfile.h"
-#include "mpp_funcs.h"
+#include "mpptalk.h"
 #include "pic_loader.h"
 #include "astribank_usb.h"
 
@@ -80,12 +80,16 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 	int			ret;
 	int			i;
 	char			star[] = "+\\+|+/+-";
+	const char		*devstr;
 
 	if((hexdata  = parse_hexfile(hexfile, MAX_HEX_LINES)) == NULL) {
 		perror(hexfile);
 		return -errno;
 	}
-	INFO("Loading hexfile to %s: %s (version %s)\n",
+	devstr = xusb_devpath(astribank->xusb);
+	INFO("%s [%s]: Loading %s Firmware: %s (version %s)\n",
+		devstr,
+		xusb_serial(astribank->xusb),
 		dev_dest2str(dest),
 		hexdata->fname, hexdata->version_info);
 #if 0
@@ -96,7 +100,7 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 	}
 #endif
 	if((ret = mpp_send_start(astribank, dest, hexdata->version_info)) < 0) {
-		ERR("Failed hexfile send start: %d\n", ret);
+		ERR("%s: Failed hexfile send start: %d\n", devstr, ret);
 		return ret;
 	}
 	for(i = 0; i < hexdata->maxlines; i++) {
@@ -109,7 +113,7 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 			fflush(stdout);
 		}
 		if(finished) {
-			ERR("Extra data after End Of Data Record (line %d)\n", i);
+			ERR("%s: Extra data after End Of Data Record (line %d)\n", devstr, i);
 			return 0;
 		}
 		if(hexline->d.content.header.tt == TT_EOF) {
@@ -118,7 +122,7 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 			continue;
 		}
 		if((ret = handle_hexline(astribank, hexline)) < 0) {
-			ERR("Failed hexfile sending in lineno %d (ret=%d)\n", i, ret);;
+			ERR("%s: Failed hexfile sending in lineno %d (ret=%d)\n", devstr, i, ret);;
 			return ret;
 		}
 	}
@@ -127,7 +131,7 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 		fflush(stdout);
 	}
 	if((ret = mpp_send_end(astribank)) < 0) {
-		ERR("Failed hexfile send end: %d\n", ret);
+		ERR("%s: Failed hexfile send end: %d\n", devstr, ret);
 		return ret;
 	}
 #if 0
@@ -208,20 +212,37 @@ int main(int argc, char *argv[])
 		ERR("Missing device path.\n");
 		usage();
 	}
-	if((astribank = astribank_open(devpath, iface_num)) == NULL) {
-		ERR("Opening astribank failed\n");
-		return 1;
-	}
-	show_astribank_info(astribank);
 	if(opt_dest) {
-		if(load_hexfile(astribank, argv[optind], dest) < 0) {
-			ERR("Loading firmware to %s failed\n", dev_dest2str(dest));
+		/*
+		 * MPP Interface
+		 */
+		struct astribank_device *astribank;
+
+		if((astribank = mpp_init(devpath, iface_num)) == NULL) {
+			ERR("%s: Opening astribank failed\n", devpath);
 			return 1;
 		}
-	} else if(opt_pic) {
-		if((ret = load_pic(astribank, argc - optind, argv + optind)) < 0) {
-			ERR("Loading PIC's failed\n");
+		//show_astribank_info(astribank);
+		if(load_hexfile(astribank, argv[optind], dest) < 0) {
+			ERR("%s: Loading firmware to %s failed\n", devpath, dev_dest2str(dest));
 			return 1;
+		}
+		astribank_close(astribank, 0);
+	} else if(opt_pic) {
+		/*
+		 * XPP Interface
+		 */
+		struct astribank_device *astribank;
+
+		if((astribank = astribank_open(devpath, iface_num)) == NULL) {
+			ERR("%s: Opening astribank failed\n", devpath);
+			return 1;
+		}
+		if (opt_pic) {
+			if ((ret = load_pic(astribank, argc - optind, argv + optind)) < 0) {
+				ERR("%s: Loading PIC's failed\n", devpath);
+				return 1;
+			}
 		}
 	}
 	astribank_close(astribank, 0);

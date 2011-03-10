@@ -54,9 +54,12 @@ PERL_SCRIPTS	=	\
 
 PERL_MANS	= $(PERL_SCRIPTS:%=%.8)
 
-ABHEXLOAD_OBJS		= astribank_hexload.o hexfile.o pic_loader.o astribank_usb.o mpp_funcs.o debug.o
-ABTOOL_OBJS		= astribank_tool.o astribank_usb.o mpp_funcs.o debug.o
-ABALLOW_OBJS		= astribank_allow.o astribank_usb.o mpp_funcs.o debug.o
+XTALK_OBJS		= xtalk/xtalk.o xtalk/xusb.o xtalk/xlist.o xtalk/debug.o
+ASTRIBANK_OBJS		= astribank_usb.o mpptalk.o $(XTALK_OBJS)
+
+ABHEXLOAD_OBJS		= astribank_hexload.o hexfile.o pic_loader.o $(ASTRIBANK_OBJS) $(OCT_OBJS)
+ABTOOL_OBJS		= astribank_tool.o $(ASTRIBANK_OBJS)
+ABALLOW_OBJS		= astribank_allow.o $(ASTRIBANK_OBJS)
 
 TARGETS	= .perlcheck astribank_is_starting
 PROG_INSTALL	= astribank_is_starting
@@ -102,6 +105,8 @@ ifneq	(,$(PERLLIBDIR))
 	done
 endif
 
+CFLAGS		+= -I. -Ixtalk
+
 fpga_load: fpga_load.o hexfile.o
 fpga_load: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 
@@ -130,11 +135,11 @@ test_parse: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 	touch $@
 
 clean:
-	$(RM) .depend *.o $(TARGETS)
+	$(RM) .depend *.o xtalk/*.o $(TARGETS)
 
 .PHONY: depend
 depend: .depend
-.depend: *.c *.h
-	@$(CC) -MM *.c > $@ || rm -f $@
+.depend: *.c *.h xtalk/*.c xtalk/*.h
+	@$(CC) $(CFLAGS) -MM *.c xtalk/*.c > $@ || rm -f $@
 
 include .depend

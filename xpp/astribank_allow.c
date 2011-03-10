@@ -32,8 +32,8 @@
 #include <arpa/inet.h>
 #include <ctype.h>
 #include "mpp.h"
-#include "mpp_funcs.h"
-#include "debug.h"
+#include "mpptalk.h"
+#include <debug.h>
 
 static const char rcsid[] = "$Id$";
 
@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
 		usage();
 	}
 	DBG("Startup %s\n", devpath);
-	if((astribank = mpp_init(devpath)) == NULL) {
+	if((astribank = mpp_init(devpath, 1)) == NULL) {
 		ERR("Failed initializing MPP\n");
 		return 1;
 	}

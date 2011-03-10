@@ -146,15 +146,19 @@ load_usb_fw() {
 }
 
 load_fw_device() {
-	dev=$1
-	fw=$2
+	dev="$1"
+	fw="$2"
 	debug "FPGA loading $fw into $dev"
 	run_astribank_hexload -D "$dev" -F "$FIRMWARE_DIR/$fw"
-	pic_files=`echo "$FIRMWARE_DIR"/PIC_TYPE_[1-4].hex`
-	debug "PIC burning into $dev: $pic_files"
-	run_astribank_hexload -D "$dev" -p $pic_files
-	run_astribank_tool -D "$dev" -n		# Do renumeration!
-	debug "PIC burning finished $pic_files"
+	if [ "$fw" = "FPGA_1161.hex" ]; then
+		pic_files=`echo "$FIRMWARE_DIR"/PIC_TYPE_[1-4].hex`
+		debug "PIC burning into $dev: $pic_files"
+		run_astribank_hexload -D "$dev" -p $pic_files
+		debug "PIC burning finished $pic_files"
+	fi
+	# Do renumeration!
+	run_astribank_tool -D "$dev" -n > /dev/null
+	debug "Reenumeration done."
 }
 
 #

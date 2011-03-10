@@ -22,13 +22,22 @@
  *
  */
 
+#include <stdint.h>
+#include <stdio.h>
+
 #include "mpp.h"
 #include "astribank_usb.h"
 
-#define	TIMEOUT	2000
+struct astribank_device;
+struct eeprom_table;
+struct extrainfo;
+struct capabilities;
+struct capkey;
+
+#define	TIMEOUT	6000
 
 /* high-level */
-struct astribank_device *mpp_init(const char devpath[]);
+struct astribank_device *mpp_init(const char devpath[], int iface_num);
 void mpp_exit(struct astribank_device *astribank);
 int mpp_proto_query(struct astribank_device *astribank);
 int mpp_status_query(struct astribank_device *astribank);
@@ -45,7 +54,7 @@ int mpp_caps_set(struct astribank_device *astribank,
 int mpp_extrainfo_get(struct astribank_device *astribank, struct extrainfo *info);
 int mpp_extrainfo_set(struct astribank_device *astribank, const struct extrainfo *info);
 int mpp_eeprom_blk_rd(struct astribank_device *astribank, uint8_t *buf, uint16_t offset, uint16_t len);
-int mpp_send_start(struct astribank_device *astribank, enum dev_dest dest, const char *ihex_version);
+int mpp_send_start(struct astribank_device *astribank, int dest, const char *ihex_version);
 int mpp_send_end(struct astribank_device *astribank);
 int mpp_send_seg(struct astribank_device *astribank, const uint8_t *data, uint16_t offset, uint16_t len);
 int mpp_reset(struct astribank_device *astribank, int full_reset);
@@ -70,11 +79,6 @@ int mpp_tws_powerstate(struct astribank_device *astribank);
 int mpp_tws_portnum(struct astribank_device *astribank);
 int mpp_tws_setportnum(struct astribank_device *astribank, uint8_t portnum);
 
-/* low-level */
-int process_command(struct astribank_device *astribank, struct mpp_command *cmd, struct mpp_command **reply_ref);
-struct mpp_command *new_command(uint8_t protocol_version, uint8_t op, uint16_t extra_data);
-void free_command(struct mpp_command *cmd);
-
-const char *dev_dest2str(enum dev_dest dest);
+const char *dev_dest2str(int dest);
 
 #endif	/* MPP_FUNCS_H */

@@ -23,7 +23,8 @@
  */
 
 #include <stdio.h>
-#include <usb.h>
+#include <xusb.h>
+#include <xtalk.h>
 #include "mpp.h"
 
 /*
@@ -63,14 +64,12 @@ enum eeprom_burn_state {
 };
 
 struct astribank_device {
-	struct usb_device	*dev;
+	struct xusb		*xusb;
+	struct xtalk_device	*xtalk_dev;
 	usb_dev_handle		*handle;
 	int			my_interface_num;
 	int			my_ep_out;
 	int			my_ep_in;
-	char			iManufacturer[BUFSIZ];
-	char			iProduct[BUFSIZ];
-	char			iSerialNumber[BUFSIZ];
 	char			iInterface[BUFSIZ];
 	int			is_usb2;
 	enum eeprom_type	eeprom_type;
@@ -79,7 +78,6 @@ struct astribank_device {
 	uint8_t			mpp_proto_version;
 	struct eeprom_table	*eeprom;
 	struct firmware_versions	fw_versions;
-	const struct interface_type	*fwtype;
 	uint16_t		tx_sequenceno;
 };
 

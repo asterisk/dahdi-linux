@@ -20,11 +20,14 @@
  *
  */
 
+
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <syslog.h>
-#include "debug.h"
+#include <execinfo.h>
+#include <debug.h>
 
 int	verbose = LOG_INFO;
 int	debug_mask = 0;
@@ -41,13 +44,29 @@ void log_function(int level, int mask, const char *msg, ...)
 	va_end(ap);
 }
 
-void dump_packet(int loglevel, const char *msg, const char *buf, int len)
+void dump_packet(int loglevel, int mask, const char *msg, const char *buf, int len)
 {
 	int	i;
 
-	log_function(loglevel, ~0, "%-15s:", msg);
-	for(i = 0; i < len; i++)
-		log_function(loglevel, ~0, " %02X", (uint8_t)buf[i]);
-	log_function(loglevel, ~0, "\n");
+	if(mask & debug_mask) {
+		log_function(loglevel, ~0, "%-15s:", msg);
+		for(i = 0; i < len; i++)
+			log_function(loglevel, ~0, " %02X", (uint8_t)buf[i]);
+		log_function(loglevel, ~0, "\n");
+	}
 }
 
+/* from glibc info(1) */
+void print_backtrace (FILE *fp)
+{
+	void	*array[10];
+	size_t	size;
+	char	**strings;
+	size_t	i;
+
+	size = backtrace (array, 10);
+	strings = backtrace_symbols (array, size);
+	for (i = 0; i < size; i++)
+		fprintf (fp, "%s\n", strings[i]);
+	free (strings);
+}

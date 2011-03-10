@@ -27,7 +27,8 @@
 #include <regex.h>
 #include "hexfile.h"
 #include "pic_loader.h"
-#include "debug.h"
+#include <debug.h>
+#include <xusb.h>
 
 #define	DBG_MASK	0x03
 #define	MAX_HEX_LINES	10000
@@ -87,16 +88,16 @@ int send_picline(struct astribank_device *astribank, uint8_t card_type, enum pic
 	}
 
 	DBG("PICLINE: pack_len=%d pcmd=%d\n", pack_len, pcmd);
-	dump_packet(LOG_DEBUG, "dump:picline[W]", (char *)phead, pack_len);
+	dump_packet(LOG_DEBUG, DBG_MASK, "dump:picline[W]", (char *)phead, pack_len);
 
-	ret = send_usb(astribank, buf, pack_len, TIMEOUT);
+	ret = xusb_send(astribank->xusb, buf, pack_len, TIMEOUT);
 	if(ret < 0) {
-		ERR("send_usb failed: %d\n", ret);
+		ERR("xusb_send failed: %d\n", ret);
 		return ret;
 	}
-	DBG("send_usb: Written %d bytes\n", ret);
+	DBG("xusb_send: Written %d bytes\n", ret);
 	if (recv_answer) {
-		ret = recv_usb(astribank, buf, sizeof(buf), TIMEOUT);
+		ret = xusb_recv(astribank->xusb, buf, sizeof(buf), TIMEOUT);
 		if(ret <= 0) {
 			ERR("No USB packs to read\n");
 			return ret;
@@ -104,7 +105,7 @@ int send_picline(struct astribank_device *astribank, uint8_t card_type, enum pic
 			phead = (struct xpp_packet_header *)buf;
 			if(phead->header.op != PIC_REP_XOP) {
 				ERR("Got unexpected reply OP=0x%02X\n", phead->header.op);
-				dump_packet(LOG_ERR, "hexline[ERR]", buf, ret);
+				dump_packet(LOG_ERR, DBG_MASK, "hexline[ERR]", buf, ret);
 				return -EINVAL;
 			}
 			DBG("received OP=0x%02X, checksum=%02X\n", phead->header.op, phead->d.pic_packet.data[0]);
@@ -180,18 +181,24 @@ static int pic_burn(struct astribank_device *astribank, const struct hexdata *he
 	uint8_t			card_type;
 	int			ret;
 	unsigned int		i;
+	const char		*devstr;
 
 	v = (v[0]) ? v : "Unknown";
 	assert(astribank != NULL);
 	assert(hexdata != NULL);
+	devstr = xusb_devpath(astribank->xusb);
 	if(!astribank->is_usb2) {
-		ERR("Skip PIC burning (not USB2)\n");
+		ERR("%s: Skip PIC burning (not USB2)\n", devstr);
 		return 0;
 	}
-	INFO("Load PIC: %s (version %s)\n", hexdata->fname, hexdata->version_info);
+	INFO("%s [%s]: Loading PIC Firmware: %s (version %s)\n",
+		devstr,
+		xusb_serial(astribank->xusb),
+		hexdata->fname,
+		hexdata->version_info);
 	basename = pic_basename(hexdata->fname, &card_type);
 	if(!basename) {
-		ERR("Bad PIC filename '%s'. Abort.\n", hexdata->fname);
+		ERR("%s: Bad PIC filename '%s'. Abort.\n", devstr, hexdata->fname);
 		return 0;
 	}
 	DBG("basename=%s card_type=%d maxlines=%d\n",
@@ -200,9 +207,9 @@ static int pic_burn(struct astribank_device *astribank, const struct hexdata *he
 	 * Try to read extra left-overs from USB controller
 	 */
 	for(i = 2; i; i--) {
-		char	buf[PACKET_SIZE];
+		char    buf[PACKET_SIZE];
 
-		if(usb_bulk_read(astribank->handle, astribank->my_ep_in, buf, sizeof(buf), 1) <= 0)
+		if(xusb_recv(astribank->xusb, buf, sizeof(buf), 1) <= 0)
 			break;
 	}
 	if((ret = send_picline(astribank, card_type, PIC_START_FLAG, 0, NULL, 0)) != 0) {
@@ -215,13 +222,13 @@ static int pic_burn(struct astribank_device *astribank, const struct hexdata *he
 
 		hexline = hexdata->lines[i];
 		if(!hexline) {
-			ERR("hexdata finished early (line %d)", i);
+			ERR("%s: hexdata finished early (line %d)", devstr, i);
 			return 0;
 		}
 		if(hexline->d.content.header.tt == TT_DATA) {
 			len = hexline->d.content.header.ll;	/* don't send checksum */
 			if(len != 3) {
-				ERR("Bad line len %d\n", len);
+				ERR("%s: Bad line len %d\n", devstr, len);
 				return 0;
 			}
 			data = hexline->d.content.tt_data.data;
@@ -235,8 +242,8 @@ static int pic_burn(struct astribank_device *astribank, const struct hexdata *he
 		} else if(hexline->d.content.header.tt == TT_EOF) {
 			break;
 		} else {
-			ERR("Unexpected TT = %d in line %d\n",
-					hexline->d.content.header.tt, i);
+			ERR("%s: Unexpected TT = %d in line %d\n",
+					devstr, hexline->d.content.header.tt, i);
 			return 0;
 		}
 	}
@@ -250,9 +257,11 @@ static int pic_burn(struct astribank_device *astribank, const struct hexdata *he
 
 int load_pic(struct astribank_device *astribank, int numfiles, char *filelist[])
 {
-	int	i;
+	int		i;
+	const char	*devstr;
 
-	DBG("Loading %d PIC files...\n", numfiles);
+	devstr = xusb_devpath(astribank->xusb);
+	DBG("%s: Loading %d PIC files...\n", devstr, numfiles);
 	for(i = 0; i < numfiles; i++) {
 		struct hexdata	*picdata;
 		const char	*curr = filelist[i];
@@ -263,13 +272,13 @@ int load_pic(struct astribank_device *astribank, int numfiles, char *filelist[])
 			return -errno;
 		}
 		if(!pic_burn(astribank, picdata)) {
-			ERR("PIC %s burning failed\n", curr);
+			ERR("%s: PIC %s burning failed\n", devstr, curr);
 			return -ENODEV;
 		}
 		free_hexdata(picdata);
 	}
 	if((i = send_picline(astribank, 0, PIC_ENDS_FLAG, 0, NULL, 0)) != 0) {
-		ERR("PIC end burning failed\n");
+		ERR("%s: PIC end burning failed\n", devstr);
 		return -ENODEV;
 	}
 	return 0;
