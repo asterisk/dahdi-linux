@@ -165,7 +165,8 @@ struct wctdm {
 	unsigned char rxident;
 
 	int flags[NUM_MODULES];			/* bitmap of board-specific + module-specific flags */
-	unsigned char ctlreg;			/* FIXME: something to do with VPM? */
+	u8 ctlreg;
+	u8 tdm410leds;
 
 	int mods_per_board;			/* maximum number of modules for this board */
 	int digi_mods;				/* number of digital modules present */
