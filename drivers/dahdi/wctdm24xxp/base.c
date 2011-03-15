@@ -898,12 +898,8 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			eframe[EFRAME_SIZE] = wc->ctlreg;
 			eframe[EFRAME_SIZE + 1] = wc->txident++;
-
-			if ((wc->desc->ports == 4) && ((wc->ctlreg & 0x10))) {
-				eframe[EFRAME_SIZE + 2] = 0;
-				for (y = 0; y < 4; y++)
-					eframe[EFRAME_SIZE + 2] |= (1 << y);
-			}
+			if (4 == wc->desc->ports)
+				eframe[EFRAME_SIZE + 2] = wc->tdm410leds;
 		}
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
@@ -4510,6 +4506,21 @@ static inline void remove_sysfs_files(struct wctdm *wc) { return; }
 
 #endif /* CONFIG_VOICEBUS_SYSFS */
 
+static void wctdm_set_tdm410_leds(struct wctdm *wc)
+{
+	int i;
+
+	if (4 != wc->desc->ports)
+		return;
+
+	wc->tdm410leds = 0; /* all on by default */
+	for (i = 0; i < wc->desc->ports; ++i) {
+		/* Turn off the LED for any module that isn't installed. */
+		if (MOD_TYPE_NONE == wc->modtype[i])
+			wc->tdm410leds |= (1 << i);
+	}
+}
+
 #ifdef USE_ASYNC_INIT
 struct async_data {
 	struct pci_dev *pdev;
@@ -4651,6 +4662,8 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	/* Now track down what modules are installed */
 	wctdm_identify_modules(wc);
+
+	wctdm_set_tdm410_leds(wc);
 
 	if (fatal_signal_pending(current)) {
 		wctdm_back_out_gracefully(wc);
