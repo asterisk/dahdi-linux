@@ -16,6 +16,7 @@
 # Should-Stop:     $network $syslog
 # Default-Start:   2 3 4 5
 # Default-Stop:    0 1 6
+# Short-Description: DAHDI kernel modules
 # Description:     dahdi - load and configure DAHDI modules
 ### END INIT INFO
 
