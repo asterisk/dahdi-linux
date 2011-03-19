@@ -2423,7 +2423,7 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 
 	/* Set line polarity for new VMWI state */
 	if (POLARITY_XOR(chan_idx)) {
-		fxs->idletxhookstate |= SLIC_LF_OPPENDING | SLIC_LF_REVMASK;
+		fxs->idletxhookstate |= SLIC_LF_REVMASK;
 		/* Do not set while currently ringing or open */
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_RINGING)  &&
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
