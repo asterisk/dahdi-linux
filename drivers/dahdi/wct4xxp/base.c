@@ -4971,10 +4971,21 @@ static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 	{ 0, }
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
+static void _t4_shutdown(struct pci_dev *pdev)
+{
+	struct t4 *wc = pci_get_drvdata(pdev);
+	t4_hardware_stop(wc);
+}
+#endif
+
 static struct pci_driver t4_driver = {
 	.name = "wct4xxp",
 	.probe = t4_init_one,
 	.remove = __devexit_p(t4_remove_one),
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
+	.shutdown = _t4_shutdown,
+#endif
 	.id_table = t4_pci_tbl,
 };
 
