@@ -32,11 +32,6 @@
 #include <linux/interrupt.h>
 
 
-#ifdef VOICEBUS_NET_DEBUG
-#include <linux/netdevice.h>
-#include <linux/etherdevice.h>
-#endif
-
 #define VOICEBUS_DEFAULT_LATENCY	3U
 #define VOICEBUS_DEFAULT_MAXLATENCY	25U
 #define VOICEBUS_MAXLATENCY_BUMP	6U
@@ -76,6 +71,11 @@ struct dahdi_fifo *dahdi_fifo_alloc(size_t maxsize, gfp_t alloc_flags);
 
 #endif
 
+#ifdef VOICEBUS_NET_DEBUG
+#include <linux/skbuff.h>
+#include <linux/netdevice.h>
+#include <linux/etherdevice.h>
+#endif
 
 struct voicebus;
 
