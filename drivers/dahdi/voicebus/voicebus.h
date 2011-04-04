@@ -177,6 +177,7 @@ int __voicebus_init(struct voicebus *vb, const char *board_name,
 void voicebus_release(struct voicebus *vb);
 int voicebus_start(struct voicebus *vb);
 void voicebus_stop(struct voicebus *vb);
+void voicebus_quiesce(struct voicebus *vb);
 int voicebus_transmit(struct voicebus *vb, struct vbb *vbb);
 int voicebus_set_minlatency(struct voicebus *vb, unsigned int milliseconds);
 int voicebus_current_latency(struct voicebus *vb);

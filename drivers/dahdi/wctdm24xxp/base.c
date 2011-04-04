@@ -4896,7 +4896,7 @@ static DEFINE_PCI_DEVICE_TABLE(wctdm_pci_tbl) = {
 static void wctdm_shutdown(struct pci_dev *pdev)
 {
 	struct wctdm *wc = pci_get_drvdata(pdev);
-	voicebus_stop(&wc->vb);
+	voicebus_quiesce(&wc->vb);
 }
 #endif
 

@@ -1154,6 +1154,26 @@ void voicebus_stop(struct voicebus *vb)
 }
 EXPORT_SYMBOL(voicebus_stop);
 
+/**
+ * voicebus_quiesce - Halt the voicebus interface.
+ * @vb:	The voicebus structure to quiet
+ *
+ * This ensures that the device is not engaged in any DMA transactions or
+ * interrupting. It does not grab any locks since it may be called by a dying
+ * kernel.
+ */
+void voicebus_quiesce(struct voicebus *vb)
+{
+	if (!vb)
+		return;
+
+	/* Reset the device */
+	__vb_disable_interrupts(vb);
+	__vb_setctl(vb, 0x0000, 0x1);
+	__vb_getctl(vb, 0x0000);
+}
+EXPORT_SYMBOL(voicebus_quiesce);
+
 /*!
  * \brief Prepare the interface for module unload.
  *
