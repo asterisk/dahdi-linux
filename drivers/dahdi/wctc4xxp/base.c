@@ -3721,11 +3721,17 @@ static DEFINE_PCI_DEVICE_TABLE(wctc4xxp_pci_tbl) = {
 
 MODULE_DEVICE_TABLE(pci, wctc4xxp_pci_tbl);
 
+static int wctc4xxp_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 static struct pci_driver wctc4xxp_driver = {
 	.name = "wctc4xxp",
 	.probe = wctc4xxp_init_one,
 	.remove = __devexit_p(wctc4xxp_remove_one),
 	.id_table = wctc4xxp_pci_tbl,
+	.suspend = wctc4xxp_suspend,
 };
 
 static int __init wctc4xxp_init(void)

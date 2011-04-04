@@ -2765,12 +2765,16 @@ static DEFINE_PCI_DEVICE_TABLE(wctdm_pci_tbl) = {
 
 MODULE_DEVICE_TABLE(pci, wctdm_pci_tbl);
 
+static int wctdm_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 static struct pci_driver wctdm_driver = {
 	.name = "wctdm",
 	.probe = wctdm_init_one,
 	.remove =__devexit_p(wctdm_remove_one),
-	.suspend = NULL,
-	.resume = NULL,
+	.suspend = wctdm_suspend,
 	.id_table = wctdm_pci_tbl,
 };
 

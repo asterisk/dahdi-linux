@@ -1312,7 +1312,7 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 	return timeout;
 }
 #endif
-
+typedef u32 __bitwise pm_message_t;
 #endif /* 2.6.11 */
 #endif /* 2.6.12 */
 #endif /* 2.6.14 */

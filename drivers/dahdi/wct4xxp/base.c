@@ -4979,6 +4979,11 @@ static void _t4_shutdown(struct pci_dev *pdev)
 }
 #endif
 
+static int t4_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 static struct pci_driver t4_driver = {
 	.name = "wct4xxp",
 	.probe = t4_init_one,
@@ -4986,6 +4991,7 @@ static struct pci_driver t4_driver = {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = _t4_shutdown,
 #endif
+	.suspend = t4_suspend,
 	.id_table = t4_pci_tbl,
 };
 

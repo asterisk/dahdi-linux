@@ -3065,11 +3065,17 @@ static DEFINE_PCI_DEVICE_TABLE(b4xx_ids) =
 
 };
 
+static int b4xx_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 static struct pci_driver b4xx_driver = {
 	.name = "wcb4xxp",
 	.probe = b4xx_probe,
 	.remove = __devexit_p(b4xxp_remove),
 	.id_table = b4xx_ids,
+	.suspend = b4xx_suspend,
 };
 
 static int __init b4xx_init(void)

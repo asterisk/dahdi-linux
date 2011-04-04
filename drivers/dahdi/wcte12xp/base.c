@@ -2377,6 +2377,11 @@ static void te12xp_shutdown(struct pci_dev *pdev)
 }
 #endif
 
+static int te12xp_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 MODULE_DEVICE_TABLE(pci, te12xp_pci_tbl);
 
 static struct pci_driver te12xp_driver = {
@@ -2386,6 +2391,7 @@ static struct pci_driver te12xp_driver = {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = te12xp_shutdown,
 #endif
+	.suspend = te12xp_suspend,
 	.id_table = te12xp_pci_tbl,
 };
 

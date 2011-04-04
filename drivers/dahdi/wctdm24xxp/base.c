@@ -4902,6 +4902,11 @@ static void wctdm_shutdown(struct pci_dev *pdev)
 
 MODULE_DEVICE_TABLE(pci, wctdm_pci_tbl);
 
+static int wctdm_suspend(struct pci_dev *pdev, pm_message_t state)
+{
+	return -ENOSYS;
+}
+
 static struct pci_driver wctdm_driver = {
 	.name = "wctdm24xxp",
 	.probe = wctdm_init_one,
@@ -4909,6 +4914,7 @@ static struct pci_driver wctdm_driver = {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = wctdm_shutdown,
 #endif
+	.suspend = wctdm_suspend,
 	.id_table = wctdm_pci_tbl,
 };
 
