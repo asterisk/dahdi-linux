@@ -1048,12 +1048,32 @@ int dahdi_dynamic_register_driver(struct dahdi_dynamic_driver *driver);
 /*! \brief Unregister a dynamic driver */
 void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *driver);
 
+int _dahdi_receive(struct dahdi_span *span);
+
 /*! Receive on a span.  The DAHDI interface will handle all the calculations for
    all member channels of the span, pulling the data from the readchunk buffer */
-int dahdi_receive(struct dahdi_span *span);
+static inline int dahdi_receive(struct dahdi_span *span)
+{
+	unsigned long flags;
+	int ret;
+	local_irq_save(flags);
+	ret = _dahdi_receive(span);
+	local_irq_restore(flags);
+	return ret;
+}
+
+int _dahdi_transmit(struct dahdi_span *span);
 
 /*! Prepare writechunk buffers on all channels for this span */
-int dahdi_transmit(struct dahdi_span *span);
+static inline int dahdi_transmit(struct dahdi_span *span)
+{
+	unsigned long flags;
+	int ret;
+	local_irq_save(flags);
+	ret = _dahdi_transmit(span);
+	local_irq_restore(flags);
+	return ret;
+}
 
 /*! Abort the buffer currently being receive with event "event" */
 void dahdi_hdlc_abort(struct dahdi_chan *ss, int event);
@@ -1122,9 +1142,26 @@ struct dahdi_tone *dahdi_mf_tone(const struct dahdi_chan *chan, char digit, int 
    as possible.  ECHO CANCELLATION IS NO LONGER AUTOMATICALLY DONE
    AT THE DAHDI LEVEL.  dahdi_ec_chunk will not echo cancel if it should
    not be doing so.  rxchunk is modified in-place */
+void _dahdi_ec_chunk(struct dahdi_chan *chan, unsigned char *rxchunk,
+		    const unsigned char *txchunk);
 
-void dahdi_ec_chunk(struct dahdi_chan *chan, unsigned char *rxchunk, const unsigned char *txchunk);
-void dahdi_ec_span(struct dahdi_span *span);
+static inline void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk,
+				  const unsigned char *txchunk)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	_dahdi_ec_chunk(ss, rxchunk, txchunk);
+	local_irq_restore(flags);
+}
+
+void _dahdi_ec_span(struct dahdi_span *span);
+static inline void dahdi_ec_span(struct dahdi_span *span)
+{
+	unsigned long flags;
+	local_irq_save(flags);
+	_dahdi_ec_span(span);
+	local_irq_restore(flags);
+}
 
 extern struct file_operations *dahdi_transcode_fops;
 

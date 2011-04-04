@@ -119,16 +119,12 @@ EXPORT_SYMBOL(__dahdi_lineartoalaw);
 EXPORT_SYMBOL(__dahdi_lin2mu);
 EXPORT_SYMBOL(__dahdi_lin2a);
 #endif
-EXPORT_SYMBOL(dahdi_transmit);
-EXPORT_SYMBOL(dahdi_receive);
 EXPORT_SYMBOL(dahdi_rbsbits);
 EXPORT_SYMBOL(dahdi_qevent_nolock);
 EXPORT_SYMBOL(dahdi_qevent_lock);
 EXPORT_SYMBOL(dahdi_hooksig);
 EXPORT_SYMBOL(dahdi_alarm_notify);
 EXPORT_SYMBOL(dahdi_set_dynamic_ioctl);
-EXPORT_SYMBOL(dahdi_ec_chunk);
-EXPORT_SYMBOL(dahdi_ec_span);
 EXPORT_SYMBOL(dahdi_hdlc_abort);
 EXPORT_SYMBOL(dahdi_hdlc_finish);
 EXPORT_SYMBOL(dahdi_hdlc_getbuf);
@@ -7635,7 +7631,8 @@ static void process_echocan_events(struct dahdi_chan *chan)
 	}
 }
 
-static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk, const unsigned char *txchunk)
+static void
+__dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 {
 	short rxlin, txlin;
 	int x;
@@ -7704,7 +7701,7 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
 }
 
 /**
- * dahdi_ec_chunk() - process echo for a single channel
+ * _dahdi_ec_chunk() - process echo for a single channel
  * @ss:		DAHDI channel
  * @rxchunk:	chunk of audio on which to cancel echo
  * @txchunk:	reference chunk from the other direction
@@ -7713,14 +7710,16 @@ static inline void __dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchun
  * audio. In order to fix it it uses the transmitted audio as a
  * reference. This call updates the echo canceller for a single chunk (8
  * bytes).
+ *
+ * Call with local interrupts disabled.
  */
-void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk, const unsigned char *txchunk)
+void _dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 {
-	unsigned long flags;
-	spin_lock_irqsave(&ss->lock, flags);
+	spin_lock(&ss->lock);
 	__dahdi_ec_chunk(ss, rxchunk, txchunk);
-	spin_unlock_irqrestore(&ss->lock, flags);
+	spin_unlock(&ss->lock);
 }
+EXPORT_SYMBOL(_dahdi_ec_chunk);
 
 /**
  * dahdi_ec_span() - process echo for all channels in a span.
@@ -7730,11 +7729,9 @@ void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk, const unsigne
  * span. Uses dahdi_chunk.write_chunk for the rxchunk (the chunk to fix)
  * and dahdi_chan.readchunk as the txchunk (the reference chunk).
  */
-void dahdi_ec_span(struct dahdi_span *span)
+void _dahdi_ec_span(struct dahdi_span *span)
 {
 	int x;
-	unsigned long flags;
-	local_irq_save(flags);
 	for (x = 0; x < span->channels; x++) {
 		if (span->chans[x]->ec_current) {
 			spin_lock(&span->chans[x]->lock);
@@ -7742,8 +7739,8 @@ void dahdi_ec_span(struct dahdi_span *span)
 			spin_unlock(&span->chans[x]->lock);
 		}
 	}
-	local_irq_restore(flags);
 }
+EXPORT_SYMBOL(_dahdi_ec_span);
 
 /* return 0 if nothing detected, 1 if lack of tone, 2 if presence of tone */
 /* modifies buffer pointed to by 'amp' with notched-out values */
@@ -8710,12 +8707,9 @@ static void __transmit_to_slaves(struct dahdi_chan *const chan)
 	}
 }
 
-int dahdi_transmit(struct dahdi_span *span)
+int _dahdi_transmit(struct dahdi_span *span)
 {
-	unsigned long flags;
 	unsigned int x;
-
-	local_irq_save(flags);
 
 	for (x=0;x<span->channels;x++) {
 		struct dahdi_chan *const chan = span->chans[x];
@@ -8756,8 +8750,6 @@ int dahdi_transmit(struct dahdi_span *span)
 		spin_unlock(&chan->lock);
 	}
 
-	local_irq_restore(flags);
-
 	if (span->mainttimer) {
 		span->mainttimer -= DAHDI_CHUNKSIZE;
 		if (span->mainttimer <= 0) {
@@ -8767,6 +8759,7 @@ int dahdi_transmit(struct dahdi_span *span)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(_dahdi_transmit);
 
 static inline void __pseudo_rx_audio(struct dahdi_chan *chan)
 {
@@ -8801,7 +8794,7 @@ static inline void dahdi_sync_tick(struct dahdi_span *const s)
 #endif
 
 /**
- * process_masterspan - Handle conferencing and timers.
+ * _process_masterspan - Handle conferencing and timers.
  *
  * There are three sets of conference sum accumulators. One for the current
  * sample chunk (conf_sums), one for the next sample chunk (conf_sums_next), and
@@ -8837,9 +8830,8 @@ static inline void dahdi_sync_tick(struct dahdi_span *const s)
  * of the next sample chunk's data (next time around the world).
  *
  */
-static void process_masterspan(void)
+static void _process_masterspan(void)
 {
-	unsigned long flags;
 	int x;
 	struct pseudo_chan *pseudo;
 	struct dahdi_span *s;
@@ -8854,7 +8846,7 @@ static void process_masterspan(void)
 #endif
 	/* Hold the chan_lock for the duration of major
 	   activities which touch all sorts of channels */
-	spin_lock_irqsave(&chan_lock, flags);
+	spin_lock(&chan_lock);
 
 	/* Process any timers */
 	process_timers();
@@ -8903,7 +8895,7 @@ static void process_masterspan(void)
 
 		dahdi_sync_tick(s);
 	}
-	spin_unlock_irqrestore(&chan_lock, flags);
+	spin_unlock(&chan_lock);
 }
 
 #ifndef CONFIG_DAHDI_CORE_TIMER
@@ -8945,6 +8937,7 @@ static inline unsigned long msecs_processed(const struct core_timer *const ct)
 
 static void coretimer_func(unsigned long param)
 {
+	unsigned long flags;
 	unsigned long ms_since_start;
 	struct timespec now;
 	const unsigned long MAX_INTERVAL = 100000L;
@@ -8987,8 +8980,10 @@ static void coretimer_func(unsigned long param)
 			return;
 		}
 
+		local_irq_save(flags);
 		while (ms_since_start > msecs_processed(&core_timer))
-			process_masterspan();
+			_process_masterspan();
+		local_irq_restore(flags);
 
 		if (ms_since_start > MAX_INTERVAL) {
 			atomic_set(&core_timer.count, 0);
@@ -9062,16 +9057,13 @@ static inline bool should_skip_receive(const struct dahdi_chan *const chan)
 		is_chan_dacsed(chan));
 }
 
-int dahdi_receive(struct dahdi_span *span)
+int _dahdi_receive(struct dahdi_span *span)
 {
-	unsigned long flags;
 	unsigned int x;
 
 #ifdef CONFIG_DAHDI_WATCHDOG
 	span->watchcounter--;
 #endif
-	local_irq_save(flags);
-
 	for (x = 0; x < span->channels; x++) {
 		struct dahdi_chan *const chan = span->chans[x];
 		spin_lock(&chan->lock);
@@ -9132,13 +9124,12 @@ int dahdi_receive(struct dahdi_span *span)
 		spin_unlock(&chan->lock);
 	}
 
-	local_irq_restore(flags);
-
 	if (span == master)
-		process_masterspan();
+		_process_masterspan();
 
 	return 0;
 }
+EXPORT_SYMBOL(_dahdi_receive);
 
 MODULE_AUTHOR("Mark Spencer <markster@digium.com>");
 MODULE_DESCRIPTION("DAHDI Telephony Interface");
