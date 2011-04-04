@@ -1564,7 +1564,8 @@ static void vb_tasklet_normal(unsigned long data)
 		list_del(&vbb->entry);
 		__voicebus_transmit(vb, vbb);
 	}
-	__vb_setctl(vb, 0x0008, 0x00000000);
+
+	writel(0, vb->iobase + 0x8);
 
 	/* Print any messages about soft latency bumps after we fix the transmit
 	 * descriptor ring. Otherwise it's possible to take so much time
