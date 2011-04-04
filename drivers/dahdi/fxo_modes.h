@@ -25,21 +25,21 @@
 #ifndef _FXO_MODES_H
 #define _FXO_MODES_H
 
-static struct fxo_mode {
-	char *name;
-	int ohs;
-	int ohs2;
-	int rz;
-	int rt;
-	int ilim;
-	int dcv;
-	int mini;
-	int acim;
-	int ring_osc;
-	int ring_x;
-	unsigned int battdebounce; /* in milliseconds */
-	unsigned int battalarm; /* in milliseconds */
-	unsigned int battthresh; /* unknown units */
+static const struct fxo_mode {
+	const char *name;
+	unsigned char ohs:1;
+	unsigned char ohs2:1;
+	unsigned char rz:1;
+	unsigned char rt:1;
+	unsigned char ilim:1;
+	unsigned char dcv:2;
+	unsigned char mini:2;
+	unsigned char acim:4;
+	unsigned short int ring_osc;
+	unsigned short int ring_x;
+	unsigned short int battdebounce; /* in milliseconds */
+	unsigned short int battalarm; /* in milliseconds */
+	unsigned short int battthresh; /* unknown units */
 } fxo_modes[] =
 {
  	/* US, Canada */
