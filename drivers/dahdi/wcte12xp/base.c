@@ -1856,9 +1856,8 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 	u8 *eframe = sframe;
 
 	/* Calculate Transmission */
-	if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
-		dahdi_transmit(&wc->span);
-	}
+	if (likely(test_bit(INITIALIZED, &wc->bit_flags)))
+		_dahdi_transmit(&wc->span);
 
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 	for (chan = 0; chan < wc->span.channels; chan++) {
@@ -1950,19 +1949,19 @@ static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 		for (x = 0; x < wc->span.channels; x++) {
 			__dahdi_fifo_get(wc->ec_reference[x], buffer,
 				    ARRAY_SIZE(buffer));
-			dahdi_ec_chunk(wc->chans[x], wc->chans[x]->readchunk,
+			_dahdi_ec_chunk(wc->chans[x], wc->chans[x]->readchunk,
 				       buffer);
 		}
 #else
 		for (x = 0; x < wc->span.channels; x++) {
-			dahdi_ec_chunk(wc->chans[x], wc->chans[x]->readchunk, wc->ec_chunk2[x]);
+			_dahdi_ec_chunk(wc->chans[x], wc->chans[x]->readchunk, wc->ec_chunk2[x]);
 			memcpy(wc->ec_chunk2[x], wc->ec_chunk1[x],
 				DAHDI_CHUNKSIZE);
 			memcpy(wc->ec_chunk1[x], wc->chans[x]->writechunk,
 				DAHDI_CHUNKSIZE);
 		}
 #endif
-		dahdi_receive(&wc->span);
+		_dahdi_receive(&wc->span);
 	}
 }
 
