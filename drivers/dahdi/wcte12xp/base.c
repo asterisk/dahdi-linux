@@ -1848,11 +1848,29 @@ static void t1_do_counters(struct t1 *wc)
 	}
 }
 
+static void insert_tdm_data(const struct t1 *wc, u8 *sframe)
+{
+	int i;
+	register u8 *chanchunk;
+	const int channels = wc->span.channels;
+
+	for (i = 0; i < channels; ++i) {
+		chanchunk = &wc->chans[i]->writechunk[0];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*0] = chanchunk[0];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*1] = chanchunk[1];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*2] = chanchunk[2];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*3] = chanchunk[3];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*4] = chanchunk[4];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*5] = chanchunk[5];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*6] = chanchunk[6];
+		sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*7] = chanchunk[7];
+	}
+}
+
 static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 {
 	int x;
 	int y;
-	int chan;
 	u8 *eframe = sframe;
 
 	/* Calculate Transmission */
@@ -1866,13 +1884,11 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 	}
 #endif
 
+	if (likely(test_bit(INITIALIZED, &wc->bit_flags)))
+		insert_tdm_data(wc, sframe);
+
 	spin_lock(&wc->reglock);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
-		if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
-			for (chan = 0; chan < wc->span.channels; chan++)
-				eframe[(chan+1)*2] = wc->chans[chan]->writechunk[x];
-		}
-
 		/* process the command queue */
 		for (y = 0; y < 7; y++)
 			cmd_dequeue(wc, eframe, x, y);
@@ -1902,22 +1918,43 @@ static inline bool is_good_frame(const u8 *sframe)
         return a != b;
 }
 
+/**
+ * extract_tdm_data() - Move TDM data from sframe to channels.
+ *
+ */
+static void extract_tdm_data(struct t1 *wc, const u8 *const sframe)
+{
+	int i;
+	register u8 *chanchunk;
+	const int channels = wc->span.channels;
+
+	for (i = 0; i < channels; ++i) {
+		chanchunk = &wc->chans[i]->readchunk[0];
+		chanchunk[0] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*0];
+		chanchunk[1] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*1];
+		chanchunk[2] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*2];
+		chanchunk[3] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*3];
+		chanchunk[4] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*4];
+		chanchunk[5] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*5];
+		chanchunk[6] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*6];
+		chanchunk[7] = sframe[(i+1)*2 + (EFRAME_SIZE + EFRAME_GAP)*7];
+	}
+}
+
 static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 {
-	int x,chan;
+	int x;
 	unsigned char expected;
 	const u8 *eframe = sframe;
 
 	if (!is_good_frame(sframe))
 		return;
 
+	if (likely(test_bit(INITIALIZED, &wc->bit_flags)))
+		extract_tdm_data(wc, sframe);
+
 	spin_lock(&wc->reglock);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
-		if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
-			for (chan = 0; chan < wc->span.channels; chan++) {
-				wc->chans[chan]->readchunk[x] = eframe[(chan+1)*2];
-			}
-		}
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			expected = wc->rxident+1;
 			wc->rxident = eframe[EFRAME_SIZE + 1];
