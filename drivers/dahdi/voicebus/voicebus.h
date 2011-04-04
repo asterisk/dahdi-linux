@@ -100,7 +100,7 @@ struct voicebus_descriptor_list {
 	unsigned int 	tail;
 	void  		*pending[DRING_SIZE];
 	dma_addr_t	desc_dma;
-	atomic_t 	count;
+	unsigned long	count;
 	unsigned int	padding;
 };
 

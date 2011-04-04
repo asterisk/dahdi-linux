@@ -271,7 +271,7 @@ vb_initialize_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *
 		d->des1 = cpu_to_le32(des1);
 	}
 	d->des1 |= cpu_to_le32(END_OF_RING);
-	atomic_set(&dl->count, 0);
+	dl->count = 0;
 	return 0;
 }
 
@@ -326,7 +326,7 @@ vb_initialize_tx_descriptors(struct voicebus *vb)
 		d->buffer1 = 0;
 	}
 	d->des1 |= cpu_to_le32(END_OF_RING);
-	atomic_set(&dl->count, 0);
+	dl->count = 0;
 	return 0;
 }
 
@@ -497,7 +497,7 @@ vb_cleanup_tx_descriptors(struct voicebus *vb)
 	}
 
 	dl->head = dl->tail = 0;
-	atomic_set(&dl->count, 0);
+	dl->count = 0;
 	vb_enable_deferred(vb);
 }
 
@@ -522,7 +522,7 @@ static void vb_cleanup_rx_descriptors(struct voicebus *vb)
 	}
 	dl->head = 0;
 	dl->tail = 0;
-	atomic_set(&dl->count, 0);
+	dl->count = 0;
 	vb_enable_deferred(vb);
 }
 
@@ -727,7 +727,7 @@ vb_submit_rxb(struct voicebus *vb, struct vbb *vbb)
 	dl->tail = (++tail) & DRING_MASK;
 	d->buffer1 = cpu_to_le32(vbb->dma_addr);
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
-	atomic_inc(&dl->count);
+	++dl->count;
 	return 0;
 }
 
@@ -753,7 +753,7 @@ static int __voicebus_transmit(struct voicebus *vb, struct vbb *vbb)
 	d->buffer1 = cpu_to_le32(vbb->dma_addr);
 	dl->tail = (dl->tail + 1) & DRING_MASK;
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
-	atomic_inc(&dl->count);
+	++dl->count;
 	return 0;
 }
 
@@ -960,7 +960,7 @@ vb_get_completed_txb(struct voicebus *vb)
 		dl->pending[head] = NULL;
 	}
 	dl->head = (++head) & DRING_MASK;
-	atomic_dec(&dl->count);
+	--dl->count;
 	vb_net_capture_vbb(vb, vbb, 1, d->des0, d->container);
 	return vbb;
 }
@@ -981,7 +981,7 @@ vb_get_completed_rxb(struct voicebus *vb, u32 *des0)
 	vbb = dl->pending[head];
 	dl->head = (++head) & DRING_MASK;
 	d->buffer1 = 0;
-	atomic_dec(&dl->count);
+	--dl->count;
 #	ifdef VOICEBUS_NET_DEBUG
 	vb_net_capture_vbb(vb, vbb, 0, d->des0, d->container);
 #	endif
@@ -1495,10 +1495,10 @@ static void vb_tasklet_normal(unsigned long data)
 	while ((vbb = vb_get_completed_txb(vb)))
 		list_add_tail(&vbb->entry, &vb->tx_complete);
 
-	if (unlikely(atomic_read(&dl->count) < 2)) {
+	if (unlikely(dl->count < 2)) {
 		softunderrun = 1;
 		d = vb_descriptor(dl, dl->head);
-		if (1 == atomic_read(&dl->count))
+		if (1 == dl->count)
 			return;
 
 		behind = 2;
