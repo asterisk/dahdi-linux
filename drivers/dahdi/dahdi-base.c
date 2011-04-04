@@ -8736,10 +8736,10 @@ int dahdi_transmit(struct dahdi_span *span)
 						span->ops->rbsbits(chan, src->rxsig);
 					}
 				}
-				/* there is no further processing to do for DACS channels, so
-				 * jump to the next channel in the span
-				 */
-				spin_unlock_irqrestore(&chan->lock, flags);
+				/* there is no further processing to do for
+				 * DACS channels, so jump to the next channel
+				 * in the span */
+				spin_unlock(&chan->lock);
 				continue;
 			} else if (chan->nextslave) {
 				__transmit_to_slaves(chan);
