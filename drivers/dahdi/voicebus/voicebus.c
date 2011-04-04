@@ -787,6 +787,7 @@ static void setup_descriptors(struct voicebus *vb)
 	struct vbb *vbb;
 	dma_addr_t dma_addr;
 	LIST_HEAD(buffers);
+	unsigned long flags;
 
 	might_sleep();
 
@@ -831,7 +832,9 @@ static void setup_descriptors(struct voicebus *vb)
 			list_add_tail(&vbb->entry, &buffers);
 		}
 
+		local_irq_save(flags);
 		handle_transmit(vb, &buffers);
+		local_irq_restore(flags);
 
 		vb_disable_deferred(vb);
 		while (!list_empty(&buffers)) {
