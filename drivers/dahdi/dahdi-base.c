@@ -8971,15 +8971,15 @@ static void coretimer_func(unsigned long param)
 		/*
 		 * If the system time has changed, it is possible for us to be
 		 * far behind.  If we are more than MS_LIMIT milliseconds
-		 * behind, just reset our time base and continue so that we do
-		 * not hang the system here.
+		 * behind (or ahead in time), just reset our time base and
+		 * continue so that we do not hang the system here.
 		 *
 		 */
 		difference = ms_since_start - msecs_processed(&core_timer);
-		if (unlikely(difference >  MS_LIMIT)) {
+		if (unlikely((difference >  MS_LIMIT) || (difference < 0))) {
 			if (printk_ratelimit()) {
 				module_printk(KERN_INFO,
-					      "Detected time shift.");
+					      "Detected time shift.\n");
 			}
 			atomic_set(&core_timer.count, 0);
 			atomic_set(&core_timer.last_count, 0);
