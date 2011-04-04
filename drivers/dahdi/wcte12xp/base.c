@@ -121,38 +121,29 @@ static void free_cmd(struct t1 *wc, struct command *cmd)
 	kmem_cache_free(cmd_cache, cmd);
 }
 
-static struct command *get_pending_cmd(struct t1 *wc)
+static struct command *_get_pending_cmd(struct t1 *wc)
 {
 	struct command *cmd = NULL;
-	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
 	if (!list_empty(&wc->pending_cmds)) {
 		cmd = list_entry(wc->pending_cmds.next, struct command, node);
 		list_move_tail(&cmd->node, &wc->active_cmds);
 	}
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 	return cmd;
 }
 
 static void submit_cmd(struct t1 *wc, struct command *cmd)
 {
 	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
+	spin_lock_irqsave(&wc->reglock, flags);
 	list_add_tail(&cmd->node, &wc->pending_cmds);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
-static void resend_cmds(struct t1 *wc)
+static void _resend_cmds(struct t1 *wc)
 {
-	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
 	list_splice_init(&wc->active_cmds, &wc->pending_cmds);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-
-	spin_lock_irqsave(&wc->reglock, flags);
 	if (wc->vpmadt032)
 		vpmadt032_resend(wc->vpmadt032);
-	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 static void cmd_dequeue(struct t1 *wc, unsigned char *eframe, int frame_num, int slot)
@@ -169,7 +160,7 @@ static void cmd_dequeue(struct t1 *wc, unsigned char *eframe, int frame_num, int
 		/* only 6 useable cs slots per */
 
 		/* framer */
-		curcmd = get_pending_cmd(wc);
+		curcmd = _get_pending_cmd(wc);
 		if (curcmd) {
 			curcmd->cs_slot = slot;
 			curcmd->ident = wc->txident;
@@ -201,12 +192,11 @@ static void cmd_dequeue(struct t1 *wc, unsigned char *eframe, int frame_num, int
 static inline void cmd_decipher(struct t1 *wc, const u8 *eframe)
 {
 	struct command *cmd = NULL;
-	unsigned long flags;
 	const int IS_VPM = 0;
 
 	/* Skip audio */
 	eframe += 66;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
+
 	while (!list_empty(&wc->active_cmds)) {
 		cmd = list_entry(wc->active_cmds.next, struct command, node);
 		if (cmd->ident != wc->rxident)
@@ -223,12 +213,10 @@ static inline void cmd_decipher(struct t1 *wc, const u8 *eframe)
 			complete(&cmd->complete);
 		}
 	}
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 }
 
 inline void cmd_decipher_vpmadt032(struct t1 *wc, const u8 *eframe)
 {
-	unsigned long flags;
 	struct vpmadt032 *vpm = wc->vpmadt032;
 	struct vpmadt032_cmd *cmd;
 
@@ -240,14 +228,14 @@ inline void cmd_decipher_vpmadt032(struct t1 *wc, const u8 *eframe)
 		return;
 	}
 
-	spin_lock_irqsave(&vpm->list_lock, flags);
+	spin_lock(&vpm->list_lock);
 	cmd = list_entry(vpm->active_cmds.next, struct vpmadt032_cmd, node);
 	if (wc->rxident == cmd->txident) {
 		list_del_init(&cmd->node);
 	} else {
 		cmd = NULL;
 	}
-	spin_unlock_irqrestore(&vpm->list_lock, flags);
+	spin_unlock(&vpm->list_lock);
 
 	if (!cmd) {
 		return;
@@ -566,12 +554,12 @@ static int t1_getreg(struct t1 *wc, int addr)
 	submit_cmd(wc, cmd);
 	ret = wait_for_completion_interruptible_timeout(&cmd->complete, HZ*10);
 	if (unlikely(!ret)) {
-		spin_lock_irqsave(&wc->cmd_list_lock, flags);
+		spin_lock_irqsave(&wc->reglock, flags);
 		if (!list_empty(&cmd->node)) {
 			/* Since we've removed this command from the list, we
 			 * can go ahead and free it right away. */
 			list_del_init(&cmd->node);
-			spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+			spin_unlock_irqrestore(&wc->reglock, flags);
 			free_cmd(wc, cmd);
 			if (-ERESTARTSYS != ret) {
 				if (printk_ratelimit()) {
@@ -585,7 +573,7 @@ static int t1_getreg(struct t1 *wc, int addr)
 			/* Looks like this command was removed from the list by
 			 * someone else already. Let's wait for them to complete
 			 * it so that we don't free up the memory. */
-			spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+			spin_unlock_irqrestore(&wc->reglock, flags);
 			ret = wait_for_completion_timeout(&cmd->complete, HZ*2);
 			WARN_ON(!ret);
 			ret = cmd->data;
@@ -627,9 +615,9 @@ static inline int t1_getpins(struct t1 *wc, int inisr)
 	submit_cmd(wc, cmd);
 	ret = wait_for_completion_interruptible_timeout(&cmd->complete, HZ*2);
 	if (unlikely(!ret)) {
-		spin_lock_irqsave(&wc->cmd_list_lock, flags);
+		spin_lock_irqsave(&wc->reglock, flags);
 		list_del_init(&cmd->node);
-		spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+		spin_unlock_irqrestore(&wc->reglock, flags);
 		free_cmd(wc, cmd);
 		if (-ERESTARTSYS != ret) {
 			if (printk_ratelimit()) {
@@ -687,10 +675,10 @@ static void free_wc(struct t1 *wc)
 		kfree(wc->ec[x]);
 	}
 
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
+	spin_lock_irqsave(&wc->reglock, flags);
 	list_splice_init(&wc->active_cmds, &list);
 	list_splice_init(&wc->pending_cmds, &list);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+	spin_unlock_irqrestore(&wc->reglock, flags);
 	while (!list_empty(&list)) {
 		cmd = list_entry(list.next, struct command, node);
 		list_del_init(&cmd->node);
@@ -1865,7 +1853,6 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 	int x;
 	int y;
 	int chan;
-	unsigned long flags;
 	u8 *eframe = sframe;
 
 	/* Calculate Transmission */
@@ -1880,6 +1867,7 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 	}
 #endif
 
+	spin_lock(&wc->reglock);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
 			for (chan = 0; chan < wc->span.channels; chan++)
@@ -1891,10 +1879,8 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 			cmd_dequeue(wc, eframe, x, y);
 
 #ifdef VPM_SUPPORT
-		spin_lock_irqsave(&wc->reglock, flags);
 		if (wc->vpmadt032)
 			cmd_dequeue_vpmadt032(wc, eframe);
-		spin_unlock_irqrestore(&wc->reglock, flags);
 #endif
 
 		if (x < DAHDI_CHUNKSIZE - 1) {
@@ -1903,6 +1889,7 @@ static inline void t1_transmitprep(struct t1 *wc, u8 *sframe)
 		}
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
+	spin_unlock(&wc->reglock);
 }
 
 /**
@@ -1919,13 +1906,13 @@ static inline bool is_good_frame(const u8 *sframe)
 static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 {
 	int x,chan;
-	unsigned long flags;
 	unsigned char expected;
 	const u8 *eframe = sframe;
 
 	if (!is_good_frame(sframe))
 		return;
 
+	spin_lock(&wc->reglock);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
 			for (chan = 0; chan < wc->span.channels; chan++) {
@@ -1938,7 +1925,7 @@ static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 			wc->statreg = eframe[EFRAME_SIZE + 2];
 			if (wc->rxident != expected) {
 				wc->span.irqmisses++;
-				resend_cmds(wc);
+				_resend_cmds(wc);
 				if (unlikely(debug)) {
 					t1_info(wc, "oops: rxident=%d "
 						"expected=%d x=%d\n",
@@ -1948,13 +1935,13 @@ static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 		}
 		cmd_decipher(wc, eframe);
 #ifdef VPM_SUPPORT
-		spin_lock_irqsave(&wc->reglock, flags);
 		if (wc->vpmadt032)
 			cmd_decipher_vpmadt032(wc, eframe);
-		spin_unlock_irqrestore(&wc->reglock, flags);
 #endif
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
+
+	spin_unlock(&wc->reglock);
 	
 	/* echo cancel */
 	if (likely(test_bit(INITIALIZED, &wc->bit_flags))) {
@@ -2228,7 +2215,6 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	memset(wc, 0, sizeof(*wc));
 	wc->ledstate = -1;
 	spin_lock_init(&wc->reglock);
-	spin_lock_init(&wc->cmd_list_lock);
 	INIT_LIST_HEAD(&wc->active_cmds);
 	INIT_LIST_HEAD(&wc->pending_cmds);
 

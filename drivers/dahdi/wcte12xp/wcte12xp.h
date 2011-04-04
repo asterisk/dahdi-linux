@@ -131,7 +131,7 @@ struct t1 {
 	unsigned long vpm_check;
 	struct work_struct vpm_check_work;
 
-	spinlock_t cmd_list_lock;
+	/* protected by t1.reglock */
 	struct list_head pending_cmds;
 	struct list_head active_cmds;
 	struct timer_list timer;
