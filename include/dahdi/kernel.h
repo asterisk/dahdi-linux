@@ -87,7 +87,13 @@
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
-#define dev_name(dev)		(dev)->bus_id
+#  ifdef RHEL_RELEASE_VERSION
+#    if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 6)
+#define dev_name(dev)		((dev)->bus_id)
+#    endif
+#  else
+#define dev_name(dev)		((dev)->bus_id)
+#  endif
 #define dev_set_name(dev, format, ...) \
 	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__);
 #endif
