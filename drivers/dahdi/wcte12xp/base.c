@@ -600,11 +600,21 @@ static void t1_setleds(struct t1 *wc, int leds)
 	submit_cmd(wc, cmd);
 }
 
-static inline int t1_getpins(struct t1 *wc, int inisr)
+/**
+ * t1_getpins - Returns the value of the jumpers on the card.
+ * @wc:	The card to read from.
+ * @pins: Pointer to u8 character to hold the pins value.
+ *
+ * Returns 0 on success, otherwise an error code.
+ *
+ */
+static int t1_getpins(struct t1 *wc, u8 *pins)
 {
 	struct command *cmd;
 	unsigned long flags;
 	unsigned long ret;
+
+	*pins = 0;
 
 	cmd = get_free_cmd(wc);
 	BUG_ON(!cmd);
@@ -628,9 +638,9 @@ static inline int t1_getpins(struct t1 *wc, int inisr)
 		}
 		return ret;
 	}
-	ret = cmd->data;
+	*pins = cmd->data;
 	free_cmd(wc, cmd);
-	return ret;
+	return 0;
 }
 
 static void __t1xxp_set_clear(struct t1 *wc)
@@ -1597,6 +1607,7 @@ static inline unsigned char t1_vpm_out(struct t1 *wc, int unit, const unsigned i
 
 static int t1_hardware_post_init(struct t1 *wc)
 {
+	int res;
 	unsigned int reg;
 	int x;
 
@@ -1607,10 +1618,12 @@ static int t1_hardware_post_init(struct t1 *wc)
 		else
 			wc->spantype = TYPE_T1;
 	} else {
-		if (t1_getpins(wc,0) & 0x01) /* returns 1 for T1 mode */
-			wc->spantype = TYPE_T1;
-		else	
-			wc->spantype = TYPE_E1;
+		u8 pins;
+		res = t1_getpins(wc, &pins);
+		if (res)
+			return res;
+
+		wc->spantype = (pins & 0x01) ? TYPE_T1 : TYPE_E1;
 	}
 	debug_printk(wc, 1, "spantype: %s\n", 1 == wc->spantype ? "T1" : "E1");
 	
@@ -2323,7 +2336,13 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 		free_wc(wc);
 		return -EIO;
 	}
-	t1_hardware_post_init(wc);
+
+	res = t1_hardware_post_init(wc);
+	if (res) {
+		voicebus_release(&wc->vb);
+		free_wc(wc);
+		return res;
+	}
 
 	for (x = 0; x < (wc->spantype == TYPE_E1 ? 31 : 24); x++) {
 		if (!(wc->chans[x] = kmalloc(sizeof(*wc->chans[x]), GFP_KERNEL))) {
