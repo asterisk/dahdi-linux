@@ -6279,7 +6279,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 		break;
 #endif
 	case DAHDI_BUFFER_EVENTS:
-		if (get_user(j, (int __user *)data) != -EFAULT && j)
+		if (get_user(j, (int __user *)data))
+			return -EFAULT;
+		if (j)
 			set_bit(DAHDI_FLAGBIT_BUFEVENTS, &chan->flags);
 		else
 			clear_bit(DAHDI_FLAGBIT_BUFEVENTS, &chan->flags);
