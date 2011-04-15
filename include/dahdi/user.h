@@ -448,6 +448,12 @@ enum dahdi_maint_mode {
 /* The echo canceler's NLP (only) was enabled */
 #define DAHDI_EVENT_EC_NLP_ENABLED	28
 
+/* The channel's read buffer encountered an overrun condition */
+#define DAHDI_EVENT_READ_OVERRUN	29
+
+/* The channel's write buffer encountered an underrun condition */
+#define DAHDI_EVENT_WRITE_UNDERRUN	30
+
 #define DAHDI_EVENT_PULSEDIGIT		(1 << 16)	/* This is OR'd with the digit received */
 #define DAHDI_EVENT_DTMFDOWN		(1 << 17)	/* Ditto for DTMF key down event */
 #define DAHDI_EVENT_DTMFUP		(1 << 18)	/* Ditto for DTMF key up event */
@@ -1084,6 +1090,13 @@ struct dahdi_vmwi_info {
 #define DAHDI_RXMIRROR			_IOW(DAHDI_CODE, 103, int)
 #define DAHDI_TXMIRROR			_IOW(DAHDI_CODE, 104, int)
 #endif /* CONFIG_DAHDI_MIRROR */
+
+/*
+  Set the desired state for channel buffer event generation which is disabled
+  by default to allow for backwards compatibility for dumb users of channels
+  such as pattern utilities.
+ */
+#define DAHDI_BUFFER_EVENTS		_IOW(DAHDI_CODE, 105, int)
 
 /* Get current status IOCTL */
 /* Defines for Radio Status (dahdi_radio_stat.radstat) bits */

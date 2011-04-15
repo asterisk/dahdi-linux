@@ -6278,6 +6278,13 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 		}
 		break;
 #endif
+	case DAHDI_BUFFER_EVENTS:
+		if (get_user(j, (int __user *)data) != -EFAULT && j)
+			set_bit(DAHDI_FLAGBIT_BUFEVENTS, &chan->flags);
+		else
+			clear_bit(DAHDI_FLAGBIT_BUFEVENTS, &chan->flags);
+
+		break;
 	default:
 		return dahdi_chanandpseudo_ioctl(file, cmd, data);
 	}
@@ -7060,6 +7067,7 @@ static inline void __dahdi_getbuf_chunk(struct dahdi_chan *ss, unsigned char *tx
 	int getlin;
 	/* How many bytes we need to process */
 	int bytes = DAHDI_CHUNKSIZE, left;
+	bool needtxunderrun = false;
 	int x;
 
 	/* Let's pick something to transmit.  First source to
@@ -7201,11 +7209,23 @@ out in the later versions, and is put back now. */
 			} else {
 				memset(txb, 0xFF, bytes);
 			}
+			needtxunderrun += bytes;
 			bytes = 0;
 		} else {
 			memset(txb, DAHDI_LIN2X(0, ms), bytes);	/* Lastly we use silence on telephony channels */
+			needtxunderrun += bytes;
 			bytes = 0;
 		}
+	}
+
+	if (needtxunderrun) {
+		if (!test_bit(DAHDI_FLAGBIT_TXUNDERRUN, &ms->flags)) {
+			if (test_bit(DAHDI_FLAGBIT_BUFEVENTS, &ms->flags))
+				__qevent(ms, DAHDI_EVENT_WRITE_UNDERRUN);
+			set_bit(DAHDI_FLAGBIT_TXUNDERRUN, &ms->flags);
+		}
+	} else {
+		clear_bit(DAHDI_FLAGBIT_TXUNDERRUN, &ms->flags);
 	}
 
 #ifdef CONFIG_DAHDI_MIRROR
@@ -8383,6 +8403,15 @@ that the waitqueue is empty. */
 #endif
 	}
 
+	if (bytes) {
+		if (!test_bit(DAHDI_FLAGBIT_RXOVERRUN, &ms->flags)) {
+			if (test_bit(DAHDI_FLAGBIT_BUFEVENTS, &ms->flags))
+				__qevent(ms, DAHDI_EVENT_READ_OVERRUN);
+			set_bit(DAHDI_FLAGBIT_RXOVERRUN, &ms->flags);
+		}
+	} else {
+		clear_bit(DAHDI_FLAGBIT_RXOVERRUN, &ms->flags);
+	}
 }
 
 static inline void __dahdi_putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb)
