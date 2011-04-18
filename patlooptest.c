@@ -208,12 +208,13 @@ int main(int argc, char *argv[])
 			outbuf[x] = c1++;
 		}
 
+write_again:
 		res = write(fd,outbuf,bs);
 		if (res != bs) {
-			printf("Res is %d: %s\n", res, strerror(errno));
-			ioctl(fd, DAHDI_GETEVENT, &x);
-			printf("Event: %d\n", x);
-			exit(1);
+			printf("W: Res is %d: %s\n", res, strerror(errno));
+ 			ioctl(fd, DAHDI_GETEVENT, &x);
+ 			printf("Event: %d\n", x);
+			goto write_again;
 		}
 
 		/* If this is the start of the test then skip a number of packets before test results */
@@ -225,13 +226,18 @@ int main(int argc, char *argv[])
 			if (!skipcount) {
 				printf("Going for it...\n");
 			}
+			i = 1;
+			ioctl(fd,DAHDI_BUFFER_EVENTS, &i);
 			continue;
 		}
 
+read_again:
 		res = read(fd, inbuf, bs);
 		if (res < bs) {
-			printf("read error: returned %d\n", res);
-			exit(1);
+			printf("R: Res is %d\n", res);
+			ioctl(fd, DAHDI_GETEVENT, &x);
+			printf("Event: %d\n", x);
+			goto read_again;
 		}
 		/* If first time through, set byte that is used to test further bytes */
 		if (!setup) {
