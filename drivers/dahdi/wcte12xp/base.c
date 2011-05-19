@@ -399,9 +399,9 @@ static void cmd_dequeue_vpmadt032(struct t1 *wc, unsigned char *eframe)
 			if (!x) {
 				if (test_and_clear_bit(VPM150M_HPIRESET,
 						       &vpm->control)) {
-					eframe[CMD_BYTE(x, 0, 0)] = 0x0b;
+					eframe[CMD_BYTE(x, 0, 1)] = 0x0b;
 				} else {
-					eframe[CMD_BYTE(x, 0, 0)] = leds;
+					eframe[CMD_BYTE(x, 0, 1)] = leds;
 				}
 			} else {
 				eframe[CMD_BYTE(x, 0, 1)] = 0x00 | leds;
