@@ -40,59 +40,6 @@ extern	int debug;
 
 /*---------------- GLOBAL PROC handling -----------------------------------*/
 
-#ifdef	OLD_PROC
-static int proc_xpd_register_read(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int			len = 0;
-	unsigned long		flags;
-	xpd_t			*xpd = data;
-	reg_cmd_t		*info;
-	bool			do_datah;
-	char			datah_str[50];
-
-	if(!xpd)
-		return -ENODEV;
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	spin_lock_irqsave(&xpd->lock, flags);
-	info = &xpd->last_reply;
-	len += sprintf(page + len, "# Writing bad data into this file may damage your hardware!\n");
-	len += sprintf(page + len, "# Consult firmware docs first\n");
-	len += sprintf(page + len, "#\n");
-	do_datah = REG_FIELD(info, do_datah) ? 1 : 0;
-	if(do_datah) {
-		snprintf(datah_str, ARRAY_SIZE(datah_str), "\t%02X",
-			REG_FIELD(info, data_high));
-	} else
-		datah_str[0] = '\0';
-	if(REG_FIELD(info, do_subreg)) {
-		len += sprintf(page + len, "#CH\tOP\tReg.\tSub\tDL%s\n",
-				(do_datah) ? "\tDH" : "");
-		len += sprintf(page + len, "%2d\tRS\t%02X\t%02X\t%02X%s\n",
-				info->portnum,
-				REG_FIELD(info, regnum), REG_FIELD(info, subreg),
-				REG_FIELD(info, data_low), datah_str);
-	} else {
-		len += sprintf(page + len, "#CH\tOP\tReg.\tDL%s\n",
-				(do_datah) ? "\tDH" : "");
-		len += sprintf(page + len, "%2d\tRD\t%02X\t%02X%s\n",
-				info->portnum,
-				REG_FIELD(info, regnum),
-				REG_FIELD(info, data_low), datah_str);
-	}
-	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-#endif
-
 static int parse_hexbyte(const char *buf)
 {
 	char		*endp;
@@ -341,78 +288,6 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 out:
 	return ret;
 }
-
-#ifdef	OLD_PROC
-static int proc_xpd_register_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
-{
-	xpd_t		*xpd = data;
-	char		buf[MAX_PROC_WRITE];
-	char		*p;
-	int		i;
-	int		ret;
-
-	if(!xpd)
-		return -ENODEV;
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] wrote to /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	for(i = 0; i < count; /* noop */) {
-		for(p = buf; p < buf + MAX_PROC_WRITE; p++) {	/* read a line */
-			if(i >= count)
-				break;
-			if(get_user(*p, buffer + i))
-				return -EFAULT;
-			i++;
-			if(*p == '\n' || *p == '\r')	/* whatever */
-				break;
-		}
-		if(p >= buf + MAX_PROC_WRITE)
-			return -E2BIG;
-		*p = '\0';
-		ret = parse_chip_command(xpd, buf);
-		if(ret < 0) {
-			XPD_NOTICE(xpd, "Failed writing command: '%s'\n", buf);
-			return ret;
-		}
-		/* Don't flood command_queue */
-		if(xframe_queue_count(&xpd->xbus->command_queue) > 5)
-			msleep(6);
-	}
-	return count;
-}
-
-void chip_proc_remove(xbus_t *xbus, xpd_t *xpd)
-{
-	BUG_ON(!xpd);
-#ifdef	CONFIG_PROC_FS
-	if(xpd->proc_xpd_chipregs) {
-		XBUS_DBG(PROC, xbus, "UNIT %d: Removing %s\n", xpd->addr.unit, CHIP_REGISTERS);
-		xpd->proc_xpd_chipregs->data = NULL;
-		remove_proc_entry(CHIP_REGISTERS, xpd->proc_xpd_dir);
-	}
-#endif
-}
-
-int chip_proc_create(xbus_t *xbus, xpd_t *xpd)
-{
-	BUG_ON(!xpd);
-#ifdef	CONFIG_PROC_FS
-	XBUS_DBG(PROC, xbus, "UNIT %d: Creating %s\n", xpd->addr.unit, CHIP_REGISTERS);
-	xpd->proc_xpd_chipregs = create_proc_entry(CHIP_REGISTERS, 0644, xpd->proc_xpd_dir);
-	if(!xpd->proc_xpd_chipregs) {
-		XPD_ERR(xpd, "Failed to create proc file '%s'\n", CHIP_REGISTERS);
-		goto err;
-	}
-	SET_PROC_DIRENTRY_OWNER(xpd->proc_xpd_chipregs);
-	xpd->proc_xpd_chipregs->write_proc = proc_xpd_register_write;
-	xpd->proc_xpd_chipregs->read_proc = proc_xpd_register_read;
-	xpd->proc_xpd_chipregs->data = xpd;
-#endif
-	return 0;
-err:
-	chip_proc_remove(xbus, xpd);
-	return -EINVAL;
-}
-#endif
 
 /*---------------- GLOBAL Protocol Commands -------------------------------*/
 

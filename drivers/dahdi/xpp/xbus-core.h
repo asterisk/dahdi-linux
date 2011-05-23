@@ -135,11 +135,6 @@ struct xbus_workqueue {
 	int			num_units;
 	int			num_units_initialized;
 	wait_queue_head_t	wait_for_xpd_initialization;
-#ifdef	CONFIG_PROC_FS
-#ifdef	OLD_PROC
-	struct proc_dir_entry	*proc_xbus_waitfor_xpds;
-#endif
-#endif
 	spinlock_t		worker_lock;
 	struct semaphore	running_initialization;
 };

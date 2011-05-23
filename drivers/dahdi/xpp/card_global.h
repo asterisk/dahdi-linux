@@ -100,10 +100,6 @@ DEF_RPACKET_DATA(GLOBAL, ERROR_CODE,
 /* 0x19 */ DECLARE_CMD(GLOBAL, SYNC_SOURCE, enum sync_mode mode, int drift);
 /* 0x23 */ DECLARE_CMD(GLOBAL, RESET_SYNC_COUNTERS);
 
-#ifdef	OLD_PROC
-void chip_proc_remove(xbus_t *xbus, xpd_t *xpd);
-int chip_proc_create(xbus_t *xbus, xpd_t *xpd);
-#endif
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	bool writing, byte regnum, bool do_subreg, byte subreg,
 	byte data_low, bool do_datah, byte data_high, bool should_reply);

@@ -50,10 +50,6 @@ static const char rcsid[] = "$Id$";
 #ifdef CONFIG_PROC_FS
 struct proc_dir_entry *xpp_proc_toplevel = NULL;
 #define	PROC_DIR		"xpp"
-#ifdef	OLD_PROC
-#define	PROC_XPD_ZTREGISTER	"dahdi_registration"
-#define	PROC_XPD_BLINK		"blink"
-#endif
 #define	PROC_XPD_SUMMARY	"summary"
 #endif
 
@@ -114,12 +110,6 @@ int total_registered_spans(void)
 
 #ifdef	CONFIG_PROC_FS
 static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data);
-#ifdef	OLD_PROC
-static int proc_xpd_ztregister_read(char *page, char **start, off_t off, int count, int *eof, void *data);
-static int proc_xpd_ztregister_write(struct file *file, const char __user *buffer, unsigned long count, void *data);
-static int proc_xpd_blink_read(char *page, char **start, off_t off, int count, int *eof, void *data);
-static int proc_xpd_blink_write(struct file *file, const char __user *buffer, unsigned long count, void *data);
-#endif
 #endif
 
 /*------------------------- XPD Management -------------------------*/
@@ -162,26 +152,11 @@ static void xpd_proc_remove(xbus_t *xbus, xpd_t *xpd)
 {
 #ifdef CONFIG_PROC_FS
 	if(xpd->proc_xpd_dir) {
-#ifdef	OLD_PROC
-		chip_proc_remove(xbus, xpd);
-#endif
 		if(xpd->proc_xpd_summary) {
 			XPD_DBG(PROC, xpd, "Removing proc '%s'\n", PROC_XPD_SUMMARY);
 			remove_proc_entry(PROC_XPD_SUMMARY, xpd->proc_xpd_dir);
 			xpd->proc_xpd_summary = NULL;
 		}
-#ifdef	OLD_PROC
-		if(xpd->proc_xpd_ztregister) {
-			XPD_DBG(PROC, xpd, "Removing proc '%s'\n", PROC_XPD_ZTREGISTER);
-			remove_proc_entry(PROC_XPD_ZTREGISTER, xpd->proc_xpd_dir);
-			xpd->proc_xpd_ztregister = NULL;
-		}
-		if(xpd->proc_xpd_blink) {
-			XPD_DBG(PROC, xpd, "Removing proc '%s'\n", PROC_XPD_BLINK);
-			remove_proc_entry(PROC_XPD_BLINK, xpd->proc_xpd_dir);
-			xpd->proc_xpd_blink = NULL;
-		}
-#endif
 		XPD_DBG(PROC, xpd, "Removing %s/%s proc directory\n",
 				xbus->busname, xpd->xpdname);
 		remove_proc_entry(xpd->xpdname, xbus->proc_xbus_dir);
@@ -206,28 +181,6 @@ static int xpd_proc_create(xbus_t *xbus, xpd_t *xpd)
 		goto err;
 	}
 	SET_PROC_DIRENTRY_OWNER(xpd->proc_xpd_summary);
-#ifdef	OLD_PROC
-	xpd->proc_xpd_ztregister = create_proc_entry(PROC_XPD_ZTREGISTER, 0644, xpd->proc_xpd_dir);
-	if (!xpd->proc_xpd_ztregister) {
-		XPD_ERR(xpd, "Failed to create proc file '%s'\n", PROC_XPD_ZTREGISTER);
-		goto err;
-	}
-	SET_PROC_DIRENTRY_OWNER(xpd->proc_xpd_ztregister);
-	xpd->proc_xpd_ztregister->data = xpd;
-	xpd->proc_xpd_ztregister->read_proc = proc_xpd_ztregister_read;
-	xpd->proc_xpd_ztregister->write_proc = proc_xpd_ztregister_write;
-	xpd->proc_xpd_blink = create_proc_entry(PROC_XPD_BLINK, 0644, xpd->proc_xpd_dir);
-	if (!xpd->proc_xpd_blink) {
-		XPD_ERR(xpd, "Failed to create proc file '%s'\n", PROC_XPD_BLINK);
-		goto err;
-	}
-	SET_PROC_DIRENTRY_OWNER(xpd->proc_xpd_blink);
-	xpd->proc_xpd_blink->data = xpd;
-	xpd->proc_xpd_blink->read_proc = proc_xpd_blink_read;
-	xpd->proc_xpd_blink->write_proc = proc_xpd_blink_write;
-	if(chip_proc_create(xbus, xpd) < 0)
-		goto err;
-#endif
 #endif
 	return 0;
 #ifdef	CONFIG_PROC_FS
@@ -755,112 +708,6 @@ void hookstate_changed(xpd_t *xpd, int pos, bool to_offhook)
 	}
 	notify_rxsig(xpd, pos, (to_offhook) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
 }
-
-#ifdef CONFIG_PROC_FS
-#ifdef	OLD_PROC
-static int proc_xpd_ztregister_read(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int		len = 0;
-	unsigned long	flags;
-	xpd_t		*xpd = data;
-
-	BUG_ON(!xpd);
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	spin_lock_irqsave(&xpd->lock, flags);
-	len += sprintf(page + len, "%d\n", SPAN_REGISTERED(xpd) ? xpd->span.spanno : 0);
-	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-
-static int proc_xpd_ztregister_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
-{
-	xpd_t		*xpd = data;
-	char		buf[MAX_PROC_WRITE];
-	int		dahdi_reg;
-	int		ret;
-
-	BUG_ON(!xpd);
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] wrote to /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	if(count >= MAX_PROC_WRITE)
-		return -EINVAL;
-	if(copy_from_user(buf, buffer, count))
-		return -EFAULT;
-	buf[count] = '\0';
-	ret = sscanf(buf, "%d", &dahdi_reg);
-	if(ret != 1)
-		return -EINVAL;
-	if(!XBUS_IS(xpd->xbus, READY))
-		return -ENODEV;
-	XPD_DBG(GENERAL, xpd, "%s\n", (dahdi_reg) ? "register" : "unregister");
-	if(dahdi_reg)
-		ret = dahdi_register_xpd(xpd);
-	else
-		ret = dahdi_unregister_xpd(xpd);
-	return (ret < 0) ? ret : count;
-}
-
-static int proc_xpd_blink_read(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int		len = 0;
-	unsigned long	flags;
-	xpd_t		*xpd = data;
-
-	BUG_ON(!xpd);
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	spin_lock_irqsave(&xpd->lock, flags);
-	len += sprintf(page + len, "0x%lX\n", xpd->blink_mode);
-	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-
-static int proc_xpd_blink_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
-{
-	xpd_t		*xpd = data;
-	char		buf[MAX_PROC_WRITE];
-	char		*endp;
-	unsigned long	blink;
-
-
-	BUG_ON(!xpd);
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] wrote to /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	if(count >= MAX_PROC_WRITE)
-		return -EINVAL;
-	if(copy_from_user(buf, buffer, count))
-		return -EFAULT;
-	buf[count] = '\0';
-	if(count > 0 && buf[count-1] == '\n')	/* chomp */
-		buf[count-1] = '\0';
-	blink = simple_strtoul(buf, &endp, 0);
-	if(*endp != '\0' || blink > 0xFFFF)
-		return -EINVAL;
-	XPD_DBG(GENERAL, xpd, "BLINK channels: 0x%lX\n", blink);
-	xpd->blink_mode = blink;
-	return count;
-}
-#endif
-
-#endif
-
 
 #define	XPP_MAX_LEN	512
 

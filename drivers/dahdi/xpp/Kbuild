@@ -3,7 +3,7 @@ EXTRA_CFLAGS	=	$(XPP_LOCAL_CFLAGS)	\
 			-DPOLL_DIGITAL_INPUTS	\
 			-DDEBUG_PCMTX		\
 			-DPROTOCOL_DEBUG	\
-			-g # -DOLD_PROC
+			-g
 			#
 
 WITH_BRISTUFF	:= $(shell grep -c '^[[:space:]]*\#[[:space:]]*define[[:space:]]\+CONFIG_DAHDI_BRI_DCHANS\>' $(src)/../../../include/dahdi/dahdi_config.h)

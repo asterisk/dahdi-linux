@@ -1219,73 +1219,6 @@ int fill_sync_string(char *buf, size_t count)
 	return len;
 }
 
-#ifdef	OLD_PROC
-#ifdef	CONFIG_PROC_FS
-static int proc_sync_read(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int		len = 0;
-	struct timeval	now;
-	unsigned int	counter = atomic_read(&xpp_tick_counter);
-	unsigned long	usec;
-
-	do_gettimeofday(&now);
-	NOTICE("%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	len += sprintf(page + len, "# To modify sync source write into this file:\n");
-	len += sprintf(page + len, "#     DAHDI       - Another dahdi device provide sync\n");
-	len += sprintf(page + len, "#     SYNC=nn     - XBUS-nn provide sync\n");
-	len += sprintf(page + len, "#     QUERY=nn    - Query XBUS-nn for sync information (DEBUG)\n");
-	len += fill_sync_string(page + len, PAGE_SIZE - len);
-#ifdef	DAHDI_SYNC_TICK
-	if(force_dahdi_sync) {
-		len += sprintf(page + len,
-			"Dahdi Reference Sync (%d registered spans):\n",
-			total_registered_spans());
-		len += sprintf(page + len, "\tdahdi_tick: #%d\n", dahdi_tick_count);
-		len += sprintf(page + len, "\ttick - dahdi_tick = %d\n",
-				counter - dahdi_tick_count);
-	} else {
-		len += sprintf(page + len,
-				"Dahdi Reference Sync Not activated\n");
-	}
-#endif
-	usec = usec_diff(&now, &global_ticks_series.last_sample.tv);
-	len += sprintf(page + len, "\ntick: #%d\n", counter);
-	len += sprintf(page + len,
-		"tick duration: %d usec (measured %ld.%ld msec ago)\n",
-		global_ticks_series.tick_period,
-		usec / 1000, usec % 1000);
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-
-static int proc_sync_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
-{
-	char		buf[MAX_PROC_WRITE];
-
-	// DBG(SYNC, "%s: count=%ld\n", __FUNCTION__, count);
-	NOTICE("%s: DEPRECATED: %s[%d] write to /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	if(count >= MAX_PROC_WRITE)
-		return -EINVAL;
-	if(copy_from_user(buf, buffer, count))
-		return -EFAULT;
-	buf[count] = '\0';
-	return exec_sync_command(buf, count);
-}
-
-static struct proc_dir_entry	*top;
-
-#endif
-#endif	/* OLD_PROC */
-
 int xbus_pcm_init(void *toplevel)
 {
 	int			ret = 0;
@@ -1301,34 +1234,11 @@ int xbus_pcm_init(void *toplevel)
 #endif
 	xpp_ticker_init(&global_ticks_series);
 	xpp_ticker_init(&dahdi_ticker);
-#ifdef	OLD_PROC
-#ifdef	CONFIG_PROC_FS
-	{
-		struct proc_dir_entry	*ent;
-
-		top = toplevel;
-		ent = create_proc_entry(PROC_SYNC, 0644, top);
-		if(ent) {
-			ent->read_proc = proc_sync_read;
-			ent->write_proc = proc_sync_write;
-			ent->data = NULL;
-		} else {
-			ret = -EFAULT;
-		}
-	}
-#endif
-#endif	/* OLD_PROC */
 	return ret;
 }
 
 void xbus_pcm_shutdown(void)
 {
-#ifdef	OLD_PROC
-#ifdef CONFIG_PROC_FS
-	DBG(GENERAL, "Removing '%s' from proc\n", PROC_SYNC);
-	remove_proc_entry(PROC_SYNC, top);
-#endif
-#endif	/* OLD_PROC */
 }
 
 

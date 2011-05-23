@@ -216,11 +216,6 @@ struct xpd {
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry	*proc_xpd_dir;
 	struct proc_dir_entry	*proc_xpd_summary;
-#ifdef	OLD_PROC
-	struct proc_dir_entry	*proc_xpd_ztregister;
-	struct proc_dir_entry	*proc_xpd_blink;
-	struct proc_dir_entry	*proc_xpd_chipregs;
-#endif
 #endif
 
 	int		counters[XPD_COUNTER_MAX];

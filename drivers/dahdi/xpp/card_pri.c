@@ -75,10 +75,6 @@ static bool is_sigtype_dchan(int sigtype)
 
 static bool pri_packet_is_valid(xpacket_t *pack);
 static void pri_packet_dump(const char *msg, xpacket_t *pack);
-#ifdef	OLD_PROC
-static int proc_pri_info_read(char *page, char **start, off_t off, int count, int *eof, void *data);
-static int proc_pri_info_write(struct file *file, const char __user *buffer, unsigned long count, void *data);
-#endif
 static int pri_startup(struct dahdi_span *span);
 static int pri_shutdown(struct dahdi_span *span);
 static int pri_rbsbits(struct dahdi_chan *chan, int bits);
@@ -86,9 +82,6 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig);
 static void send_idlebits(xpd_t *xpd, bool saveold);
 
 #define	PROC_REGISTER_FNAME	"slics"
-#ifdef	OLD_PROC
-#define	PROC_PRI_INFO_FNAME	"pri_info"
-#endif
 
 enum pri_protocol {
 	PRI_PROTO_0  	= 0,
@@ -314,9 +307,6 @@ struct pri_leds {
 
 struct PRI_priv_data {
 	bool				clock_source;
-#ifdef	OLD_PROC
-	struct proc_dir_entry		*pri_info;
-#endif
 	enum pri_protocol		pri_protocol;
 	xpp_line_t			rbslines;
 	int				deflaw;
@@ -493,50 +483,6 @@ static int write_cas_reg(xpd_t *xpd, int rsnum, byte val)
 	}
 	return 0;
 }
-
-#ifdef	OLD_PROC
-static void pri_proc_remove(xbus_t *xbus, xpd_t *xpd)
-{
-	struct PRI_priv_data	*priv;
-
-	BUG_ON(!xpd);
-	priv = xpd->priv;
-	XPD_DBG(PROC, xpd, "\n");
-#ifdef	CONFIG_PROC_FS
-	if(priv->pri_info) {
-		XPD_DBG(PROC, xpd, "Removing xpd PRI_INFO file\n");
-		remove_proc_entry(PROC_PRI_INFO_FNAME, xpd->proc_xpd_dir);
-	}
-#endif
-}
-#endif
-
-#ifdef	OLD_PROC
-static int pri_proc_create(xbus_t *xbus, xpd_t *xpd)
-{
-	struct PRI_priv_data	*priv;
-
-	BUG_ON(!xpd);
-	priv = xpd->priv;
-	XPD_DBG(PROC, xpd, "\n");
-#ifdef	CONFIG_PROC_FS
-	XPD_DBG(PROC, xpd, "Creating PRI_INFO file\n");
-	priv->pri_info = create_proc_entry(PROC_PRI_INFO_FNAME, 0644, xpd->proc_xpd_dir);
-	if(!priv->pri_info) {
-		XPD_ERR(xpd, "Failed to create proc '%s'\n", PROC_PRI_INFO_FNAME);
-		goto err;
-	}
-	SET_PROC_DIRENTRY_OWNER(priv->pri_info);
-	priv->pri_info->write_proc = proc_pri_info_write;
-	priv->pri_info->read_proc = proc_pri_info_read;
-	priv->pri_info->data = xpd;
-#endif
-	return 0;
-err:
-	pri_proc_remove(xbus, xpd);
-	return -EINVAL;
-}
-#endif
 
 static bool valid_pri_modes(const xpd_t *xpd)
 {
@@ -1189,12 +1135,6 @@ static xpd_t *PRI_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	priv->pri_protocol = PRI_PROTO_0;		/* Default, changes in set_pri_proto() */
 	priv->deflaw = DAHDI_LAW_DEFAULT;		/* Default, changes in set_pri_proto() */
 	xpd->type_name = type_name(priv->pri_protocol);
-#ifdef	OLD_PROC
-	if(pri_proc_create(xbus, xpd) < 0) {
-		xpd_free(xpd);
-		return NULL;
-	}
-#endif
 	xbus->sync_mode_default = SYNC_MODE_AB;
 	return xpd;
 }
@@ -1241,9 +1181,6 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 	priv->initialized = 1;
 	return 0;
 err:
-#ifdef	OLD_PROC
-	pri_proc_remove(xbus, xpd);
-#endif
 	XPD_ERR(xpd, "Failed initializing registers (%d)\n", ret);
 	return ret;
 }
@@ -1255,9 +1192,6 @@ static int PRI_card_remove(xbus_t *xbus, xpd_t *xpd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
-#ifdef	OLD_PROC
-	pri_proc_remove(xbus, xpd);
-#endif
 	return 0;
 }
 
@@ -2218,154 +2152,6 @@ static void pri_packet_dump(const char *msg, xpacket_t *pack)
 	DBG(GENERAL, "%s\n", msg);
 }
 /*------------------------- REGISTER Handling --------------------------*/
-#ifdef	OLD_PROC
-static int proc_pri_info_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
-{
-	xpd_t			*xpd = data;
-	struct PRI_priv_data	*priv;
-	char			buf[MAX_PROC_WRITE];
-	char			*p;
-	char			*tok;
-	int			ret = 0;
-	bool			got_localloop = 0;
-	bool			got_nolocalloop = 0;
-	bool			got_e1 = 0;
-	bool			got_t1 = 0;
-	bool			got_j1 = 0;
-
-	if(!xpd)
-		return -ENODEV;
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] write to /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	priv = xpd->priv;
-	if(count >= MAX_PROC_WRITE) {	/* leave room for null */
-		XPD_ERR(xpd, "write too long (%ld)\n", count);
-		return -E2BIG;
-	}
-	if(copy_from_user(buf, buffer, count)) {
-		XPD_ERR(xpd, "Failed reading user data\n");
-		return -EFAULT;
-	}
-	buf[count] = '\0';
-	XPD_DBG(PROC, xpd, "PRI-SETUP: got %s\n", buf);
-	/*
-	 * First parse. Act only of *everything* is good.
-	 */
-	p = buf;
-	while((tok = strsep(&p, " \t\v\n")) != NULL) {
-		if(*tok == '\0')
-			continue;
-		XPD_DBG(PROC, xpd, "Got token='%s'\n", tok);
-		if(strnicmp(tok, "LOCALLOOP", 8) == 0)
-			got_localloop = 1;
-		else if(strnicmp(tok, "NOLOCALLOOP", 8) == 0)
-			got_nolocalloop = 1;
-		else if(strnicmp(tok, "E1", 2) == 0)
-			got_e1 = 1;
-		else if(strnicmp(tok, "T1", 2) == 0)
-			got_t1 = 1;
-		else if(strnicmp(tok, "J1", 2) == 0) {
-			got_j1 = 1;
-		} else {
-			XPD_NOTICE(xpd, "PRI-SETUP: unknown keyword: '%s'\n", tok);
-			return -EINVAL;
-		}
-	}
-	if(got_e1)
-		ret = set_pri_proto(xpd, PRI_PROTO_E1);
-	else if(got_t1)
-		ret = set_pri_proto(xpd, PRI_PROTO_T1);
-	else if(got_j1)
-		ret = set_pri_proto(xpd, PRI_PROTO_J1);
-	if(priv->pri_protocol == PRI_PROTO_0) {
-		XPD_ERR(xpd,
-			"Must set PRI protocol (E1/T1/J1) before setting other parameters\n");
-		return -EINVAL;
-	}
-	if(got_localloop)
-		ret = set_localloop(xpd, 1);
-	if(got_nolocalloop)
-		ret = set_localloop(xpd, 0);
-	return (ret) ? ret : count;
-}
-
-
-static int proc_pri_info_read(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int			len = 0;
-	unsigned long		flags;
-	xpd_t			*xpd = data;
-	struct PRI_priv_data	*priv;
-	int			i;
-
-	DBG(PROC, "\n");
-	if(!xpd)
-		return -ENODEV;
-	XPD_NOTICE(xpd, "%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-		__FUNCTION__, current->comm, current->tgid);
-	spin_lock_irqsave(&xpd->lock, flags);
-	priv = xpd->priv;
-	BUG_ON(!priv);
-	len += sprintf(page + len, "PRI: %s %s%s (deflaw=%d, dchan=%d)\n",
-		(priv->clock_source) ? "MASTER" : "SLAVE",
-		pri_protocol_name(priv->pri_protocol),
-		(priv->local_loopback) ? " LOCALLOOP" : "",
-		priv->deflaw, priv->dchan_num);
-	len += sprintf(page + len, "%05d Layer1: ", priv->layer1_replies);
-	if(priv->poll_noreplies > 1)
-		len += sprintf(page + len, "No Replies [%d]\n",
-			priv->poll_noreplies);
-	else {
-		len += sprintf(page + len, "%s\n",
-				((priv->layer1_up) ?  "UP" : "DOWN"));
-		len += sprintf(page + len,
-				"Framer Status: FRS0=0x%02X, FRS1=0x%02X ALARMS:",
-				priv->reg_frs0, priv->reg_frs1);
-		if(priv->reg_frs0 & REG_FRS0_LOS)
-			len += sprintf(page + len, " RED");
-		if(priv->reg_frs0 & REG_FRS0_AIS)
-			len += sprintf(page + len, " BLUE");
-		if(priv->reg_frs0 & REG_FRS0_RRA)
-			len += sprintf(page + len, " YELLOW");
-		len += sprintf(page + len, "\n");
-	}
-	if(priv->is_cas) {
-		len += sprintf(page + len,
-			"CAS: replies=%d\n", priv->cas_replies);
-		len += sprintf(page + len, "   CAS-TS: ");
-		for(i = 0; i < NUM_CAS_RS_E; i++) {
-			len += sprintf(page + len, " %02X", priv->cas_ts_e[i]);
-		}
-		len += sprintf(page + len, "\n");
-		len += sprintf(page + len, "   CAS-RS: ");
-		for(i = 0; i < NUM_CAS_RS_E; i++) {
-			len += sprintf(page + len, " %02X", priv->cas_rs_e[i]);
-		}
-		len += sprintf(page + len, "\n");
-	}
-	len += sprintf(page + len, "D-Channel: TX=[%5d] (0x%02X)   RX=[%5d] (0x%02X) ",
-			priv->dchan_tx_counter, priv->dchan_tx_sample,
-			priv->dchan_rx_counter, priv->dchan_rx_sample);
-	if(priv->dchan_alive) {
-		len += sprintf(page + len, "(alive %d K-ticks)\n",
-			priv->dchan_alive_ticks/1000);
-	} else {
-		len += sprintf(page + len, "(dead)\n");
-	}
-	for(i = 0; i < NUM_LEDS; i++)
-		len += sprintf(page + len, "LED #%d: %d\n", i, priv->ledstate[i]);
-	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-}
-#endif
 
 /*------------------------- sysfs stuff --------------------------------*/
 static DEVICE_ATTR_READER(pri_protocol_show, dev, buf)

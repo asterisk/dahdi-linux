@@ -51,9 +51,6 @@ static const char rcsid[] = "$Id$";
 #define	INITIALIZATION_TIMEOUT	(90*HZ)		/* in jiffies */
 #define	PROC_XBUSES		"xbuses"
 #define	PROC_XBUS_SUMMARY	"summary"
-#ifdef	OLD_PROC
-#define	PROC_XBUS_WAITFOR_XPDS	"waitfor_xpds"
-#endif
 
 #ifdef	PROTOCOL_DEBUG
 #ifdef	CONFIG_PROC_FS
@@ -70,9 +67,6 @@ static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
 
 #ifdef	CONFIG_PROC_FS
 static int xbus_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data);
-#ifdef	OLD_PROC
-static int xbus_read_waitfor_xpds(char *page, char **start, off_t off, int count, int *eof, void *data);
-#endif
 #endif
 static void transport_init(xbus_t *xbus, struct xbus_ops *ops, ushort max_send_size, struct device *transport_device, void *priv);
 static void transport_destroy(xbus_t *xbus);
@@ -1131,16 +1125,6 @@ static void worker_destroy(xbus_t *xbus)
 		worker->wq = NULL;
 		XBUS_DBG(DEVICES, xbus, "destroying workqueue -- done\n");
 	}
-#ifdef CONFIG_PROC_FS
-#ifdef	OLD_PROC
-	if (xbus->proc_xbus_dir && worker->proc_xbus_waitfor_xpds) {
-		XBUS_DBG(PROC, xbus, "Removing proc '%s'\n",
-				PROC_XBUS_WAITFOR_XPDS);
-		remove_proc_entry(PROC_XBUS_WAITFOR_XPDS, xbus->proc_xbus_dir);
-		worker->proc_xbus_waitfor_xpds = NULL;
-	}
-#endif
-#endif
 	XBUS_DBG(DEVICES, xbus, "detach worker\n");
 	put_xbus(__func__, xbus);	/* got from worker_run() */
 }
@@ -1176,22 +1160,6 @@ static int worker_run(xbus_t *xbus)
 	BUG_ON(worker->wq);	/* Hmmm... nested workers? */
 	XBUS_DBG(DEVICES, xbus, "\n");
 	/* poll related variables */
-#ifdef CONFIG_PROC_FS
-#ifdef	OLD_PROC
-	if(xbus->proc_xbus_dir) {
-		worker->proc_xbus_waitfor_xpds = create_proc_read_entry(
-				PROC_XBUS_WAITFOR_XPDS, 0444,
-				xbus->proc_xbus_dir,
-				xbus_read_waitfor_xpds,
-				xbus);
-		if (!worker->proc_xbus_waitfor_xpds) {
-			XBUS_ERR(xbus, "Failed to create proc file '%s'\n", PROC_XBUS_WAITFOR_XPDS);
-			goto err;
-		}
-		SET_PROC_DIRENTRY_OWNER(worker->proc_xbus_waitfor_xpds);
-	}
-#endif
-#endif
 	worker->wq = create_singlethread_workqueue(xbus->busname);
 	if(!worker->wq) {
 		XBUS_ERR(xbus, "Failed to create worker workqueue.\n");
@@ -1729,35 +1697,6 @@ out:
 	return len;
 
 }
-
-#ifdef	OLD_PROC
-static int xbus_read_waitfor_xpds(char *page, char **start, off_t off, int count, int *eof, void *data)
-{
-	int			len = 0;
-	int			i = (int)((unsigned long)data);
-	xbus_t			*xbus;
-
-	xbus = get_xbus(__func__, i);
-	if (xbus != NULL) {
-		XBUS_NOTICE(xbus, "%s: DEPRECATED: %s[%d] read from /proc interface instead of /sys\n",
-			__func__, current->comm, current->tgid);
-		/* first handle special cases */
-		if (count && !off)
-			len = waitfor_xpds(xbus, page);
-		put_xbus(__func__, xbus);
-	}
-	if (len <= off+count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-
-}
-#endif
 
 #ifdef	PROTOCOL_DEBUG
 static int proc_xbus_command_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
