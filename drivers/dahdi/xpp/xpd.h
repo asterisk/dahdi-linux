@@ -37,14 +37,6 @@
 #include <asm/semaphore.h>
 #endif
 #include <linux/moduleparam.h>
-#ifdef	XPP_DEBUGFS
-#ifndef	CONFIG_DEBUG_FS
-#warning kernel does not include CONFIG_DEBUG_FS, canceling XPP_DEBUGFS support
-#undef	XPP_DEBUGFS
-#else
-#include <linux/debugfs.h>
-#endif
-#endif
 #endif	/* __KERNEL__ */
 
 #include <dahdi/kernel.h>

@@ -38,9 +38,6 @@
 #include "xpd.h"
 #include "xpp_dahdi.h"
 #include "xbus-core.h"
-#ifdef	XPP_DEBUGFS
-#include "xpp_log.h"
-#endif
 #include "dahdi_debug.h"
 
 static const char rcsid[] = "$Id$";

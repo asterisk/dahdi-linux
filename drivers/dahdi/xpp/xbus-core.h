@@ -34,9 +34,6 @@
 
 /* forward declarations */
 struct xbus_workqueue;
-#ifdef XPP_DEBUGFS
-struct debugfs_data;
-#endif
 
 #ifdef	__KERNEL__
 
@@ -235,11 +232,6 @@ struct xbus {
 
 	atomic_t		num_xpds;
 
-#ifdef	XPP_DEBUGFS
-	struct dentry		*debugfs_dir;
-	struct dentry		*debugfs_file;
-	struct debugfs_data	*debugfs_data;
-#endif
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry	*proc_xbus_dir;
 	struct proc_dir_entry	*proc_xbus_summary;
@@ -278,11 +270,6 @@ void xframe_init(xbus_t *xbus, xframe_t *xframe, void *buf, size_t maxsize, void
 
 int xbus_core_init(void);		/* Initializer */
 void xbus_core_shutdown(void);		/* Terminator */
-
-#ifdef XPP_DEBUGFS
-/* Debugfs handling */
-int xbus_log(xbus_t *xbus, xpd_t *xpd, int direction, const void *buf, unsigned long len);
-#endif
 
 /* Frame handling */
 void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, int debug);

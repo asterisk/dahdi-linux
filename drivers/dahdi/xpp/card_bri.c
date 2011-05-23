@@ -563,9 +563,6 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	xbus = xpd->xbus;
-#ifdef XPP_DEBUGFS
-	xbus_log(xbus, xpd, 0, regcmd, sizeof(reg_cmd_t));		/* 0 = RX */
-#endif
 	dchan = XPD_CHAN(xpd, 2);
 	if(!IS_OFFHOOK(xpd, 2)) {	/* D-chan is used? */
 		static int rate_limit;
@@ -640,9 +637,6 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	xbus = xpd->xbus;
-#ifdef XPP_DEBUGFS
-	xbus_log(xbus, xpd, 0, regcmd, sizeof(reg_cmd_t));		/* 0 = RX */
-#endif
 	dchan = XPD_CHAN(xpd, 2);
 	if(!IS_OFFHOOK(xpd, 2)) {	/* D-chan is used? */
 		static int rate_limit;

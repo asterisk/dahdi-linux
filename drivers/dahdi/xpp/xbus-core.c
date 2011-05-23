@@ -40,9 +40,6 @@
 #include "xpp_dahdi.h"
 #include "xbus-core.h"
 #include "card_global.h"
-#ifdef	XPP_DEBUGFS
-#include "xpp_log.h"
-#endif
 #include "dahdi_debug.h"
 
 static const char rcsid[] = "$Id$";
@@ -212,155 +209,6 @@ int refcount_xbus(xbus_t *xbus)
 
 	return atomic_read(&kref->refcount);
 }
-
-/*------------------------- Debugfs Handling -----------------------*/
-#ifdef	XPP_DEBUGFS
-
-#define DEBUGFS_BUFSIZ		4096	/* must be power of two, otherwise POS_IN_BUF will have to use '%' instead of '&' */
-#define POS_IN_BUF(x)		((x) & (DEBUGFS_BUFSIZ-1))
-
-struct debugfs_data {
-	spinlock_t lock;
-	xbus_t *xbus;
-	char buffer[DEBUGFS_BUFSIZ];
-	unsigned long head, tail;	/* reading and writing are performed at position (head % BUF_SIZ) and (tail % BUF_SIZ) */
-	wait_queue_head_t queue;
-};
-
-static unsigned long add_to_buf(struct debugfs_data *d, unsigned long tail, const void *buf, unsigned long len)
-{
-	unsigned long count = min(len, (unsigned long)(DEBUGFS_BUFSIZ - POS_IN_BUF(tail)));
-	memcpy(d->buffer + POS_IN_BUF(tail), buf, count);		/* fill starting at position tail */
-	memcpy(d->buffer, (u_char *)buf + count, len - count);		/* fill leftover */
-	return len;
-}
-
-int xbus_log(xbus_t *xbus, xpd_t *xpd, int direction, const void *buf, unsigned long len)
-{
-	unsigned long tail;
-	unsigned long flags;
-	struct debugfs_data *d;
-	struct log_header header;
-	int ret = 0;
-	
-	BUG_ON(!xbus);
-	BUG_ON(!xpd);
-	BUG_ON(sizeof(struct log_header) + len > DEBUGFS_BUFSIZ);
-	d = xbus->debugfs_data;
-	if (!d)			/* no consumer process */
-		return ret;
-	spin_lock_irqsave(&d->lock, flags);
-	if (sizeof(struct log_header) + len > DEBUGFS_BUFSIZ - (d->tail - d->head)) {
-		ret = -ENOSPC;
-		XPD_DBG(GENERAL, xpd, "Dropping debugfs data of len %lu, free space is %lu\n", sizeof(struct log_header) + len,
-				DEBUGFS_BUFSIZ - (d->tail - d->head));
-		goto out;
-	}
-	header.len = sizeof(struct log_header) + len;
-	header.time = jiffies_to_msecs(jiffies);
-	header.xpd_num = xpd->xbus_idx;
-	header.direction = (char)direction;
-	tail = d->tail;
-	tail += add_to_buf(d, tail, &header, sizeof(header));
-	tail += add_to_buf(d, tail, buf, len);
-	d->tail = tail;
-	wake_up_interruptible(&d->queue);
-out:
-	spin_unlock_irqrestore(&d->lock, flags);
-	return ret;
-}
-
-static struct dentry	*debugfs_root = NULL;
-static int debugfs_open(struct inode *inode, struct file *file);
-static ssize_t debugfs_read(struct file *file, char __user *buf, size_t nbytes, loff_t *ppos);
-static int debugfs_release(struct inode *inode, struct file *file);
-
-static struct file_operations debugfs_operations = {
-	.open		= debugfs_open,
-	.read		= debugfs_read,
-	.release	= debugfs_release,
-};
-
-/*
- * As part of the "inode diet" the private data member of struct inode
- * has changed in 2.6.19. However, Fedore Core 6 adopted this change
- * a bit earlier (2.6.18). If you use such a kernel, Change the 
- * following test from 2,6,19 to 2,6,18.
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-#define	I_PRIVATE(inode)	((inode)->u.generic_ip)
-#else
-#define	I_PRIVATE(inode)	((inode)->i_private)
-#endif
-
-static int debugfs_open(struct inode *inode, struct file *file)
-{
-	xbus_t	*xbus = I_PRIVATE(inode);
-	struct debugfs_data *d;
-	struct log_global_header gheader;
-
-	BUG_ON(!xbus);
-	XBUS_DBG(GENERAL, xbus, "\n");
-	if (xbus->debugfs_data)
-		return -EBUSY;
-	d = KZALLOC(sizeof(struct debugfs_data), GFP_KERNEL);
-	if (!d)
-		return -ENOMEM;
-	try_module_get(THIS_MODULE);
-	spin_lock_init(&d->lock);
-	d->xbus = xbus;
-	d->head = d->tail = 0;
-	init_waitqueue_head(&d->queue);
-	file->private_data = d;
-
-	gheader.magic = XPP_LOG_MAGIC;
-	gheader.version = 1;
-	d->tail += add_to_buf(d, d->tail, &gheader, sizeof(gheader));
-
-	xbus->debugfs_data = d;
-	return 0;
-}
-
-static ssize_t debugfs_read(struct file *file, char __user *buf, size_t nbytes, loff_t *ppos)
-{
-	struct debugfs_data *d = file->private_data;
-	size_t len;
-
-	BUG_ON(!d);
-	BUG_ON(!d->xbus);
-	XBUS_DBG(GENERAL, d->xbus, "\n");
-	while (d->head == d->tail) {
-		if (wait_event_interruptible(d->queue, d->head != d->tail))
-			return -EAGAIN;
-	}
-	len = min(nbytes, (size_t)(d->tail - d->head));
-	if (copy_to_user(buf, d->buffer + POS_IN_BUF(d->head), len))
-		return -EFAULT;
-	d->head += len;
-	/* optimization to avoid future buffer wraparound */
-	if (d->head == d->tail) {
-		unsigned long flags;
-		spin_lock_irqsave(&d->lock, flags);
-		if (d->head == d->tail)
-			d->head = d->tail = 0;
-		spin_unlock_irqrestore(&d->lock, flags);
-	}
-	return len;
-}
-
-static int debugfs_release(struct inode *inode, struct file *file)
-{
-	struct debugfs_data *d = file->private_data;
-
-	BUG_ON(!d);
-	BUG_ON(!d->xbus);
-	XBUS_DBG(GENERAL, d->xbus, "\n");
-	d->xbus->debugfs_data = NULL;
-	KZFREE(d);
-	module_put(THIS_MODULE);
-	return 0;
-}
-#endif
 
 /*------------------------- Frame  Handling ------------------------*/
 
@@ -1381,16 +1229,6 @@ void xbus_free(xbus_t *xbus)
 	BUG_ON(!xbuses_array[num].xbus);
 	BUG_ON(xbus != xbuses_array[num].xbus);
 	spin_unlock_irqrestore(&xbuses_lock, flags);
-#ifdef	XPP_DEBUGFS
-	if(xbus->debugfs_dir) {
-		if(xbus->debugfs_file) {
-			XBUS_DBG(GENERAL, xbus, "Removing debugfs file\n");
-			debugfs_remove(xbus->debugfs_file);
-		}
-		XBUS_DBG(GENERAL, xbus, "Removing debugfs directory\n");
-		debugfs_remove(xbus->debugfs_dir);
-	}
-#endif
 #ifdef CONFIG_PROC_FS
 	if(xbus->proc_xbus_dir) {
 		if(xbus->proc_xbus_summary) {
@@ -1485,18 +1323,6 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size, struct device *tran
 	xbus->proc_xbus_command->data = xbus;
 	SET_PROC_DIRENTRY_OWNER(xbus->proc_xbus_command);
 #endif
-#endif
-#ifdef	XPP_DEBUGFS
-	xbus->debugfs_dir = debugfs_create_dir(xbus->busname, debugfs_root);
-	if(!xbus->debugfs_dir) {
-		XBUS_ERR(xbus, "Failed to create debugfs directory\n");
-		goto nobus;
-	}
-	xbus->debugfs_file = debugfs_create_file("dchannel", S_IFREG|S_IRUGO|S_IWUSR, xbus->debugfs_dir, xbus, &debugfs_operations);
-	if(!xbus->debugfs_file) {
-		XBUS_ERR(xbus, "Failed to create dchannel file\n");
-		goto nobus;
-	}
 #endif
 	xframe_queue_init(&xbus->command_queue, 10, command_queue_length, "command_queue", xbus);
 	xframe_queue_init(&xbus->receive_queue, 10, 50, "receive_queue", xbus);
@@ -1875,12 +1701,6 @@ void transportops_put(xbus_t *xbus)
 static void xbus_core_cleanup(void)
 {
 	finalize_xbuses_array();
-#ifdef	XPP_DEBUGFS
-	if(debugfs_root) {
-		DBG(GENERAL, "Removing xpp from debugfs\n");
-		debugfs_remove(debugfs_root);
-	}
-#endif
 #ifdef CONFIG_PROC_FS
 	if(proc_xbuses) {
 		DBG(PROC, "Removing " PROC_XBUSES " from proc\n");
@@ -1898,9 +1718,6 @@ int __init xbus_core_init(void)
 #ifdef PROTOCOL_DEBUG
 	INFO("FEATURE: with PROTOCOL_DEBUG\n");
 #endif
-#ifdef	XPP_DEBUGFS
-	INFO("FEATURE: with XPP_DEBUGFS support\n");
-#endif
 #ifdef CONFIG_PROC_FS
 	proc_xbuses = create_proc_read_entry(PROC_XBUSES, 0444, xpp_proc_toplevel, read_proc_xbuses, NULL);
 	if (!proc_xbuses) {
@@ -1909,15 +1726,6 @@ int __init xbus_core_init(void)
 		goto err;
 	}
 	SET_PROC_DIRENTRY_OWNER(proc_xbuses);
-#endif
-#ifdef	XPP_DEBUGFS
-	DBG(GENERAL, "Creating debugfs xpp root\n");
-	debugfs_root = debugfs_create_dir("xpp", NULL);
-	if(!debugfs_root) {
-		ERR("Failed to create debugfs root\n");
-		ret = -EFAULT;
-		goto err;
-	}
 #endif
 	if((ret = xpp_driver_init()) < 0)
 		goto err;
@@ -1959,6 +1767,3 @@ EXPORT_SYMBOL(xframe_init);
 EXPORT_SYMBOL(transportops_get);
 EXPORT_SYMBOL(transportops_put);
 EXPORT_SYMBOL(xbus_command_queue_tick);
-#ifdef XPP_DEBUGFS
-EXPORT_SYMBOL(xbus_log);
-#endif
