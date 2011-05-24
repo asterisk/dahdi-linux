@@ -996,10 +996,35 @@ struct tone_zone builtin_zones[] =
 			{ DAHDI_TONE_INFO, "950/333,1400/333,1800/333,0/1000" },
 			/* STUTTER TONE - not specified */
 			{ DAHDI_TONE_STUTTER, "!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,!425/100,!0/100,425" },
-	},
+		},
 		.dtmf_high_level = -10,
 		.dtmf_low_level = -10,
 		.mfr1_level = -10,
+		.mfr2_level = -8,
+	},
+	{
+		.zone = 44,
+		.country = "cr",
+		.description = "Costa Rica",
+		.ringcadence = { 1203, 4797 },
+		.tones = {
+			/* Reference: http://www.itu.int/ITU-T/inr/forms/files/tones-0203.pdf [^] */
+			{ DAHDI_TONE_DIALTONE, "450" },
+			{ DAHDI_TONE_BUSY, "450/330,0/330" },
+			{ DAHDI_TONE_RINGTONE, "450/1203,0/4900" },
+			{ DAHDI_TONE_CONGESTION, "450/330,0/330" },
+			{ DAHDI_TONE_CALLWAIT, "450/150,0/150,450/150,450/8000" },
+			/* RECALL DIAL TONE - not specified */
+			{ DAHDI_TONE_DIALRECALL, "!450/100,!0/100,!450/100,!0/100,!450/100,!0/100,450" },
+			/* RECORD TONE - not specified */
+			{ DAHDI_TONE_RECORDTONE, "1400/500,0/15000" },
+			{ DAHDI_TONE_INFO, "!950/330,!1400/330,!1800/330,0" },
+			/* STUTTER TONE - not specified */
+			{ DAHDI_TONE_STUTTER, "!450/100,!0/100,!450/100,!0/100,!450/100,!0/100,!450/100,!0/100,!450/100,!0/100,!450/100,!0/100,450" },
+		},
+		.dtmf_high_level = -9,
+		.dtmf_low_level = -11,
+		.mfr1_level = -7,
 		.mfr2_level = -8,
 	},
 	{ .zone = -1 }
