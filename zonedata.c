@@ -1027,5 +1027,28 @@ struct tone_zone builtin_zones[] =
 		.mfr1_level = -7,
 		.mfr2_level = -8,
 	},
+	{
+		.zone = 45,
+		.country = "ae",
+		.description = "United Arab Emirates",
+		.ringcadence = { 1500, 4000 },
+		.tones = {
+			/* References: http://www.itu.int/ITU-T/inr/forms/files/tones-0203.pdf */
+			{ DAHDI_TONE_DIALTONE, "350+440" },
+			{ DAHDI_TONE_BUSY, "400/375,0/375" },
+			{ DAHDI_TONE_RINGTONE, "400+425/400,0/200,400+425/400,0/2000" },
+			{ DAHDI_TONE_CONGESTION, "425/400,0/350,425/225,0/525" },
+			{ DAHDI_TONE_CALLWAIT, "420/40,0/1960" },
+			/* RECORD TONE */
+			{ DAHDI_TONE_RECORDTONE, "1400/80,0/14920" },
+			{ DAHDI_TONE_INFO, "950/330,1450/330,1850/330,0/1000" },
+			/* STUTTER TONE */
+			{ DAHDI_TONE_STUTTER, "380+420" },
+		},
+		.dtmf_high_level = -10,
+		.dtmf_low_level = -10,
+		.mfr1_level = -10,
+		.mfr2_level = -8,
+	},
 	{ .zone = -1 }
 };
