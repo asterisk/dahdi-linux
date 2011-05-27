@@ -3330,6 +3330,7 @@ struct dahdi_tone *dahdi_mf_tone(const struct dahdi_chan *chan, char digit, int 
 		case 'C':
 		case 'D':
 			tone_index = DAHDI_TONE_DTMF_A + (digit - 'A');
+			break;
 		case 'W':
 			return &tone_pause;
 		default:
