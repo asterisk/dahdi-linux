@@ -46,7 +46,7 @@ static LIST_HEAD(registration_list);
  * is used as a simplistic way to spread the load amongst the different hardware
  * transcoders in the system. */
 static LIST_HEAD(active_list);
-static spinlock_t translock = SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(translock);
 
 EXPORT_SYMBOL(dahdi_transcoder_register);
 EXPORT_SYMBOL(dahdi_transcoder_unregister);

@@ -42,11 +42,7 @@ struct ztdeth_header {
 
 /* We take the raw message, put it in an ethernet frame, and add a
    two byte addressing header at the top for future use */
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(zlock);
-#else
-static spinlock_t zlock = SPIN_LOCK_UNLOCKED;
-#endif
 
 static struct sk_buff_head skbs;
 

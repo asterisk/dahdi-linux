@@ -1129,11 +1129,7 @@ static void tor2_tasklet(unsigned long data)
 static int syncsrc = 0;
 static int syncnum = 0 /* -1 */;
 static int syncspan = 0;
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(synclock);
-#else
-static spinlock_t synclock = SPIN_LOCK_UNLOCKED;
-#endif
 
 static int tor2_findsync(struct tor2 *tor)
 {

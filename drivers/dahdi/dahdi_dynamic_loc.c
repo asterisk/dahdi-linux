@@ -57,11 +57,7 @@
 
 #include <dahdi/kernel.h>
 
-#ifdef DEFINE_SPINLOCK
 static DEFINE_SPINLOCK(zlock);
-#else
-static spinlock_t zlock = SPIN_LOCK_UNLOCKED;
-#endif
 
 static struct ztdlocal {
 	unsigned short key;

@@ -77,8 +77,6 @@
 #define TYPE_T1	1
 #define TYPE_E1	2
 
-extern spinlock_t ifacelock;
-
 struct command {
 	struct list_head node;
 	struct completion complete;

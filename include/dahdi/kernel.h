@@ -1285,6 +1285,10 @@ wait_for_completion_interruptible_timeout(struct completion *x,
 	const struct pci_device_id _x[] __devinitdata
 #endif
 
+#ifndef DEFINE_SPINLOCK
+#define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED
+#endif
+
 #ifndef DMA_BIT_MASK
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
