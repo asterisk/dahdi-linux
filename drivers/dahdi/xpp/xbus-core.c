@@ -104,7 +104,7 @@ int xbus_check_unique(xbus_t *xbus)
 {
 	if (!xbus)
 		return -ENOENT;
-	if (xbus->label) {
+	if (xbus->label && *(xbus->label)) {
 		xbus_t	*xbus_old;
 
 		XBUS_DBG(DEVICES, xbus, "Checking LABEL='%s'\n", xbus->label);
@@ -118,7 +118,7 @@ int xbus_check_unique(xbus_t *xbus)
 			return -EBUSY;
 		}
 	} else {
-		XBUS_NOTICE(xbus, "MISSING BOARD LABEL!!!\n");
+		XBUS_NOTICE(xbus, "Missing board label (old Astribank?)\n");
 	}
 	return 0;
 }
