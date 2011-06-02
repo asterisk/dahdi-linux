@@ -152,38 +152,38 @@ void vpmadt032_echocan_free(struct vpmadt032 *vpm, int channo,
 struct GpakEcanParms;
 void vpmadt032_get_default_parameters(struct GpakEcanParms *p);
 
-/* If there is a command ready to go to the VPMADT032, return it, otherwise NULL */
+/* If there is a command ready to go to the VPMADT032, return it, otherwise
+ * NULL. Call with local interrupts disabled.  */
 static inline struct vpmadt032_cmd *vpmadt032_get_ready_cmd(struct vpmadt032 *vpm)
 {
-	unsigned long flags;
 	struct vpmadt032_cmd *cmd;
 
-	spin_lock_irqsave(&vpm->list_lock, flags);
+	spin_lock(&vpm->list_lock);
 	if (list_empty(&vpm->pending_cmds)) {
-		spin_unlock_irqrestore(&vpm->list_lock, flags);
+		spin_unlock(&vpm->list_lock);
 		return NULL;
 	}
 	cmd = list_entry(vpm->pending_cmds.next, struct vpmadt032_cmd, node);
 	list_move_tail(&cmd->node, &vpm->active_cmds);
-	spin_unlock_irqrestore(&vpm->list_lock, flags);
+	spin_unlock(&vpm->list_lock);
 	return cmd;
 }
 
+/**
+ * call with local interrupts disabled.
+ */
 static inline void vpmadt032_resend(struct vpmadt032 *vpm)
 {
-	unsigned long flags;
 	struct vpmadt032_cmd *cmd, *temp;
-
-	BUG_ON(!vpm);
 
 	/* By moving the commands back to the pending list, they will be
 	 * transmitted when room is available */
-	spin_lock_irqsave(&vpm->list_lock, flags);
+	spin_lock(&vpm->list_lock);
 	list_for_each_entry_safe(cmd, temp, &vpm->active_cmds, node) {
 		cmd->desc &= ~(__VPM150M_TX);
 		list_move_tail(&cmd->node, &vpm->pending_cmds);
 	}
-	spin_unlock_irqrestore(&vpm->list_lock, flags);
+	spin_unlock(&vpm->list_lock);
 }
 
 

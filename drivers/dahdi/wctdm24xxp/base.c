@@ -484,7 +484,6 @@ static inline bool is_good_frame(const u8 *sframe)
 
 static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 {
-	unsigned long flags;
 	struct vpmadt032_cmd *curcmd = NULL;
 	struct vpmadt032 *vpmadt032 = wc->vpmadt032;
 	int x;
@@ -496,7 +495,6 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 	if (test_bit(VPM150M_HPIRESET, &vpmadt032->control)) {
 		if (debug & DEBUG_ECHOCAN)
 			dev_info(&wc->vb.pdev->dev, "HW Resetting VPMADT032...\n");
-		spin_lock_irqsave(&wc->reglock, flags);
 		for (x = 24; x < 28; x++) {
 			if (x == 24) {
 				if (test_and_clear_bit(VPM150M_HPIRESET,
@@ -511,7 +509,6 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 			eframe[CMD_BYTE(x, 1, 0)] = 0;
 			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
 		}
-		spin_unlock_irqrestore(&wc->reglock, flags);
 		return;
 	}
 
@@ -595,10 +592,9 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 	}
 }
 
-static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card, int pos)
+static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 {
 	struct wctdm_module *const mod = &wc->mods[card];
-	unsigned long flags;
 	unsigned int curcmd=0;
 	int x;
 	int subaddr = card & 0x3;
@@ -612,7 +608,6 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 
 	/* Skip audio */
 	eframe += 24;
-	spin_lock_irqsave(&wc->reglock, flags);
 	/* Search for something waiting to transmit */
 	if (pos) {
 		for (x = 0; x < MAX_COMMANDS; x++) {
@@ -627,25 +622,36 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 
 	if (!curcmd) {
 		/* If nothing else, use filler */
-		if (mod->type == FXS)
+		switch (mod->type) {
+		case FXS:
 			curcmd = CMD_RD(LINE_STATE);
-		else if (mod->type == FXO)
+			break;
+		case FXO:
 			curcmd = CMD_RD(12);
-		else if (mod->type == BRI)
+			break;
+		case BRI:
 			curcmd = 0x101010;
-		else if (mod->type == QRV)
+			break;
+		case QRV:
 			curcmd = CMD_RD(3);
+			break;
+		default:
+			break;
+		}
 	}
 
-	if (mod->type == FXS) {
+	switch (mod->type) {
+	case FXS:
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = (1 << (subaddr));
 		if (curcmd & __CMD_WR)
 			eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0x7f;
 		else
 			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x80 | ((curcmd >> 8) & 0x7f);
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
+		break;
 
-	} else if (mod->type == FXO) {
+	case FXO:
+	{
 		static const int FXO_ADDRS[4] = { 0x00, 0x08, 0x04, 0x0c };
 		int idx = CMD_BYTE(card, 0, mod->altcs);
 		if (curcmd & __CMD_WR)
@@ -654,8 +660,9 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 			eframe[idx] = 0x60 | FXO_ADDRS[subaddr];
 		eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0xff;
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
-
-	} else if (mod->type == FXSINIT) {
+		break;
+	}
+	case FXSINIT:
 		/* Special case, we initialize the FXS's into the three-byte command mode then
 		   switch to the regular mode.  To send it into thee byte mode, treat the path as
 		   6 two-byte commands and in the last one we initialize register 0 to 0x80. All modules
@@ -666,18 +673,18 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x80;
 		else
 			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
+		break;
 
-	} else if (mod->type == BRI) {
-
+	case BRI:
 		if (unlikely((curcmd != 0x101010) && (curcmd & 0x1010) == 0x1010)) /* b400m CPLD */
 			eframe[CMD_BYTE(card, 0, 0)] = 0x55;
 		else /* xhfc */
 			eframe[CMD_BYTE(card, 0, 0)] = 0x10;
 		eframe[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
 		eframe[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
+		break;
 
-	} else if (mod->type == QRV) {
- 
+	case QRV:
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
 		if (!curcmd) {
 			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x00;
@@ -689,18 +696,19 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0xc0 | ((curcmd >> 8) & 0x3f);
 			eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 		}
-	} else if (mod->type == NONE) {
+		break;
+
+	case NONE:
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x10;
 		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x10;
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x10;
+		break;
 	}
-	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 {
-	unsigned long flags;
-	struct vpmadt032 *vpm = wc->vpmadt032;
+	struct vpmadt032 *const vpm = wc->vpmadt032;
 	struct vpmadt032_cmd *cmd;
 
 	BUG_ON(!vpm);
@@ -711,18 +719,17 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 		return;
 	}
 
-	spin_lock_irqsave(&vpm->list_lock, flags);
+	spin_lock(&vpm->list_lock);
 	cmd = list_entry(vpm->active_cmds.next, struct vpmadt032_cmd, node);
 	if (wc->rxident == cmd->txident) {
 		list_del_init(&cmd->node);
 	} else {
 		cmd = NULL;
 	}
-	spin_unlock_irqrestore(&vpm->list_lock, flags);
+	spin_unlock(&vpm->list_lock);
 
-	if (!cmd) {
+	if (!cmd)
 		return;
-	}
 
 	/* Skip audio */
 	eframe += 24;
@@ -738,10 +745,12 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 	}
 }
 
-static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
+/**
+ * Call with the reglock held and local interrupts disabled
+ */
+static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 {
 	struct wctdm_module *const mod = &wc->mods[card];
-	unsigned long flags;
 	unsigned char ident;
 	int x;
 
@@ -751,7 +760,6 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 	/* Skip audio */
 	eframe += 24;
-	spin_lock_irqsave(&wc->reglock, flags);
 
 	/* Search for any pending results */
 	for (x=0;x<MAX_COMMANDS;x++) {
@@ -775,7 +783,6 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 			}
 		}
 	}
-	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 static void cmd_checkisr(struct wctdm *wc, struct wctdm_module *const mod)
@@ -865,7 +872,8 @@ static void insert_tdm_data(const struct wctdm *wc, u8 *sframe)
 
 static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 {
-	int x,y;
+	unsigned long flags;
+	int x, y;
 	struct dahdi_span *s;
 	unsigned char *eframe = sframe;
 
@@ -887,6 +895,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 #endif
 	}
 
+	spin_lock_irqsave(&wc->reglock, flags);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		/* Send a sample, as a 32-bit word */
 
@@ -896,7 +905,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		 * installed modules. */
 		for (y = 0; y < wc->avchannels; y++) {
 			if (y < wc->mods_per_board)
-				cmd_dequeue(wc, eframe, y, x);
+				_cmd_dequeue(wc, eframe, y, x);
 		}
 
 		if (wc->vpmadt032) {
@@ -913,6 +922,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		}
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 static bool
@@ -1013,12 +1023,13 @@ int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
 	return val;
 }
 
-static inline void cmd_retransmit(struct wctdm *wc)
+/**
+ * call with wc->reglock held and interrupts disabled.
+ */
+static void cmd_retransmit(struct wctdm *wc)
 {
 	int x,y;
-	unsigned long flags;
 	/* Force retransmissions */
-	spin_lock_irqsave(&wc->reglock, flags);
 	for (x=0;x<MAX_COMMANDS;x++) {
 		for (y = 0; y < wc->mods_per_board; y++) {
 			struct wctdm_module *const mod = &wc->mods[y];
@@ -1028,7 +1039,6 @@ static inline void cmd_retransmit(struct wctdm *wc)
 				mod->cmdq.cmds[x] &= ~(__CMD_TX | (0xff << 24));
 		}
 	}
-	spin_unlock_irqrestore(&wc->reglock, flags);
 #ifdef VPM_SUPPORT
 	if (wc->vpmadt032)
 		vpmadt032_resend(wc->vpmadt032);
@@ -1089,8 +1099,9 @@ static void extract_tdm_data(struct wctdm *wc, const u8 *sframe)
 
 static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 {
-	int x,y;
-	bool irqmiss = 0;
+	unsigned long flags;
+	int x, y;
+	bool irqmiss = false;
 	unsigned char expected;
 	const u8 *eframe = sframe;
 
@@ -1100,27 +1111,26 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 	if (likely(wc->initialized))
 		extract_tdm_data(wc, sframe);
 
+	spin_lock_irqsave(&wc->reglock, flags);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		if (x < DAHDI_CHUNKSIZE - 1) {
-			expected = wc->rxident+1;
+			expected = wc->rxident + 1;
 			wc->rxident = eframe[EFRAME_SIZE + 1];
 			if (wc->rxident != expected) {
-				irqmiss = 1;
+				irqmiss = true;
 				cmd_retransmit(wc);
 			}
 		}
-		for (y = 0; y < wc->avchannels; y++) {
-			cmd_decipher(wc, eframe, y);
-		}
 
-		if (wc->vpmadt032) {
+		for (y = 0; y < wc->avchannels; y++)
+			_cmd_decipher(wc, eframe, y);
+
+		if (wc->vpmadt032)
 			cmd_decipher_vpmadt032(wc, eframe);
-		} else if (wc->vpmadt032) {
-			cmd_decipher_vpmadt032(wc, eframe);
-		}
 
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	/* XXX We're wasting 8 taps.  We should get closer :( */
 	if (likely(wc->initialized)) {
