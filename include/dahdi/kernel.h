@@ -1158,8 +1158,14 @@ struct dahdi_tone *dahdi_mf_tone(const struct dahdi_chan *chan, char digit, int 
    as possible.  ECHO CANCELLATION IS NO LONGER AUTOMATICALLY DONE
    AT THE DAHDI LEVEL.  dahdi_ec_chunk will not echo cancel if it should
    not be doing so.  rxchunk is modified in-place */
-void _dahdi_ec_chunk(struct dahdi_chan *chan, unsigned char *rxchunk,
-		    const unsigned char *txchunk);
+void __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk,
+		      const u8 *preecchunk, const u8 *txchunk);
+
+static inline void _dahdi_ec_chunk(struct dahdi_chan *chan,
+				   u8 *rxchunk, const u8 *txchunk)
+{
+	__dahdi_ec_chunk(chan, rxchunk, rxchunk, txchunk);
+}
 
 static inline void dahdi_ec_chunk(struct dahdi_chan *ss, unsigned char *rxchunk,
 				  const unsigned char *txchunk)

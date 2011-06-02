@@ -7730,8 +7730,22 @@ static void process_echocan_events(struct dahdi_chan *chan)
 	}
 }
 
-static void
-__dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
+/**
+ * __dahdi_ec_chunk() - process echo for a single channel
+ * @ss:		DAHDI channel
+ * @rxchunk:	buffer to store audio with cancelled audio
+ * @preecchunk: chunk of audio on which to cancel echo
+ * @txchunk:	reference chunk from the other direction
+ *
+ * The echo canceller function fixes received (from device to userspace)
+ * audio. In order to fix it it uses the transmitted audio as a
+ * reference. This call updates the echo canceller for a single chunk (8
+ * bytes).
+ *
+ * Call with local interrupts disabled.
+ */
+void __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk,
+		      const u8 *preecchunk, const u8 *txchunk)
 {
 	short rxlin;
 	int x;
@@ -7740,7 +7754,7 @@ __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 		/* Save a copy of the audio before the echo can has its way with it */
 		for (x = 0; x < DAHDI_CHUNKSIZE; x++)
 			/* We only ever really need to deal with signed linear - let's just convert it now */
-			ss->readchunkpreec[x] = DAHDI_XLAW(rxchunk[x], ss);
+			ss->readchunkpreec[x] = DAHDI_XLAW(preecchunk[x], ss);
 	}
 
 	/* Perform echo cancellation on a chunk if necessary */
@@ -7751,7 +7765,7 @@ __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 		if (ss->ec_state->status.mode & __ECHO_MODE_MUTE) {
 			/* Special stuff for training the echo can */
 			for (x=0;x<DAHDI_CHUNKSIZE;x++) {
-				rxlin = DAHDI_XLAW(rxchunk[x], ss);
+				rxlin = DAHDI_XLAW(preecchunk[x], ss);
 				if (ss->ec_state->status.mode == ECHO_MODE_PRETRAINING) {
 					if (--ss->ec_state->status.pretrain_timer <= 0) {
 						ss->ec_state->status.pretrain_timer = 0;
@@ -7778,7 +7792,8 @@ __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 				short rxlins[DAHDI_CHUNKSIZE], txlins[DAHDI_CHUNKSIZE];
 
 				for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
-					rxlins[x] = DAHDI_XLAW(rxchunk[x], ss);
+					rxlins[x] = DAHDI_XLAW(preecchunk[x],
+							       ss);
 					txlins[x] = DAHDI_XLAW(txchunk[x], ss);
 				}
 				ss->ec_state->ops->echocan_process(ss->ec_state, rxlins, txlins, DAHDI_CHUNKSIZE);
@@ -7797,27 +7812,7 @@ __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 #endif
 	}
 }
-
-/**
- * _dahdi_ec_chunk() - process echo for a single channel
- * @ss:		DAHDI channel
- * @rxchunk:	chunk of audio on which to cancel echo
- * @txchunk:	reference chunk from the other direction
- *
- * The echo canceller function fixes received (from device to userspace)
- * audio. In order to fix it it uses the transmitted audio as a
- * reference. This call updates the echo canceller for a single chunk (8
- * bytes).
- *
- * Call with local interrupts disabled.
- */
-void _dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
-{
-	spin_lock(&ss->lock);
-	__dahdi_ec_chunk(ss, rxchunk, txchunk);
-	spin_unlock(&ss->lock);
-}
-EXPORT_SYMBOL(_dahdi_ec_chunk);
+EXPORT_SYMBOL(__dahdi_ec_chunk);
 
 /**
  * dahdi_ec_span() - process echo for all channels in a span.
@@ -7831,11 +7826,13 @@ void _dahdi_ec_span(struct dahdi_span *span)
 {
 	int x;
 	for (x = 0; x < span->channels; x++) {
-		if (span->chans[x]->ec_current) {
-			spin_lock(&span->chans[x]->lock);
-			__dahdi_ec_chunk(span->chans[x], span->chans[x]->readchunk, span->chans[x]->writechunk);
-			spin_unlock(&span->chans[x]->lock);
-		}
+		struct dahdi_chan *const chan = span->chans[x];
+		if (!chan->ec_current)
+			continue;
+
+		spin_lock(&chan->lock);
+		_dahdi_ec_chunk(chan, chan->readchunk, chan->writechunk);
+		spin_unlock(&chan->lock);
 	}
 }
 EXPORT_SYMBOL(_dahdi_ec_span);
