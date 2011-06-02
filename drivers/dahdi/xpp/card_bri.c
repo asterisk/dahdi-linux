@@ -344,14 +344,12 @@ static void layer1_state(xpd_t *xpd, bool up)
 static void te_activation(xpd_t *xpd, bool on)
 {
 	struct BRI_priv_data	*priv;
-	xbus_t			*xbus;
 	byte			curr_state;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	curr_state = priv->state_register.bits.v_su_sta;
-	xbus = xpd->xbus;
 	XPD_DBG(SIGNAL, xpd, "%s\n", (on)?"ON":"OFF");
 	if(on) {
 		if(curr_state == ST_TE_DEACTIVATED) {
@@ -389,14 +387,12 @@ static void te_activation(xpd_t *xpd, bool on)
 static void nt_activation(xpd_t *xpd, bool on)
 {
 	struct BRI_priv_data	*priv;
-	xbus_t			*xbus;
 	byte			curr_state;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	curr_state = priv->state_register.bits.v_su_sta;
-	xbus = xpd->xbus;
 	XPD_DBG(SIGNAL, xpd, "%s\n", (on)?"ON":"OFF");
 	if(on) {
 		switch(curr_state) {
@@ -541,7 +537,6 @@ static void bri_hdlc_finish(xpd_t *xpd, struct dahdi_chan *dchan)
 #ifdef	CONFIG_DAHDI_BRI_DCHANS
 static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 {
-	xbus_t			*xbus;
 	struct BRI_priv_data	*priv;
 	byte			*src;
 	byte			*dst;
@@ -846,10 +841,7 @@ static int BRI_card_init(xbus_t *xbus, xpd_t *xpd)
 
 static int BRI_card_remove(xbus_t *xbus, xpd_t *xpd)
 {
-	struct BRI_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
 	bri_proc_remove(xbus, xpd);
 	return 0;
@@ -934,11 +926,9 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 static int BRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
 {
 	xbus_t			*xbus;
-	struct BRI_priv_data	*priv;
 	
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
-	priv = xpd->priv;
 	BUG_ON(!xbus);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
 	return(0);
@@ -1139,10 +1129,7 @@ static int BRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 
 static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 {
-	struct BRI_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	if(pos == 2) {
 		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK the whole span\n");
 		BIT_SET(PHONEDEV(xpd).offhook_state, 0);
@@ -1487,14 +1474,12 @@ static int write_state_register(xpd_t *xpd, byte value)
 /*---------------- BRI: Astribank Reply Handlers --------------------------*/
 static void su_new_state(xpd_t *xpd, byte reg_x30)
 {
-	xbus_t			*xbus;
 	struct BRI_priv_data	*priv;
 	su_rd_sta_t		new_state;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	xbus = xpd->xbus;
 	if(!priv->initialized) {
 		XPD_ERR(xpd, "%s called on uninitialized AB\n", __FUNCTION__);
 		return;

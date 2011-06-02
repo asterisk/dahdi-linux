@@ -1453,7 +1453,6 @@ static int xbus_fill_proc_queue(char *p, struct xframe_queue *q)
 static int xbus_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	xbus_t			*xbus;
-	struct xbus_workqueue	*worker;
 	unsigned long		flags;
 	int			len = 0;
 	int			i = (int)((unsigned long)data);
@@ -1462,7 +1461,6 @@ static int xbus_read_proc(char *page, char **start, off_t off, int count, int *e
 	if(!xbus)
 		goto out;
 	spin_lock_irqsave(&xbus->lock, flags);
-	worker = &xbus->worker;
 
 	len += sprintf(page + len, "%s: CONNECTOR=%s LABEL=[%s] STATUS=%s\n",
 			xbus->busname,

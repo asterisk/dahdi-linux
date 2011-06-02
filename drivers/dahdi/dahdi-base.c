@@ -5196,7 +5196,6 @@ static int dahdi_ioctl_confdiag(struct file *file, unsigned long data)
 {
 	struct dahdi_chan *chan;
 	unsigned long flags;
-	int rv;
 	int i;
 	int j;
 	int c;
@@ -5240,7 +5239,6 @@ static int dahdi_ioctl_confdiag(struct file *file, unsigned long data)
 				      pseudo->chan.channo, pseudo->chan.confmode);
 		}
 		spin_unlock_irqrestore(&chan_lock, flags);
-		rv = 0;
 		if (c)
 			module_printk(KERN_NOTICE, "\n");
 	}
@@ -7714,7 +7712,7 @@ static void process_echocan_events(struct dahdi_chan *chan)
 static void
 __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 {
-	short rxlin, txlin;
+	short rxlin;
 	int x;
 
 	if (ss->readchunkpreec) {
@@ -7733,7 +7731,6 @@ __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk, const u8 *txchunk)
 			/* Special stuff for training the echo can */
 			for (x=0;x<DAHDI_CHUNKSIZE;x++) {
 				rxlin = DAHDI_XLAW(rxchunk[x], ss);
-				txlin = DAHDI_XLAW(txchunk[x], ss);
 				if (ss->ec_state->status.mode == ECHO_MODE_PRETRAINING) {
 					if (--ss->ec_state->status.pretrain_timer <= 0) {
 						ss->ec_state->status.pretrain_timer = 0;
@@ -8449,7 +8446,6 @@ void dahdi_hdlc_abort(struct dahdi_chan *ss, int event)
 void dahdi_hdlc_putbuf(struct dahdi_chan *ss, unsigned char *rxb, int bytes)
 {
 	unsigned long flags;
-	int res;
 	int left;
 
 	spin_lock_irqsave(&ss->lock, flags);
@@ -8477,7 +8473,6 @@ void dahdi_hdlc_putbuf(struct dahdi_chan *ss, unsigned char *rxb, int bytes)
 #endif
 		__dahdi_hdlc_abort(ss, DAHDI_EVENT_OVERRUN);
 	}
-	res = left;
 	spin_unlock_irqrestore(&ss->lock, flags);
 }
 

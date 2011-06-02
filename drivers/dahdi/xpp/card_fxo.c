@@ -486,10 +486,7 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 
 static int FXO_card_remove(xbus_t *xbus, xpd_t *xpd)
 {
-	struct FXO_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
 	fxo_proc_remove(xbus, xpd);
 	return 0;
@@ -604,10 +601,7 @@ static void dahdi_report_battery(xpd_t *xpd, lineno_t chan)
 
 static int FXO_card_open(xpd_t *xpd, lineno_t chan)
 {
-	struct FXO_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	return 0;
 }
 

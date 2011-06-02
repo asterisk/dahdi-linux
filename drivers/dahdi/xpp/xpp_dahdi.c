@@ -275,13 +275,11 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 {
 	int		len = 0;
 	xpd_t		*xpd = data;
-	xbus_t		*xbus;
 	int		i;
 
 	if(!xpd)
 		goto out;
 
-	xbus = xpd->xbus;
 	len += sprintf(page + len, "%s (%s, card %s, span %d)\n"
 			"timing_priority: %d\n"
 			"timer_count: %d span->mainttimer=%d\n"
@@ -606,10 +604,7 @@ void xbus_request_removal(xbus_t *xbus)
  */
 void xpd_remove(xpd_t *xpd)
 {
-	xbus_t	*xbus;
-
 	BUG_ON(!xpd);
-	xbus = xpd->xbus;
 	XPD_INFO(xpd, "Remove\n");
 	dahdi_unregister_xpd(xpd);
 	CALL_XMETHOD(card_remove, xpd);

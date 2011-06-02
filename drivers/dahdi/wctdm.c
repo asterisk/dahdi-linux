@@ -619,13 +619,11 @@ static unsigned char wctdm_getreg(struct wctdm *wc, int card, unsigned char reg)
 static int __wait_access(struct wctdm *wc, int card)
 {
     unsigned char data = 0;
-    long origjiffies;
     int count = 0;
 
     #define MAX 6000 /* attempts */
 
 
-    origjiffies = jiffies;
     /* Wait for indirect access */
     while (count++ < MAX)
 	 {

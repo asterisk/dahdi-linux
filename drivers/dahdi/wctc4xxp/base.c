@@ -2868,7 +2868,6 @@ static int
 wctc4xxp_load_firmware(struct wcdte *wc, const struct firmware *firmware)
 {
 	unsigned int byteloc;
-	unsigned int last_byteloc;
 	unsigned int length;
 	struct tcb *cmd;
 
@@ -2883,7 +2882,6 @@ wctc4xxp_load_firmware(struct wcdte *wc, const struct firmware *firmware)
 #endif
 
 	while (byteloc < (firmware->size-20)) {
-		last_byteloc = byteloc;
 		length = (firmware->data[byteloc] << 8) |
 				firmware->data[byteloc+1];
 		byteloc += 2;

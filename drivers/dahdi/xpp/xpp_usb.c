@@ -816,7 +816,6 @@ static void xusb_disconnect(struct usb_interface *interface)
 	struct usb_host_interface	*iface_desc = usb_altnum_to_altsetting(interface, 0);
 	xusb_t			*xusb;
 	xbus_t			*xbus;
-	int			minor;
 	int			i;
 
 	DBG(DEVICES, "CALLED on interface #%d\n", iface_desc->desc.bInterfaceNumber);
@@ -845,7 +844,6 @@ static void xusb_disconnect(struct usb_interface *interface)
 	xbus_disconnect(xbus);		// Blocking until fully deactivated!
 
 	down (&xusb->sem);
-	minor = xusb->minor;
 
 	/* give back our minor */
 	usb_deregister_dev(interface, &xusb_class);
@@ -924,7 +922,6 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 	xbus_t		*xbus = xbus_num(xusb->xbus_num);
 	size_t		size;
 	bool		do_resubmit = 1;
-	bool		is_inuse = 0;
 	struct timeval	now;
 
 	do_gettimeofday(&now);
@@ -933,7 +930,6 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 		XUSB_ERR(xusb, "Received URB does not belong to a valid xbus anymore...\n");
 		return;
 	}
-	is_inuse = 1;
 	if(!xusb->present) {
 		do_resubmit = 0;
 		goto err;

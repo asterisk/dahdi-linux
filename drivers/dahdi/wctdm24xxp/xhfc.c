@@ -1676,10 +1676,8 @@ static void hfc_start_st(struct b400m_span *s)
 static int hdlc_start(struct b400m *b4, int fifo);
 static void hfc_init_all_st(struct b400m *b4)
 {
-	int i, gpio;
+	int i;
 	struct b400m_span *s;
-
-	gpio = 0;
 
 	for (i = 0; i < 4; i++) {
 		s = &b4->spans[i];
@@ -2519,7 +2517,6 @@ int wctdm_bri_checkisr(struct wctdm *wc, int modpos, int offset)
 /* DAHDI calls this when it has data it wants to send to the HDLC controller */
 void wctdm_hdlc_hard_xmit(struct dahdi_chan *chan)
 {
-	struct wctdm *wc;
 	struct b400m *b4;
 	struct b400m_span *bspan;
 	struct dahdi_span *dspan;
@@ -2528,7 +2525,6 @@ void wctdm_hdlc_hard_xmit(struct dahdi_chan *chan)
 	dspan = chan->span;
 	bspan = bspan_from_dspan(dspan);
 	b4 = bspan->parent;
-	wc = b4->wc;
 	span = bspan->port;
 
 	if ((DBG_FOPS || DBG_HDLC) && DBG_SPANFILTER) {

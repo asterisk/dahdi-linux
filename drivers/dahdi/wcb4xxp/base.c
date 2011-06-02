@@ -2603,13 +2603,12 @@ DAHDI_IRQ_HANDLER(b4xxp_interrupt)
 static void b4xxp_bottom_half(unsigned long data)
 {
 	struct b4xxp *b4 = (struct b4xxp *)data;
-	int i, j, k, gotrxfifo, fifo, fifo_low, fifo_high;
+	int i, j, k, fifo, fifo_low, fifo_high;
 	unsigned char b, b2;
 
 	if (b4->shutdown)
 		return;
 
-	gotrxfifo = 0;
 	/* HFC-4S d-chan fifos 8-11 *** HFC-8S d-chan fifos 16-23 */
 	if (b4->numspans == 8) {
 		fifo_low = 16;

@@ -423,12 +423,10 @@ err:
 
 static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 {
-	struct FXS_priv_data	*priv;
 	int			ret = 0;
 	int			i;
 
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	/*
 	 * Setup ring timers
 	 */
@@ -473,10 +471,7 @@ err:
 
 static int FXS_card_remove(xbus_t *xbus, xpd_t *xpd)
 {
-	struct FXS_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
 	fxs_proc_remove(xbus, xpd);
 	return 0;

@@ -1329,12 +1329,9 @@ static void
 setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 			 GpakChannelConfig_t *chanconfig)
 {
-	const struct vpmadt032_options *options;
 	GpakEcanParms_t *p;
 
 	BUG_ON(!vpm);
-
-	options = &vpm->options;
 
 	chanconfig->PcmInPortA = 3;
 	chanconfig->PcmInSlotA = (channel + 1) * 2;

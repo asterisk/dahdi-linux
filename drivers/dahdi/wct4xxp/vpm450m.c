@@ -319,12 +319,11 @@ int vpm450m_getdtmf(struct vpm450m *vpm450m, int *channel, int *tone, int *start
 {
 	tOCT6100_TONE_EVENT tonefound;
 	tOCT6100_EVENT_GET_TONE tonesearch;
-	UINT32 ulResult;
 	
 	Oct6100EventGetToneDef(&tonesearch);
 	tonesearch.pToneEvent = &tonefound;
 	tonesearch.ulMaxToneEvent = 1;
-	ulResult = Oct6100EventGetTone(vpm450m->pApiInstance, &tonesearch);
+	Oct6100EventGetTone(vpm450m->pApiInstance, &tonesearch);
 	if (tonesearch.ulNumValidToneEvent) {
 		if (channel)
 			*channel = tonefound.ulUserChanId;

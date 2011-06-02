@@ -747,11 +747,8 @@ static void set_reg_lim0(const char *msg, xpd_t *xpd)
  */
 static int set_master_mode(const char *msg, xpd_t *xpd)
 {
-	struct PRI_priv_data	*priv;
-
 	BUG_ON(!xpd);
 	XPD_DBG(SIGNAL, xpd, "\n");
-	priv = xpd->priv;
 	set_reg_lim0(__FUNCTION__, xpd);
 	set_clocking(xpd);
 	return 0;
@@ -1143,12 +1140,10 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 {
 	struct PRI_priv_data	*priv;
 	int			ret = 0;
-	xproto_table_t		*proto_table;
 
 	BUG_ON(!xpd);
 	XPD_DBG(GENERAL, xpd, "\n");
 	xpd->type = XPD_TYPE_PRI;
-	proto_table = &PROTO_TABLE(PRI);
 	priv = xpd->priv;
 	if(priv->pri_protocol == PRI_PROTO_0) {
 		/*
@@ -1187,10 +1182,7 @@ err:
 
 static int PRI_card_remove(xbus_t *xbus, xpd_t *xpd)
 {
-	struct PRI_priv_data	*priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
 	return 0;
 }
@@ -1278,11 +1270,9 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 static int PRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
 {
 	xbus_t			*xbus;
-	struct PRI_priv_data	*priv;
 	
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
-	priv = xpd->priv;
 	BUG_ON(!xbus);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
 	dahdi_update_syncsrc(xpd);

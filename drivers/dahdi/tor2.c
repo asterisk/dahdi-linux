@@ -621,7 +621,7 @@ err_out_free_tor:
 	if (tor) {
 		free_tor(tor);
 	}
-	return -ENODEV;
+	return ret;
 }
 
 static struct pci_driver tor2_driver;

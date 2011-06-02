@@ -4140,7 +4140,6 @@ static int t4_vpm_echotail(void)
 
 static void t4_vpm450_init(struct t4 *wc)
 {
-	unsigned int check1, check2;
 	int laws[4] = { 0, };
 	int x;
 	unsigned int vpm_capacity;
@@ -4165,8 +4164,8 @@ static void t4_vpm450_init(struct t4 *wc)
 	t4_gpio_setdir(wc, (1 << 24), (1 << 24));
 	__t4_raw_oct_out(wc, 0x000a, 0x5678);
 	__t4_raw_oct_out(wc, 0x0004, 0x1234);
-	check1 = __t4_raw_oct_in(wc, 0x0004);
-	check2 = __t4_raw_oct_in(wc, 0x000a);
+	__t4_raw_oct_in(wc, 0x0004);
+	__t4_raw_oct_in(wc, 0x000a);
 	if (debug)
 		dev_notice(&wc->dev->dev, "OCT Result: %04x/%04x\n",
 			__t4_raw_oct_in(wc, 0x0004),
