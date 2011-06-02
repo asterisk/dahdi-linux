@@ -1390,6 +1390,7 @@ static int check_and_load_vpm(struct t1 *wc)
 	int res;
 	unsigned long flags;
 	struct vpmadt032_options options;
+	struct vpmadt032 *vpm = NULL;
 
 	if (!vpmsupport) {
 		t1_info(wc, "VPM Support Disabled\n");
@@ -1417,15 +1418,20 @@ static int check_and_load_vpm(struct t1 *wc)
 	 * done setting it up here, an hour should cover it... */
 	wc->vpm_check = jiffies + HZ*3600;
 
-	wc->vpmadt032 = vpmadt032_alloc(&options, wc->name);
-	if (!wc->vpmadt032)
+	vpm = vpmadt032_alloc(&options, wc->name);
+	if (!vpm)
 		return -ENOMEM;
 
-	wc->vpmadt032->setchanconfig_from_state = setchanconfig_from_state;
+	vpm->setchanconfig_from_state = setchanconfig_from_state;
 
-	res = vpmadt032_init(wc->vpmadt032, &wc->vb);
+	spin_lock_irqsave(&wc->reglock, flags);
+	wc->vpmadt032 = vpm;
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	res = vpmadt032_init(vpm, &wc->vb);
 	if (-ENODEV == res) {
 		struct vpmadt032 *vpm = wc->vpmadt032;
+
 		/* There does not appear to be a VPMADT032 installed. */
 		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		spin_lock_irqsave(&wc->reglock, flags);
@@ -1441,7 +1447,7 @@ static int check_and_load_vpm(struct t1 *wc)
 		return -EAGAIN;
 	}
 
-	if (config_vpmadt032(wc->vpmadt032, wc)) {
+	if (config_vpmadt032(vpm, wc)) {
 		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		wc->vpm_check = jiffies + HZ/2;
 		return -EAGAIN;
