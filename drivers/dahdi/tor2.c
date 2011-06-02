@@ -177,7 +177,7 @@ static int highestorder;
 static int timingcable;
 
 static void set_clear(struct tor2 *tor);
-static int tor2_startup(struct dahdi_span *span);
+static int tor2_startup(struct file *file, struct dahdi_span *span);
 static int tor2_shutdown(struct dahdi_span *span);
 static int tor2_rbsbits(struct dahdi_chan *chan, int bits);
 static int tor2_maint(struct dahdi_span *span, int cmd);
@@ -193,7 +193,8 @@ static unsigned datxlt_e1[] = {
     1 ,2 ,3 ,4 ,5 ,6 ,7 ,8 ,9 ,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
 	25,26,27,28,29,30,31 };
 
-static int tor2_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+static int tor2_spanconfig(struct file *file, struct dahdi_span *span,
+			   struct dahdi_lineconfig *lc)
 {
 	int i;
 	struct tor2_span *p = container_of(span, struct tor2_span, dahdi_span);
@@ -223,12 +224,13 @@ static int tor2_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
 	}
 	/* If we're already running, then go ahead and apply the changes */
 	if (span->flags & DAHDI_FLAG_RUNNING)
-		return tor2_startup(span);
+		return tor2_startup(file, span);
 
 	return 0;
 }
 
-static int tor2_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int tor2_chanconfig(struct file *file,
+			   struct dahdi_chan *chan, int sigtype)
 {
 	int alreadyrunning;
 	unsigned long flags;
@@ -811,7 +813,7 @@ static int tor2_shutdown(struct dahdi_span *span)
 }
 
 
-static int tor2_startup(struct dahdi_span *span)
+static int tor2_startup(struct file *file, struct dahdi_span *span)
 {
 	unsigned long endjif;
 	int i;

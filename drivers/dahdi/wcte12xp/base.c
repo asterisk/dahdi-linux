@@ -929,7 +929,7 @@ static void set_span_devicetype(struct t1 *wc)
 #endif
 }
 
-static int t1xxp_startup(struct dahdi_span *span)
+static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 {
 	struct t1 *wc = container_of(span, struct t1, span);
 #ifndef CONFIG_VOICEBUS_ECREFERENCE
@@ -954,7 +954,8 @@ static int t1xxp_startup(struct dahdi_span *span)
 	return 0;
 }
 
-static int t1xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int t1xxp_chanconfig(struct file *file,
+			    struct dahdi_chan *chan, int sigtype)
 {
 	struct t1 *wc = chan->pvt;
 	if (test_bit(DAHDI_FLAGBIT_RUNNING, &chan->span->flags) &&
@@ -1484,7 +1485,8 @@ static void t1_chan_set_sigcap(struct dahdi_span *span, int x)
 }
 
 static int
-t1xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+t1xxp_spanconfig(struct file *file, struct dahdi_span *span,
+		 struct dahdi_lineconfig *lc)
 {
 	struct t1 *wc = container_of(span, struct t1, span);
 	int i;
@@ -1504,7 +1506,7 @@ t1xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
 
 	/* If already running, apply changes immediately */
 	if (test_bit(DAHDI_FLAGBIT_RUNNING, &span->flags))
-		return t1xxp_startup(span);
+		return t1xxp_startup(file, span);
 
 	return 0;
 }

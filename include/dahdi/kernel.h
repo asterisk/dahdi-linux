@@ -790,6 +790,8 @@ struct dahdi_count {
 #define DAHDI_FLAG_TXUNDERRUN	DAHDI_FLAG(TXUNDERRUN)
 #define DAHDI_FLAG_RXOVERRUN	DAHDI_FLAG(RXOVERRUN)
 
+struct file;
+
 struct dahdi_span_ops {
 	struct module *owner;		/*!< Which module is exporting this span. */
 
@@ -799,10 +801,11 @@ struct dahdi_span_ops {
 	int (*setchunksize)(struct dahdi_span *span, int chunksize);
 
 	/*! Opt: Configure the span (if appropriate) */
-	int (*spanconfig)(struct dahdi_span *span, struct dahdi_lineconfig *lc);
+	int (*spanconfig)(struct file *file, struct dahdi_span *span,
+			  struct dahdi_lineconfig *lc);
 	
 	/*! Opt: Start the span */
-	int (*startup)(struct dahdi_span *span);
+	int (*startup)(struct file *file, struct dahdi_span *span);
 	
 	/*! Opt: Shutdown the span */
 	int (*shutdown)(struct dahdi_span *span);
@@ -817,7 +820,8 @@ struct dahdi_span_ops {
 #endif
 	/* ====  Channel Callback Operations ==== */
 	/*! Opt: Set signalling type (if appropriate) */
-	int (*chanconfig)(struct dahdi_chan *chan, int sigtype);
+	int (*chanconfig)(struct file *file, struct dahdi_chan *chan,
+			  int sigtype);
 
 	/*! Opt: Prepare a channel for I/O */
 	int (*open)(struct dahdi_chan *chan);

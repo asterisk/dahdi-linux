@@ -2175,7 +2175,8 @@ static int b400m_set_ntte(struct b400m_span *bspan, int te_mode, int term_on)
 }
 
 /* spanconfig for us means ...? */
-int b400m_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+int b400m_spanconfig(struct file *file, struct dahdi_span *span,
+		     struct dahdi_lineconfig *lc)
 {
 	struct b400m_span *bspan;
 	struct b400m *b4;
@@ -2250,7 +2251,7 @@ int b400m_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
  * The solution to that is to simply increment the span's "restart" flag, and
  * the driver's workqueue will do the dirty work on our behalf.
  */
-int b400m_chanconfig(struct dahdi_chan *chan, int sigtype)
+int b400m_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 {
 	int alreadyrunning;
 	struct b400m_span *bspan = bspan_from_dspan(chan->span);

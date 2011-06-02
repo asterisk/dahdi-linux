@@ -4373,7 +4373,7 @@ static const struct net_device_ops dahdi_netdev_ops = {
 };
 #endif
 
-static int dahdi_ioctl_chanconfig(unsigned long data)
+static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 {
 	int res = 0;
 	int y;
@@ -4507,8 +4507,13 @@ static int dahdi_ioctl_chanconfig(unsigned long data)
 			chan->flags &= ~DAHDI_FLAG_MTP2;
 	}
 
+	/* Chanconfig can block, do not call through the function pointer with
+	 * the channel lock held. */
+	spin_unlock_irqrestore(&chan->lock, flags);
 	if (!res && chan->span->ops->chanconfig)
-		res = chan->span->ops->chanconfig(chan, ch.sigtype);
+		res = chan->span->ops->chanconfig(file, chan, ch.sigtype);
+	spin_lock_irqsave(&chan->lock, flags);
+
 
 #ifdef CONFIG_DAHDI_NET
 	if (!res &&
@@ -4685,7 +4690,7 @@ static int dahdi_ioctl_indirect(struct file *file, unsigned long data)
 	return res;
 }
 
-static int dahdi_ioctl_spanconfig(unsigned long data)
+static int dahdi_ioctl_spanconfig(struct file *file, unsigned long data)
 {
 	int res = 0;
 	struct dahdi_lineconfig lc;
@@ -4708,13 +4713,13 @@ static int dahdi_ioctl_spanconfig(unsigned long data)
 		s->txlevel = lc.lbo;
 		s->rxlevel = 0;
 
-		res = s->ops->spanconfig(s, &lc);
+		res = s->ops->spanconfig(file, s, &lc);
 	}
 	put_span(s);
 	return res;
 }
 
-static int dahdi_ioctl_startup(unsigned long data)
+static int dahdi_ioctl_startup(struct file *file, unsigned long data)
 {
 	/* I/O CTL's for control interface */
 	int j;
@@ -4735,7 +4740,7 @@ static int dahdi_ioctl_startup(unsigned long data)
 	}
 
 	if (s->ops->startup)
-		res = s->ops->startup(s);
+		res = s->ops->startup(file, s);
 
 	if (!res) {
 		/* Mark as running and hangup any channels */
@@ -4986,15 +4991,15 @@ dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	case DAHDI_INDIRECT:
 		return dahdi_ioctl_indirect(file, data);
 	case DAHDI_SPANCONFIG:
-		return dahdi_ioctl_spanconfig(data);
+		return dahdi_ioctl_spanconfig(file, data);
 	case DAHDI_STARTUP:
-		return dahdi_ioctl_startup(data);
+		return dahdi_ioctl_startup(file, data);
 	case DAHDI_SHUTDOWN:
 		return dahdi_ioctl_shutdown(data);
 	case DAHDI_ATTACH_ECHOCAN:
 		return dahdi_ioctl_attach_echocan(data);
 	case DAHDI_CHANCONFIG:
-		return dahdi_ioctl_chanconfig(data);
+		return dahdi_ioctl_chanconfig(file, data);
 	case DAHDI_SFCONFIG:
 		return dahdi_ioctl_sfconfig(data);
 	case DAHDI_DEFAULTZONE:

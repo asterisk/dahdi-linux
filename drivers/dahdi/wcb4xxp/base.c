@@ -2277,7 +2277,7 @@ static int b4xxp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 	return 0;
 }
 
-static int b4xxp_startup(struct dahdi_span *span)
+static int b4xxp_startup(struct file *file, struct dahdi_span *span)
 {
 	struct b4xxp_span *bspan = container_of(span, struct b4xxp_span, span);
 	struct b4xxp *b4 = bspan->parent;
@@ -2310,7 +2310,8 @@ static void b4xxp_reset_span(struct b4xxp_span *bspan)
 }
 
 /* spanconfig for us means to set up the HFC FIFO and channel mapping */
-static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
+			    struct dahdi_lineconfig *lc)
 {
 	int i;
 	struct b4xxp_span *bspan = container_of(span, struct b4xxp_span, span);
@@ -2347,7 +2348,7 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 	b4xxp_reset_span(bspan);
 
 /* call startup() manually here, because DAHDI won't call the startup function unless it receives an IOCTL to do so, and dahdi_cfg doesn't. */
-	b4xxp_startup(&bspan->span);
+	b4xxp_startup(file, &bspan->span);
 
 	span->flags |= DAHDI_FLAG_RUNNING;
 
@@ -2355,7 +2356,8 @@ static int b4xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 }
 
 /* chanconfig for us means to configure the HDLC controller, if appropriate */
-static int b4xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int
+b4xxp_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 {
 	int alreadyrunning;
 	struct b4xxp *b4 = chan->pvt;
@@ -2820,7 +2822,7 @@ static int b4xxp_proc_read(char *buf, char **start, off_t offset, int count, int
 static int b4xxp_startdefaultspan(struct b4xxp *b4)
 {
 	struct dahdi_lineconfig lc = {0,};
-	return b4xxp_spanconfig(&b4->spans[0].span, &lc);
+	return b4xxp_spanconfig(NULL, &b4->spans[0].span, &lc);
 }
 
 static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id *ent)

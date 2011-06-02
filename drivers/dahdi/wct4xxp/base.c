@@ -416,7 +416,7 @@ static const struct dahdi_echocan_ops vpm_ec_ops = {
 #endif
 
 static void __set_clear(struct t4 *wc, int span);
-static int t4_startup(struct dahdi_span *span);
+static int t4_startup(struct file *file, struct dahdi_span *span);
 static int t4_shutdown(struct dahdi_span *span);
 static int t4_rbsbits(struct dahdi_chan *chan, int bits);
 static int t4_maint(struct dahdi_span *span, int cmd);
@@ -1901,7 +1901,9 @@ static void t4_chan_set_sigcap(struct dahdi_span *span, int x)
 	}
 }
 
-static int t4_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+static int
+t4_spanconfig(struct file *file, struct dahdi_span *span,
+	      struct dahdi_lineconfig *lc)
 {
 	int i;
 	struct t4_span *ts = container_of(span, struct t4_span, span);
@@ -1943,14 +1945,15 @@ static int t4_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
 
 	/* If we're already running, then go ahead and apply the changes */
 	if (span->flags & DAHDI_FLAG_RUNNING)
-		return t4_startup(span);
+		return t4_startup(file, span);
 
 	if (debug)
 		dev_info(&wc->dev->dev, "Done with spanconfig!\n");
 	return 0;
 }
 
-static int t4_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int
+t4_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 {
 	int alreadyrunning;
 	unsigned long flags;
@@ -2671,7 +2674,7 @@ static void __t4_configure_e1(struct t4 *wc, int unit, int lineconfig)
 			wc->numspans, unit + 1, framing, line, crc4);
 }
 
-static int t4_startup(struct dahdi_span *span)
+static int t4_startup(struct file *file, struct dahdi_span *span)
 {
 #ifdef SUPPORT_GEN1
 	int i;

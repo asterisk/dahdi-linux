@@ -38,9 +38,10 @@ int wctdm_init_b400m(struct wctdm *wc, int card);
 int wctdm_bri_checkisr(struct wctdm *wc, int card, int offset);
 void wctdm_unload_b400m(struct wctdm *wc, int card);
 void wctdm_hdlc_hard_xmit(struct dahdi_chan *chan);
-int b400m_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc);
+int b400m_spanconfig(struct file *file, struct dahdi_span *span,
+		     struct dahdi_lineconfig *lc);
 int b400m_dchan(struct dahdi_span *span);
-int b400m_chanconfig(struct dahdi_chan *chan, int sigtype);
+int b400m_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype);
 void b400m_post_init(struct b400m *b4);
 void b400m_set_dahdi_span(struct b400m *b4, int spanno,
 			  struct wctdm_span *wspan);

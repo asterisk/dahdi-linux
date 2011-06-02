@@ -511,7 +511,8 @@ static int dahdi_dynamic_open(struct dahdi_chan *chan)
 	return 0;
 }
 
-static int dahdi_dynamic_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int dahdi_dynamic_chanconfig(struct file *file,
+				    struct dahdi_chan *chan, int sigtype)
 {
 	return 0;
 }

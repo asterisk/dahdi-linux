@@ -162,9 +162,11 @@ static void bri_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef	CONFIG_PROC_FS
 static int proc_bri_info_read(char *page, char **start, off_t off, int count, int *eof, void *data);
 #endif
-static int bri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc);
-static int bri_chanconfig(struct dahdi_chan *chan, int sigtype);
-static int bri_startup(struct dahdi_span *span);
+static int bri_spanconfig(struct file *file, struct dahdi_span *span,
+			  struct dahdi_lineconfig *lc);
+static int bri_chanconfig(struct file *file, struct dahdi_chan *chan,
+			  int sigtype);
+static int bri_startup(struct file *file, struct dahdi_span *span);
 static int bri_shutdown(struct dahdi_span *span);
 
 #define	PROC_REGISTER_FNAME	"slics"
@@ -1165,7 +1167,8 @@ static int BRI_card_close(xpd_t *xpd, lineno_t pos)
 /*
  * Called only for 'span' keyword in /etc/dahdi/system.conf
  */
-static int bri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+static int bri_spanconfig(struct file *file, struct dahdi_span *span,
+			  struct dahdi_lineconfig *lc)
 {
 	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
 	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
@@ -1210,7 +1213,8 @@ static int bri_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
  * Called from dahdi with spinlock held on chan. Must not call back
  * dahdi functions.
  */
-static int bri_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int bri_chanconfig(struct file *file, struct dahdi_chan *chan,
+			  int sigtype)
 {
 	DBG(GENERAL, "channel %d (%s) -> %s\n", chan->channo, chan->name, sig2str(sigtype));
 	// FIXME: sanity checks:
@@ -1222,7 +1226,7 @@ static int bri_chanconfig(struct dahdi_chan *chan, int sigtype)
 /*
  * Called only for 'span' keyword in /etc/dahdi/system.conf
  */
-static int bri_startup(struct dahdi_span *span)
+static int bri_startup(struct file *file, struct dahdi_span *span)
 {
 	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
 	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);

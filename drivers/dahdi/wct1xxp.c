@@ -608,7 +608,7 @@ static inline struct t1xxp *t1xxp_from_span(struct dahdi_span *span)
 	return container_of(span, struct t1xxp, span);
 }
 
-static int t1xxp_startup(struct dahdi_span *span)
+static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 {
 	struct t1xxp *wc = t1xxp_from_span(span);
 
@@ -714,7 +714,8 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 	return res;
 }
 
-static int t1xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
+static int
+t1xxp_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 {
 	struct t1xxp *wc = chan->pvt;
 	unsigned long flags;
@@ -729,7 +730,9 @@ static int t1xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
 	return 0;
 }
 
-static int t1xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc)
+static int
+t1xxp_spanconfig(struct file *file, struct dahdi_span *span,
+		 struct dahdi_lineconfig *lc)
 {
 	struct t1xxp *wc = t1xxp_from_span(span);
 
@@ -737,7 +740,7 @@ static int t1xxp_spanconfig(struct dahdi_span *span, struct dahdi_lineconfig *lc
 	wc->sync = (lc->sync) ? 1 : 0;
 	/* If already running, apply changes immediately */
 	if (span->flags & DAHDI_FLAG_RUNNING)
-		return t1xxp_startup(span);
+		return t1xxp_startup(file, span);
 
 	return 0;
 }
