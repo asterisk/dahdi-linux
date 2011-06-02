@@ -96,7 +96,6 @@ static const struct t1_desc te121 = {"Wildcard TE121"};
 
 /* names of HWEC modules */
 static const char *vpmadt032_name = "VPMADT032";
-static const char *noec_name = "NONE";
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 static kmem_cache_t *cmd_cache;
@@ -1291,7 +1290,7 @@ static const char *t1xxp_echocan_name(const struct dahdi_chan *chan)
 	struct t1 *wc = chan->pvt;
 	if (wc->vpmadt032)
 		return vpmadt032_name;
-	return noec_name;
+	return NULL;
 }
 
 static int t1xxp_echocan_create(struct dahdi_chan *chan,

@@ -246,7 +246,6 @@ static int altab[] = {
 static const char *vpm400_name = "VPM400M";
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
-static const char *noec_name = "NONE";
 
 #define PORTS_PER_FRAMER 4
 
@@ -1296,7 +1295,7 @@ static const char *t4_echocan_name(const struct dahdi_chan *chan)
 			else if (wc->numspans == 4)
 				return vpmoct128_name;
 	}
-	return noec_name;
+	return NULL;
 }
 
 static int t4_echocan_create(struct dahdi_chan *chan,

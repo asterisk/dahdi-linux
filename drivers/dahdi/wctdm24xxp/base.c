@@ -162,7 +162,6 @@ static alpha  indirect_regs[] =
 
 /* names of HWEC modules */
 static const char *vpmadt032_name = "VPMADT032";
-static const char *noec_name = "NONE";
 
 /* Undefine to enable Power alarm / Transistor debug -- note: do not
    enable for normal operation! */
@@ -1872,7 +1871,7 @@ static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
 	struct wctdm *wc = chan->pvt;
 	if (wc->vpmadt032)
 		return vpmadt032_name;
-	return noec_name;
+	return NULL;
 }
 
 static int wctdm_echocan_create(struct dahdi_chan *chan,

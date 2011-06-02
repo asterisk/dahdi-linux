@@ -4904,6 +4904,11 @@ static int dahdi_ioctl_attach_echocan(unsigned long data)
 		new = find_echocan(ae.echocan);
 		if (!new)
 			return -EINVAL;
+
+		if (!new->get_name(chan)) {
+			release_echocan(new);
+			return -EINVAL;
+		}
 	}
 
 	spin_lock_irqsave(&chan->lock, flags);
