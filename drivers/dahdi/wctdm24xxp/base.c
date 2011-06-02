@@ -1059,6 +1059,54 @@ int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
 	return val;
 }
 
+static int wctdm_getregs(struct wctdm *wc, struct wctdm_module *const mod,
+			 int *const addresses, const size_t count)
+{
+	int x;
+	unsigned long flags;
+	struct wctdm_cmd *cmd;
+	struct wctdm_cmd **cmds = kmalloc(sizeof(cmd) * count, GFP_KERNEL);
+
+	if (!cmds)
+		return -ENOMEM;
+
+	for (x = 0; x < count; ++x) {
+		cmd = kmalloc(sizeof(*cmd), GFP_KERNEL);
+		if (!cmd) {
+			kfree(cmds);
+			return -ENOMEM;
+		}
+
+		cmd->complete = kmalloc(sizeof(*cmd->complete), GFP_KERNEL);
+		if (!cmd->complete) {
+			kfree(cmd);
+			kfree(cmds);
+			return -ENOMEM;
+		}
+
+		init_completion(cmd->complete);
+
+		cmd->cmd = CMD_RD(addresses[x]);
+
+		spin_lock_irqsave(&wc->reglock, flags);
+		list_add_tail(&cmd->node, &mod->pending_cmds);
+		spin_unlock_irqrestore(&wc->reglock, flags);
+
+		cmds[x] = cmd;
+	}
+
+	for (x = count - 1; x >= 0; --x) {
+		cmd = cmds[x];
+		wait_for_completion(cmd->complete);
+		addresses[x] = cmd->cmd & 0xff;
+		kfree(cmd->complete);
+		kfree(cmd);
+	}
+
+	kfree(cmds);
+	return 0;
+}
+
 /**
  * call with wc->reglock held and interrupts disabled.
  */
@@ -1268,10 +1316,10 @@ wctdm_proslic_getreg_indirect(struct wctdm *wc, struct wctdm_module *const mod,
 	if (!wait_access(wc, mod)) {
 		wctdm_setreg(wc, mod, IAA, address);
 		if (!wait_access(wc, mod)) {
-			unsigned char data1, data2;
-			data1 = wctdm_getreg(wc, mod, IDA_LO);
-			data2 = wctdm_getreg(wc, mod, IDA_HI);
-			res = data1 | (data2 << 8);
+			int addresses[2] = {IDA_LO, IDA_HI};
+			wctdm_getregs(wc, mod, addresses,
+				      ARRAY_SIZE(addresses));
+			res = addresses[0] | (addresses[1] << 8);
 		} else
 			p = "Failed to wait inside\n";
 	} else
@@ -2191,13 +2239,14 @@ static void handle_hx8_transmit(struct voicebus *vb, struct list_head *buffers)
 
 static int wctdm_voicedaa_insane(struct wctdm *wc, struct wctdm_module *mod)
 {
-	int blah;
-	blah = wctdm_getreg(wc, mod, 2);
-	if (blah != 0x3)
+	int blah[] = {2, 11};
+	wctdm_getregs(wc, mod, blah, ARRAY_SIZE(blah));
+	if (blah[0] != 0x3)
 		return -2;
-	blah = wctdm_getreg(wc, mod, 11);
-	if (debug & DEBUG_CARD)
-		dev_info(&wc->vb.pdev->dev, "VoiceDAA System: %02x\n", blah & 0xf);
+	if (debug & DEBUG_CARD) {
+		dev_info(&wc->vb.pdev->dev,
+			 "VoiceDAA System: %02x\n", blah[1] & 0xf);
+	}
 	return 0;
 }
 
@@ -2777,6 +2826,7 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	unsigned char r19,r9;
 	int x;
 	int fxsmode=0;
+	int addresses[NUM_CAL_REGS];
 
 #if 0 /* TODO */
 	if (wc->mods[mod->card & 0xfc].type == QRV)
@@ -2893,7 +2943,10 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 
 		/* Save calibration vectors */
 		for (x = 0; x < NUM_CAL_REGS; x++)
-			fxs->calregs.vals[x] = wctdm_getreg(wc, mod, 96 + x);
+			addresses[x] = 96 + x;
+		wctdm_getregs(wc, mod, addresses, ARRAY_SIZE(addresses));
+		for (x = 0; x < NUM_CAL_REGS; x++)
+			fxs->calregs.vals[x] = addresses[x];
 #endif
 
 	} else {
