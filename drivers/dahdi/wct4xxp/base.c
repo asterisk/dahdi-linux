@@ -1737,7 +1737,6 @@ static int t4_clear_maint(struct dahdi_span *span)
 	/* Clear loopup/loopdown signals on the line */
 	reg = __t4_framer_in(wc, span->offset, FMR5);
 	__t4_framer_out(wc, span->offset, FMR5, (reg & ~(FMR5_XLU | FMR5_XLD)));
-	span->maintstat = DAHDI_MAINT_NONE;
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	span->mainttimer = 0;
