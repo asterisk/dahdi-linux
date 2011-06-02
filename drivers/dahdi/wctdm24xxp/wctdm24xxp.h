@@ -222,14 +222,14 @@ struct wctdm_module {
 	/* Protected by wctdm.reglock */
 	struct list_head pending_cmds;
 	struct list_head active_cmds;
+	u8 offsets[3];
+	u8 subaddr;
 	u8 isrshadow[ISR_COMMANDS];
+	u8 card;
 
 	enum module_type type;
 	int sethook; /* pending hook state command */
 	int dacssrc;
-
-	int altcs;
-	u8 card;
 };
 
 struct wctdm {

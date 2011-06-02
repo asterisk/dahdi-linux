@@ -273,21 +273,39 @@ static int
 wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod, int fast,
 		   int manual, int sane);
 
-static inline int CMD_BYTE(int card, int bit, int altcs)
+static void set_offsets(struct wctdm_module *const mod, int altcs)
 {
-	/* Let's add some trickery to make the TDM410 work */
-	if (altcs == 3) {
-		if (card == 2) {
-			card = 4;
-			altcs = 0;
-		} else if (card == 3) {
-			card = 5;
-			altcs = 2;
-		}
-	}
+	int card = mod->card;
+	int bit;
 
-	return (((((card) & 0x3) * 3 + (bit)) * 7) \
-			+ ((card) >> 2) + (altcs) + ((altcs) ? -21 : 0));
+	mod->subaddr = (altcs) ? 0 : (mod->card & 0x3);
+
+	for (bit = 0; bit < ARRAY_SIZE(mod->offsets); ++bit) {
+		/* Let's add some trickery to make the TDM410 work */
+		if (altcs == 3) {
+			if (card == 2) {
+				card = 4;
+				altcs = 0;
+			} else if (card == 3) {
+				card = 5;
+				altcs = 2;
+			}
+		}
+		mod->offsets[bit] = ((((card & 0x3) * 3 + bit) * 7) +
+					(card >> 2) + altcs +
+					((altcs) ? -21 : 0));
+	}
+}
+
+static inline __attribute_const__ int
+CMD_BYTE(const struct wctdm_module *const mod, const int bit)
+{
+	return mod->offsets[bit];
+}
+
+static inline __attribute_const__ int VPM_CMD_BYTE(int timeslot, int bit)
+{
+	return ((((timeslot) & 0x3) * 3 + (bit)) * 7) + ((timeslot) >> 2);
 }
 
 static void
@@ -489,15 +507,15 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 			if (x == 24) {
 				if (test_and_clear_bit(VPM150M_HPIRESET,
 						       &vpmadt032->control)) {
-					eframe[CMD_BYTE(x, 0, 0)] = 0x0b;
+					eframe[VPM_CMD_BYTE(x, 0)] = 0x0b;
 				} else {
-					eframe[CMD_BYTE(x, 0, 0)] = leds;
+					eframe[VPM_CMD_BYTE(x, 0)] = leds;
 				}
 			} else {
-				eframe[CMD_BYTE(x, 0, 0)] = leds;
+				eframe[VPM_CMD_BYTE(x, 0)] = leds;
 			}
-			eframe[CMD_BYTE(x, 1, 0)] = 0;
-			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
+			eframe[VPM_CMD_BYTE(x, 1)] = 0;
+			eframe[VPM_CMD_BYTE(x, 2)] = 0x00;
 		}
 		return;
 	}
@@ -510,75 +528,75 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 #endif
 		if (curcmd->desc & __VPM150M_RWPAGE) {
 			/* Set CTRL access to page*/
-			eframe[CMD_BYTE(24, 0, 0)] = (0x8 << 4);
-			eframe[CMD_BYTE(24, 1, 0)] = 0;
-			eframe[CMD_BYTE(24, 2, 0)] = 0x20;
+			eframe[VPM_CMD_BYTE(24, 0)] = (0x8 << 4);
+			eframe[VPM_CMD_BYTE(24, 1)] = 0;
+			eframe[VPM_CMD_BYTE(24, 2)] = 0x20;
 
 			/* Do a page write */
 			if (curcmd->desc & __VPM150M_WR)
-				eframe[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4) << 4);
+				eframe[VPM_CMD_BYTE(25, 0)] = ((0x8 | 0x4) << 4);
 			else
-				eframe[CMD_BYTE(25, 0, 0)] = ((0x8 | 0x4 | 0x1) << 4);
-			eframe[CMD_BYTE(25, 1, 0)] = 0;
+				eframe[VPM_CMD_BYTE(25, 0)] = ((0x8 | 0x4 | 0x1) << 4);
+			eframe[VPM_CMD_BYTE(25, 1)] = 0;
 			if (curcmd->desc & __VPM150M_WR)
-				eframe[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xf;
+				eframe[VPM_CMD_BYTE(25, 2)] = curcmd->data & 0xf;
 			else
-				eframe[CMD_BYTE(25, 2, 0)] = 0;
+				eframe[VPM_CMD_BYTE(25, 2)] = 0;
 
 			/* Clear XADD */
-			eframe[CMD_BYTE(26, 0, 0)] = (0x8 << 4);
-			eframe[CMD_BYTE(26, 1, 0)] = 0;
-			eframe[CMD_BYTE(26, 2, 0)] = 0;
+			eframe[VPM_CMD_BYTE(26, 0)] = (0x8 << 4);
+			eframe[VPM_CMD_BYTE(26, 1)] = 0;
+			eframe[VPM_CMD_BYTE(26, 2)] = 0;
 
 			/* Fill in to buffer to size */
-			eframe[CMD_BYTE(27, 0, 0)] = 0;
-			eframe[CMD_BYTE(27, 1, 0)] = 0;
-			eframe[CMD_BYTE(27, 2, 0)] = 0;
+			eframe[VPM_CMD_BYTE(27, 0)] = 0;
+			eframe[VPM_CMD_BYTE(27, 1)] = 0;
+			eframe[VPM_CMD_BYTE(27, 2)] = 0;
 
 		} else {
 			/* Set address */
-			eframe[CMD_BYTE(24, 0, 0)] = ((0x8 | 0x4) << 4);
-			eframe[CMD_BYTE(24, 1, 0)] = (curcmd->address >> 8) & 0xff;
-			eframe[CMD_BYTE(24, 2, 0)] = curcmd->address & 0xff;
+			eframe[VPM_CMD_BYTE(24, 0)] = ((0x8 | 0x4) << 4);
+			eframe[VPM_CMD_BYTE(24, 1)] = (curcmd->address >> 8) & 0xff;
+			eframe[VPM_CMD_BYTE(24, 2)] = curcmd->address & 0xff;
 
 			/* Send/Get our data */
-			eframe[CMD_BYTE(25, 0, 0)] = (curcmd->desc & __VPM150M_WR) ?
+			eframe[VPM_CMD_BYTE(25, 0)] = (curcmd->desc & __VPM150M_WR) ?
 				((0x8 | (0x3 << 1)) << 4) : ((0x8 | (0x3 << 1) | 0x1) << 4);
-			eframe[CMD_BYTE(25, 1, 0)] = (curcmd->data >> 8) & 0xff;
-			eframe[CMD_BYTE(25, 2, 0)] = curcmd->data & 0xff;
+			eframe[VPM_CMD_BYTE(25, 1)] = (curcmd->data >> 8) & 0xff;
+			eframe[VPM_CMD_BYTE(25, 2)] = curcmd->data & 0xff;
 			
-			eframe[CMD_BYTE(26, 0, 0)] = 0;
-			eframe[CMD_BYTE(26, 1, 0)] = 0;
-			eframe[CMD_BYTE(26, 2, 0)] = 0;
+			eframe[VPM_CMD_BYTE(26, 0)] = 0;
+			eframe[VPM_CMD_BYTE(26, 1)] = 0;
+			eframe[VPM_CMD_BYTE(26, 2)] = 0;
 
 			/* Fill in the rest */
-			eframe[CMD_BYTE(27, 0, 0)] = 0;
-			eframe[CMD_BYTE(27, 1, 0)] = 0;
-			eframe[CMD_BYTE(27, 2, 0)] = 0;
+			eframe[VPM_CMD_BYTE(27, 0)] = 0;
+			eframe[VPM_CMD_BYTE(27, 1)] = 0;
+			eframe[VPM_CMD_BYTE(27, 2)] = 0;
 		}
 	} else if (test_and_clear_bit(VPM150M_SWRESET, &vpmadt032->control)) {
 		for (x = 24; x < 28; x++) {
 			if (x == 24)
-				eframe[CMD_BYTE(x, 0, 0)] = (0x8 << 4);
+				eframe[VPM_CMD_BYTE(x, 0)] = (0x8 << 4);
 			else
-				eframe[CMD_BYTE(x, 0, 0)] = 0x00;
-			eframe[CMD_BYTE(x, 1, 0)] = 0;
+				eframe[VPM_CMD_BYTE(x, 0)] = 0x00;
+			eframe[VPM_CMD_BYTE(x, 1)] = 0;
 			if (x == 24)
-				eframe[CMD_BYTE(x, 2, 0)] = 0x01;
+				eframe[VPM_CMD_BYTE(x, 2)] = 0x01;
 			else
-				eframe[CMD_BYTE(x, 2, 0)] = 0x00;
+				eframe[VPM_CMD_BYTE(x, 2)] = 0x00;
 		}
 	} else {
 		for (x = 24; x < 28; x++) {
-			eframe[CMD_BYTE(x, 0, 0)] = 0x00;
-			eframe[CMD_BYTE(x, 1, 0)] = 0x00;
-			eframe[CMD_BYTE(x, 2, 0)] = 0x00;
+			eframe[VPM_CMD_BYTE(x, 0)] = 0x00;
+			eframe[VPM_CMD_BYTE(x, 1)] = 0x00;
+			eframe[VPM_CMD_BYTE(x, 2)] = 0x00;
 		}
 	}
 
 	/* Add our leds in */
 	for (x = 24; x < 28; x++) {
-		eframe[CMD_BYTE(x, 0, 0)] |= leds;
+		eframe[VPM_CMD_BYTE(x, 0)] |= leds;
 	}
 }
 
@@ -587,14 +605,10 @@ static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 {
 	struct wctdm_module *const mod = &wc->mods[card];
 	unsigned int curcmd=0;
-	int subaddr = card & 0x3;
 
 	/* QRV only use commands relating to the first channel */
 	if ((card & 0x03) && (mod->type == QRV))
 		return;
-
-	if (mod->altcs)
-		subaddr = 0;
 
 	/* Skip audio */
 	eframe += 24;
@@ -632,24 +646,23 @@ static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 
 	switch (mod->type) {
 	case FXS:
-		eframe[CMD_BYTE(card, 0, mod->altcs)] = (1 << (subaddr));
+		eframe[CMD_BYTE(mod, 0)] = (1 << (mod->subaddr));
 		if (curcmd & __CMD_WR)
-			eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0x7f;
+			eframe[CMD_BYTE(mod, 1)] = (curcmd >> 8) & 0x7f;
 		else
-			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x80 | ((curcmd >> 8) & 0x7f);
-		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
+			eframe[CMD_BYTE(mod, 1)] = 0x80 | ((curcmd >> 8) & 0x7f);
+		eframe[CMD_BYTE(mod, 2)] = curcmd & 0xff;
 		break;
 
 	case FXO:
 	{
-		static const int FXO_ADDRS[4] = { 0x00, 0x08, 0x04, 0x0c };
-		int idx = CMD_BYTE(card, 0, mod->altcs);
+		static const int ADDRS[4] = {0x00, 0x08, 0x04, 0x0c};
 		if (curcmd & __CMD_WR)
-			eframe[idx] = 0x20 | FXO_ADDRS[subaddr];
+			eframe[CMD_BYTE(mod, 0)] = 0x20 | ADDRS[mod->subaddr];
 		else
-			eframe[idx] = 0x60 | FXO_ADDRS[subaddr];
-		eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0xff;
-		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
+			eframe[CMD_BYTE(mod, 0)] = 0x60 | ADDRS[mod->subaddr];
+		eframe[CMD_BYTE(mod, 1)] = (curcmd >> 8) & 0xff;
+		eframe[CMD_BYTE(mod, 2)] = curcmd & 0xff;
 		break;
 	}
 	case FXSINIT:
@@ -657,41 +670,41 @@ static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 		   switch to the regular mode.  To send it into thee byte mode, treat the path as
 		   6 two-byte commands and in the last one we initialize register 0 to 0x80. All modules
 		   read this as the command to switch to daisy chain mode and we're done.  */
-		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
-		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x00;
+		eframe[CMD_BYTE(mod, 0)] = 0x00;
+		eframe[CMD_BYTE(mod, 1)] = 0x00;
 		if ((card & 0x1) == 0x1) 
-			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x80;
+			eframe[CMD_BYTE(mod, 2)] = 0x80;
 		else
-			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
+			eframe[CMD_BYTE(mod, 2)] = 0x00;
 		break;
 
 	case BRI:
 		if (unlikely((curcmd != 0x101010) && (curcmd & 0x1010) == 0x1010)) /* b400m CPLD */
-			eframe[CMD_BYTE(card, 0, 0)] = 0x55;
+			eframe[CMD_BYTE(mod, 0)] = 0x55;
 		else /* xhfc */
-			eframe[CMD_BYTE(card, 0, 0)] = 0x10;
-		eframe[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
-		eframe[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
+			eframe[CMD_BYTE(mod, 0)] = 0x10;
+		eframe[CMD_BYTE(mod, 1)] = (curcmd >> 8) & 0xff;
+		eframe[CMD_BYTE(mod, 2)] = curcmd & 0xff;
 		break;
 
 	case QRV:
-		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
+		eframe[CMD_BYTE(mod, 0)] = 0x00;
 		if (!curcmd) {
-			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x00;
-			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
+			eframe[CMD_BYTE(mod, 1)] = 0x00;
+			eframe[CMD_BYTE(mod, 2)] = 0x00;
 		} else {
 			if (curcmd & __CMD_WR)
-				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x40 | ((curcmd >> 8) & 0x3f);
+				eframe[CMD_BYTE(mod, 1)] = 0x40 | ((curcmd >> 8) & 0x3f);
 			else
-				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0xc0 | ((curcmd >> 8) & 0x3f);
-			eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
+				eframe[CMD_BYTE(mod, 1)] = 0xc0 | ((curcmd >> 8) & 0x3f);
+			eframe[CMD_BYTE(mod, 2)] = curcmd & 0xff;
 		}
 		break;
 
 	case NONE:
-		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x10;
-		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x10;
-		eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x10;
+		eframe[CMD_BYTE(mod, 0)] = 0x10;
+		eframe[CMD_BYTE(mod, 1)] = 0x10;
+		eframe[CMD_BYTE(mod, 2)] = 0x10;
 		break;
 	}
 }
@@ -725,8 +738,8 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 	eframe += 24;
 
 	/* Store result */
-	cmd->data = (0xff & eframe[CMD_BYTE(25, 1, 0)]) << 8;
-	cmd->data |= eframe[CMD_BYTE(25, 2, 0)];
+	cmd->data = (0xff & eframe[VPM_CMD_BYTE(25, 1)]) << 8;
+	cmd->data |= eframe[VPM_CMD_BYTE(25, 2)];
 	if (cmd->desc & __VPM150M_WR) {
 		kfree(cmd);
 	} else {
@@ -762,7 +775,7 @@ static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 	address = (cmd->cmd >> 8) & 0xff;
 
-	cmd->cmd = eframe[TDM_BYTES + CMD_BYTE(card, 2, mod->altcs)];
+	cmd->cmd = eframe[TDM_BYTES + CMD_BYTE(mod, 2)];
 
 	value = (cmd->cmd & 0xff);
 
@@ -773,30 +786,11 @@ static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 	switch (mod->type) {
 	case FXS:
-		if (68 == address) {
-			mod->isrshadow[0] = value;
-#ifdef PAQ_DEBUG
-		} else if (19 == address) {
-			mod->isrshadow[1] = value;
-#else
-		} else if (LINE_STATE == address) {
-			mod->isrshadow[1] = value;
-#endif
-		} else {
-			dev_info(&wc->vb.pdev->dev,
-				 "FXS isr read address: %d\n", address);
-		}
+		mod->isrshadow[(68 == address) ? 0 : 1] = value;
 		break;
 	case FXO:
-		if (5 == address) { /* Hook/Ring state */
-			mod->isrshadow[0] = value;
-		} else if (29 == address) { /* Battery */
-			mod->isrshadow[1] = value;
-		} else {
-			dev_info(&wc->vb.pdev->dev,
-				 "FXO isr read address: %d %08x\n",
-				 address, cmd->cmd);
-		}
+		/* 5 = Hook/Ring  29 = Battery */
+		mod->isrshadow[(5 == address) ? 0 : 1] = value;
 		break;
 	case QRV:
 		/* wctdm_isr_getreg(wc, mod, 3); */ /* COR/CTCSS state */
@@ -4292,6 +4286,7 @@ static void wctdm_identify_modules(struct wctdm *wc)
 		struct wctdm_module *const mod = &wc->mods[x];
 		enum {SANE = 1, UNKNOWN = 0};
 		int ret = 0, readi = 0;
+		bool altcs = false;
 
 		if (fatal_signal_pending(current))
 			break;
@@ -4354,20 +4349,22 @@ retry:
 			continue;
 		}
 
-		if ((wc->desc->ports != 24) && ((x&0x3) == 1) && !mod->altcs) {
+		if ((wc->desc->ports != 24) && ((x&0x3) == 1) && !altcs) {
 
 			spin_lock_irqsave(&wc->reglock, flags);
-			mod->altcs = 2;
+			set_offsets(mod, 2);
+			altcs = true;
 
 			if (wc->desc->ports == 4) {
-				wc->mods[x+1].altcs = 3;
-				wc->mods[x+2].altcs = 3;
+				set_offsets(&wc->mods[x+1], 3);
+				set_offsets(&wc->mods[x+2], 3);
 			}
 
 			mod->type = FXSINIT;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 
-			msleep(20);
+			udelay(1000);
+			udelay(1000);
 
 			spin_lock_irqsave(&wc->reglock, flags);
 			mod->type = FXS;
@@ -5068,10 +5065,12 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		wc->companding = DAHDI_LAW_DEFAULT;
 
 	for (i = 0; i < ARRAY_SIZE(wc->mods); i++) {
-		INIT_LIST_HEAD(&wc->mods[i].pending_cmds);
-		INIT_LIST_HEAD(&wc->mods[i].active_cmds);
-		wc->mods[i].dacssrc = -1;
-		wc->mods[i].card = i;
+		struct wctdm_module *const mod = &wc->mods[i];
+		INIT_LIST_HEAD(&mod->pending_cmds);
+		INIT_LIST_HEAD(&mod->active_cmds);
+		mod->dacssrc = -1;
+		mod->card = i;
+		set_offsets(mod, 0);
 	}
 
 	/* Start the hardware processing. */
