@@ -170,7 +170,6 @@ struct wctdm {
 	int mods_per_board;			/* maximum number of modules for this board */
 	int digi_mods;				/* number of digital modules present */
 	int avchannels;				/* active "voice" (voice, B and D) channels */
-	int modmap;				/* Bit-map of present cards (1=present) */
 
 	int altcs[NUM_MODULES];
 

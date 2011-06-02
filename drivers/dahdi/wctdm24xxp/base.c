@@ -877,10 +877,6 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		 * BRI modules have a different number of TDM channels than
 		 * installed modules. */
 		for (y = 0; y < wc->avchannels; y++) {
-			if (!x && y < wc->mods_per_board) {
-				cmd_checkisr(wc, y);
-			}
-
 			if (y < wc->mods_per_board)
 				cmd_dequeue(wc, eframe, y, x);
 		}
@@ -1993,19 +1989,24 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 {
 	int x;
 
-	if (unlikely(!wc->initialized)) {
+	if (unlikely(!wc->initialized))
 		return;
-	}
 
 	for (x = 0; x < wc->mods_per_board; x++) {
-		if (wc->modmap & (1 << x)) {
-			if (wc->modtype[x] == MOD_TYPE_FXS) {
-				wctdm_isr_misc_fxs(wc, x);
-			} else if (wc->modtype[x] == MOD_TYPE_FXO) {
-				wctdm_voicedaa_check_hook(wc, x);
-			} else if (wc->modtype[x] == MOD_TYPE_QRV) {
-				wctdm_qrvdri_check_hook(wc, x);
-			}
+		spin_lock(&wc->reglock);
+		cmd_checkisr(wc, x);
+		spin_unlock(&wc->reglock);
+
+		switch (wc->modtype[x]) {
+		case MOD_TYPE_FXS:
+			wctdm_isr_misc_fxs(wc, x);
+			break;
+		case MOD_TYPE_FXO:
+			wctdm_voicedaa_check_hook(wc, x);
+			break;
+		case MOD_TYPE_QRV:
+			wctdm_qrvdri_check_hook(wc, x);
+			break;
 		}
 	}
 }
@@ -2815,6 +2816,11 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 
 	wc->mods[card].fxs.lasttxhook = wc->mods[card].fxs.idletxhookstate;
 	wctdm_setreg(wc, card, LINE_STATE, wc->mods[card].fxs.lasttxhook);
+
+	/* Preset the isrshadow register so that we won't get a power alarm
+	 * when we finish initialization, otherwise the line state register
+	 * may not have been read yet. */
+	wc->cmdq[card].isrshadow[1] = wc->mods[card].fxs.lasttxhook;
 	return 0;
 }
 
@@ -3358,8 +3364,6 @@ static int wctdm_open(struct dahdi_chan *chan)
 	channo = chan->chanpos - 1;
 
 #if 0
-	if (!(wc->modmap & (1 << (chan->chanpos - 1))))
-		return -ENODEV;
 	if (wc->dead)
 		return -ENODEV;
 #endif
@@ -3932,7 +3936,6 @@ static int wctdm_identify_modules(struct wctdm *wc)
 			break;
 retry:
 		if (!(ret = wctdm_init_proslic(wc, x, 0, 0, sane))) {
-			wc->modmap |= (1 << x);
 			if (debug & DEBUG_CARD) {
 				readi = wctdm_getreg(wc,x,LOOP_I_LIMIT);
 				dev_info(&wc->vb.pdev->dev, "Proslic module %d loop current is %dmA\n", x, ((readi*3)+20));
@@ -3943,7 +3946,6 @@ retry:
 				sane = 1;
 				/* Init with Manual Calibration */
 				if (!wctdm_init_proslic(wc, x, 0, 1, sane)) {
-					wc->modmap |= (1 << x);
 
 					if (debug & DEBUG_CARD) {
 						readi = wctdm_getreg(wc, x, LOOP_I_LIMIT);
@@ -3956,17 +3958,14 @@ retry:
 				}
 
 			} else if (!(ret = wctdm_init_voicedaa(wc, x, 0, 0, sane))) {
-				wc->modmap |= (1 << x);
 				dev_info(&wc->vb.pdev->dev,
 					 "Port %d: Installed -- AUTO FXO "
 					 "(%s mode)\n", x + 1,
 					 fxo_modes[_opermode].name);
 			} else if (!wctdm_init_qrvdri(wc, x)) {
-				wc->modmap |= 1 << x;
 				dev_info(&wc->vb.pdev->dev,
 					 "Port %d: Installed -- QRV DRI card\n", x + 1);
 			} else if (is_hx8(wc) && !wctdm_init_b400m(wc, x)) {
-				wc->modmap |= (1 << x);
 				dev_info(&wc->vb.pdev->dev,
 					 "Port %d: Installed -- BRI "
 					 "quad-span module\n", x + 1);
