@@ -107,10 +107,9 @@ static int loopcurrent = 20;
  * 	polarity reversal for the port,
  * 	and the state of the line reversal MWI indicator
  */
-#define POLARITY_XOR(card) \
-	((reversepolarity != 0) ^ \
-	(wc->mods[(card)].mod.fxs.reversepolarity != 0) ^ \
-	(wc->mods[(card)].mod.fxs.vmwi_linereverse != 0))
+#define POLARITY_XOR(fxs) \
+	((reversepolarity != 0) ^ ((fxs)->reversepolarity != 0) ^ \
+	((fxs)->vmwi_linereverse != 0))
 
 static int reversepolarity = 0;
 
@@ -1373,7 +1372,7 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 			dev_notice(&wc->vb.pdev->dev, "Power alarm on module %d, resetting!\n", card + 1);
 			spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 			if (fxs->lasttxhook == SLIC_LF_RINGING) {
-				fxs->lasttxhook = POLARITY_XOR(card) ?
+				fxs->lasttxhook = POLARITY_XOR(fxs) ?
 							SLIC_LF_ACTIVE_REV :
 							SLIC_LF_ACTIVE_FWD;;
 			}
@@ -1763,7 +1762,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 			x = fxs->idletxhookstate;
 			break;
 		case DAHDI_SIG_FXOGS:
-			x = (POLARITY_XOR(card)) ?
+			x = (POLARITY_XOR(fxs)) ?
 					SLIC_LF_RING_OPEN :
 					SLIC_LF_TIP_OPEN;
 			break;
@@ -1777,7 +1776,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 	case DAHDI_TXSIG_OFFHOOK:
 		switch (wc->aspan->span.chans[card]->sig) {
 		case DAHDI_SIG_EM:
-			x = (POLARITY_XOR(card)) ?
+			x = (POLARITY_XOR(fxs)) ?
 					SLIC_LF_ACTIVE_FWD :
 					SLIC_LF_ACTIVE_REV;
 			break;
@@ -1826,7 +1825,7 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
 	case SLIC_LF_OHTRAN_FWD:	/* Forward On Hook Transfer */
 	case SLIC_LF_OHTRAN_REV:	/* Reverse On Hook Transfer */
 		/* just detected OffHook, during Ringing or OnHookTransfer */
-		fxs->idletxhookstate = POLARITY_XOR(card) ?
+		fxs->idletxhookstate = POLARITY_XOR(fxs) ?
 						SLIC_LF_ACTIVE_REV :
 						SLIC_LF_ACTIVE_FWD;
 		break;
@@ -1967,7 +1966,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 		/* RINGing, prepare for OHT */
 		fxs->ohttimer = OHT_TIMER << 3;
 		/* OHT mode when idle */
-		fxs->idletxhookstate = POLARITY_XOR(card) ? SLIC_LF_OHTRAN_REV :
+		fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_OHTRAN_REV :
 							    SLIC_LF_OHTRAN_FWD;
 	} else if (fxs->ohttimer) {
 		 /* check if still OnHook */
@@ -1977,7 +1976,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 				return;
 
 			/* Switch to active */
-			fxs->idletxhookstate = POLARITY_XOR(card) ? SLIC_LF_ACTIVE_REV :
+			fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_ACTIVE_REV :
 								    SLIC_LF_ACTIVE_FWD;
 			spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 			if (SLIC_LF_OHTRAN_FWD == fxs->lasttxhook) {
@@ -2005,7 +2004,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 		} else {
 			fxs->ohttimer = 0;
 			/* Switch to active */
-			fxs->idletxhookstate = POLARITY_XOR(card) ? SLIC_LF_ACTIVE_REV : SLIC_LF_ACTIVE_FWD;
+			fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_ACTIVE_REV : SLIC_LF_ACTIVE_FWD;
 			if (debug & DEBUG_CARD) {
 				dev_info(&wc->vb.pdev->dev,
 					 "Channel %d OnHookTransfer abort\n",
@@ -2459,7 +2458,7 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 		fxs->vmwi_linereverse = 0;
 
 	/* Set line polarity for new VMWI state */
-	if (POLARITY_XOR(chan_idx)) {
+	if (POLARITY_XOR(fxs)) {
 		fxs->idletxhookstate |= SLIC_LF_REVMASK;
 		/* Do not set while currently ringing or open */
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_RINGING)  &&
@@ -3080,7 +3079,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		fxs->ohttimer = x << 3;
 
 		/* Active mode when idle */
-		fxs->idletxhookstate = POLARITY_XOR(chan->chanpos - 1) ?
+		fxs->idletxhookstate = POLARITY_XOR(fxs) ?
 						SLIC_LF_ACTIVE_REV :
 						SLIC_LF_ACTIVE_FWD;
 
@@ -3088,7 +3087,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_ACTIVE_REV)) {
 
 			x = set_lasttxhook_interruptible(fxs,
-				(POLARITY_XOR(chan->chanpos - 1) ?
+				(POLARITY_XOR(fxs) ?
 				SLIC_LF_OHTRAN_REV : SLIC_LF_OHTRAN_FWD),
 				&mod->sethook);
 
@@ -3238,7 +3237,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 		fxs->reversepolarity = (x) ? 1 : 0;
 
-		if (POLARITY_XOR(chan->chanpos - 1)) {
+		if (POLARITY_XOR(fxs)) {
 			fxs->idletxhookstate |= SLIC_LF_REVMASK;
 			x = fxs->lasttxhook & SLIC_LF_SETMASK;
 			x |= SLIC_LF_REVMASK;
@@ -3455,8 +3454,8 @@ static int wctdm_close(struct dahdi_chan *chan)
 		struct wctdm_module *const mod = &wc->mods[x];
 		if (FXS == mod->type) {
 			mod->mod.fxs.idletxhookstate =
-				POLARITY_XOR(x) ? SLIC_LF_ACTIVE_REV :
-						  SLIC_LF_ACTIVE_FWD;
+			    POLARITY_XOR(&mod->mod.fxs) ? SLIC_LF_ACTIVE_REV :
+							  SLIC_LF_ACTIVE_FWD;
 		} else if (QRV == mod->type) {
 			int qrvcard = x & 0xfc;
 
