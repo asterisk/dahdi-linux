@@ -1728,7 +1728,7 @@ static inline void print_debug_writebuf(struct dahdi_chan* ss, struct sk_buff *s
 #endif
 
 #ifdef CONFIG_DAHDI_NET
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 static inline struct net_device_stats *hdlc_stats(struct net_device *dev)
 {
 	return &dev->stats;
