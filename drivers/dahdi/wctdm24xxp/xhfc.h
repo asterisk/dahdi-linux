@@ -35,7 +35,8 @@ struct b400m;
 
 /* probes the given card to see if it's a B400M */
 int wctdm_init_b400m(struct wctdm *wc, int card);
-int wctdm_bri_checkisr(struct wctdm *wc, int card, int offset);
+void wctdm_bri_checkisr(struct wctdm *wc,
+			struct wctdm_module *const mod, int offset);
 void wctdm_unload_b400m(struct wctdm *wc, int card);
 void wctdm_hdlc_hard_xmit(struct dahdi_chan *chan);
 int b400m_spanconfig(struct file *file, struct dahdi_span *span,

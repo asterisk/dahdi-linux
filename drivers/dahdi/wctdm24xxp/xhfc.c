@@ -615,27 +615,32 @@ static inline void flush_hw(void)
 {
 }
 
-static int xhfc_getreg(struct wctdm *wc, int card,
+static int xhfc_getreg(struct wctdm *wc, struct wctdm_module *const mod,
 		       int addr, u8 *lastreg)
 {
 	int x;
 
 	if (*lastreg != (unsigned char)addr) {
-		wctdm_setreg(wc, card, 0x60, addr);
+		wctdm_setreg(wc, mod, 0x60, addr);
 		*lastreg = (unsigned char)addr;
 	}
-	x = wctdm_getreg(wc, card, 0x80);
+	x = wctdm_getreg(wc, mod, 0x80);
 	return x;
 }
 
-static int xhfc_setreg(struct wctdm *wc, int card, int addr,
-		       int val, u8 *lastreg)
+static int xhfc_setreg(struct wctdm *wc, struct wctdm_module *const mod,
+		       int addr, int val, u8 *lastreg)
 {
 	if (*lastreg != (unsigned char)addr) {
-		wctdm_setreg(wc, card, 0x60, addr);
+		wctdm_setreg(wc, mod, 0x60, addr);
 		*lastreg = (unsigned char)addr;
 	}
-	return wctdm_setreg(wc, card, 0x00, val);
+	return wctdm_setreg(wc, mod, 0x00, val);
+}
+
+static inline struct wctdm_module *get_mod(struct b400m *b4)
+{
+	return &b4->wc->mods[b4->position];
 }
 
 static int b400m_getreg(struct b400m *b4, int addr)
@@ -650,7 +655,7 @@ static int b400m_getreg(struct b400m *b4, int addr)
 		}
 	}
 
-	x = xhfc_getreg(b4->wc, b4->position, addr, &b4->lastreg);
+	x = xhfc_getreg(b4->wc, get_mod(b4), addr, &b4->lastreg);
 	up(&b4->regsem);
 
 	return x;
@@ -668,7 +673,7 @@ static int b400m_setreg(struct b400m *b4, const int addr, const int val)
 		}
 	}
 
-	x = xhfc_setreg(b4->wc, b4->position, addr, val, &b4->lastreg);
+	x = xhfc_setreg(b4->wc, get_mod(b4), addr, val, &b4->lastreg);
 	up(&b4->regsem);
 
 	return x;
@@ -689,8 +694,8 @@ static void b400m_setreg_ra(struct b400m *b4, u8 r, u8 rd, u8 a, u8 ad)
 		}
 	}
 
-	xhfc_setreg(b4->wc, b4->position, r, rd, &b4->lastreg);
-	xhfc_setreg(b4->wc, b4->position, a, ad, &b4->lastreg);
+	xhfc_setreg(b4->wc, get_mod(b4), r, rd, &b4->lastreg);
+	xhfc_setreg(b4->wc, get_mod(b4), a, ad, &b4->lastreg);
 	up(&b4->regsem);
 }
 
@@ -705,8 +710,8 @@ static u8 b400m_getreg_ra(struct b400m *b4, u8 r, u8 rd, u8 a)
 		}
 	}
 
-	xhfc_setreg(b4->wc, b4->position, r, rd, &b4->lastreg);
-	res = xhfc_getreg(b4->wc, b4->position, a, &b4->lastreg);
+	xhfc_setreg(b4->wc, get_mod(b4), r, rd, &b4->lastreg);
+	res = xhfc_getreg(b4->wc, get_mod(b4), a, &b4->lastreg);
 	up(&b4->regsem);
 	return res;
 }
@@ -2161,7 +2166,7 @@ static int b400m_set_ntte(struct b400m_span *bspan, int te_mode, int term_on)
 	addr = 0x10 | all_modes;
 
 	msleep(voicebus_current_latency(&b4->wc->vb) + 2);
-	wctdm_setreg(b4->wc, b4->position, addr, data);
+	wctdm_setreg(b4->wc, get_mod(b4), addr, data);
 
 	b4->lastreg = 0xff;
 	msleep(voicebus_current_latency(&b4->wc->vb) + 2);
@@ -2503,30 +2508,25 @@ static void xhfc_work(struct work_struct *work)
 	hfc_update_st_timers(b4);
 }
 
-int wctdm_bri_checkisr(struct wctdm *wc, int modpos, int offset)
+void wctdm_bri_checkisr(struct wctdm *wc, struct wctdm_module *const mod,
+			int offset)
 {
-	struct b400m *b4;
-	int ret = 0;
+	struct b400m *b4 = mod->mod.bri;
 
 	/* don't do anything for non-base card slots */
-	if (modpos & 0x03)
-		return 0;
+	if (mod->card & 0x03)
+		return;
 
 	/* DEFINITELY don't do anything if our structures aren't ready! */
-	if (!wc || !wc->initialized || !(wc->mods[modpos].mod.bri) ||
-	    !((struct b400m *)wc->mods[modpos].mod.bri)->inited) {
-		return 0;
-	}
+	if (!wc->initialized || !b4 || !b4->inited)
+		return;
 
-	b4 = (struct b400m *)wc->mods[modpos].mod.bri;
 	if (offset == 0) {
-		if (!b4->shutdown) {
-			/* if (!(wc->intcount % 50)) */
-				queue_work(b4->xhfc_ws, &b4->xhfc_wq);
-		}
+		if (!b4->shutdown)
+			queue_work(b4->xhfc_ws, &b4->xhfc_wq);
 		b4->ticks++;
 	}
-	return ret;
+	return;
 }
 
 /* DAHDI calls this when it has data it wants to send to the HDLC controller */
@@ -2562,8 +2562,8 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	unsigned long flags;
 	int chiprev;
 
-	wctdm_setreg(wc, modpos, 0x10, 0x10);
-	id = xhfc_getreg(wc, modpos, R_CHIP_ID, &x);
+	wctdm_setreg(wc, &wc->mods[modpos], 0x10, 0x10);
+	id = xhfc_getreg(wc, &wc->mods[modpos], R_CHIP_ID, &x);
 
 	/* chip ID high 7 bits must be 0x62, see datasheet */
 	if ((id & 0xfe) != 0x62)

@@ -230,6 +230,7 @@ struct wctdm_module {
 	int flags;   /* bitmap of board-specific + module-specific flags */
 
 	int altcs;
+	u8 card;
 };
 
 struct wctdm {
@@ -279,8 +280,9 @@ struct wctdm {
 /* Atomic flag bits for checkflag field */
 #define WCTDM_CHECK_TIMING	0
 
-int wctdm_getreg(struct wctdm *wc, int card, int addr);
-int wctdm_setreg(struct wctdm *wc, int card, int addr, int val);
+int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr);
+int wctdm_setreg(struct wctdm *wc, struct wctdm_module *const mod,
+		 int addr, int val);
 
 int wctdm_wait_for_ready(const struct wctdm *wc);
 

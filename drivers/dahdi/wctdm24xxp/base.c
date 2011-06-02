@@ -198,6 +198,18 @@ static inline bool is_hx8(const struct wctdm *wc)
 	return (&wcha80000 == wc->desc) || (&wchb80000 == wc->desc);
 }
 
+static inline struct dahdi_chan *
+get_dahdi_chan(const struct wctdm *wc, struct wctdm_module *const mod)
+{
+	return wc->aspan->span.chans[mod->card];
+}
+
+static inline void
+mod_hooksig(struct wctdm *wc, struct wctdm_module *mod, enum dahdi_rxsig rxsig)
+{
+	dahdi_hooksig(get_dahdi_chan(wc, mod), rxsig);
+}
+
 struct wctdm *ifaces[WC_MAX_IFACES];
 DEFINE_SEMAPHORE(ifacelock);
 
@@ -257,7 +269,9 @@ static const struct dahdi_echocan_ops vpm_ec_ops = {
 	.echocan_free = echocan_free,
 };
 
-static int wctdm_init_proslic(struct wctdm *wc, int card, int fast , int manual, int sane);
+static int
+wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod, int fast,
+		   int manual, int sane);
 
 static inline int CMD_BYTE(int card, int bit, int altcs)
 {
@@ -276,11 +290,11 @@ static inline int CMD_BYTE(int card, int bit, int altcs)
 			+ ((card) >> 2) + (altcs) + ((altcs) ? -21 : 0));
 }
 
-static inline int empty_slot(struct wctdm *wc, int card)
+static inline int empty_slot(struct wctdm_module *const mod)
 {
 	int x;
 	for (x = 0; x < USER_COMMANDS; x++) {
-		if (!wc->mods[card].cmdq.cmds[x])
+		if (!mod->cmdq.cmds[x])
 			return x;
 	}
 	return -1;
@@ -419,11 +433,12 @@ static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
 	}
 
 	for (i = 0; i < vpm->options.channels; ++i) {
+		struct dahdi_chan *const chan = &wc->chans[i]->chan;
 		vpm->curecstate[i].tap_length = 0;
 		vpm->curecstate[i].nlp_type = vpm->options.vpmnlptype;
 		vpm->curecstate[i].nlp_threshold = vpm->options.vpmnlpthresh;
 		vpm->curecstate[i].nlp_max_suppress = vpm->options.vpmnlpmaxsupp;
-		vpm->curecstate[i].companding = (wc->chans[i]->chan.span->deflaw == DAHDI_LAW_ALAW) ? ADT_COMP_ALAW : ADT_COMP_ULAW;
+		vpm->curecstate[i].companding = (chan->span->deflaw == DAHDI_LAW_ALAW) ? ADT_COMP_ALAW : ADT_COMP_ULAW;
 		/* set_vpmadt032_chanconfig_from_state(&vpm->curecstate[i], &vpm->options, i, &chanconfig); !!! */
 		vpm->setchanconfig_from_state(vpm, i, &chanconfig);
 		if ((res = gpakConfigureChannel(vpm->dspid, i, tdmToTdm, &chanconfig, &cstatus))) {
@@ -763,10 +778,8 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
-static inline void cmd_checkisr(struct wctdm *wc, int card)
+static void cmd_checkisr(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct wctdm_module *const mod = &wc->mods[card];
-
 	if (!mod->cmdq.cmds[USER_COMMANDS + 0]) {
 		if (mod->sethook) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = mod->sethook;
@@ -776,9 +789,9 @@ static inline void cmd_checkisr(struct wctdm *wc, int card)
 		} else if (mod->type == FXO) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(5);	/* Hook/Ring state */
 		} else if (mod->type == QRV) {
-			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
+			wc->mods[mod->card & 0xfc].cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
 		} else if (mod->type == BRI) {
-			mod->cmdq.cmds[USER_COMMANDS + 0] = wctdm_bri_checkisr(wc, card, 0);
+			wctdm_bri_checkisr(wc, mod, 0);
 		}
 	}
 	if (!mod->cmdq.cmds[USER_COMMANDS + 1]) {
@@ -791,9 +804,9 @@ static inline void cmd_checkisr(struct wctdm *wc, int card)
 		} else if (mod->type == FXO) {
 			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(29);	/* Battery */
 		} else if (mod->type == QRV) {
-			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
+			wc->mods[mod->card & 0xfc].cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
 		} else if (mod->type == BRI) {
-			mod->cmdq.cmds[USER_COMMANDS + 1] = wctdm_bri_checkisr(wc, card, 1);
+			wctdm_bri_checkisr(wc, mod, 1);
 		}
 	}
 }
@@ -903,55 +916,59 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 }
 
 static bool
-stuff_command(struct wctdm *wc, int card, unsigned int cmd, int *hit)
+stuff_command(struct wctdm *wc, struct wctdm_module *const mod,
+	      unsigned int cmd, int *hit)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	*hit = empty_slot(wc, card);
+	*hit = empty_slot(mod);
 	if (*hit > -1)
-		wc->mods[card].cmdq.cmds[*hit] = cmd;
+		mod->cmdq.cmds[*hit] = cmd;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	return (*hit > -1);
 }
 
 static int
-wctdm_setreg_full(struct wctdm *wc, int card, int addr, int val, int inisr)
+wctdm_setreg_full(struct wctdm *wc, struct wctdm_module *mod,
+		  int addr, int val, int inisr)
 {
+	const unsigned int cmd = CMD_WR(addr, val);
 	int ret;
 	int hit;
-	const unsigned int cmd = CMD_WR(addr, val);
 
+#if 0 /* TODO */
 	/* QRV and BRI cards are only addressed at their first "port" */
 	if ((card & 0x03) && ((wc->mods[card].type ==  QRV) ||
 	    (wc->mods[card].type ==  BRI)))
 		return 0;
+#endif
 
 	if (inisr) {
-		stuff_command(wc, card, cmd, &hit);
+		stuff_command(wc, mod, cmd, &hit);
 		return 0;
 	}
 
 	ret = wait_event_interruptible(wc->regq,
-			stuff_command(wc, card, cmd, &hit));
+			stuff_command(wc, mod, cmd, &hit));
 	return ret;
 }
 
 static inline void
-wctdm_setreg_intr(struct wctdm *wc, int card, int addr, int val)
+wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
 {
-	wctdm_setreg_full(wc, card, addr, val, 1);
+	wctdm_setreg_full(wc, mod, addr, val, 1);
 }
 
-int wctdm_setreg(struct wctdm *wc, int card, int addr, int val)
+int wctdm_setreg(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
 {
-	return wctdm_setreg_full(wc, card, addr, val, 0);
+	return wctdm_setreg_full(wc, mod, addr, val, 0);
 }
 
-static bool cmd_finished(struct wctdm *wc, int card, int hit, u8 *val)
+static bool
+cmd_finished(struct wctdm *wc, struct wctdm_module *const mod, int hit, u8 *val)
 {
-	struct wctdm_module *const mod = &wc->mods[card];
 	bool ret;
 	unsigned long flags;
 
@@ -968,26 +985,28 @@ static bool cmd_finished(struct wctdm *wc, int card, int hit, u8 *val)
 	return ret;
 }
 
-int wctdm_getreg(struct wctdm *wc, int card, int addr)
+int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
 {
 	const unsigned int cmd = CMD_RD(addr);
 	u8 val = 0;
 	int hit;
 	int ret;
 
+#if 0 /* TODO */
 	/* if a QRV card, use only its first channel */  
 	if (wc->mods[card].type ==  QRV) {
 		if (card & 3)
 			return 0;
 	}
+#endif
 
 	ret = wait_event_interruptible(wc->regq,
-			stuff_command(wc, card, cmd, &hit));
+			stuff_command(wc, mod, cmd, &hit));
 	if (ret)
 		return ret;
 
 	ret = wait_event_interruptible(wc->regq,
-			cmd_finished(wc, card, hit, &val));
+			cmd_finished(wc, mod, hit, &val));
 	if (ret)
 		return ret;
 
@@ -1106,7 +1125,8 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 	/* XXX We're wasting 8 taps.  We should get closer :( */
 	if (likely(wc->initialized)) {
 		for (x = 0; x < wc->avchannels; x++) {
-			struct dahdi_chan *c = &wc->chans[x]->chan;
+			struct wctdm_chan *const wchan = wc->chans[x];
+			struct dahdi_chan *const c = &wchan->chan;
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 			unsigned char buffer[DAHDI_CHUNKSIZE];
 			__dahdi_fifo_get(wc->ec_reference[x], buffer,
@@ -1140,26 +1160,24 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 	wake_up_interruptible_all(&wc->regq);
 }
 
-static int wait_access(struct wctdm *wc, int card)
+static int wait_access(struct wctdm *wc, struct wctdm_module *const mod)
 {
-    unsigned char data=0;
-    int count = 0;
+	unsigned char data = 0;
+	int count = 0;
 
-    #define MAX 10 /* attempts */
+	#define MAX 10 /* attempts */
 
-
-    /* Wait for indirect access */
-    while (count++ < MAX)
-	 {
-		data = wctdm_getreg(wc, card, I_STATUS);
-
+	/* Wait for indirect access */
+	while (count++ < MAX) {
+		data = wctdm_getreg(wc, mod, I_STATUS);
 		if (!data)
 			return 0;
+	}
 
-	 }
-
-    if (count > (MAX-1))
-	    dev_notice(&wc->vb.pdev->dev, " ##### Loop error (%02x) #####\n", data);
+	if (count > (MAX-1)) {
+		dev_notice(&wc->vb.pdev->dev,
+			   " ##### Loop error (%02x) #####\n", data);
+	}
 
 	return 0;
 }
@@ -1176,40 +1194,44 @@ static unsigned char translate_3215(unsigned char address)
 	return address;
 }
 
-static int wctdm_proslic_setreg_indirect(struct wctdm *wc, int card, unsigned char address, unsigned short data)
+static int
+wctdm_proslic_setreg_indirect(struct wctdm *wc, struct wctdm_module *const mod,
+			      unsigned char address, unsigned short data)
 {
 	int res = -1;
 	/* Translate 3215 addresses */
-	if (wc->mods[card].flags & FLAG_3215) {
+	if (mod->flags & FLAG_3215) {
 		address = translate_3215(address);
 		if (address == 255)
 			return 0;
 	}
-	if (!wait_access(wc, card)) {
-		wctdm_setreg(wc, card, IDA_LO,(unsigned char)(data & 0xFF));
-		wctdm_setreg(wc, card, IDA_HI,(unsigned char)((data & 0xFF00)>>8));
-		wctdm_setreg(wc, card, IAA,address);
+	if (!wait_access(wc, mod)) {
+		wctdm_setreg(wc, mod, IDA_LO, (u8)(data & 0xFF));
+		wctdm_setreg(wc, mod, IDA_HI, (u8)((data & 0xFF00)>>8));
+		wctdm_setreg(wc, mod, IAA, address);
 		res = 0;
 	};
 	return res;
 }
 
-static int wctdm_proslic_getreg_indirect(struct wctdm *wc, int card, unsigned char address)
+static int
+wctdm_proslic_getreg_indirect(struct wctdm *wc, struct wctdm_module *const mod,
+			      unsigned char address)
 { 
 	int res = -1;
 	char *p=NULL;
 	/* Translate 3215 addresses */
-	if (wc->mods[card].flags & FLAG_3215) {
+	if (mod->flags & FLAG_3215) {
 		address = translate_3215(address);
 		if (address == 255)
 			return 0;
 	}
-	if (!wait_access(wc, card)) {
-		wctdm_setreg(wc, card, IAA, address);
-		if (!wait_access(wc, card)) {
+	if (!wait_access(wc, mod)) {
+		wctdm_setreg(wc, mod, IAA, address);
+		if (!wait_access(wc, mod)) {
 			unsigned char data1, data2;
-			data1 = wctdm_getreg(wc, card, IDA_LO);
-			data2 = wctdm_getreg(wc, card, IDA_HI);
+			data1 = wctdm_getreg(wc, mod, IDA_LO);
+			data2 = wctdm_getreg(wc, mod, IDA_HI);
 			res = data1 | (data2 << 8);
 		} else
 			p = "Failed to wait inside\n";
@@ -1220,12 +1242,13 @@ static int wctdm_proslic_getreg_indirect(struct wctdm *wc, int card, unsigned ch
 	return res;
 }
 
-static int wctdm_proslic_init_indirect_regs(struct wctdm *wc, int card)
+static int
+wctdm_proslic_init_indirect_regs(struct wctdm *wc, struct wctdm_module *mod)
 {
 	unsigned char i;
 
 	for (i = 0; i < ARRAY_SIZE(indirect_regs); i++) {
-		if (wctdm_proslic_setreg_indirect(wc, card,
+		if (wctdm_proslic_setreg_indirect(wc, mod,
 				indirect_regs[i].address,
 				indirect_regs[i].initial))
 			return -1;
@@ -1234,22 +1257,23 @@ static int wctdm_proslic_init_indirect_regs(struct wctdm *wc, int card)
 	return 0;
 }
 
-static int wctdm_proslic_verify_indirect_regs(struct wctdm *wc, int card)
+static int
+wctdm_proslic_verify_indirect_regs(struct wctdm *wc, struct wctdm_module *mod)
 { 
 	int passed = 1;
 	unsigned short i, initial;
 	int j;
 
-	for (i = 0; i < ARRAY_SIZE(indirect_regs); i++) 
-	{
-		j = wctdm_proslic_getreg_indirect(wc, card, (unsigned char) indirect_regs[i].address);
+	for (i = 0; i < ARRAY_SIZE(indirect_regs); i++) {
+		j = wctdm_proslic_getreg_indirect(wc, mod,
+						(u8)indirect_regs[i].address);
 		if (j < 0) {
 			dev_notice(&wc->vb.pdev->dev, "Failed to read indirect register %d\n", i);
 			return -1;
 		}
-		initial= indirect_regs[i].initial;
+		initial = indirect_regs[i].initial;
 
-		if ((j != initial) && (!(wc->mods[card].flags & FLAG_3215) ||
+		if ((j != initial) && (!(mod->flags & FLAG_3215) ||
 		    (indirect_regs[i].altaddr != 255))) {
 			dev_notice(&wc->vb.pdev->dev,
 				   "!!!!!!! %s  iREG %X = %X  should be %X\n",
@@ -1259,20 +1283,23 @@ static int wctdm_proslic_verify_indirect_regs(struct wctdm *wc, int card)
 		}	
 	}
 
-    if (passed) {
-		if (debug & DEBUG_CARD)
-			dev_info(&wc->vb.pdev->dev, "Init Indirect Registers completed successfully.\n");
-    } else {
-		dev_notice(&wc->vb.pdev->dev, " !!!!! Init Indirect Registers UNSUCCESSFULLY.\n");
+	if (passed) {
+		if (debug & DEBUG_CARD) {
+			dev_info(&wc->vb.pdev->dev,
+			 "Init Indirect Registers completed successfully.\n");
+		}
+	} else {
+		dev_notice(&wc->vb.pdev->dev,
+			" !!!!! Init Indirect Registers UNSUCCESSFULLY.\n");
 		return -1;
-    }
-    return 0;
+	}
+	return 0;
 }
 
 /* 1ms interrupt */
-static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
+static void
+wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct wctdm_module *const mod = &wc->mods[card];
 	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
 
@@ -1294,7 +1321,7 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF OK: card=%d shadow=%02x "
-				 "lasttxhook=%02x intcount=%d\n", card,
+				 "lasttxhook=%02x intcount=%d\n", mod->card,
 				 res, fxs->lasttxhook, wc->intcount);
 		}
 	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
@@ -1303,7 +1330,7 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF RETRY: card=%d shadow=%02x "
-				 "lasttxhook=%02x intcount=%d\n", card,
+				 "lasttxhook=%02x intcount=%d\n", mod->card,
 				 res, fxs->lasttxhook, wc->intcount);
 		}
 	} else { /* Start 100ms Timeout */
@@ -1313,9 +1340,9 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 }
 
 /* 256ms interrupt */
-static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
+static void
+wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct wctdm_module *const mod = &wc->mods[card];
 	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
 	unsigned long flags;
@@ -1369,7 +1396,9 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 	if (res) {
 		fxs->palarms++;
 		if (fxs->palarms < MAX_ALARMS) {
-			dev_notice(&wc->vb.pdev->dev, "Power alarm on module %d, resetting!\n", card + 1);
+			dev_notice(&wc->vb.pdev->dev,
+				   "Power alarm on module %d, resetting!\n",
+				   mod->card + 1);
 			spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 			if (fxs->lasttxhook == SLIC_LF_RINGING) {
 				fxs->lasttxhook = POLARITY_XOR(fxs) ?
@@ -1383,14 +1412,17 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 			/* Update shadow register to avoid extra power alarms until next read */
 			mod->cmdq.isrshadow[1] = fxs->lasttxhook;
 		} else {
-			if (fxs->palarms == MAX_ALARMS)
-				dev_notice(&wc->vb.pdev->dev, "Too many power alarms on card %d, NOT resetting!\n", card + 1);
+			if (fxs->palarms == MAX_ALARMS) {
+				dev_notice(&wc->vb.pdev->dev,
+					   "Too many power alarms on card %d, "
+					   "NOT resetting!\n", mod->card + 1);
+			}
 		}
 	}
 #endif
 }
 
-static inline void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
+static void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 {
 	signed char b,b1;
 	int qrvcard = card & 0xfc;
@@ -1458,14 +1490,14 @@ static inline void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 	return;
 }
 
-static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
+static void
+wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
 #define MS_PER_CHECK_HOOK 1
 
 	unsigned char res;
 	signed char b;
 	unsigned int abs_voltage;
-	struct wctdm_module *const mod = &wc->mods[card];
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
@@ -1473,10 +1505,10 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 	b &= 0x9b;
 	if (fxo->offhook) {
 		if (b != 0x9)
-			wctdm_setreg_intr(wc, card, 5, 0x9);
+			wctdm_setreg_intr(wc, mod, 5, 0x9);
 	} else {
 		if (b != 0x8)
-			wctdm_setreg_intr(wc, card, 5, 0x8);
+			wctdm_setreg_intr(wc, mod, 5, 0x8);
 	}
 	if (!fxo->offhook) {
 		if (fwringdetect || neonmwi_monitor) {
@@ -1505,8 +1537,8 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 					if (++fxo->lastrdtx_count >= 2) {
 						fxo->wasringing = 1;
 						if (debug)
-							dev_info(&wc->vb.pdev->dev, "FW RING on %d/%d!\n", wc->aspan->span.spanno, card + 1);
-						dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_RING);
+							dev_info(&wc->vb.pdev->dev, "FW RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
+						mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
 						fxo->ringdebounce = ringdebounce / 16;
 					} else {
 						fxo->lastrdtx = res;
@@ -1522,8 +1554,8 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				} else if (--fxo->ringdebounce == 0) {
 					fxo->wasringing = 0;
 					if (debug)
-						dev_info(&wc->vb.pdev->dev, "FW NO RING on %d/%d!\n", wc->aspan->span.spanno, card + 1);
-					dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_OFFHOOK);
+						dev_info(&wc->vb.pdev->dev, "FW NO RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
+					mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
 				}
 			}
 		} else {
@@ -1533,9 +1565,9 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				if (fxo->ringdebounce >= DAHDI_CHUNKSIZE * ringdebounce) {
 					if (!fxo->wasringing) {
 						fxo->wasringing = 1;
-						dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_RING);
+						mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
 						if (debug)
-							dev_info(&wc->vb.pdev->dev, "RING on %d/%d!\n", wc->aspan->span.spanno, card + 1);
+							dev_info(&wc->vb.pdev->dev, "RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
 					}
 					fxo->ringdebounce = DAHDI_CHUNKSIZE * ringdebounce;
 				}
@@ -1544,9 +1576,9 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				if (fxo->ringdebounce <= 0) {
 					if (fxo->wasringing) {
 						fxo->wasringing = 0;
-						dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_OFFHOOK);
+						mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
 						if (debug)
-							dev_info(&wc->vb.pdev->dev, "NO RING on %d/%d!\n", wc->aspan->span.spanno, card + 1);
+							dev_info(&wc->vb.pdev->dev, "NO RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
 					}
 					fxo->ringdebounce = 0;
 				}
@@ -1560,11 +1592,11 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 
 	if (fxovoltage) {
 		if (!(wc->intcount % 100)) {
-			dev_info(&wc->vb.pdev->dev, "Port %d: Voltage: %d  Debounce %d\n", card + 1, b, fxo->battdebounce);
+			dev_info(&wc->vb.pdev->dev, "Port %d: Voltage: %d  Debounce %d\n", mod->card + 1, b, fxo->battdebounce);
 		}
 	}
 
-	if (unlikely(DAHDI_RXSIG_INITIAL == wc->aspan->span.chans[card]->rxhooksig)) {
+	if (unlikely(DAHDI_RXSIG_INITIAL == get_dahdi_chan(wc, mod)->rxhooksig)) {
 		/*
 		 * dahdi-base will set DAHDI_RXSIG_INITIAL after a
 		 * DAHDI_STARTUP or DAHDI_CHANCONFIG ioctl so that new events
@@ -1599,7 +1631,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				if (--fxo->battdebounce == 0) {
 					fxo->battery = BATTERY_LOST;
 					if (debug)
-						dev_info(&wc->vb.pdev->dev, "NO BATTERY on %d/%d!\n", wc->aspan->span.spanno, card + 1);
+						dev_info(&wc->vb.pdev->dev, "NO BATTERY on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
 #ifdef	JAPAN
 					if (!wc->ohdebounce && wc->offhook) {
 						dahdi_hooksig(wc->aspan->chans[card], DAHDI_RXSIG_ONHOOK);
@@ -1610,7 +1642,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 #endif
 					}
 #else
-					dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_ONHOOK);
+					mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
 					/* set the alarm timer, taking into account that part of its time
 					   period has already passed while debouncing occurred */
 					fxo->battalarm = (battalarm - battdebounce) / MS_PER_CHECK_HOOK;
@@ -1644,18 +1676,18 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 						dev_info(&wc->vb.pdev->dev,
 							 "BATTERY on %d/%d (%s)!\n",
 							 wc->aspan->span.spanno,
-							 card + 1,
+							 mod->card + 1,
 							 (b < 0) ? "-" : "+");
 					}
 #ifdef	ZERO_BATT_RING
 					if (wc->onhook) {
 						wc->onhook = 0;
-						dahdi_hooksig(wc->aspan->chans[card], DAHDI_RXSIG_OFFHOOK);
+						mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
 						if (debug)
 							dev_info(&wc->vb.pdev->dev, "Signalled Off Hook\n");
 					}
 #else
-					dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_OFFHOOK);
+					mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
 #endif
 					/* set the alarm timer, taking into account that part of its time
 					   period has already passed while debouncing occurred */
@@ -1685,7 +1717,10 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 		if (--fxo->battalarm == 0) {
 			/* the alarm timer has expired, so update the battery alarm state
 			   for this channel */
-			dahdi_alarm_channel(wc->aspan->span.chans[card], fxo->battery == BATTERY_LOST ? DAHDI_ALARM_RED : DAHDI_ALARM_NONE);
+			dahdi_alarm_channel(get_dahdi_chan(wc, mod),
+					    (fxo->battery == BATTERY_LOST) ?
+						DAHDI_ALARM_RED :
+						DAHDI_ALARM_NONE);
 		}
 	}
 
@@ -1698,7 +1733,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				       fxo->polarity, 
 				       fxo->lastpol);
 			if (fxo->polarity)
-				dahdi_qevent_lock(wc->aspan->span.chans[card], DAHDI_EVENT_POLARITY);
+				dahdi_qevent_lock(get_dahdi_chan(wc, mod), DAHDI_EVENT_POLARITY);
 			fxo->polarity = fxo->lastpol;
 		    }
 		}
@@ -1718,10 +1753,10 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 			if (NEONMWI_ON_DEBOUNCE == fxo->neonmwi_debounce) {
 				fxo->neonmwi_offcounter = neonmwi_offlimit_cycles;
 				if (0 == fxo->neonmwi_state) {
-					dahdi_qevent_lock(wc->aspan->span.chans[card], DAHDI_EVENT_NEONMWI_ACTIVE);
+					dahdi_qevent_lock(get_dahdi_chan(wc, mod), DAHDI_EVENT_NEONMWI_ACTIVE);
 					fxo->neonmwi_state = 1;
 					if (debug)
-						dev_info(&wc->vb.pdev->dev, "NEON MWI active for card %d\n", card+1);
+						dev_info(&wc->vb.pdev->dev, "NEON MWI active for card %d\n", mod->card+1);
 				}
 				fxo->neonmwi_debounce++;  /* terminate the processing */
 			} else if (NEONMWI_ON_DEBOUNCE > fxo->neonmwi_debounce) {
@@ -1737,25 +1772,28 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 		if (fxo->neonmwi_state && 0 < fxo->neonmwi_offcounter ) {
 			fxo->neonmwi_offcounter--;
 			if (0 == fxo->neonmwi_offcounter) {
-				dahdi_qevent_lock(wc->aspan->span.chans[card], DAHDI_EVENT_NEONMWI_INACTIVE);
+				dahdi_qevent_lock(get_dahdi_chan(wc, mod), DAHDI_EVENT_NEONMWI_INACTIVE);
 				fxo->neonmwi_state = 0;
 				if (debug)
-					dev_info(&wc->vb.pdev->dev, "NEON MWI cleared for card %d\n", card+1);
+					dev_info(&wc->vb.pdev->dev, "NEON MWI cleared for card %d\n", mod->card+1);
 			}
 		}
 	}
 #undef MS_PER_CHECK_HOOK
 }
 
-static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig txsig)
+static void
+wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
+		  enum dahdi_txsig txsig)
 {
 	int x = 0;
 	unsigned long flags;
-	struct fxs *const fxs = &wc->mods[card].mod.fxs;
+	struct fxs *const fxs = &mod->mod.fxs;
+
 	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 	switch (txsig) {
 	case DAHDI_TXSIG_ONHOOK:
-		switch (wc->aspan->span.chans[card]->sig) {
+		switch (get_dahdi_chan(wc, mod)->sig) {
 		case DAHDI_SIG_EM:
 		case DAHDI_SIG_FXOKS:
 		case DAHDI_SIG_FXOLS:
@@ -1769,12 +1807,12 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 		default:
 			WARN_ONCE(1, "%x is an invalid signaling state for "
 				  "an FXS module.\n",
-				  wc->aspan->span.chans[card]->sig);
+				  get_dahdi_chan(wc, mod)->sig);
 			break;
 		}
 		break;
 	case DAHDI_TXSIG_OFFHOOK:
-		switch (wc->aspan->span.chans[card]->sig) {
+		switch (get_dahdi_chan(wc, mod)->sig) {
 		case DAHDI_SIG_EM:
 			x = (POLARITY_XOR(fxs)) ?
 					SLIC_LF_ACTIVE_FWD :
@@ -1800,7 +1838,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 
 	if (x != fxs->lasttxhook) {
 		fxs->lasttxhook = x | SLIC_LF_OPPENDING;
-		wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+		mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 
 		if (debug & DEBUG_CARD) {
@@ -1813,13 +1851,13 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 	}
 }
 
-static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
+static void wctdm_fxs_off_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct fxs *const fxs = &wc->mods[card].mod.fxs;
+	struct fxs *const fxs = &mod->mod.fxs;
 
 	if (debug & DEBUG_CARD)
 		dev_info(&wc->vb.pdev->dev,
-			"fxs_off_hook: Card %d Going off hook\n", card);
+			"fxs_off_hook: Card %d Going off hook\n", mod->card);
 	switch (fxs->lasttxhook) {
 	case SLIC_LF_RINGING:		/* Ringing */
 	case SLIC_LF_OHTRAN_FWD:	/* Forward On Hook Transfer */
@@ -1830,37 +1868,39 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
 						SLIC_LF_ACTIVE_FWD;
 		break;
 	}
-	wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_OFFHOOK);
-	dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_OFFHOOK);
+	wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_OFFHOOK);
+	dahdi_hooksig(get_dahdi_chan(wc, mod), DAHDI_RXSIG_OFFHOOK);
 
 #ifdef DEBUG
 	if (robust)
-		wctdm_init_proslic(wc, card, 1, 0, 1);
+		wctdm_init_proslic(wc, mod, 1, 0, 1);
 #endif
 	fxs->oldrxhook = 1;
 }
 
-static void wctdm_fxs_on_hook(struct wctdm *wc, const int card)
+static void wctdm_fxs_on_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct fxs *const fxs = &wc->mods[card].mod.fxs;
-	if (debug & DEBUG_CARD)
+	struct fxs *const fxs = &mod->mod.fxs;
+	if (debug & DEBUG_CARD) {
 		dev_info(&wc->vb.pdev->dev,
-			"fxs_on_hook: Card %d Going on hook\n", card);
-	wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_ONHOOK);
-	dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_ONHOOK);
+			"fxs_on_hook: Card %d Going on hook\n", mod->card);
+	}
+	wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_ONHOOK);
+	dahdi_hooksig(get_dahdi_chan(wc, mod), DAHDI_RXSIG_ONHOOK);
 	fxs->oldrxhook = 0;
 }
 
-static inline void wctdm_proslic_check_hook(struct wctdm *wc, const int card)
+static void
+wctdm_proslic_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct fxs *const fxs = &wc->mods[card].mod.fxs;
+	struct fxs *const fxs = &mod->mod.fxs;
 	char res;
 	int hook;
 
 	/* For some reason we have to debounce the
 	   hook detector.  */
 
-	res = wc->mods[card].cmdq.isrshadow[0];	/* Hook state */
+	res = mod->cmdq.isrshadow[0];	/* Hook state */
 	hook = (res & 1);
 	
 	if (hook != fxs->lastrxhook) {
@@ -1885,9 +1925,9 @@ static inline void wctdm_proslic_check_hook(struct wctdm *wc, const int card)
 			}
 
 			if (!fxs->oldrxhook && fxs->debouncehook)
-				wctdm_fxs_off_hook(wc, card);
+				wctdm_fxs_off_hook(wc, mod);
 			else if (fxs->oldrxhook && !fxs->debouncehook)
-				wctdm_fxs_on_hook(wc, card);
+				wctdm_fxs_on_hook(wc, mod);
 		}
 	}
 	fxs->lastrxhook = hook;
@@ -1946,9 +1986,9 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 }
 
 /* 1ms interrupt */
-static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
+static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct fxs *const fxs = &wc->mods[card].mod.fxs;
+	struct fxs *const fxs = &mod->mod.fxs;
 	unsigned long flags;
 
 	if (!(wc->intcount % 10000)) {
@@ -1956,12 +1996,12 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 		if (fxs->palarms)
 			fxs->palarms--;
 	}
-	wctdm_proslic_check_hook(wc, card);
+	wctdm_proslic_check_hook(wc, mod);
 
-	wctdm_proslic_check_oppending(wc, card);
+	wctdm_proslic_check_oppending(wc, mod);
 
 	if (!(wc->intcount & 0xfc))	/* every 256ms */
-		wctdm_proslic_recheck_sanity(wc, card);
+		wctdm_proslic_recheck_sanity(wc, mod);
 	if (SLIC_LF_RINGING == fxs->lasttxhook) {
 		/* RINGing, prepare for OHT */
 		fxs->ohttimer = OHT_TIMER << 3;
@@ -1983,21 +2023,21 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 				/* Apply the change if appropriate */
 				fxs->lasttxhook = SLIC_LF_OPPENDING | SLIC_LF_ACTIVE_FWD;
 				/* Data enqueued here */
-				wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+				mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 				if (debug & DEBUG_CARD) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d OnHookTransfer "
-						 "stop\n", card);
+						 "stop\n", mod->card);
 				}
 			} else if (SLIC_LF_OHTRAN_REV == fxs->lasttxhook) {
 				/* Apply the change if appropriate */
 				fxs->lasttxhook = SLIC_LF_OPPENDING | SLIC_LF_ACTIVE_REV;
 				/* Data enqueued here */
-				wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+				mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 				if (debug & DEBUG_CARD) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d OnHookTransfer "
-						 "stop\n", card);
+						 "stop\n", mod->card);
 				}
 			}
 			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
@@ -2008,7 +2048,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 			if (debug & DEBUG_CARD) {
 				dev_info(&wc->vb.pdev->dev,
 					 "Channel %d OnHookTransfer abort\n",
-					 card);
+					 mod->card);
 			}
 		}
 
@@ -2024,17 +2064,18 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 		return;
 
 	for (x = 0; x < wc->mods_per_board; x++) {
+		struct wctdm_module *const mod = &wc->mods[x];
 
 		spin_lock(&wc->reglock);
-		cmd_checkisr(wc, x);
+		cmd_checkisr(wc, mod);
 		spin_unlock(&wc->reglock);
 
-		switch (wc->mods[x].type) {
+		switch (mod->type) {
 		case FXS:
-			wctdm_isr_misc_fxs(wc, x);
+			wctdm_isr_misc_fxs(wc, mod);
 			break;
 		case FXO:
-			wctdm_voicedaa_check_hook(wc, x);
+			wctdm_voicedaa_check_hook(wc, mod);
 			break;
 		case QRV:
 			wctdm_qrvdri_check_hook(wc, x);
@@ -2115,30 +2156,36 @@ static void handle_hx8_transmit(struct voicebus *vb, struct list_head *buffers)
 	}
 }
 
-static int wctdm_voicedaa_insane(struct wctdm *wc, int card)
+static int wctdm_voicedaa_insane(struct wctdm *wc, struct wctdm_module *mod)
 {
 	int blah;
-	blah = wctdm_getreg(wc, card, 2);
+	blah = wctdm_getreg(wc, mod, 2);
 	if (blah != 0x3)
 		return -2;
-	blah = wctdm_getreg(wc, card, 11);
+	blah = wctdm_getreg(wc, mod, 11);
 	if (debug & DEBUG_CARD)
 		dev_info(&wc->vb.pdev->dev, "VoiceDAA System: %02x\n", blah & 0xf);
 	return 0;
 }
 
-static int wctdm_proslic_insane(struct wctdm *wc, int card)
+static int
+wctdm_proslic_insane(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	int blah, reg1, insane_report;
 	insane_report=0;
 
-	blah = wctdm_getreg(wc, card, 0);
-	if (blah != 0xff && (debug & DEBUG_CARD))
-		dev_info(&wc->vb.pdev->dev, "ProSLIC on module %d, product %d, version %d\n", card, (blah & 0x30) >> 4, (blah & 0xf));
+	blah = wctdm_getreg(wc, mod, 0);
+	if (blah != 0xff && (debug & DEBUG_CARD)) {
+		dev_info(&wc->vb.pdev->dev,
+			 "ProSLIC on module %d, product %d, "
+			 "version %d\n", mod->card, (blah & 0x30) >> 4,
+			 (blah & 0xf));
+	}
 
 #if 0
 	if ((blah & 0x30) >> 4) {
-		dev_info(&wc->vb.pdev->dev, "ProSLIC on module %d is not a 3210.\n", card);
+		dev_info(&wc->vb.pdev->dev,
+			 "ProSLIC on module %d is not a 3210.\n", mod->card);
 		return -1;
 	}
 #endif
@@ -2148,99 +2195,126 @@ static int wctdm_proslic_insane(struct wctdm *wc, int card)
 	}
 
 	/* let's be really sure this is an FXS before we continue */
-	reg1 = wctdm_getreg(wc, card, 1);
+	reg1 = wctdm_getreg(wc, mod, 1);
 	if ((0x80 != (blah & 0xf0)) || (0x88 != reg1)) {
-		if (debug & DEBUG_CARD)
-			dev_info(&wc->vb.pdev->dev, "DEBUG: not FXS b/c reg0=%x or reg1 != 0x88 (%x).\n", blah, reg1);
+		if (debug & DEBUG_CARD) {
+			dev_info(&wc->vb.pdev->dev,
+				 "DEBUG: not FXS b/c reg0=%x or "
+				 "reg1 != 0x88 (%x).\n", blah, reg1);
+		}
 		return -1;
 	}
 
 	if ((blah & 0xf) < 2) {
-		dev_info(&wc->vb.pdev->dev, "ProSLIC 3210 version %d is too old\n", blah & 0xf);
+		dev_info(&wc->vb.pdev->dev,
+			 "ProSLIC 3210 version %d is too old\n", blah & 0xf);
 		return -1;
 	}
-	if (wctdm_getreg(wc, card, 1) & 0x80)
+
+	if (wctdm_getreg(wc, mod, 1) & 0x80)
 		/* ProSLIC 3215, not a 3210 */
-		wc->mods[card].flags |= FLAG_3215;
+		mod->flags |= FLAG_3215;
 
-	blah = wctdm_getreg(wc, card, 8);
+	blah = wctdm_getreg(wc, mod, 8);
 	if (blah != 0x2) {
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d insane (1) %d should be 2\n", card, blah);
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d insane (1) %d should be 2\n",
+			   mod->card, blah);
 		return -1;
-	} else if ( insane_report)
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d Reg 8 Reads %d Expected is 0x2\n",card,blah);
+	} else if (insane_report) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d Reg 8 Reads %d Expected "
+			   "is 0x2\n", mod->card, blah);
+	}
 
-	blah = wctdm_getreg(wc, card, 64);
+	blah = wctdm_getreg(wc, mod, 64);
 	if (blah != 0x0) {
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d insane (2)\n", card);
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d insane (2)\n",
+			   mod->card);
 		return -1;
-	} else if ( insane_report)
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d Reg 64 Reads %d Expected is 0x0\n",card,blah);
+	} else if (insane_report) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d Reg 64 Reads %d Expected "
+			   "is 0x0\n", mod->card, blah);
+	}
 
-	blah = wctdm_getreg(wc, card, 11);
+	blah = wctdm_getreg(wc, mod, 11);
 	if (blah != 0x33) {
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d insane (3)\n", card);
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d insane (3)\n", mod->card);
 		return -1;
-	} else if ( insane_report)
-		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d Reg 11 Reads %d Expected is 0x33\n",card,blah);
+	} else if (insane_report) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "ProSLIC on module %d Reg 11 Reads %d "
+			   "Expected is 0x33\n", mod->card, blah);
+	}
 
 	/* Just be sure it's setup right. */
-	wctdm_setreg(wc, card, 30, 0);
+	wctdm_setreg(wc, mod, 30, 0);
 
-	if (debug & DEBUG_CARD) 
-		dev_info(&wc->vb.pdev->dev, "ProSLIC on module %d seems sane.\n", card);
+	if (debug & DEBUG_CARD) {
+		dev_info(&wc->vb.pdev->dev,
+			 "ProSLIC on module %d seems sane.\n", mod->card);
+	}
 	return 0;
 }
 
-static int wctdm_proslic_powerleak_test(struct wctdm *wc, int card)
+static int
+wctdm_proslic_powerleak_test(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	unsigned long origjiffies;
 	unsigned char vbat;
 
 	/* Turn off linefeed */
-	wctdm_setreg(wc, card, LINE_STATE, 0);
+	wctdm_setreg(wc, mod, LINE_STATE, 0);
 
 	/* Power down */
-	wctdm_setreg(wc, card, 14, 0x10);
+	wctdm_setreg(wc, mod, 14, 0x10);
 
 	/* Wait for one second */
 	origjiffies = jiffies;
 
-	while ((vbat = wctdm_getreg(wc, card, 82)) > 0x6) {
+	while ((vbat = wctdm_getreg(wc, mod, 82)) > 0x6) {
 		if ((jiffies - origjiffies) >= (HZ/2))
 			break;;
 	}
 
 	if (vbat < 0x06) {
-		dev_notice(&wc->vb.pdev->dev, "Excessive leakage detected on module %d: %d volts (%02x) after %d ms\n", card,
-		       376 * vbat / 1000, vbat, (int)((jiffies - origjiffies) * 1000 / HZ));
+		dev_notice(&wc->vb.pdev->dev,
+			   "Excessive leakage detected on module %d: %d "
+			   "volts (%02x) after %d ms\n", mod->card,
+			   376 * vbat / 1000, vbat,
+			   (int)((jiffies - origjiffies) * 1000 / HZ));
 		return -1;
 	} else if (debug & DEBUG_CARD) {
-		dev_info(&wc->vb.pdev->dev, "Post-leakage voltage: %d volts\n", 376 * vbat / 1000);
+		dev_info(&wc->vb.pdev->dev,
+			 "Post-leakage voltage: %d volts\n", 376 * vbat / 1000);
 	}
 	return 0;
 }
 
-static int wctdm_powerup_proslic(struct wctdm *wc, int card, int fast)
+static int wctdm_powerup_proslic(struct wctdm *wc,
+				 struct wctdm_module *mod, int fast)
 {
 	unsigned char vbat;
 	unsigned long origjiffies;
 	int lim;
 
 	/* Set period of DC-DC converter to 1/64 khz */
-	wctdm_setreg(wc, card, 92, 0xc0 /* was 0xff */);
+	wctdm_setreg(wc, mod, 92, 0xc0 /* was 0xff */);
 
 	/* Wait for VBat to powerup */
 	origjiffies = jiffies;
 
 	/* Disable powerdown */
-	wctdm_setreg(wc, card, 14, 0);
+	wctdm_setreg(wc, mod, 14, 0);
 
 	/* If fast, don't bother checking anymore */
 	if (fast)
 		return 0;
 
-	while ((vbat = wctdm_getreg(wc, card, 82)) < 0xc0) {
+	while ((vbat = wctdm_getreg(wc, mod, 82)) < 0xc0) {
 		/* Wait no more than 500ms */
 		if ((jiffies - origjiffies) > HZ/2) {
 			break;
@@ -2249,12 +2323,14 @@ static int wctdm_powerup_proslic(struct wctdm *wc, int card, int fast)
 
 	if (vbat < 0xc0) {
 		dev_notice(&wc->vb.pdev->dev, "ProSLIC on module %d failed to powerup within %d ms (%d mV only)\n\n -- DID YOU REMEMBER TO PLUG IN THE HD POWER CABLE TO THE TDM CARD??\n",
-		       card, (int)(((jiffies - origjiffies) * 1000 / HZ)),
+		       mod->card, (int)(((jiffies - origjiffies) * 1000 / HZ)),
 			vbat * 375);
 		return -1;
 	} else if (debug & DEBUG_CARD) {
-		dev_info(&wc->vb.pdev->dev, "ProSLIC on module %d powered up to -%d volts (%02x) in %d ms\n",
-		       card, vbat * 376 / 1000, vbat, (int)(((jiffies - origjiffies) * 1000 / HZ)));
+		dev_info(&wc->vb.pdev->dev,
+			 "ProSLIC on module %d powered up to -%d volts (%02x) "
+			 "in %d ms\n", mod->card, vbat * 376 / 1000, vbat,
+			 (int)(((jiffies - origjiffies) * 1000 / HZ)));
 	}
 
         /* Proslic max allowed loop current, reg 71 LOOP_I_LIMIT */
@@ -2267,29 +2343,36 @@ static int wctdm_powerup_proslic(struct wctdm *wc, int card, int fast)
         }
         else if (debug & DEBUG_CARD)
                         dev_info(&wc->vb.pdev->dev, "Loop current set to %dmA!\n",(lim*3)+20);
-        wctdm_setreg(wc,card,LOOP_I_LIMIT,lim);
+	wctdm_setreg(wc, mod, LOOP_I_LIMIT, lim);
 
 	/* Engage DC-DC converter */
-	wctdm_setreg(wc, card, 93, 0x19 /* was 0x19 */);
+	wctdm_setreg(wc, mod, 93, 0x19 /* was 0x19 */);
 	return 0;
 
 }
 
-static int wctdm_proslic_manual_calibrate(struct wctdm *wc, int card)
+static int
+wctdm_proslic_manual_calibrate(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	unsigned long origjiffies;
 	unsigned char i;
 
-	wctdm_setreg(wc, card, 21, 0);//(0)  Disable all interupts in DR21
-	wctdm_setreg(wc, card, 22, 0);//(0)Disable all interupts in DR21
-	wctdm_setreg(wc, card, 23, 0);//(0)Disable all interupts in DR21
-	wctdm_setreg(wc, card, 64, 0);//(0)
+	/* Disable all interupts in DR21-23 */
+	wctdm_setreg(wc, mod, 21, 0);
+	wctdm_setreg(wc, mod, 22, 0);
+	wctdm_setreg(wc, mod, 23, 0);
 
-	wctdm_setreg(wc, card, 97, 0x18); //(0x18)Calibrations without the ADC and DAC offset and without common mode calibration.
-	wctdm_setreg(wc, card, 96, 0x47); //(0x47)	Calibrate common mode and differential DAC mode DAC + ILIM
+	wctdm_setreg(wc, mod, 64, 0);
+
+	/* (0x18) Calibrations without the ADC and DAC offset and without
+	 * common mode calibration. */
+	wctdm_setreg(wc, mod, 97, 0x18);
+
+	/* (0x47) Calibrate common mode and differential DAC mode DAC + ILIM */
+	wctdm_setreg(wc, mod, 96, 0x47);
 
 	origjiffies=jiffies;
-	while (wctdm_getreg(wc, card, 96) != 0) {
+	while (wctdm_getreg(wc, mod, 96) != 0) {
 		if ((jiffies-origjiffies) > 80)
 			return -1;
 	}
@@ -2299,77 +2382,88 @@ static int wctdm_proslic_manual_calibrate(struct wctdm *wc, int card)
 /*******************************The following is the manual gain mismatch calibration****************************/
 /*******************************This is also available as a function *******************************************/
 	msleep(10);
-	wctdm_proslic_setreg_indirect(wc, card, 88,0);
-	wctdm_proslic_setreg_indirect(wc,card,89,0);
-	wctdm_proslic_setreg_indirect(wc,card,90,0);
-	wctdm_proslic_setreg_indirect(wc,card,91,0);
-	wctdm_proslic_setreg_indirect(wc,card,92,0);
-	wctdm_proslic_setreg_indirect(wc,card,93,0);
+	wctdm_proslic_setreg_indirect(wc, mod, 88, 0);
+	wctdm_proslic_setreg_indirect(wc, mod, 89, 0);
+	wctdm_proslic_setreg_indirect(wc, mod, 90, 0);
+	wctdm_proslic_setreg_indirect(wc, mod, 91, 0);
+	wctdm_proslic_setreg_indirect(wc, mod, 92, 0);
+	wctdm_proslic_setreg_indirect(wc, mod, 93, 0);
 
-	wctdm_setreg(wc, card, 98,0x10); // This is necessary if the calibration occurs other than at reset time
-	wctdm_setreg(wc, card, 99,0x10);
+	/* This is necessary if the calibration occurs other than at reset */
+	wctdm_setreg(wc, mod, 98, 0x10);
+	wctdm_setreg(wc, mod, 99, 0x10);
 
 	for ( i=0x1f; i>0; i--)
 	{
-		wctdm_setreg(wc, card, 98,i);
+		wctdm_setreg(wc, mod, 98, i);
 		msleep(40);
-		if ((wctdm_getreg(wc, card, 88)) == 0)
+		if ((wctdm_getreg(wc, mod, 88)) == 0)
 			break;
 	} // for
 
 	for ( i=0x1f; i>0; i--)
 	{
-		wctdm_setreg(wc, card, 99,i);
+		wctdm_setreg(wc, mod, 99, i);
 		msleep(40);
-		if ((wctdm_getreg(wc, card, 89)) == 0)
+		if ((wctdm_getreg(wc, mod, 89)) == 0)
 			break;
 	}//for
 
 /*******************************The preceding is the manual gain mismatch calibration****************************/
 /**********************************The following is the longitudinal Balance Cal***********************************/
-	wctdm_setreg(wc,card,64,1);
+	wctdm_setreg(wc, mod, 64, 1);
 	msleep(100);
 
-	wctdm_setreg(wc, card, 64, 0);
-	wctdm_setreg(wc, card, 23, 0x4);  // enable interrupt for the balance Cal
-	wctdm_setreg(wc, card, 97, 0x1); // this is a singular calibration bit for longitudinal calibration
-	wctdm_setreg(wc, card, 96,0x40);
+	wctdm_setreg(wc, mod, 64, 0);
 
-	wctdm_getreg(wc,card,96); /* Read Reg 96 just cause */
+	/* enable interrupt for the balance Cal */
+	wctdm_setreg(wc, mod, 23, 0x4);
 
-	wctdm_setreg(wc, card, 21, 0xFF);
-	wctdm_setreg(wc, card, 22, 0xFF);
-	wctdm_setreg(wc, card, 23, 0xFF);
+	/* this is a singular calibration bit for longitudinal calibration */
+	wctdm_setreg(wc, mod, 97, 0x1);
+	wctdm_setreg(wc, mod, 96, 0x40);
+
+	wctdm_getreg(wc, mod, 96); /* Read Reg 96 just cause */
+
+	wctdm_setreg(wc, mod, 21, 0xFF);
+	wctdm_setreg(wc, mod, 22, 0xFF);
+	wctdm_setreg(wc, mod, 23, 0xFF);
 
 	/**The preceding is the longitudinal Balance Cal***/
 	return(0);
 
 }
 
-static int wctdm_proslic_calibrate(struct wctdm *wc, int card)
+static int
+wctdm_proslic_calibrate(struct wctdm *wc, struct wctdm_module *mod)
 {
 	unsigned long origjiffies;
 	int x;
+
 	/* Perform all calibrations */
-	wctdm_setreg(wc, card, 97, 0x1f);
+	wctdm_setreg(wc, mod, 97, 0x1f);
 	
 	/* Begin, no speedup */
-	wctdm_setreg(wc, card, 96, 0x5f);
+	wctdm_setreg(wc, mod, 96, 0x5f);
 
 	/* Wait for it to finish */
 	origjiffies = jiffies;
-	while (wctdm_getreg(wc, card, 96)) {
+	while (wctdm_getreg(wc, mod, 96)) {
 		if (time_after(jiffies, (origjiffies + (2*HZ)))) {
-			dev_notice(&wc->vb.pdev->dev, "Timeout waiting for calibration of module %d\n", card);
+			dev_notice(&wc->vb.pdev->dev,
+				   "Timeout waiting for calibration of "
+				   "module %d\n", mod->card);
 			return -1;
 		}
 	}
 	
 	if (debug & DEBUG_CARD) {
 		/* Print calibration parameters */
-		dev_info(&wc->vb.pdev->dev, "Calibration Vector Regs 98 - 107: \n");
+		dev_info(&wc->vb.pdev->dev,
+			 "Calibration Vector Regs 98 - 107:\n");
 		for (x=98;x<108;x++) {
-			dev_info(&wc->vb.pdev->dev, "%d: %02x\n", x, wctdm_getreg(wc, card, x));
+			dev_info(&wc->vb.pdev->dev,
+				 "%d: %02x\n", x, wctdm_getreg(wc, mod, x));
 		}
 	}
 	return 0;
@@ -2383,36 +2477,48 @@ static int wctdm_proslic_calibrate(struct wctdm *wc, int card)
  * tx = (0 for rx; 1 for tx)
  *
  *******************************************************************/
-static int wctdm_set_hwgain(struct wctdm *wc, int card, __s32 gain, __u32 tx)
+static int
+wctdm_set_hwgain(struct wctdm *wc, struct wctdm_module *mod,
+		 __s32 gain, __u32 tx)
 {
-	if (!(wc->mods[card].type == FXO)) {
-		dev_notice(&wc->vb.pdev->dev, "Cannot adjust gain.  Unsupported module type!\n");
+	if (mod->type != FXO) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "Cannot adjust gain. Unsupported module type!\n");
 		return -1;
 	}
+
 	if (tx) {
-		if (debug)
-			dev_info(&wc->vb.pdev->dev, "setting FXO tx gain for card=%d to %d\n", card, gain);
+		if (debug) {
+			dev_info(&wc->vb.pdev->dev,
+				 "setting FXO tx gain for card=%d to %d\n",
+				 mod->card, gain);
+		}
 		if (gain >=  -150 && gain <= 0) {
-			wctdm_setreg(wc, card, 38, 16 + (gain/-10));
-			wctdm_setreg(wc, card, 40, 16 + (-gain%10));
+			wctdm_setreg(wc, mod, 38, 16 + (gain / -10));
+			wctdm_setreg(wc, mod, 40, 16 + (-gain % 10));
 		} else if (gain <= 120 && gain > 0) {
-			wctdm_setreg(wc, card, 38, gain/10);
-			wctdm_setreg(wc, card, 40, (gain%10));
+			wctdm_setreg(wc, mod, 38, gain/10);
+			wctdm_setreg(wc, mod, 40, (gain%10));
 		} else {
-			dev_notice(&wc->vb.pdev->dev, "FXO tx gain is out of range (%d)\n", gain);
+			dev_notice(&wc->vb.pdev->dev,
+				   "FXO tx gain is out of range (%d)\n", gain);
 			return -1;
 		}
 	} else { /* rx */
-		if (debug)
-			dev_info(&wc->vb.pdev->dev, "setting FXO rx gain for card=%d to %d\n", card, gain);
+		if (debug) {
+			dev_info(&wc->vb.pdev->dev,
+				 "setting FXO rx gain for card=%d to %d\n",
+				 mod->card, gain);
+		}
 		if (gain >=  -150 && gain <= 0) {
-			wctdm_setreg(wc, card, 39, 16+ (gain/-10));
-			wctdm_setreg(wc, card, 41, 16 + (-gain%10));
+			wctdm_setreg(wc, mod, 39, 16 + (gain / -10));
+			wctdm_setreg(wc, mod, 41, 16 + (-gain % 10));
 		} else if (gain <= 120 && gain > 0) {
-			wctdm_setreg(wc, card, 39, gain/10);
-			wctdm_setreg(wc, card, 41, (gain%10));
+			wctdm_setreg(wc, mod, 39, gain/10);
+			wctdm_setreg(wc, mod, 41, (gain%10));
 		} else {
-			dev_notice(&wc->vb.pdev->dev, "FXO rx gain is out of range (%d)\n", gain);
+			dev_notice(&wc->vb.pdev->dev,
+				   "FXO rx gain is out of range (%d)\n", gain);
 			return -1;
 		}
 	}
@@ -2445,10 +2551,10 @@ static int set_lasttxhook_interruptible(struct fxs *fxs, unsigned newval, int * 
 }
 
 /* Must be called from within an interruptible context */
-static int set_vmwi(struct wctdm *wc, int chan_idx)
+static int set_vmwi(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	int x;
-	struct fxs *const fxs = &wc->mods[chan_idx].mod.fxs;
+	struct fxs *const fxs = &mod->mod.fxs;
 
 	/* Presently only supports line reversal MWI */
 	if ((fxs->vmwi_active_messages) &&
@@ -2465,8 +2571,7 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x |= SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x,
-					&wc->mods[chan_idx].sethook);
+			set_lasttxhook_interruptible(fxs, x, &mod->sethook);
 		}
 	} else {
 		fxs->idletxhookstate &= ~SLIC_LF_REVMASK;
@@ -2475,140 +2580,169 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x &= ~SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x,
-					&wc->mods[chan_idx].sethook);
+			set_lasttxhook_interruptible(fxs, x, &mod->sethook);
 		}
 	}
 	if (debug) {
 		dev_info(&wc->vb.pdev->dev,
 			 "Setting VMWI on channel %d, messages=%d, lrev=%d\n",
-			 chan_idx, fxs->vmwi_active_messages,
+			 mod->card, fxs->vmwi_active_messages,
 			 fxs->vmwi_linereverse);
 	}
 	return 0;
 }
 
-static void wctdm_voicedaa_set_ts(struct wctdm *wc, int card, int ts)
+static void
+wctdm_voicedaa_set_ts(struct wctdm *wc, struct wctdm_module *mod, int ts)
 {
-	wctdm_setreg(wc, card, 34, (ts * 8) & 0xff);
-	wctdm_setreg(wc, card, 35, (ts * 8) >> 8);
-	wctdm_setreg(wc, card, 36, (ts * 8) & 0xff);
-	wctdm_setreg(wc, card, 37, (ts * 8) >> 8);
+	wctdm_setreg(wc, mod, 34, (ts * 8) & 0xff);
+	wctdm_setreg(wc, mod, 35, (ts * 8) >> 8);
+	wctdm_setreg(wc, mod, 36, (ts * 8) & 0xff);
+	wctdm_setreg(wc, mod, 37, (ts * 8) >> 8);
 
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "voicedaa: card %d new timeslot: %d\n", card + 1, ts);
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "voicedaa: card %d new timeslot: %d\n",
+			 mod->card + 1, ts);
+	}
 }
 
-static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual, int sane)
+static int
+wctdm_init_voicedaa(struct wctdm *wc, struct wctdm_module *mod,
+		    int fast, int manual, int sane)
 {
 	unsigned char reg16=0, reg26=0, reg30=0, reg31=0;
 	unsigned long flags;
 	long newjiffies;
 
+#if 0	/* TODO */
 	if ((wc->mods[card & 0xfc].type == QRV) ||
 	    (wc->mods[card & 0xfc].type == BRI))
 		return -2;
+#endif
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->mods[card].type = NONE;
+	mod->type = NONE;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->mods[card].type = FXO;
+	mod->type = FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
-	if (!sane && wctdm_voicedaa_insane(wc, card))
+	if (!sane && wctdm_voicedaa_insane(wc, mod))
 		return -2;
 
 	/* Software reset */
-	wctdm_setreg(wc, card, 1, 0x80);
+	wctdm_setreg(wc, mod, 1, 0x80);
 	msleep(100);
 
 	/* Set On-hook speed, Ringer impedence, and ringer threshold */
 	reg16 |= (fxo_modes[_opermode].ohs << 6);
 	reg16 |= (fxo_modes[_opermode].rz << 1);
 	reg16 |= (fxo_modes[_opermode].rt);
-	wctdm_setreg(wc, card, 16, reg16);
+	wctdm_setreg(wc, mod, 16, reg16);
 
 	/* Enable ring detector full-wave rectifier mode */
-	wctdm_setreg(wc, card, 18, 2);
-	wctdm_setreg(wc, card, 24, 0);
+	wctdm_setreg(wc, mod, 18, 2);
+	wctdm_setreg(wc, mod, 24, 0);
 	
 	/* Set DC Termination:
 	   Tip/Ring voltage adjust, minimum operational current, current limitation */
 	reg26 |= (fxo_modes[_opermode].dcv << 6);
 	reg26 |= (fxo_modes[_opermode].mini << 4);
 	reg26 |= (fxo_modes[_opermode].ilim << 1);
-	wctdm_setreg(wc, card, 26, reg26);
+	wctdm_setreg(wc, mod, 26, reg26);
 
 	/* Set AC Impedence */
 	reg30 = (fxo_modes[_opermode].acim);
-	wctdm_setreg(wc, card, 30, reg30);
+	wctdm_setreg(wc, mod, 30, reg30);
 
 	/* Misc. DAA parameters */
 	reg31 = 0xa3;
 	reg31 |= (fxo_modes[_opermode].ohs2 << 3);
-	wctdm_setreg(wc, card, 31, reg31);
+	wctdm_setreg(wc, mod, 31, reg31);
 
-	wctdm_voicedaa_set_ts(wc, card, card);
+	wctdm_voicedaa_set_ts(wc, mod, mod->card);
 
 	/* Enable ISO-Cap */
-	wctdm_setreg(wc, card, 6, 0x00);
+	wctdm_setreg(wc, mod, 6, 0x00);
 
 	/* Wait 1000ms for ISO-cap to come up */
 	newjiffies = jiffies;
 	newjiffies += 2 * HZ;
-	while ((jiffies < newjiffies) && !(wctdm_getreg(wc, card, 11) & 0xf0))
+
+	while ((jiffies < newjiffies) && !(wctdm_getreg(wc, mod, 11) & 0xf0))
 		msleep(100);
 
-	if (!(wctdm_getreg(wc, card, 11) & 0xf0)) {
+	if (!(wctdm_getreg(wc, mod, 11) & 0xf0)) {
 		dev_notice(&wc->vb.pdev->dev, "VoiceDAA did not bring up ISO link properly!\n");
 		return -1;
 	}
-	if (debug & DEBUG_CARD)
+
+	if (debug & DEBUG_CARD) {
 		dev_info(&wc->vb.pdev->dev, "ISO-Cap is now up, line side: %02x rev %02x\n", 
-		       wctdm_getreg(wc, card, 11) >> 4,
-		       (wctdm_getreg(wc, card, 13) >> 2) & 0xf);
+		       wctdm_getreg(wc, mod, 11) >> 4,
+		       (wctdm_getreg(wc, mod, 13) >> 2) & 0xf);
+	}
+
 	/* Enable on-hook line monitor */
-	wctdm_setreg(wc, card, 5, 0x08);
+	wctdm_setreg(wc, mod, 5, 0x08);
 	
 	/* Take values for fxotxgain and fxorxgain and apply them to module */
-	wctdm_set_hwgain(wc, card, fxotxgain, 1);
-	wctdm_set_hwgain(wc, card, fxorxgain, 0);
+	wctdm_set_hwgain(wc, mod, fxotxgain, 1);
+	wctdm_set_hwgain(wc, mod, fxorxgain, 0);
 
 #ifdef DEBUG
 	if (digitalloopback) {
 		dev_info(&wc->vb.pdev->dev,
 			 "Turning on digital loopback for port %d.\n",
-			 card + 1);
-		wctdm_setreg(wc, card, 10, 0x01);
+			 mod->card + 1);
+		wctdm_setreg(wc, mod, 10, 0x01);
 	}
 #endif
 
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "DEBUG fxotxgain:%i.%i fxorxgain:%i.%i\n", (wctdm_getreg(wc, card, 38)/16) ? -(wctdm_getreg(wc, card, 38) - 16) : wctdm_getreg(wc, card, 38), (wctdm_getreg(wc, card, 40)/16) ? -(wctdm_getreg(wc, card, 40) - 16) : wctdm_getreg(wc, card, 40), (wctdm_getreg(wc, card, 39)/16) ? -(wctdm_getreg(wc, card, 39) - 16): wctdm_getreg(wc, card, 39), (wctdm_getreg(wc, card, 41)/16)?-(wctdm_getreg(wc, card, 41) - 16) : wctdm_getreg(wc, card, 41));
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "DEBUG fxotxgain:%i.%i fxorxgain:%i.%i\n",
+			 (wctdm_getreg(wc, mod, 38)/16) ?
+				-(wctdm_getreg(wc, mod, 38) - 16) :
+				wctdm_getreg(wc, mod, 38),
+			 (wctdm_getreg(wc, mod, 40)/16) ?
+				-(wctdm_getreg(wc, mod, 40) - 16) :
+				wctdm_getreg(wc, mod, 40),
+			 (wctdm_getreg(wc, mod, 39)/16) ?
+				-(wctdm_getreg(wc, mod, 39) - 16) :
+				wctdm_getreg(wc, mod, 39),
+			 (wctdm_getreg(wc, mod, 41)/16) ?
+				-(wctdm_getreg(wc, mod, 41) - 16) :
+				wctdm_getreg(wc, mod, 41));
+	}
 	
 	return 0;
-		
 }
 
-static void wctdm_proslic_set_ts(struct wctdm *wc, int card, int ts)
+static void
+wctdm_proslic_set_ts(struct wctdm *wc, struct wctdm_module *mod, int ts)
 {
-	wctdm_setreg(wc, card, 2, (ts * 8) & 0xff);		/* Tx Start count low byte  0 */
-	wctdm_setreg(wc, card, 3, (ts * 8) >> 8);		/* Tx Start count high byte 0 */
-	wctdm_setreg(wc, card, 4, (ts * 8) & 0xff);		/* Rx Start count low byte  0 */
-	wctdm_setreg(wc, card, 5, (ts * 8) >> 8);		/* Rx Start count high byte 0 */
+	wctdm_setreg(wc, mod, 2, (ts * 8) & 0xff); /* Tx Start low byte  0 */
+	wctdm_setreg(wc, mod, 3, (ts * 8) >> 8);   /* Tx Start high byte 0 */
+	wctdm_setreg(wc, mod, 4, (ts * 8) & 0xff); /* Rx Start low byte  0 */
+	wctdm_setreg(wc, mod, 5, (ts * 8) >> 8);   /* Rx Start high byte 0 */
 
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "proslic: card %d new timeslot: %d\n", card + 1, ts);
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "proslic: card %d new timeslot: %d\n",
+			 mod->card + 1, ts);
+	}
 }
 
-static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, int sane)
+static int
+wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
+		   int fast, int manual, int sane)
 {
 
-	struct wctdm_module *const mod = &wc->mods[card];
 	struct fxs *const fxs = &mod->mod.fxs;
 	unsigned short tmp[5];
 	unsigned long flags;
@@ -2616,8 +2750,10 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	int x;
 	int fxsmode=0;
 
-	if (wc->mods[card & 0xfc].type == QRV)
+#if 0 /* TODO */
+	if (wc->mods[mod->card & 0xfc].type == QRV)
 		return -2;
+#endif
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	mod->type = FXS;
@@ -2626,7 +2762,7 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	msleep(100);
 
 	/* Sanity check the ProSLIC */
-	if (!sane && wctdm_proslic_insane(wc, card))
+	if (!sane && wctdm_proslic_insane(wc, mod))
 		return -2;
 
 	/* Initialize VMWI settings */
@@ -2641,41 +2777,45 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 
 	if (sane) {
 		/* Make sure we turn off the DC->DC converter to prevent anything from blowing up */
-		wctdm_setreg(wc, card, 14, 0x10);
+		wctdm_setreg(wc, mod, 14, 0x10);
 	}
 
-	if (wctdm_proslic_init_indirect_regs(wc, card)) {
-		dev_info(&wc->vb.pdev->dev, "Indirect Registers failed to initialize on module %d.\n", card);
+	if (wctdm_proslic_init_indirect_regs(wc, mod)) {
+		dev_info(&wc->vb.pdev->dev,
+			 "Indirect Registers failed to initialize on "
+			 "module %d.\n", mod->card);
 		return -1;
 	}
 
 	/* Clear scratch pad area */
-	wctdm_proslic_setreg_indirect(wc, card, 97,0);
+	wctdm_proslic_setreg_indirect(wc, mod, 97, 0);
 
 	/* Clear digital loopback */
-	wctdm_setreg(wc, card, 8, 0);
+	wctdm_setreg(wc, mod, 8, 0);
 
 	/* Revision C optimization */
-	wctdm_setreg(wc, card, 108, 0xeb);
+	wctdm_setreg(wc, mod, 108, 0xeb);
 
 	/* Disable automatic VBat switching for safety to prevent
-	   Q7 from accidently turning on and burning out. */
-	wctdm_setreg(wc, card, 67, 0x07); /* If pulse dialing has trouble at high REN
-					     loads change this to 0x17 */
+	 * Q7 from accidently turning on and burning out.
+	 * If pulse dialing has trouble at high REN loads change this to 0x17 */
+	wctdm_setreg(wc, mod, 67, 0x07);
 
 	/* Turn off Q7 */
-	wctdm_setreg(wc, card, 66, 1);
+	wctdm_setreg(wc, mod, 66, 1);
 
 	/* Flush ProSLIC digital filters by setting to clear, while
 	   saving old values */
 	for (x=0;x<5;x++) {
-		tmp[x] = wctdm_proslic_getreg_indirect(wc, card, x + 35);
-		wctdm_proslic_setreg_indirect(wc, card, x + 35, 0x8000);
+		tmp[x] = wctdm_proslic_getreg_indirect(wc, mod, x + 35);
+		wctdm_proslic_setreg_indirect(wc, mod, x + 35, 0x8000);
 	}
 
 	/* Power up the DC-DC converter */
-	if (wctdm_powerup_proslic(wc, card, fast)) {
-		dev_notice(&wc->vb.pdev->dev, "Unable to do INITIAL ProSLIC powerup on module %d\n", card);
+	if (wctdm_powerup_proslic(wc, mod, fast)) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "Unable to do INITIAL ProSLIC powerup on "
+			   "module %d\n", mod->card);
 		return -1;
 	}
 
@@ -2683,20 +2823,24 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 		spin_lock_init(&fxs->lasttxhooklock);
 
 		/* Check for power leaks */
-		if (wctdm_proslic_powerleak_test(wc, card)) {
-			dev_notice(&wc->vb.pdev->dev, "ProSLIC module %d failed leakage test.  Check for short circuit\n", card);
+		if (wctdm_proslic_powerleak_test(wc, mod)) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "ProSLIC module %d failed leakage test. "
+				   "Check for short circuit\n", mod->card);
 		}
 		/* Power up again */
-		if (wctdm_powerup_proslic(wc, card, fast)) {
-			dev_notice(&wc->vb.pdev->dev, "Unable to do FINAL ProSLIC powerup on module %d\n", card);
+		if (wctdm_powerup_proslic(wc, mod, fast)) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "Unable to do FINAL ProSLIC powerup on "
+				   "module %d\n", mod->card);
 			return -1;
 		}
 #ifndef NO_CALIBRATION
 		/* Perform calibration */
 		if (manual) {
-			if (wctdm_proslic_manual_calibrate(wc, card)) {
+			if (wctdm_proslic_manual_calibrate(wc, mod)) {
 				//dev_notice(&wc->vb.pdev->dev, "Proslic failed on Manual Calibration\n");
-				if (wctdm_proslic_manual_calibrate(wc, card)) {
+				if (wctdm_proslic_manual_calibrate(wc, mod)) {
 					dev_notice(&wc->vb.pdev->dev, "Proslic Failed on Second Attempt to Calibrate Manually. (Try -DNO_CALIBRATION in Makefile)\n");
 					return -1;
 				}
@@ -2704,9 +2848,9 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 			}
 		}
 		else {
-			if (wctdm_proslic_calibrate(wc, card))  {
+			if (wctdm_proslic_calibrate(wc, mod))  {
 				//dev_notice(&wc->vb.pdev->dev, "ProSlic died on Auto Calibration.\n");
-				if (wctdm_proslic_calibrate(wc, card)) {
+				if (wctdm_proslic_calibrate(wc, mod)) {
 					dev_notice(&wc->vb.pdev->dev, "Proslic Failed on Second Attempt to Auto Calibrate\n");
 					return -1;
 				}
@@ -2714,29 +2858,29 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 			}
 		}
 		/* Perform DC-DC calibration */
-		wctdm_setreg(wc, card, 93, 0x99);
-		r19 = wctdm_getreg(wc, card, 107);
+		wctdm_setreg(wc, mod, 93, 0x99);
+		r19 = wctdm_getreg(wc, mod, 107);
 		if ((r19 < 0x2) || (r19 > 0xd)) {
 			dev_notice(&wc->vb.pdev->dev, "DC-DC cal has a surprising direct 107 of 0x%02x!\n", r19);
-			wctdm_setreg(wc, card, 107, 0x8);
+			wctdm_setreg(wc, mod, 107, 0x8);
 		}
 
 		/* Save calibration vectors */
 		for (x = 0; x < NUM_CAL_REGS; x++)
-			fxs->calregs.vals[x] = wctdm_getreg(wc, card, 96 + x);
+			fxs->calregs.vals[x] = wctdm_getreg(wc, mod, 96 + x);
 #endif
 
 	} else {
 		/* Restore calibration registers */
 		for (x = 0; x < NUM_CAL_REGS; x++)
-			wctdm_setreg(wc, card, 96 + x, fxs->calregs.vals[x]);
+			wctdm_setreg(wc, mod, 96 + x, fxs->calregs.vals[x]);
 	}
 	/* Calibration complete, restore original values */
 	for (x=0;x<5;x++) {
-		wctdm_proslic_setreg_indirect(wc, card, x + 35, tmp[x]);
+		wctdm_proslic_setreg_indirect(wc, mod, x + 35, tmp[x]);
 	}
 
-	if (wctdm_proslic_verify_indirect_regs(wc, card)) {
+	if (wctdm_proslic_verify_indirect_regs(wc, mod)) {
 		dev_info(&wc->vb.pdev->dev, "Indirect Registers failed verification.\n");
 		return -1;
 	}
@@ -2756,26 +2900,31 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 #endif
 
 	/* U-Law 8-bit interface */
-    wctdm_proslic_set_ts(wc, card, card);
+	wctdm_proslic_set_ts(wc, mod, mod->card);
 
-    wctdm_setreg(wc, card, 18, 0xff);     // clear all interrupt
-    wctdm_setreg(wc, card, 19, 0xff);
-    wctdm_setreg(wc, card, 20, 0xff);
-    wctdm_setreg(wc, card, 22, 0xff);
-    wctdm_setreg(wc, card, 73, 0x04);
+	wctdm_setreg(wc, mod, 18, 0xff); /* clear all interrupt */
+	wctdm_setreg(wc, mod, 19, 0xff);
+	wctdm_setreg(wc, mod, 20, 0xff);
+	wctdm_setreg(wc, mod, 22, 0xff);
+	wctdm_setreg(wc, mod, 73, 0x04);
+
 	if (fxshonormode) {
 		static const int ACIM2TISS[16] = { 0x0, 0x1, 0x4, 0x5, 0x7,
 						   0x0, 0x0, 0x6, 0x0, 0x0,
 						   0x0, 0x2, 0x0, 0x3 };
 		fxsmode = ACIM2TISS[fxo_modes[_opermode].acim];
-		wctdm_setreg(wc, card, 10, 0x08 | fxsmode);
-		if (fxo_modes[_opermode].ring_osc)
-			wctdm_proslic_setreg_indirect(wc, card, 20, fxo_modes[_opermode].ring_osc);
-		if (fxo_modes[_opermode].ring_x)
-			wctdm_proslic_setreg_indirect(wc, card, 21, fxo_modes[_opermode].ring_x);
+		wctdm_setreg(wc, mod, 10, 0x08 | fxsmode);
+		if (fxo_modes[_opermode].ring_osc) {
+			wctdm_proslic_setreg_indirect(wc, mod, 20,
+					fxo_modes[_opermode].ring_osc);
+		}
+		if (fxo_modes[_opermode].ring_x) {
+			wctdm_proslic_setreg_indirect(wc, mod, 21,
+					fxo_modes[_opermode].ring_x);
+		}
 	}
-    if (lowpower)
-    	wctdm_setreg(wc, card, 72, 0x10);
+	if (lowpower)
+		wctdm_setreg(wc, mod, 72, 0x10);
 
 #if 0
     wctdm_setreg(wc, card, 21, 0x00); 	// enable interrupt
@@ -2793,36 +2942,46 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 
 	if (fastringer) {
 		/* Speed up Ringer */
-		wctdm_proslic_setreg_indirect(wc, card, 20, 0x7e6d);
-		wctdm_proslic_setreg_indirect(wc, card, 21, 0x01b9);
+		wctdm_proslic_setreg_indirect(wc, mod, 20, 0x7e6d);
+		wctdm_proslic_setreg_indirect(wc, mod, 21, 0x01b9);
 		/* Beef up Ringing voltage to 89V */
 		if (boostringer) {
-			wctdm_setreg(wc, card, 74, 0x3f);
-			if (wctdm_proslic_setreg_indirect(wc, card, 21, 0x247)) 
+			wctdm_setreg(wc, mod, 74, 0x3f);
+			if (wctdm_proslic_setreg_indirect(wc, mod, 21, 0x247))
 				return -1;
-			dev_info(&wc->vb.pdev->dev, "Boosting fast ringer on slot %d (89V peak)\n", card + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Boosting fast ringer on slot %d (89V peak)\n",
+				 mod->card + 1);
 		} else if (lowpower) {
-			if (wctdm_proslic_setreg_indirect(wc, card, 21, 0x14b)) 
+			if (wctdm_proslic_setreg_indirect(wc, mod, 21, 0x14b))
 				return -1;
-			dev_info(&wc->vb.pdev->dev, "Reducing fast ring power on slot %d (50V peak)\n", card + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Reducing fast ring power on slot %d "
+				 "(50V peak)\n", mod->card + 1);
 		} else
-			dev_info(&wc->vb.pdev->dev, "Speeding up ringer on slot %d (25Hz)\n", card + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Speeding up ringer on slot %d (25Hz)\n",
+				 mod->card + 1);
 	} else {
 		/* Beef up Ringing voltage to 89V */
 		if (boostringer) {
-			wctdm_setreg(wc, card, 74, 0x3f);
-			if (wctdm_proslic_setreg_indirect(wc, card, 21, 0x1d1)) 
+			wctdm_setreg(wc, mod, 74, 0x3f);
+			if (wctdm_proslic_setreg_indirect(wc, mod, 21, 0x1d1))
 				return -1;
-			dev_info(&wc->vb.pdev->dev, "Boosting ringer on slot %d (89V peak)\n", card + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Boosting ringer on slot %d (89V peak)\n",
+				 mod->card + 1);
 		} else if (lowpower) {
-			if (wctdm_proslic_setreg_indirect(wc, card, 21, 0x108)) 
+			if (wctdm_proslic_setreg_indirect(wc, mod, 21, 0x108))
 				return -1;
-			dev_info(&wc->vb.pdev->dev, "Reducing ring power on slot %d (50V peak)\n", card + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Reducing ring power on slot %d "
+				 "(50V peak)\n", mod->card + 1);
 		}
 	}
 
 	if (fxstxgain || fxsrxgain) {
-		r9 = wctdm_getreg(wc, card, 9);
+		r9 = wctdm_getreg(wc, mod, 9);
 		switch (fxstxgain) {
 		
 			case 35:
@@ -2846,14 +3005,22 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 			case 0:
 				break;
 		}
-		wctdm_setreg(wc, card, 9, r9);
+		wctdm_setreg(wc, mod, 9, r9);
 	}
 
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "DEBUG: fxstxgain:%s fxsrxgain:%s\n",((wctdm_getreg(wc, card, 9)/8) == 1)?"3.5":(((wctdm_getreg(wc,card,9)/4) == 1)?"-3.5":"0.0"),((wctdm_getreg(wc, card, 9)/2) == 1)?"3.5":((wctdm_getreg(wc,card,9)%2)?"-3.5":"0.0"));
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "DEBUG: fxstxgain:%s fxsrxgain:%s\n",
+			 ((wctdm_getreg(wc, mod, 9) / 8) == 1) ?
+				"3.5" : (((wctdm_getreg(wc, mod, 9) / 4) == 1) ?
+							"-3.5" : "0.0"),
+			 ((wctdm_getreg(wc, mod, 9) / 2) == 1) ?
+				"3.5" : ((wctdm_getreg(wc, mod, 9) % 2) ?
+							"-3.5" : "0.0"));
+	}
 
-	fxs->lasttxhook = wc->mods[card].mod.fxs.idletxhookstate;
-	wctdm_setreg(wc, card, LINE_STATE, fxs->lasttxhook);
+	fxs->lasttxhook = fxs->idletxhookstate;
+	wctdm_setreg(wc, mod, LINE_STATE, fxs->lasttxhook);
 
 	/* Preset the isrshadow register so that we won't get a power alarm
 	 * when we finish initialization, otherwise the line state register
@@ -2862,197 +3029,213 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	return 0;
 }
 
-static void wctdm_qrvdri_set_ts(struct wctdm *wc, int card, int ts)
+static void
+wctdm_qrvdri_set_ts(struct wctdm *wc, struct wctdm_module *mod, int ts)
 {
-	wctdm_setreg(wc, card, 0x13, ts + 0x80);	/* codec 2 tx, ts0 */
-	wctdm_setreg(wc, card, 0x17, ts + 0x80);	/* codec 0 rx, ts0 */
-	wctdm_setreg(wc, card, 0x14, ts + 0x81);	/* codec 1 tx, ts1 */
-	wctdm_setreg(wc, card, 0x18, ts + 0x81);	/* codec 1 rx, ts1 */
+	wctdm_setreg(wc, mod, 0x13, ts + 0x80);	/* codec 2 tx, ts0 */
+	wctdm_setreg(wc, mod, 0x17, ts + 0x80);	/* codec 0 rx, ts0 */
+	wctdm_setreg(wc, mod, 0x14, ts + 0x81);	/* codec 1 tx, ts1 */
+	wctdm_setreg(wc, mod, 0x18, ts + 0x81);	/* codec 1 rx, ts1 */
 
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "qrvdri: card %d new timeslot: %d\n", card + 1, ts);
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "qrvdri: card %d new timeslot: %d\n",
+			 mod->card + 1, ts);
+	}
 }
 
 static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 {
+	struct wctdm_module *const mod = &wc->mods[card];
 	unsigned char x,y;
 
 	if (BRI == wc->mods[card & 0xfc].type)
 		return -2;
 
 	/* have to set this, at least for now */
-	wc->mods[card].type = QRV;
-	if (!(card & 3)) /* if at base of card, reset and write it */
-	{
-		wctdm_setreg(wc,card,0,0x80); 
-		wctdm_setreg(wc,card,0,0x55);
-		wctdm_setreg(wc,card,1,0x69);
-		wc->mods[card].mod.qrv.hook = wc->mods[card + 1].mod.qrv.hook = 0;
-		wc->mods[card + 2].mod.qrv.hook = wc->mods[card + 3].mod.qrv.hook = 0xff;
-		wc->mods[card].mod.qrv.debouncetime = wc->mods[card + 1].mod.qrv.debouncetime = QRV_DEBOUNCETIME;
-		wc->mods[card].mod.qrv.debtime = wc->mods[card + 1].mod.qrv.debtime = 0;
-		wc->mods[card].mod.qrv.radmode = wc->mods[card + 1].mod.qrv.radmode = 0;
-		wc->mods[card].mod.qrv.txgain = wc->mods[card + 1].mod.qrv.txgain = 3599;
-		wc->mods[card].mod.qrv.rxgain = wc->mods[card + 1].mod.qrv.rxgain = 1199;
+	mod->type = QRV;
+	if (!(card & 3)) { /* if at base of card, reset and write it */
+		struct qrv *const qrv = &mod->mod.qrv;
+		struct qrv *const qrv1 = &wc->mods[card + 1].mod.qrv;
+		struct qrv *const qrv2 = &wc->mods[card + 2].mod.qrv;
+		struct qrv *const qrv3 = &wc->mods[card + 3].mod.qrv;
+
+		wctdm_setreg(wc, mod, 0, 0x80);
+		wctdm_setreg(wc, mod, 0, 0x55);
+		wctdm_setreg(wc, mod, 1, 0x69);
+		qrv->hook = qrv1->hook = 0;
+		qrv2->hook = qrv3->hook = 0xff;
+		qrv->debouncetime = qrv1->debouncetime = QRV_DEBOUNCETIME;
+		qrv->debtime = qrv1->debtime = 0;
+		qrv->radmode = qrv1->radmode = 0;
+		qrv->txgain = qrv1->txgain = 3599;
+		qrv->rxgain = qrv1->rxgain = 1199;
 	} else { /* channel is on same card as base, no need to test */
 		if (wc->mods[card & 0x7c].type == QRV) {
 			/* only lower 2 are valid */
 			if (!(card & 2))
 				return 0;
 		}
-		wc->mods[card].type = NONE;
+		mod->type = NONE;
 		return 1;
 	}
-	x = wctdm_getreg(wc,card,0);
-	y = wctdm_getreg(wc,card,1);
+	x = wctdm_getreg(wc, mod, 0);
+	y = wctdm_getreg(wc, mod, 1);
 	/* if not a QRV card, return as such */
 	if ((x != 0x55) || (y != 0x69))
 	{
-		wc->mods[card].type = NONE;
+		mod->type = NONE;
 		return 1;
 	}
-	for (x = 0; x < 0x30; x++)
-	{
-		if ((x >= 0x1c) && (x <= 0x1e)) wctdm_setreg(wc,card,x,0xff);
-		else wctdm_setreg(wc,card,x,0);
+	for (x = 0; x < 0x30; x++) {
+		if ((x >= 0x1c) && (x <= 0x1e))
+			wctdm_setreg(wc, mod, x, 0xff);
+		else
+			wctdm_setreg(wc, mod, x, 0);
 	}
-	wctdm_setreg(wc,card,0,0x80); 
+	wctdm_setreg(wc, mod, 0, 0x80);
 	msleep(100);
-	wctdm_setreg(wc,card,0,0x10); 
-	wctdm_setreg(wc,card,0,0x10); 
+	wctdm_setreg(wc, mod, 0, 0x10);
+	wctdm_setreg(wc, mod, 0, 0x10);
 	msleep(100);
 	/* set up modes */
-	wctdm_setreg(wc,card,0,0x1c); 
+	wctdm_setreg(wc, mod, 0, 0x1c);
 	/* set up I/O directions */
-	wctdm_setreg(wc,card,1,0x33); 
-	wctdm_setreg(wc,card,2,0x0f); 
-	wctdm_setreg(wc,card,5,0x0f); 
+	wctdm_setreg(wc, mod, 1, 0x33);
+	wctdm_setreg(wc, mod, 2, 0x0f);
+	wctdm_setreg(wc, mod, 5, 0x0f);
 	/* set up I/O to quiescent state */
-	wctdm_setreg(wc,card,3,0x11);  /* D0-7 */
-	wctdm_setreg(wc,card,4,0xa);  /* D8-11 */
-	wctdm_setreg(wc,card,7,0);  /* CS outputs */
+	wctdm_setreg(wc, mod, 3, 0x11);  /* D0-7 */
+	wctdm_setreg(wc, mod, 4, 0xa);  /* D8-11 */
+	wctdm_setreg(wc, mod, 7, 0);  /* CS outputs */
 
-	wctdm_qrvdri_set_ts(wc, card, card);
+	wctdm_qrvdri_set_ts(wc, mod, card);
 
 	/* set up for max gains */
-	wctdm_setreg(wc,card,0x26,0x24); 
-	wctdm_setreg(wc,card,0x27,0x24); 
-	wctdm_setreg(wc,card,0x0b,0x01);  /* "Transmit" gain codec 0 */
-	wctdm_setreg(wc,card,0x0c,0x01);  /* "Transmit" gain codec 1 */
-	wctdm_setreg(wc,card,0x0f,0xff);  /* "Receive" gain codec 0 */
-	wctdm_setreg(wc,card,0x10,0xff);  /* "Receive" gain codec 1 */
+	wctdm_setreg(wc, mod, 0x26, 0x24);
+	wctdm_setreg(wc, mod, 0x27, 0x24);
+	wctdm_setreg(wc, mod, 0x0b, 0x01);  /* "Transmit" gain codec 0 */
+	wctdm_setreg(wc, mod, 0x0c, 0x01);  /* "Transmit" gain codec 1 */
+	wctdm_setreg(wc, mod, 0x0f, 0xff);  /* "Receive" gain codec 0 */
+	wctdm_setreg(wc, mod, 0x10, 0xff);  /* "Receive" gain codec 1 */
 	return 0;
 }
 
-static void qrv_dosetup(struct dahdi_chan *chan,struct wctdm *wc)
+static void qrv_dosetup(struct dahdi_chan *chan, struct wctdm *wc)
 {
+	struct wctdm_module *qrvmod;
+	struct wctdm_module *nextqrvmod;
 	int qrvcard;
 	unsigned char r;
 	long l;
 
 	/* actually do something with the values */
 	qrvcard = (chan->chanpos - 1) & 0xfc;
+	qrvmod = &wc->mods[qrvcard];
+	nextqrvmod = &wc->mods[qrvcard + 1];
 	if (debug) {
 		dev_info(&wc->vb.pdev->dev,
 			 "@@@@@ radmodes: %d,%d  rxgains: %d,%d   "
 			 "txgains: %d,%d\n", wc->mods[qrvcard].mod.qrv.radmode,
-			 wc->mods[qrvcard + 1].mod.qrv.radmode,
-			 wc->mods[qrvcard].mod.qrv.rxgain, wc->mods[qrvcard + 1].mod.qrv.rxgain,
+			 nextqrvmod->mod.qrv.radmode,
+			 wc->mods[qrvcard].mod.qrv.rxgain,
+			 nextqrvmod->mod.qrv.rxgain,
 			 wc->mods[qrvcard].mod.qrv.txgain,
-			 wc->mods[qrvcard + 1].mod.qrv.txgain);
+			 nextqrvmod->mod.qrv.txgain);
 	}
 	r = 0;
-	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_DEEMP)
+	if (qrvmod->mod.qrv.radmode & RADMODE_DEEMP)
 		r |= 4;
-	if (wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_DEEMP)
+	if (nextqrvmod->mod.qrv.radmode & RADMODE_DEEMP)
 		r |= 8;
-	if (wc->mods[qrvcard].mod.qrv.rxgain < 1200)
+	if (qrvmod->mod.qrv.rxgain < 1200)
 		r |= 1;
-	if (wc->mods[qrvcard + 1].mod.qrv.rxgain < 1200)
+	if (nextqrvmod->mod.qrv.rxgain < 1200)
 		r |= 2;
-	wctdm_setreg(wc, qrvcard, 7, r);
+	wctdm_setreg(wc, qrvmod, 7, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 7 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_PREEMP)
+	if (qrvmod->mod.qrv.radmode & RADMODE_PREEMP)
 		r |= 3;
-	else if (wc->mods[qrvcard].mod.qrv.txgain >= 3600)
+	else if (qrvmod->mod.qrv.txgain >= 3600)
 		r |= 1;
-	else if (wc->mods[qrvcard].mod.qrv.txgain >= 1200)
+	else if (qrvmod->mod.qrv.txgain >= 1200)
 		r |= 2;
-	if (wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_PREEMP)
+	if (nextqrvmod->mod.qrv.radmode & RADMODE_PREEMP)
 		r |= 0xc;
-	else if (wc->mods[qrvcard + 1].mod.qrv.txgain >= 3600)
+	else if (nextqrvmod->mod.qrv.txgain >= 3600)
 		r |= 4;
-	else if (wc->mods[qrvcard + 1].mod.qrv.txgain >= 1200)
+	else if (nextqrvmod->mod.qrv.txgain >= 1200)
 		r |= 8;
-	wctdm_setreg(wc, qrvcard, 4, r);
+	wctdm_setreg(wc, qrvmod, 4, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 4 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].mod.qrv.rxgain >= 2400)
+	if (qrvmod->mod.qrv.rxgain >= 2400)
 		r |= 1;
-	if (wc->mods[qrvcard + 1].mod.qrv.rxgain >= 2400)
+	if (nextqrvmod->mod.qrv.rxgain >= 2400)
 		r |= 2;
-	wctdm_setreg(wc, qrvcard, 0x25, r);
+	wctdm_setreg(wc, qrvmod, 0x25, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x25 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].mod.qrv.txgain < 2400)
+	if (qrvmod->mod.qrv.txgain < 2400)
 		r |= 1;
 	else
 		r |= 4;
-	if (wc->mods[qrvcard + 1].mod.qrv.txgain < 2400)
+	if (nextqrvmod->mod.qrv.txgain < 2400)
 		r |= 8;
 	else
 		r |= 0x20;
-	wctdm_setreg(wc, qrvcard, 0x26, r);
+	wctdm_setreg(wc, qrvmod, 0x26, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x26 to %02x hex\n",r);
-	l = ((long)(wc->mods[qrvcard].mod.qrv.rxgain % 1200) * 10000) / 46875;
+	l = ((long)(qrvmod->mod.qrv.rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->mods[qrvcard].mod.qrv.rxgain >= 2400)
+	if (qrvmod->mod.qrv.rxgain >= 2400)
 		l += 181;
-	wctdm_setreg(wc, qrvcard, 0x0b, (unsigned char)l);
+	wctdm_setreg(wc, qrvmod, 0x0b, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0b to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->mods[qrvcard + 1].mod.qrv.rxgain % 1200) * 10000) / 46875;
+	l = ((long)(nextqrvmod->mod.qrv.rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->mods[qrvcard + 1].mod.qrv.rxgain >= 2400)
+	if (nextqrvmod->mod.qrv.rxgain >= 2400)
 		l += 181;
-	wctdm_setreg(wc, qrvcard, 0x0c, (unsigned char)l);
+	wctdm_setreg(wc, qrvmod, 0x0c, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0c to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->mods[qrvcard].mod.qrv.txgain % 1200) * 10000) / 46875;
+	l = ((long)(qrvmod->mod.qrv.txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	wctdm_setreg(wc, qrvcard, 0x0f, (unsigned char)l);
+	wctdm_setreg(wc, qrvmod, 0x0f, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0f to %02x hex\n", (unsigned char)l);
-	l = ((long)(wc->mods[qrvcard + 1].mod.qrv.txgain % 1200) * 10000) / 46875;
+	l = ((long)(nextqrvmod->mod.qrv.txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	wctdm_setreg(wc, qrvcard, 0x10,(unsigned char)l);
+	wctdm_setreg(wc, qrvmod, 0x10, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x10 to %02x hex\n",(unsigned char)l);
 	return;
 }
 
-static void wctdm24xxp_get_fxs_regs(struct wctdm *wc, struct dahdi_chan *chan,
+static void wctdm24xxp_get_fxs_regs(struct wctdm *wc, struct wctdm_module *mod,
 				    struct wctdm_regs *regs)
 {
 	int  x;
+
 	for (x = 0; x < NUM_INDIRECT_REGS; x++)
-		regs->indirect[x] = wctdm_proslic_getreg_indirect(wc,
-							chan->chanpos - 1, x);
+		regs->indirect[x] = wctdm_proslic_getreg_indirect(wc, mod, x);
+
 	for (x = 0; x < NUM_REGS; x++)
-		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+		regs->direct[x] = wctdm_getreg(wc, mod, x);
 }
 
-static void wctdm24xxp_get_fxo_regs(struct wctdm *wc, struct dahdi_chan *chan,
+static void wctdm24xxp_get_fxo_regs(struct wctdm *wc, struct wctdm_module *mod,
 				    struct wctdm_regs *regs)
 {
 	int  x;
 	for (x = 0; x < NUM_FXO_REGS; x++)
-		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+		regs->direct[x] = wctdm_getreg(wc, mod, x);
 }
 
-static void wctdm24xxp_get_qrv_regs(struct wctdm *wc, struct dahdi_chan *chan,
+static void wctdm24xxp_get_qrv_regs(struct wctdm *wc, struct wctdm_module *mod,
 				    struct wctdm_regs *regs)
 {
 	int  x;
 	for (x = 0; x < 0x32; x++)
-		regs->direct[x] = wctdm_getreg(wc, chan->chanpos - 1, x);
+		regs->direct[x] = wctdm_getreg(wc, mod, x);
 }
 
 static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long data)
@@ -3113,7 +3296,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 				   (__user void *)data,
 				   sizeof(fxs->vmwisetting)))
 			return -EFAULT;
-		set_vmwi(wc, chan->chanpos - 1);
+		set_vmwi(wc, mod);
 		break;
 	case DAHDI_VMWI:
 		if (mod->type != FXS)
@@ -3123,17 +3306,17 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (0 > x)
 			return -EFAULT;
 		fxs->vmwi_active_messages = x;
-		set_vmwi(wc, chan->chanpos - 1);
+		set_vmwi(wc, mod);
 		break;
 	case WCTDM_GET_STATS:
 		if (mod->type == FXS) {
-			stats.tipvolt = wctdm_getreg(wc, chan->chanpos - 1, 80) * -376;
-			stats.ringvolt = wctdm_getreg(wc, chan->chanpos - 1, 81) * -376;
-			stats.batvolt = wctdm_getreg(wc, chan->chanpos - 1, 82) * -376;
+			stats.tipvolt = wctdm_getreg(wc, mod, 80) * -376;
+			stats.ringvolt = wctdm_getreg(wc, mod, 81) * -376;
+			stats.batvolt = wctdm_getreg(wc, mod, 82) * -376;
 		} else if (mod->type == FXO) {
-			stats.tipvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
-			stats.ringvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
-			stats.batvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
+			stats.tipvolt = (s8)wctdm_getreg(wc, mod, 29) * 1000;
+			stats.ringvolt = (s8)wctdm_getreg(wc, mod, 29) * 1000;
+			stats.batvolt = (s8)wctdm_getreg(wc, mod, 29) * 1000;
 		} else 
 			return -EINVAL;
 		if (copy_to_user((__user void *) data, &stats, sizeof(stats)))
@@ -3146,11 +3329,11 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			return -ENOMEM;
 
 		if (mod->type == FXS)
-			wctdm24xxp_get_fxs_regs(wc, chan, regs);
+			wctdm24xxp_get_fxs_regs(wc, mod, regs);
 		else if (mod->type == QRV)
-			wctdm24xxp_get_qrv_regs(wc, chan, regs);
+			wctdm24xxp_get_qrv_regs(wc, mod, regs);
 		else
-			wctdm24xxp_get_fxo_regs(wc, chan, regs);
+			wctdm24xxp_get_fxo_regs(wc, mod, regs);
 
 		if (copy_to_user((__user void *)data, regs, sizeof(*regs))) {
 			kfree(regs);
@@ -3167,7 +3350,8 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			if (mod->type != FXS)
 				return -EINVAL;
 			dev_info(&wc->vb.pdev->dev, "Setting indirect %d to 0x%04x on %d\n", regop.reg, regop.val, chan->chanpos);
-			wctdm_proslic_setreg_indirect(wc, chan->chanpos - 1, regop.reg, regop.val);
+			wctdm_proslic_setreg_indirect(wc, mod, regop.reg,
+						      regop.val);
 		} else {
 			regop.val &= 0xff;
 			if (regop.reg == LINE_STATE) {
@@ -3175,7 +3359,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 				fxs->lasttxhook = (regop.val & 0x0f) |  SLIC_LF_OPPENDING;
 			}
 			dev_info(&wc->vb.pdev->dev, "Setting direct %d to %04x on %d\n", regop.reg, regop.val, chan->chanpos);
-			wctdm_setreg(wc, chan->chanpos - 1, regop.reg, regop.val);
+			wctdm_setreg(wc, mod, regop.reg, regop.val);
 		}
 		break;
 	case WCTDM_SET_ECHOTUNE:
@@ -3185,17 +3369,17 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 		if (mod->type == FXO) {
 			/* Set the ACIM register */
-			wctdm_setreg(wc, chan->chanpos - 1, 30, echoregs.acim);
+			wctdm_setreg(wc, mod, 30, echoregs.acim);
 
 			/* Set the digital echo canceller registers */
-			wctdm_setreg(wc, chan->chanpos - 1, 45, echoregs.coef1);
-			wctdm_setreg(wc, chan->chanpos - 1, 46, echoregs.coef2);
-			wctdm_setreg(wc, chan->chanpos - 1, 47, echoregs.coef3);
-			wctdm_setreg(wc, chan->chanpos - 1, 48, echoregs.coef4);
-			wctdm_setreg(wc, chan->chanpos - 1, 49, echoregs.coef5);
-			wctdm_setreg(wc, chan->chanpos - 1, 50, echoregs.coef6);
-			wctdm_setreg(wc, chan->chanpos - 1, 51, echoregs.coef7);
-			wctdm_setreg(wc, chan->chanpos - 1, 52, echoregs.coef8);
+			wctdm_setreg(wc, mod, 45, echoregs.coef1);
+			wctdm_setreg(wc, mod, 46, echoregs.coef2);
+			wctdm_setreg(wc, mod, 47, echoregs.coef3);
+			wctdm_setreg(wc, mod, 48, echoregs.coef4);
+			wctdm_setreg(wc, mod, 49, echoregs.coef5);
+			wctdm_setreg(wc, mod, 50, echoregs.coef6);
+			wctdm_setreg(wc, mod, 51, echoregs.coef7);
+			wctdm_setreg(wc, mod, 52, echoregs.coef8);
 
 			dev_info(&wc->vb.pdev->dev, "-- Set echo registers successfully\n");
 
@@ -3209,7 +3393,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (copy_from_user(&hwgain, (__user void *) data, sizeof(hwgain)))
 			return -EFAULT;
 
-		wctdm_set_hwgain(wc, chan->chanpos-1, hwgain.newgain, hwgain.tx);
+		wctdm_set_hwgain(wc, mod, hwgain.newgain, hwgain.tx);
 
 		if (debug)
 			dev_info(&wc->vb.pdev->dev, "Setting hwgain on channel %d to %d for %s direction\n", 
@@ -3523,13 +3707,15 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 			dev_notice(&wc->vb.pdev->dev, "wctdm24xxp: Can't set tx state to %d\n", txsig);
 		}
 	} else if (mod->type == FXS) {
-		wctdm_fxs_hooksig(wc, chan->chanpos - 1, txsig);
+		wctdm_fxs_hooksig(wc, mod, txsig);
 	}
 	return 0;
 }
 
 static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 {
+	struct wctdm_module *const srcmod = &wc->mods[srccard];
+	struct wctdm_module *const dstmod = &wc->mods[dstcard];
 	unsigned int type;
 
 	if (wc->mods[dstcard].dacssrc > -1) {
@@ -3550,71 +3736,88 @@ static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 			   "for card %d\n", dstcard);
 		return;
 	}
-	if (debug)
-		dev_info(&wc->vb.pdev->dev, "connect %d => %d\n", srccard, dstcard);
-	wc->mods[dstcard].dacssrc = srccard;
+
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "connect %d => %d\n", srccard, dstcard);
+	}
+
+	dstmod->dacssrc = srccard;
 
 	/* make srccard transmit to srccard+24 on the TDM bus */
-	if (wc->mods[srccard].type == FXS) {
+	if (srcmod->type == FXS) {
 		/* proslic */
-		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_LSB, ((srccard+24) * 8) & 0xff); 
-		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_MSB, ((srccard+24) * 8) >> 8);
-	} else if (wc->mods[srccard].type == FXO) {
-		/* daa */
-		wctdm_setreg(wc, srccard, 34, ((srccard+24) * 8) & 0xff); /* TX */
-		wctdm_setreg(wc, srccard, 35, ((srccard+24) * 8) >> 8);   /* TX */
+		wctdm_setreg(wc, srcmod, PCM_XMIT_START_COUNT_LSB,
+			     ((srccard+24) * 8) & 0xff);
+		wctdm_setreg(wc, srcmod, PCM_XMIT_START_COUNT_MSB,
+			     ((srccard+24) * 8) >> 8);
+	} else if (srcmod->type == FXO) {
+		/* daa TX */
+		wctdm_setreg(wc, srcmod, 34, ((srccard+24) * 8) & 0xff);
+		wctdm_setreg(wc, srcmod, 35, ((srccard+24) * 8) >> 8);
 	}
 
 	/* have dstcard receive from srccard+24 on the TDM bus */
-	if (wc->mods[dstcard].type == FXS) {
+	if (dstmod->type == FXS) {
 		/* proslic */
-    	wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_LSB,  ((srccard+24) * 8) & 0xff);
-		wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_MSB,  ((srccard+24) * 8) >> 8);
-	} else if (wc->mods[dstcard].type == FXO) {
-		/* daa */
-		wctdm_setreg(wc, dstcard, 36, ((srccard+24) * 8) & 0xff); /* RX */
-		wctdm_setreg(wc, dstcard, 37, ((srccard+24) * 8) >> 8);   /* RX */
+		wctdm_setreg(wc, dstmod, PCM_RCV_START_COUNT_LSB,
+			     ((srccard+24) * 8) & 0xff);
+		wctdm_setreg(wc, dstmod, PCM_RCV_START_COUNT_MSB,
+			     ((srccard+24) * 8) >> 8);
+	} else if (dstmod->type == FXO) {
+		/* daa RX */
+		wctdm_setreg(wc, dstmod, 36, ((srccard+24) * 8) & 0xff);
+		wctdm_setreg(wc, dstmod, 37, ((srccard+24) * 8) >> 8);
 	}
-
 }
 
 static void wctdm_dacs_disconnect(struct wctdm *wc, int card)
 {
 	struct wctdm_module *const mod = &wc->mods[card];
+	struct wctdm_module *dacssrc;
 
-	if (mod->dacssrc > -1) {
-		if (debug) {
-			dev_info(&wc->vb.pdev->dev,
-				 "wctdm_dacs_disconnect: restoring TX for %d "
-				 "and RX for %d\n", mod->dacssrc, card);
-		}
+	if (mod->dacssrc <= -1)
+		return;
 
-		/* restore TX (source card) */
-		if (wc->mods[mod->dacssrc].type == FXS) {
-			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_LSB,
-				     (wc->mods[card].dacssrc * 8) & 0xff);
-			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_MSB,
-				     (wc->mods[card].dacssrc * 8) >> 8);
-		} else if (wc->mods[mod->dacssrc].type == FXO) {
-			wctdm_setreg(wc, card, 34, (card * 8) & 0xff);
-			wctdm_setreg(wc, card, 35, (card * 8) >> 8);
-		} else {
-			dev_warn(&wc->vb.pdev->dev, "WARNING: wctdm_dacs_disconnect() called on unsupported modtype\n");
-		}
+	dacssrc = &wc->mods[mod->dacssrc];
 
-		/* restore RX (this card) */
-		if (FXS == mod->type) {
-			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_LSB, (card * 8) & 0xff);
-			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_MSB, (card * 8) >> 8);
-		} else if (FXO == mod->type) {
-			wctdm_setreg(wc, card, 36, (card * 8) & 0xff);
-			wctdm_setreg(wc, card, 37, (card * 8) >> 8);
-		} else {
-			dev_warn(&wc->vb.pdev->dev, "WARNING: wctdm_dacs_disconnect() called on unsupported modtype\n");
-		}
-
-		mod->dacssrc = -1;
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev, "wctdm_dacs_disconnect: "
+			 "restoring TX for %d and RX for %d\n",
+			 mod->dacssrc, card);
 	}
+
+	/* restore TX (source card) */
+	if (dacssrc->type == FXS) {
+		wctdm_setreg(wc, dacssrc, PCM_XMIT_START_COUNT_LSB,
+			     (mod->dacssrc * 8) & 0xff);
+		wctdm_setreg(wc, dacssrc, PCM_XMIT_START_COUNT_MSB,
+			     (mod->dacssrc * 8) >> 8);
+	} else if (dacssrc->type == FXO) {
+		wctdm_setreg(wc, mod, 34, (card * 8) & 0xff);
+		wctdm_setreg(wc, mod, 35, (card * 8) >> 8);
+	} else {
+		dev_warn(&wc->vb.pdev->dev,
+			 "WARNING: wctdm_dacs_disconnect() called "
+			 "on unsupported modtype\n");
+	}
+
+	/* restore RX (this card) */
+	if (FXS == mod->type) {
+		wctdm_setreg(wc, mod, PCM_RCV_START_COUNT_LSB,
+			     (card * 8) & 0xff);
+		wctdm_setreg(wc, mod, PCM_RCV_START_COUNT_MSB,
+			     (card * 8) >> 8);
+	} else if (FXO == mod->type) {
+		wctdm_setreg(wc, mod, 36, (card * 8) & 0xff);
+		wctdm_setreg(wc, mod, 37, (card * 8) >> 8);
+	} else {
+		dev_warn(&wc->vb.pdev->dev,
+			 "WARNING: wctdm_dacs_disconnect() called "
+			 "on unsupported modtype\n");
+	}
+
+	mod->dacssrc = -1;
 }
 
 static int wctdm_dacs(struct dahdi_chan *dst, struct dahdi_chan *src)
@@ -3878,10 +4081,10 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 #ifdef DEBUG
 			val = (digitalloopback) ? 0x30 : val;
 #endif
-			wctdm_setreg(wc, x, 33, val);
+			wctdm_setreg(wc, mod, 33, val);
 		} else if (mod->type == FXS) {
 			s->chans[y++]->sigcap = DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS | DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
-			wctdm_setreg(wc, x, 1,
+			wctdm_setreg(wc, mod, 1,
 				     (should_set_alaw(wc) ? 0x20 : 0x28));
 		} else if (mod->type == QRV) {
 			s->chans[y++]->sigcap = DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
@@ -4008,20 +4211,23 @@ static int wctdm_identify_modules(struct wctdm *wc)
 		if (fatal_signal_pending(current))
 			break;
 retry:
-		if (!(ret = wctdm_init_proslic(wc, x, 0, 0, sane))) {
+		if (!(ret = wctdm_init_proslic(wc, mod, 0, 0, sane))) {
 			if (debug & DEBUG_CARD) {
-				readi = wctdm_getreg(wc,x,LOOP_I_LIMIT);
-				dev_info(&wc->vb.pdev->dev, "Proslic module %d loop current is %dmA\n", x, ((readi*3)+20));
+				readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
+				dev_info(&wc->vb.pdev->dev,
+					 "Proslic module %d loop current "
+					 "is %dmA\n", x, ((readi*3) + 20));
 			}
-			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- AUTO FXS/DPO\n", x + 1);
+			dev_info(&wc->vb.pdev->dev,
+				 "Port %d: Installed -- AUTO FXS/DPO\n", x + 1);
 		} else {
 			if (ret != -2) {
 				sane = 1;
 				/* Init with Manual Calibration */
-				if (!wctdm_init_proslic(wc, x, 0, 1, sane)) {
+				if (!wctdm_init_proslic(wc, mod, 0, 1, sane)) {
 
 					if (debug & DEBUG_CARD) {
-						readi = wctdm_getreg(wc, x, LOOP_I_LIMIT);
+						readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
 						dev_info(&wc->vb.pdev->dev, "Proslic module %d loop current is %dmA\n", x, ((readi*3)+20));
 					}
 
@@ -4030,7 +4236,7 @@ retry:
 					dev_notice(&wc->vb.pdev->dev, "Port %d: FAILED FXS (%s)\n", x + 1, fxshonormode ? fxo_modes[_opermode].name : "FCC");
 				}
 
-			} else if (!(ret = wctdm_init_voicedaa(wc, x, 0, 0, sane))) {
+			} else if (!(ret = wctdm_init_voicedaa(wc, mod, 0, 0, sane))) {
 				dev_info(&wc->vb.pdev->dev,
 					 "Port %d: Installed -- AUTO FXO "
 					 "(%s mode)\n", x + 1,
@@ -4105,7 +4311,7 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 		wc->spans[i] = NULL;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(wc->chans); ++i) {
+	for (i = 0; i < ARRAY_SIZE(wc->mods); ++i) {
 		kfree(wc->chans[i]);
 		wc->chans[i] = NULL;
 	}
@@ -4748,6 +4954,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	for (i = 0; i < NUM_MODULES; i++) {
 		wc->mods[i].flags = wc->desc->flags;
 		wc->mods[i].dacssrc = -1;
+		wc->mods[i].card = i;
 	}
 
 	/* Start the hardware processing. */
@@ -4860,13 +5067,13 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		struct wctdm_module *const mod = &wc->mods[i];
 		switch (mod->type) {
 		case FXS:
-			wctdm_proslic_set_ts(wc, i, (digimods * 12) + i);
+			wctdm_proslic_set_ts(wc, mod, (digimods * 12) + i);
 			break;
 		case FXO:
-			wctdm_voicedaa_set_ts(wc, i, (digimods * 12) + i);
+			wctdm_voicedaa_set_ts(wc, mod, (digimods * 12) + i);
 			break;
 		case QRV:
-			wctdm_qrvdri_set_ts(wc, i, (digimods * 12) + i);
+			wctdm_qrvdri_set_ts(wc, mod, (digimods * 12) + i);
 			break;
 		default:
 			break;
