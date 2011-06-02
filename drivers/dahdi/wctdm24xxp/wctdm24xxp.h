@@ -85,11 +85,8 @@
 
 #define NUM_CAL_REGS		12
 
-#define USER_COMMANDS		8
 #define ISR_COMMANDS		2
 #define QRV_DEBOUNCETIME	20
-
-#define MAX_COMMANDS		(USER_COMMANDS + ISR_COMMANDS)
 
 #define VPM150M_HPI_CONTROL	0x00
 #define VPM150M_HPI_ADDRESS	0x02
@@ -106,15 +103,17 @@ struct calregs {
 	unsigned char vals[NUM_CAL_REGS];
 };
 
-struct cmdq {
-	unsigned int cmds[MAX_COMMANDS];
-	unsigned char isrshadow[ISR_COMMANDS];
-};
-
 enum battery_state {
 	BATTERY_UNKNOWN = 0,
 	BATTERY_PRESENT,
 	BATTERY_LOST,
+};
+
+struct wctdm_cmd {
+	struct list_head node;
+	struct completion *complete;
+	u32 cmd;
+	u8 ident;
 };
 
 /**
@@ -221,7 +220,10 @@ struct wctdm_module {
 		struct b400m *bri;
 	} mod;
 
-	struct cmdq cmdq;
+	/* Protected by wctdm.reglock */
+	struct list_head pending_cmds;
+	struct list_head active_cmds;
+	u8 isrshadow[ISR_COMMANDS];
 
 	enum module_type type;
 	int sethook; /* pending hook state command */

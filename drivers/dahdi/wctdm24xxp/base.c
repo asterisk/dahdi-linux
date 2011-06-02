@@ -290,16 +290,6 @@ static inline int CMD_BYTE(int card, int bit, int altcs)
 			+ ((card) >> 2) + (altcs) + ((altcs) ? -21 : 0));
 }
 
-static inline int empty_slot(struct wctdm_module *const mod)
-{
-	int x;
-	for (x = 0; x < USER_COMMANDS; x++) {
-		if (!mod->cmdq.cmds[x])
-			return x;
-	}
-	return -1;
-}
-
 static void
 setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 			 GpakChannelConfig_t *chanconfig)
@@ -592,11 +582,11 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 	}
 }
 
+/* Call with wc->reglock held and local interrupts disabled */
 static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 {
 	struct wctdm_module *const mod = &wc->mods[card];
 	unsigned int curcmd=0;
-	int x;
 	int subaddr = card & 0x3;
 
 	/* QRV only use commands relating to the first channel */
@@ -610,13 +600,13 @@ static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 	eframe += 24;
 	/* Search for something waiting to transmit */
 	if (pos) {
-		for (x = 0; x < MAX_COMMANDS; x++) {
-			if ((mod->cmdq.cmds[x] & (__CMD_RD | __CMD_WR)) &&
-			   !(mod->cmdq.cmds[x] & (__CMD_TX | __CMD_FIN))) {
-				curcmd = mod->cmdq.cmds[x];
-				mod->cmdq.cmds[x] |= (wc->txident << 24) | __CMD_TX;
-				break;
-			}
+		if (!list_empty(&mod->pending_cmds)) {
+			struct wctdm_cmd *const cmd =
+				list_entry(mod->pending_cmds.next,
+					   struct wctdm_cmd, node);
+			curcmd = cmd->cmd;
+			cmd->ident = wc->txident;
+			list_move_tail(&cmd->node, &mod->active_cmds);
 		}
 	}
 
@@ -750,71 +740,132 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
  */
 static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 {
+	enum { TDM_BYTES = 24, };
 	struct wctdm_module *const mod = &wc->mods[card];
-	unsigned char ident;
-	int x;
+	struct wctdm_cmd *cmd;
+	u8 address;
+	u8 value;
 
-	/* QRV modules only use commands relating to the first channel */
-	if ((card & 0x03) && (mod->type == QRV))
+	if (list_empty(&mod->active_cmds))
 		return;
 
-	/* Skip audio */
-	eframe += 24;
+	cmd = list_entry(mod->active_cmds.next, struct wctdm_cmd, node);
+	if (cmd->ident != wc->rxident)
+		return;
 
-	/* Search for any pending results */
-	for (x=0;x<MAX_COMMANDS;x++) {
-		if ((mod->cmdq.cmds[x] & (__CMD_RD | __CMD_WR)) &&
-		    (mod->cmdq.cmds[x] & (__CMD_TX)) &&
-		    !(mod->cmdq.cmds[x] & (__CMD_FIN))) {
-			ident = (mod->cmdq.cmds[x] >> 24) & 0xff;
-		   	if (ident == wc->rxident) {
-				/* Store result */
-				mod->cmdq.cmds[x] |= eframe[CMD_BYTE(card, 2, mod->altcs)];
-				mod->cmdq.cmds[x] |= __CMD_FIN;
-				if (mod->cmdq.cmds[x] & __CMD_WR) {
-					/* Go ahead and clear out writes since they need no acknowledgement */
-					mod->cmdq.cmds[x] = 0x00000000;
-				} else if (x >= USER_COMMANDS) {
-					/* Clear out ISR reads */
-					mod->cmdq.isrshadow[x - USER_COMMANDS] = mod->cmdq.cmds[x] & 0xff;
-					mod->cmdq.cmds[x] = 0x00000000;
-				}
-				break;
-			}
-		}
+	list_del(&cmd->node);
+
+	if (cmd->cmd & __CMD_WR) {
+		kfree(cmd);
+		return;
 	}
+
+	address = (cmd->cmd >> 8) & 0xff;
+
+	cmd->cmd = eframe[TDM_BYTES + CMD_BYTE(card, 2, mod->altcs)];
+
+	value = (cmd->cmd & 0xff);
+
+	if (cmd->complete) {
+		complete(cmd->complete);
+		return;
+	}
+
+	switch (mod->type) {
+	case FXS:
+		if (68 == address) {
+			mod->isrshadow[0] = value;
+#ifdef PAQ_DEBUG
+		} else if (19 == address) {
+			mod->isrshadow[1] = value;
+#else
+		} else if (LINE_STATE == address) {
+			mod->isrshadow[1] = value;
+#endif
+		} else {
+			dev_info(&wc->vb.pdev->dev,
+				 "FXS isr read address: %d\n", address);
+		}
+		break;
+	case FXO:
+		if (5 == address) { /* Hook/Ring state */
+			mod->isrshadow[0] = value;
+		} else if (29 == address) { /* Battery */
+			mod->isrshadow[1] = value;
+		} else {
+			dev_info(&wc->vb.pdev->dev,
+				 "FXO isr read address: %d %08x\n",
+				 address, cmd->cmd);
+		}
+		break;
+	case QRV:
+		/* wctdm_isr_getreg(wc, mod, 3); */ /* COR/CTCSS state */
+		/* TODO: This looks broken to me, but I have no way to
+		 * resolved it. */
+		/* wc->mods[card & 0xfc].cmds[USER_COMMANDS + 1] = CMD_RD(3); */
+		break;
+	default:
+		break;
+	}
+
+	kfree(cmd);
 }
+
+/* Call with wc.reglock held and local interrupts disabled. */
+static void
+wctdm_isr_getreg(struct wctdm *wc, struct wctdm_module *const mod, u8 address)
+{
+	struct wctdm_cmd *cmd;
+
+	cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
+	if (unlikely(!cmd))
+		return;
+
+	cmd->cmd = CMD_RD(address);
+	cmd->complete = NULL;
+
+	list_add(&cmd->node, &mod->pending_cmds);
+}
+
+static inline void
+wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod,
+		  int addr, int val);
 
 static void cmd_checkisr(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	if (!mod->cmdq.cmds[USER_COMMANDS + 0]) {
-		if (mod->sethook) {
-			mod->cmdq.cmds[USER_COMMANDS + 0] = mod->sethook;
-			mod->sethook = 0;
-		} else if (mod->type == FXS) {
-			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(68);	/* Hook state */
-		} else if (mod->type == FXO) {
-			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(5);	/* Hook/Ring state */
-		} else if (mod->type == QRV) {
-			wc->mods[mod->card & 0xfc].cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
-		} else if (mod->type == BRI) {
-			wctdm_bri_checkisr(wc, mod, 0);
-		}
+	if (mod->sethook) {
+		wctdm_setreg_intr(wc, mod, ((mod->sethook >> 8) & 0xff),
+				  mod->sethook & 0xff);
+		mod->sethook = 0;
+		return;
 	}
-	if (!mod->cmdq.cmds[USER_COMMANDS + 1]) {
-		if (mod->type == FXS) {
+
+	switch (mod->type) {
+	case FXS:
+		wctdm_isr_getreg(wc, mod, 68); /* Hook state */
 #ifdef PAQ_DEBUG
-			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(19);	/* Transistor interrupts */
+		wctdm_isr_getreg(wc, mod, 19); /* Transistor interrupts */
 #else
-			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(LINE_STATE);
+		wctdm_isr_getreg(wc, mod, LINE_STATE);
 #endif
-		} else if (mod->type == FXO) {
-			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(29);	/* Battery */
-		} else if (mod->type == QRV) {
-			wc->mods[mod->card & 0xfc].cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
-		} else if (mod->type == BRI) {
-			wctdm_bri_checkisr(wc, mod, 1);
-		}
+		break;
+	case FXO:
+		wctdm_isr_getreg(wc, mod, 5);  /* Hook/Ring state */
+		wctdm_isr_getreg(wc, mod, 29); /* Battery */
+		break;
+	case QRV:
+		wctdm_isr_getreg(wc, mod, 3); /* COR/CTCSS state */
+		/* TODO: This looks broken to me, but I have no way to
+		 * resolved it. */
+		/* wc->mods[card & 0xfc].cmds[USER_COMMANDS + 1] = CMD_RD(3); */
+		break;
+	case BRI:
+		/* TODO: Two calls needed here? */
+		wctdm_bri_checkisr(wc, mod, 0);
+		wctdm_bri_checkisr(wc, mod, 1);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -925,28 +976,26 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
-static bool
-stuff_command(struct wctdm *wc, struct wctdm_module *const mod,
-	      unsigned int cmd, int *hit)
+/* Must be called with wc.reglock held and local interrupts disabled */
+static inline void
+wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
 {
-	unsigned long flags;
+	struct wctdm_cmd *cmd;
 
-	spin_lock_irqsave(&wc->reglock, flags);
-	*hit = empty_slot(mod);
-	if (*hit > -1)
-		mod->cmdq.cmds[*hit] = cmd;
-	spin_unlock_irqrestore(&wc->reglock, flags);
+	cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
+	if (unlikely(!cmd))
+		return;
 
-	return (*hit > -1);
+	cmd->complete = NULL;
+	cmd->cmd = CMD_WR(addr, val);
+
+	list_add_tail(&cmd->node, &mod->pending_cmds);
 }
 
-static int
-wctdm_setreg_full(struct wctdm *wc, struct wctdm_module *mod,
-		  int addr, int val, int inisr)
+int wctdm_setreg(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
 {
-	const unsigned int cmd = CMD_WR(addr, val);
-	int ret;
-	int hit;
+	struct wctdm_cmd *cmd;
+	unsigned long flags;
 
 #if 0 /* TODO */
 	/* QRV and BRI cards are only addressed at their first "port" */
@@ -955,52 +1004,25 @@ wctdm_setreg_full(struct wctdm *wc, struct wctdm_module *mod,
 		return 0;
 #endif
 
-	if (inisr) {
-		stuff_command(wc, mod, cmd, &hit);
-		return 0;
-	}
+	cmd = kmalloc(sizeof(*cmd), GFP_KERNEL);
+	if (unlikely(!cmd))
+		return -ENOMEM;
 
-	ret = wait_event_interruptible(wc->regq,
-			stuff_command(wc, mod, cmd, &hit));
-	return ret;
-}
-
-static inline void
-wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
-{
-	wctdm_setreg_full(wc, mod, addr, val, 1);
-}
-
-int wctdm_setreg(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
-{
-	return wctdm_setreg_full(wc, mod, addr, val, 0);
-}
-
-static bool
-cmd_finished(struct wctdm *wc, struct wctdm_module *const mod, int hit, u8 *val)
-{
-	bool ret;
-	unsigned long flags;
+	cmd->complete = NULL;
+	cmd->cmd = CMD_WR(addr, val);
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	if (mod->cmdq.cmds[hit] & __CMD_FIN) {
-		*val = mod->cmdq.cmds[hit] & 0xff;
-		mod->cmdq.cmds[hit] = 0x00000000;
-		ret = true;
-	} else {
-		ret = false;
-	}
+	list_add_tail(&cmd->node, &mod->pending_cmds);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	return ret;
+	return 0;
 }
 
 int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
 {
-	const unsigned int cmd = CMD_RD(addr);
-	u8 val = 0;
-	int hit;
-	int ret;
+	unsigned long flags;
+	struct wctdm_cmd *cmd;
+	int val;
 
 #if 0 /* TODO */
 	/* if a QRV card, use only its first channel */  
@@ -1010,15 +1032,29 @@ int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
 	}
 #endif
 
-	ret = wait_event_interruptible(wc->regq,
-			stuff_command(wc, mod, cmd, &hit));
-	if (ret)
-		return ret;
+	cmd = kmalloc(sizeof(*cmd), GFP_KERNEL);
+	if (!cmd)
+		return -ENOMEM;
 
-	ret = wait_event_interruptible(wc->regq,
-			cmd_finished(wc, mod, hit, &val));
-	if (ret)
-		return ret;
+	cmd->complete = kmalloc(sizeof(*cmd->complete), GFP_KERNEL);
+	if (!cmd->complete) {
+		kfree(cmd);
+		return -ENOMEM;
+	}
+
+	init_completion(cmd->complete);
+
+	cmd->cmd = CMD_RD(addr);
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	list_add_tail(&cmd->node, &mod->pending_cmds);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	wait_for_completion(cmd->complete);
+	val = cmd->cmd & 0xff;
+
+	kfree(cmd->complete);
+	kfree(cmd);
 
 	return val;
 }
@@ -1028,17 +1064,15 @@ int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr)
  */
 static void cmd_retransmit(struct wctdm *wc)
 {
-	int x,y;
-	/* Force retransmissions */
-	for (x=0;x<MAX_COMMANDS;x++) {
-		for (y = 0; y < wc->mods_per_board; y++) {
-			struct wctdm_module *const mod = &wc->mods[y];
-			if (mod->type == BRI)
-				continue;
-			if (!(mod->cmdq.cmds[x] & __CMD_FIN))
-				mod->cmdq.cmds[x] &= ~(__CMD_TX | (0xff << 24));
-		}
+	int x;
+
+	for (x = 0; x < wc->mods_per_board; x++) {
+		struct wctdm_module *const mod = &wc->mods[x];
+		if (mod->type == BRI)
+			continue;
+		list_splice_init(&mod->active_cmds, &mod->pending_cmds);
 	}
+
 #ifdef VPM_SUPPORT
 	if (wc->vpmadt032)
 		vpmadt032_resend(wc->vpmadt032);
@@ -1165,9 +1199,6 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 			}
 		}
 	}
-
-	/* Wake up anyone sleeping to read/write a new register */
-	wake_up_interruptible_all(&wc->regq);
 }
 
 static int wait_access(struct wctdm *wc, struct wctdm_module *const mod)
@@ -1308,20 +1339,21 @@ static void
 wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
+	unsigned long flags;
 	int res;
 
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING))
 		return;
 
 	/* Monitor the Pending LF state change, for the next 100ms */
-	spin_lock(&fxs->lasttxhooklock);
+	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING)) {
-		spin_unlock(&fxs->lasttxhooklock);
+		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 		return;
 	}
 
-	res = mod->cmdq.isrshadow[1];
+	res = mod->isrshadow[1];
 	if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
 		fxs->lasttxhook &= SLIC_LF_SETMASK;
 		fxs->oppending_ms = 0;
@@ -1332,8 +1364,7 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 				 res, fxs->lasttxhook, wc->intcount);
 		}
 	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
-		/* Timed out, resend the linestate */
-		mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+		wctdm_setreg_intr(wc, mod, LINE_STATE, fxs->lasttxhook);
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF RETRY: card=%d shadow=%02x "
@@ -1343,7 +1374,7 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 	} else { /* Start 100ms Timeout */
 		fxs->oppending_ms = 100;
 	}
-	spin_unlock(&fxs->lasttxhooklock);
+	spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 }
 
 /* 256ms interrupt */
@@ -1354,16 +1385,16 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 	int res;
 	unsigned long flags;
 #ifdef PAQ_DEBUG
-	res = mod->cmdq.isrshadow[1];
+	res = mod->isrshadow[1];
 	res &= ~0x3;
 	if (res) {
-		mod->cmdq.isrshadow[1] = 0;
+		mod->isrshadow[1] = 0;
 		fxs->palarms++;
 		if (fxs->palarms < MAX_ALARMS) {
 			dev_notice(&wc->vb.pdev->dev, "Power alarm (%02x) on module %d, resetting!\n", res, card + 1);
 			mod->sethook = CMD_WR(19, res);
 			/* Update shadow register to avoid extra power alarms until next read */
-			mod->cmdq.isrshadow[1] = 0;
+			mod->isrshadow[1] = 0;
 		} else {
 			if (fxs->palarms == MAX_ALARMS)
 				dev_notice(&wc->vb.pdev->dev, "Too many power alarms on card %d, NOT resetting!\n", card + 1);
@@ -1371,7 +1402,7 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 	}
 #else
 	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
-	res = mod->cmdq.isrshadow[1];
+	res = mod->isrshadow[1];
 
 #if 0
 	/* This makes sure the lasthook was put in reg 64 the linefeed reg */
@@ -1417,7 +1448,7 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 
 			/* Update shadow register to avoid extra power alarms until next read */
-			mod->cmdq.isrshadow[1] = fxs->lasttxhook;
+			mod->isrshadow[1] = fxs->lasttxhook;
 		} else {
 			if (fxs->palarms == MAX_ALARMS) {
 				dev_notice(&wc->vb.pdev->dev,
@@ -1436,7 +1467,7 @@ static void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 
 	if (wc->mods[card].mod.qrv.debtime >= 2)
 		wc->mods[card].mod.qrv.debtime--;
-	b = wc->mods[qrvcard].cmdq.isrshadow[0]; /* Hook/Ring state */
+	b = wc->mods[qrvcard].isrshadow[0]; /* Hook/Ring state */
 	b &= 0xcc; /* use bits 3-4 and 6-7 only */
 
 	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_IGNORECOR)
@@ -1508,7 +1539,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
-	b = mod->cmdq.isrshadow[0];	/* Hook/Ring state */
+	b = mod->isrshadow[0];	/* Hook/Ring state */
 	b &= 0x9b;
 	if (fxo->offhook) {
 		if (b != 0x9)
@@ -1528,7 +1559,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 			* but not to have transitions between the two bits (i.e. no negative
 			* to positive or positive to negative transversals )
 			*/
-			res =  mod->cmdq.isrshadow[0] & 0x60;
+			res =  mod->isrshadow[0] & 0x60;
 			if (0 == fxo->wasringing) {
 				if (res) {
 					/* Look for positive/negative crossings in ring status reg */
@@ -1566,7 +1597,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 				}
 			}
 		} else {
-			res =  mod->cmdq.isrshadow[0];
+			res =  mod->isrshadow[0];
 			if ((res & 0x60) && (fxo->battery == BATTERY_PRESENT)) {
 				fxo->ringdebounce += (DAHDI_CHUNKSIZE * 16);
 				if (fxo->ringdebounce >= DAHDI_CHUNKSIZE * ringdebounce) {
@@ -1594,7 +1625,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		}
 	}
 
-	b = mod->cmdq.isrshadow[1]; /* Voltage */
+	b = mod->isrshadow[1]; /* Voltage */
 	abs_voltage = abs(b);
 
 	if (fxovoltage) {
@@ -1907,7 +1938,7 @@ wctdm_proslic_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	/* For some reason we have to debounce the
 	   hook detector.  */
 
-	res = mod->cmdq.isrshadow[0];	/* Hook state */
+	res = mod->isrshadow[0];	/* Hook state */
 	hook = (res & 1);
 	
 	if (hook != fxs->lastrxhook) {
@@ -2271,6 +2302,10 @@ wctdm_proslic_powerleak_test(struct wctdm *wc, struct wctdm_module *const mod)
 
 	/* Wait for one second */
 	origjiffies = jiffies;
+
+	/* TODO: Why is this sleep necessary.  WIthout it, the first read
+	 * comes back with a 0 value. */
+	msleep(20);
 
 	while ((vbat = wctdm_getreg(wc, mod, 82)) > 0x6) {
 		if ((jiffies - origjiffies) >= (HZ/2))
@@ -3022,7 +3057,7 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	/* Preset the isrshadow register so that we won't get a power alarm
 	 * when we finish initialization, otherwise the line state register
 	 * may not have been read yet. */
-	mod->cmdq.isrshadow[1] = fxs->lasttxhook;
+	mod->isrshadow[1] = fxs->lasttxhook;
 	return 0;
 }
 
@@ -4311,7 +4346,6 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 {
 	int i;
 	unsigned long flags;
-	struct sframe_packet *frame;
 	LIST_HEAD(local_list);
 
 	voicebus_release(&wc->vb);
@@ -4330,9 +4364,23 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 		wc->spans[i] = NULL;
 	}
 
+	spin_lock_irqsave(&wc->reglock, flags);
 	for (i = 0; i < ARRAY_SIZE(wc->mods); ++i) {
+		struct wctdm_module *const mod = &wc->mods[i];
 		kfree(wc->chans[i]);
 		wc->chans[i] = NULL;
+		list_splice_init(&mod->pending_cmds, &local_list);
+		list_splice_init(&mod->active_cmds, &local_list);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	while (!list_empty(&local_list)) {
+		struct wctdm_cmd *cmd;
+		cmd = list_entry(local_list.next,
+				 struct wctdm_cmd, node);
+		list_del(&cmd->node);
+		kfree(cmd->complete);
+		kfree(cmd);
 	}
 
 	spin_lock_irqsave(&wc->frame_list_lock, flags);
@@ -4340,11 +4388,14 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 	spin_unlock_irqrestore(&wc->frame_list_lock, flags);
 
 	while (!list_empty(&local_list)) {
+		struct sframe_packet *frame;
 		frame = list_entry(local_list.next,
 				   struct sframe_packet, node);
 		list_del(&frame->node);
 		kfree(frame);
 	}
+
+
 
 	kfree(wc->board_name);
 	kfree(wc);
@@ -4970,7 +5021,9 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		/* Auto detect this card's companding */
 		wc->companding = DAHDI_LAW_DEFAULT;
 
-	for (i = 0; i < NUM_MODULES; i++) {
+	for (i = 0; i < ARRAY_SIZE(wc->mods); i++) {
+		INIT_LIST_HEAD(&wc->mods[i].pending_cmds);
+		INIT_LIST_HEAD(&wc->mods[i].active_cmds);
 		wc->mods[i].dacssrc = -1;
 		wc->mods[i].card = i;
 	}
