@@ -1385,6 +1385,64 @@ struct vpm_load_work {
 	struct t1 *wc;
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void vpm_load_func(void *data)
+{
+	struct maint_work_struct *w = data;
+#else
+static void vpm_load_func(struct work_struct *work)
+{
+	struct vpm_load_work *w = container_of(work,
+					struct vpm_load_work, work);
+#endif
+	struct t1 *wc = w->wc;
+	int res;
+
+	res = vpmadt032_init(wc->vpmadt032);
+	if (res) {
+		/* There was some problem during initialization, but it passed
+		 * the address test, let's try again in a bit. */
+		wc->vpm_check = jiffies + HZ/2;
+		return;
+	}
+
+	if (config_vpmadt032(wc->vpmadt032, wc)) {
+		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
+		wc->vpm_check = jiffies + HZ/2;
+		return;
+	}
+
+	/* turn on vpm (RX audio from vpm module) */
+	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
+	wc->vpm_check = jiffies + HZ*5;
+	if (vpmtsisupport) {
+		debug_printk(wc, 1, "enabling VPM TSI pin\n");
+		/* turn on vpm timeslot interchange pin */
+		set_bit(0, &wc->ctlreg);
+	}
+
+	set_bit(READY, &wc->bit_flags);
+	kfree(w);
+}
+
+static int vpm_start_load(struct t1 *wc)
+{
+	struct vpm_load_work *work;
+
+	work = kzalloc(sizeof(*work), GFP_KERNEL);
+	if (!work)
+		return -ENOMEM;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&work->work, vpm_load_func, work);
+#else
+	INIT_WORK(&work->work, vpm_load_func);
+#endif
+	work->wc = wc;
+
+	queue_work(wc->wq, &work->work);
+	return 0;
+}
+
 static int check_and_load_vpm(struct t1 *wc)
 {
 	int res;
@@ -1428,7 +1486,7 @@ static int check_and_load_vpm(struct t1 *wc)
 	wc->vpmadt032 = vpm;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	res = vpmadt032_init(vpm, &wc->vb);
+	res = vpmadt032_test(vpm, &wc->vb);
 	if (-ENODEV == res) {
 		struct vpmadt032 *vpm = wc->vpmadt032;
 
@@ -1439,30 +1497,19 @@ static int check_and_load_vpm(struct t1 *wc)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		vpmadt032_free(vpm);
 		return res;
-
-	} else if (res) {
-		/* There was some problem during initialization, but it passed
-		 * the address test, let's try again in a bit. */
-		wc->vpm_check = jiffies + HZ/2;
-		return -EAGAIN;
 	}
 
-	if (config_vpmadt032(vpm, wc)) {
+	res = vpm_start_load(wc);
+	if (res) {
+		/* There does not appear to be a VPMADT032 installed. */
 		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
-		wc->vpm_check = jiffies + HZ/2;
-		return -EAGAIN;
+		spin_lock_irqsave(&wc->reglock, flags);
+		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpm);
+		return res;
 	}
-
-	/* turn on vpm (RX audio from vpm module) */
-	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
-	wc->vpm_check = jiffies + HZ*5;
-	if (vpmtsisupport) {
-		debug_printk(wc, 1, "enabling VPM TSI pin\n");
-		/* turn on vpm timeslot interchange pin */
-		set_bit(0, &wc->ctlreg);
-	}
-
-	return 0;
+	return res;
 }
 #else
 static inline int check_and_load_vpm(const struct t1 *wc)

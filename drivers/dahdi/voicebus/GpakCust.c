@@ -513,6 +513,11 @@ vpmadt032_alloc(struct vpmadt032_options *options)
 	sema_init(&vpm->sem, 1);
 	vpm->curpage = 0x80;
 	vpm->dspid = -1;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&vpm->work, vpmadt032_bh, vpm);
+#else
+	INIT_WORK(&vpm->work, vpmadt032_bh);
+#endif
 
 	/* Do not use the global workqueue for processing these events.  Some of
 	 * the operations can take 100s of ms, most of that time spent sleeping.
@@ -605,36 +610,26 @@ int vpmadt032_reset(struct vpmadt032 *vpm)
 }
 EXPORT_SYMBOL(vpmadt032_reset);
 
-int
-vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
+/**
+ * vpmadt032_test - Check if there is a VPMADT032 present on voicebus device.
+ * @vpm:	Allocated with vpmadt032_alloc previously.
+ * @vb:		Voicebus structure to test on.
+ *
+ * Returns 0 if there is a device, otherwise -ENODEV.
+ *
+ */
+int vpmadt032_test(struct vpmadt032 *vpm, struct voicebus *vb)
 {
-	int i;
-	u16 reg;
-	int res = -EFAULT;
-	unsigned long stoptime;
-	struct device *dev;
-	gpakPingDspStat_t pingstatus;
-
-	BUG_ON(!vpm->setchanconfig_from_state);
-	BUG_ON(!vpm->wq);
-	BUG_ON(!vb);
+	u8 reg;
+	int i, x;
+	struct device *dev = &vb->pdev->dev;
 
 	vpm->vb = vb;
 
-	might_sleep();
-
-	dev = &vpm->vb->pdev->dev;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&vpm->work, vpmadt032_bh, vpm);
-#else
-	INIT_WORK(&vpm->work, vpmadt032_bh);
-#endif
 	if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
 		dev_info(dev, "VPMADT032 Testing page access: ");
 
 	for (i = 0; i < 0xf; i++) {
-		int x;
 		for (x = 0; x < 3; x++) {
 			vpmadt032_setpage(vpm, i);
 			reg = vpmadt032_getpage(vpm);
@@ -645,14 +640,42 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 						"VPMADT032 Failed HI page " \
 						"test\n", i, reg);
 				}
-				res = -ENODEV;
-				goto failed_exit;
+				return -ENODEV;
 			}
 		}
 	}
 
 	if (vpm->options.debug & DEBUG_VPMADT032_ECHOCAN)
-		dev_info(&vpm->vb->pdev->dev, "Passed\n");
+		dev_info(dev, "Passed\n");
+
+	return 0;
+}
+EXPORT_SYMBOL(vpmadt032_test);
+
+/**
+ * vpmadt032_init - Initialize and load VPMADT032 firmware.
+ * @vpm:	Allocated with vpmadt032_alloc previously.
+ *
+ * Returns 0 on success.  This must be called after vpmadt032_test already
+ * checked if there appears to be a VPMADT032 installed on the board.
+ *
+ */
+int vpmadt032_init(struct vpmadt032 *vpm)
+{
+	int i;
+	u16 reg;
+	int res = -EFAULT;
+	unsigned long stoptime;
+	struct device *dev;
+	gpakPingDspStat_t pingstatus;
+
+	BUG_ON(!vpm->setchanconfig_from_state);
+	BUG_ON(!vpm->wq);
+	BUG_ON(!vpm->vb);
+
+	might_sleep();
+
+	dev = &vpm->vb->pdev->dev;
 
 	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_HPIRESET, &vpm->control);
@@ -699,14 +722,14 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 		goto failed_exit;
 	}
 
-	res = vpmadtreg_loadfirmware(vb);
+	res = vpmadtreg_loadfirmware(vpm->vb);
 	if (res) {
-		dev_info(&vb->pdev->dev, "Failed to load the firmware.\n");
+		dev_info(&vpm->vb->pdev->dev, "Failed to load the firmware.\n");
 		return res;
 	}
 	vpm->curpage = -1;
 
-	dev_info(&vb->pdev->dev, "Booting VPMADT032\n");
+	dev_info(&vpm->vb->pdev->dev, "Booting VPMADT032\n");
 
 	stoptime = jiffies + 3*HZ;
 	set_bit(VPM150M_SWRESET, &vpm->control);
@@ -723,7 +746,7 @@ vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb)
 	pingstatus = gpakPingDsp(vpm->dspid, &vpm->version);
 
 	if (!pingstatus) {
-		dev_info(&vb->pdev->dev, "VPM present and operational "
+		dev_info(&vpm->vb->pdev->dev, "VPM present and operational "
 			"(Firmware version %x)\n", vpm->version);
 	} else {
 		dev_notice(&vpm->vb->pdev->dev, "VPMADT032 Failed! Unable to ping the DSP (%d)!\n", pingstatus);

@@ -3841,7 +3841,9 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	/* wc->vpmadt032->context = wc; */
 	/* Pull the configuration information from the span holding
 	 * the analog channels. */
-	res = vpmadt032_init(wc->vpmadt032, &wc->vb);
+	res = vpmadt032_test(wc->vpmadt032, &wc->vb);
+	if (!res)
+		res = vpmadt032_init(wc->vpmadt032);
 	if (res) {
 		vpmadt032_free(wc->vpmadt032);
 		wc->vpmadt032 = NULL;
