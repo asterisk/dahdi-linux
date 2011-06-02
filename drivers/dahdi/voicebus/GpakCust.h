@@ -128,8 +128,6 @@ struct vpmadt032 {
 	struct list_head active_cmds;
 	struct vpmadt032_options options;
 	void (*setchanconfig_from_state)(struct vpmadt032 *vpm, int channel, struct GpakChannelConfig *chanconfig);
-	/* This must be last */
-	char wq_name[0];
 };
 
 struct voicebus;
@@ -141,8 +139,7 @@ struct dahdi_echocan_state;
 char vpmadt032tone_to_zaptone(GpakToneCodes_t tone);
 int vpmadt032_init(struct vpmadt032 *vpm, struct voicebus *vb);
 int vpmadt032_reset(struct vpmadt032 *vpm);
-struct vpmadt032 *vpmadt032_alloc(struct vpmadt032_options *options,
-					const char *board_name);
+struct vpmadt032 *vpmadt032_alloc(struct vpmadt032_options *options);
 void vpmadt032_free(struct vpmadt032 *vpm);
 int vpmadt032_echocan_create(struct vpmadt032 *vpm, int channo,
 			     enum adt_companding companding,

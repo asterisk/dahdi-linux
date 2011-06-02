@@ -1418,7 +1418,7 @@ static int check_and_load_vpm(struct t1 *wc)
 	 * done setting it up here, an hour should cover it... */
 	wc->vpm_check = jiffies + HZ*3600;
 
-	vpm = vpmadt032_alloc(&options, wc->name);
+	vpm = vpmadt032_alloc(&options);
 	if (!vpm)
 		return -ENOMEM;
 

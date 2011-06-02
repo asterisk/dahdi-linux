@@ -492,29 +492,16 @@ void vpmadt032_echocan_free(struct vpmadt032 *vpm, int channo,
 EXPORT_SYMBOL(vpmadt032_echocan_free);
 
 struct vpmadt032 *
-vpmadt032_alloc(struct vpmadt032_options *options, const char *board_name)
+vpmadt032_alloc(struct vpmadt032_options *options)
 {
 	struct vpmadt032 *vpm;
 	int i;
-	const char *suffix = "-vpm";
-	size_t length;
 
 	might_sleep();
 
-	length = strlen(board_name) + strlen(suffix) + 1;
-
-	/* Add a little extra to store the wq_name. */
-	vpm = kzalloc(sizeof(*vpm) + length, GFP_KERNEL);
+	vpm = kzalloc(sizeof(*vpm), GFP_KERNEL);
 	if (!vpm)
 		return NULL;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-	/* There is a limit on the length of the name of the workqueue. */
-	strcpy(vpm->wq_name, "vpmadt032");
-#else
-	strcpy(vpm->wq_name, board_name);
-	strcat(vpm->wq_name, suffix);
-#endif
 
 	/* Init our vpmadt032 struct */
 	memcpy(&vpm->options, options, sizeof(*options));
@@ -531,7 +518,7 @@ vpmadt032_alloc(struct vpmadt032_options *options, const char *board_name)
 	 * the operations can take 100s of ms, most of that time spent sleeping.
 	 * On single CPU systems, this unduly serializes operations accross
 	 * multiple vpmadt032 instances. */
-	vpm->wq = create_singlethread_workqueue(vpm->wq_name);
+	vpm->wq = create_singlethread_workqueue("vpmadt032");
 	if (!vpm->wq) {
 		kfree(vpm);
 		return NULL;

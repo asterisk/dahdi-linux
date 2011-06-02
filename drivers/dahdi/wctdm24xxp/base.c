@@ -3833,7 +3833,7 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	options.vpmnlpmaxsupp = vpmnlpmaxsupp;
 	options.channels = wc->avchannels;
 
-	wc->vpmadt032 = vpmadt032_alloc(&options, wc->board_name);
+	wc->vpmadt032 = vpmadt032_alloc(&options);
 	if (!wc->vpmadt032)
 		return -ENOMEM;
 
