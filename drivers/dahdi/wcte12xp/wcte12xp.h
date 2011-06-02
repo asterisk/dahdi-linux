@@ -127,7 +127,6 @@ struct t1 {
 	unsigned long ctlreg;
 	struct voicebus vb;
 	atomic_t txints;
-	int vpm100;
 	struct vpmadt032 *vpmadt032;
 	unsigned long vpm_check;
 	struct work_struct vpm_check_work;
