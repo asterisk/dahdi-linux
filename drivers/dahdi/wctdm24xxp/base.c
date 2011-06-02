@@ -3910,7 +3910,9 @@ static inline bool dahdi_is_digital_span(const struct dahdi_span *s)
 	return (s->linecompat > 0);
 }
 
-static struct wctdm_chan *wctdm_init_chan(struct wctdm *wc, struct wctdm_span *s, int chanoffset, int channo)
+static struct wctdm_chan *
+wctdm_init_chan(struct wctdm *wc, struct wctdm_span *s, int chanoffset,
+		int channo, unsigned int card_position)
 {
 	struct wctdm_chan *c;
 
@@ -3920,10 +3922,10 @@ static struct wctdm_chan *wctdm_init_chan(struct wctdm *wc, struct wctdm_span *s
 
 	/* Do not change the procfs representation for non-hx8 cards. */
 	if (dahdi_is_digital_span(&s->span)) {
-		sprintf(c->chan.name, "WCBRI/%d/%d/%d", wc->pos, s->spanno,
-			channo);
+		sprintf(c->chan.name, "WCBRI/%d/%d/%d", card_position,
+			s->spanno, channo);
 	} else {
-		sprintf(c->chan.name, "WCTDM/%d/%d", wc->pos, channo);
+		sprintf(c->chan.name, "WCTDM/%d/%d", card_position, channo);
 	}
 
 	c->chan.chanpos = channo+1;
@@ -3953,7 +3955,9 @@ static int wctdm_span_count(const struct wctdm *wc)
 }
 #endif
 
-static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount, int digital_span)
+static struct wctdm_span *
+wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
+		int digital_span, unsigned int card_position)
 {
 	int x;
 	struct pci_dev *pdev = wc->vb.pdev;
@@ -3973,11 +3977,12 @@ static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chan
 
 	/* Do not change the procfs representation for non-hx8 cards. */
 	if (digital_span)
-		sprintf(s->span.name, "WCBRI/%d/%d", wc->pos, s->spanno);
+		sprintf(s->span.name, "WCBRI/%d/%d", card_position, s->spanno);
 	else
-		sprintf(s->span.name, "WCTDM/%d", wc->pos);
+		sprintf(s->span.name, "WCTDM/%d", card_position);
 
-	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s Board %d", wc->desc->name, wc->pos + 1);
+	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s Board %d",
+		 wc->desc->name, card_position + 1);
 	snprintf(s->span.location, sizeof(s->span.location) - 1,
 		 "PCI%s Bus %02d Slot %02d",
 		 (wc->desc->flags & FLAG_EXPRESS) ? " Express" : "",
@@ -4018,7 +4023,7 @@ static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chan
 
 	/* allocate channels for the span */
 	for (x = 0; x < chancount; x++) {
-		c = wctdm_init_chan(wc, s, chanoffset, x);
+		c = wctdm_init_chan(wc, s, chanoffset, x, card_position);
 		if (!c)
 			return NULL;
 		wc->chans[chanoffset + x] = c;
@@ -4852,6 +4857,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 #endif
 {
 	struct wctdm *wc;
+	unsigned int pos;
 	int i, ret;
 
 	int anamods, digimods, curchan, curspan;
@@ -4864,9 +4870,9 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	down(&ifacelock);
 	/* \todo this is a candidate for removal... */
-	for (i = 0; i < WC_MAX_IFACES; ++i) {
-		if (!ifaces[i]) {
-			ifaces[i] = wc;
+	for (pos = 0; pos < WC_MAX_IFACES; ++pos) {
+		if (!ifaces[pos]) {
+			ifaces[pos] = wc;
 			break;
 		}
 	}
@@ -4882,7 +4888,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	spin_lock_init(&wc->reglock);
 	wc->oldsync = -1;
 
-	wc->board_name = kasprintf(GFP_KERNEL, "%s%d", wctdm_driver.name, i);
+	wc->board_name = kasprintf(GFP_KERNEL, "%s%d", wctdm_driver.name, pos);
 	if (!wc->board_name) {
 		wctdm_back_out_gracefully(wc);
 		return -ENOMEM;
@@ -4928,7 +4934,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	voicebus_lock_latency(&wc->vb);
 
 	wc->mods_per_board = NUM_MODULES;
-	wc->pos = i;
 	wc->txident = 1;
 
 	if (alawoverride) {
@@ -5010,7 +5015,9 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 				wctdm_back_out_gracefully(wc);
 				return -EIO;
 			}
-			wc->spans[curspan] = wctdm_init_span(wc, curspan, curchan, 3, 1);
+			wc->spans[curspan] = wctdm_init_span(wc, curspan,
+							     curchan, 3, 1,
+							     pos);
 			if (!wc->spans[curspan]) {
 				wctdm_back_out_gracefully(wc);
 				return -EIO;
@@ -5050,7 +5057,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		if (!digimods) {
 			curspan = 0;
 		}
-		wctdm_init_span(wc, curspan, curchan, wc->desc->ports, 0);
+		wctdm_init_span(wc, curspan, curchan, wc->desc->ports, 0, pos);
 		wctdm_fixup_analog_span(wc, curspan);
 		wc->aspan = wc->spans[curspan];
 		curchan += wc->desc->ports;

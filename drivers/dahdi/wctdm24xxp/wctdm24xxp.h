@@ -234,7 +234,6 @@ struct wctdm_module {
 struct wctdm {
 	const struct wctdm_desc *desc;
 	const char *board_name;
-	int pos;				/* card number in system */
 
 	spinlock_t frame_list_lock;
 	struct list_head frame_list;
