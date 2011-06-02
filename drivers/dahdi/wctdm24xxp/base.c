@@ -107,7 +107,11 @@ static int loopcurrent = 20;
  * 	polarity reversal for the port,
  * 	and the state of the line reversal MWI indicator
  */
-#define POLARITY_XOR(card) ( (reversepolarity != 0) ^ (wc->mods[(card)].fxs.reversepolarity != 0) ^ (wc->mods[(card)].fxs.vmwi_linereverse != 0) )
+#define POLARITY_XOR(card) \
+	((reversepolarity != 0) ^ \
+	(wc->mods[(card)].mod.fxs.reversepolarity != 0) ^ \
+	(wc->mods[(card)].mod.fxs.vmwi_linereverse != 0))
+
 static int reversepolarity = 0;
 
 static alpha  indirect_regs[] =
@@ -277,7 +281,7 @@ static inline int empty_slot(struct wctdm *wc, int card)
 {
 	int x;
 	for (x = 0; x < USER_COMMANDS; x++) {
-		if (!wc->cmdq[card].cmds[x])
+		if (!wc->mods[card].cmdq.cmds[x])
 			return x;
 	}
 	return -1;
@@ -579,17 +583,17 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 
 static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card, int pos)
 {
+	struct wctdm_module *const mod = &wc->mods[card];
 	unsigned long flags;
 	unsigned int curcmd=0;
 	int x;
 	int subaddr = card & 0x3;
 
-	/* QRV and BRI modules only use commands relating to the first channel */
-	if ((card & 0x03) && (wc->modtype[card] ==  MOD_TYPE_QRV)) {
+	/* QRV only use commands relating to the first channel */
+	if ((card & 0x03) && (mod->type == MOD_TYPE_QRV))
 		return;
-	}
 
-	if (wc->altcs[card])
+	if (mod->altcs)
 		subaddr = 0;
 
 	/* Skip audio */
@@ -598,10 +602,10 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 	/* Search for something waiting to transmit */
 	if (pos) {
 		for (x = 0; x < MAX_COMMANDS; x++) {
-			if ((wc->cmdq[card].cmds[x] & (__CMD_RD | __CMD_WR)) && 
-			   !(wc->cmdq[card].cmds[x] & (__CMD_TX | __CMD_FIN))) {
-			   	curcmd = wc->cmdq[card].cmds[x];
-				wc->cmdq[card].cmds[x] |= (wc->txident << 24) | __CMD_TX;
+			if ((mod->cmdq.cmds[x] & (__CMD_RD | __CMD_WR)) &&
+			   !(mod->cmdq.cmds[x] & (__CMD_TX | __CMD_FIN))) {
+				curcmd = mod->cmdq.cmds[x];
+				mod->cmdq.cmds[x] |= (wc->txident << 24) | __CMD_TX;
 				break;
 			}
 		}
@@ -609,47 +613,47 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 
 	if (!curcmd) {
 		/* If nothing else, use filler */
-		if (wc->modtype[card] == MOD_TYPE_FXS)
+		if (mod->type == MOD_TYPE_FXS)
 			curcmd = CMD_RD(LINE_STATE);
-		else if (wc->modtype[card] == MOD_TYPE_FXO)
+		else if (mod->type == MOD_TYPE_FXO)
 			curcmd = CMD_RD(12);
-		else if (wc->modtype[card] == MOD_TYPE_BRI)
+		else if (mod->type == MOD_TYPE_BRI)
 			curcmd = 0x101010;
-		else if (wc->modtype[card] == MOD_TYPE_QRV)
+		else if (mod->type == MOD_TYPE_QRV)
 			curcmd = CMD_RD(3);
 	}
 
-	if (wc->modtype[card] == MOD_TYPE_FXS) {
-		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = (1 << (subaddr));
+	if (mod->type == MOD_TYPE_FXS) {
+		eframe[CMD_BYTE(card, 0, mod->altcs)] = (1 << (subaddr));
 		if (curcmd & __CMD_WR)
-			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0x7f;
+			eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0x7f;
 		else
-			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x80 | ((curcmd >> 8) & 0x7f);
-		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x80 | ((curcmd >> 8) & 0x7f);
+		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 
-	} else if (wc->modtype[card] == MOD_TYPE_FXO) {
+	} else if (mod->type == MOD_TYPE_FXO) {
 		static const int FXO_ADDRS[4] = { 0x00, 0x08, 0x04, 0x0c };
-		int idx = CMD_BYTE(card, 0, wc->altcs[card]);
+		int idx = CMD_BYTE(card, 0, mod->altcs);
 		if (curcmd & __CMD_WR)
 			eframe[idx] = 0x20 | FXO_ADDRS[subaddr];
 		else
 			eframe[idx] = 0x60 | FXO_ADDRS[subaddr];
-		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = (curcmd >> 8) & 0xff;
-		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+		eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0xff;
+		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 
-	} else if (wc->modtype[card] == MOD_TYPE_FXSINIT) {
+	} else if (mod->type == MOD_TYPE_FXSINIT) {
 		/* Special case, we initialize the FXS's into the three-byte command mode then
 		   switch to the regular mode.  To send it into thee byte mode, treat the path as
 		   6 two-byte commands and in the last one we initialize register 0 to 0x80. All modules
 		   read this as the command to switch to daisy chain mode and we're done.  */
-		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
-		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
+		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
+		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x00;
 		if ((card & 0x1) == 0x1) 
-			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x80;
+			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x80;
 		else
-			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
+			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
 
-	} else if (wc->modtype[card] == MOD_TYPE_BRI) {
+	} else if (mod->type == MOD_TYPE_BRI) {
 
 		if (unlikely((curcmd != 0x101010) && (curcmd & 0x1010) == 0x1010)) /* b400m CPLD */
 			eframe[CMD_BYTE(card, 0, 0)] = 0x55;
@@ -657,23 +661,24 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 			eframe[CMD_BYTE(card, 0, 0)] = 0x10;
 		eframe[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
 		eframe[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
-	} else if (wc->modtype[card] == MOD_TYPE_QRV) {
+
+	} else if (mod->type == MOD_TYPE_QRV) {
  
-		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x00;
+		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
 		if (!curcmd) {
-			eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x00;
-			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x00;
+			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x00;
+			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
 		} else {
 			if (curcmd & __CMD_WR)
-				eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x40 | ((curcmd >> 8) & 0x3f);
+				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x40 | ((curcmd >> 8) & 0x3f);
 			else
-				eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0xc0 | ((curcmd >> 8) & 0x3f);
-			eframe[CMD_BYTE(card, 2, wc->altcs[card])] = curcmd & 0xff;
+				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0xc0 | ((curcmd >> 8) & 0x3f);
+			eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 		}
-	} else if (wc->modtype[card] == MOD_TYPE_NONE) {
-		eframe[CMD_BYTE(card, 0, wc->altcs[card])] = 0x10;
-		eframe[CMD_BYTE(card, 1, wc->altcs[card])] = 0x10;
-		eframe[CMD_BYTE(card, 2, wc->altcs[card])] = 0x10;
+	} else if (mod->type == MOD_TYPE_NONE) {
+		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x10;
+		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x10;
+		eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x10;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
@@ -721,14 +726,14 @@ static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 
 static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 {
+	struct wctdm_module *const mod = &wc->mods[card];
 	unsigned long flags;
 	unsigned char ident;
 	int x;
 
-	/* QRV and BRI modules only use commands relating to the first channel */
-	if ((card & 0x03) && (wc->modtype[card] ==  MOD_TYPE_QRV)) { /* || (wc->modtype[card] ==  MOD_TYPE_BRI))) { */
+	/* QRV modules only use commands relating to the first channel */
+	if ((card & 0x03) && (mod->type == MOD_TYPE_QRV))
 		return;
-	}
 
 	/* Skip audio */
 	eframe += 24;
@@ -736,22 +741,21 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 	/* Search for any pending results */
 	for (x=0;x<MAX_COMMANDS;x++) {
-		if ((wc->cmdq[card].cmds[x] & (__CMD_RD | __CMD_WR)) && 
-		    (wc->cmdq[card].cmds[x] & (__CMD_TX)) && 
-		   !(wc->cmdq[card].cmds[x] & (__CMD_FIN))) {
-		   	ident = (wc->cmdq[card].cmds[x] >> 24) & 0xff;
+		if ((mod->cmdq.cmds[x] & (__CMD_RD | __CMD_WR)) &&
+		    (mod->cmdq.cmds[x] & (__CMD_TX)) &&
+		    !(mod->cmdq.cmds[x] & (__CMD_FIN))) {
+			ident = (mod->cmdq.cmds[x] >> 24) & 0xff;
 		   	if (ident == wc->rxident) {
 				/* Store result */
-				wc->cmdq[card].cmds[x] |= eframe[CMD_BYTE(card, 2, wc->altcs[card])];
-				wc->cmdq[card].cmds[x] |= __CMD_FIN;
-
-				if (wc->cmdq[card].cmds[x] & __CMD_WR) {
+				mod->cmdq.cmds[x] |= eframe[CMD_BYTE(card, 2, mod->altcs)];
+				mod->cmdq.cmds[x] |= __CMD_FIN;
+				if (mod->cmdq.cmds[x] & __CMD_WR) {
 					/* Go ahead and clear out writes since they need no acknowledgement */
-					wc->cmdq[card].cmds[x] = 0x00000000;
+					mod->cmdq.cmds[x] = 0x00000000;
 				} else if (x >= USER_COMMANDS) {
 					/* Clear out ISR reads */
-					wc->cmdq[card].isrshadow[x - USER_COMMANDS] = wc->cmdq[card].cmds[x] & 0xff;
-					wc->cmdq[card].cmds[x] = 0x00000000;
+					mod->cmdq.isrshadow[x - USER_COMMANDS] = mod->cmdq.cmds[x] & 0xff;
+					mod->cmdq.cmds[x] = 0x00000000;
 				}
 				break;
 			}
@@ -762,33 +766,35 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 static inline void cmd_checkisr(struct wctdm *wc, int card)
 {
-	if (!wc->cmdq[card].cmds[USER_COMMANDS + 0]) {
-		if (wc->sethook[card]) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 0] = wc->sethook[card];
-			wc->sethook[card] = 0;
-		} else if (wc->modtype[card] == MOD_TYPE_FXS) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 0] = CMD_RD(68);	/* Hook state */
-		} else if (wc->modtype[card] == MOD_TYPE_FXO) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 0] = CMD_RD(5);	/* Hook/Ring state */
-		} else if (wc->modtype[card] == MOD_TYPE_QRV) {
-			wc->cmdq[card & 0xfc].cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
-		} else if (wc->modtype[card] == MOD_TYPE_BRI) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 0] = wctdm_bri_checkisr(wc, card, 0);
+	struct wctdm_module *const mod = &wc->mods[card];
+
+	if (!mod->cmdq.cmds[USER_COMMANDS + 0]) {
+		if (mod->sethook) {
+			mod->cmdq.cmds[USER_COMMANDS + 0] = mod->sethook;
+			mod->sethook = 0;
+		} else if (mod->type == MOD_TYPE_FXS) {
+			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(68);	/* Hook state */
+		} else if (mod->type == MOD_TYPE_FXO) {
+			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(5);	/* Hook/Ring state */
+		} else if (mod->type == MOD_TYPE_QRV) {
+			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
+		} else if (mod->type == MOD_TYPE_BRI) {
+			mod->cmdq.cmds[USER_COMMANDS + 0] = wctdm_bri_checkisr(wc, card, 0);
 		}
 	}
-	if (!wc->cmdq[card].cmds[USER_COMMANDS + 1]) {
-		if (wc->modtype[card] == MOD_TYPE_FXS) {
+	if (!mod->cmdq.cmds[USER_COMMANDS + 1]) {
+		if (mod->type == MOD_TYPE_FXS) {
 #ifdef PAQ_DEBUG
-			wc->cmdq[card].cmds[USER_COMMANDS + 1] = CMD_RD(19);	/* Transistor interrupts */
+			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(19);	/* Transistor interrupts */
 #else
-			wc->cmdq[card].cmds[USER_COMMANDS + 1] = CMD_RD(LINE_STATE);
+			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(LINE_STATE);
 #endif
-		} else if (wc->modtype[card] == MOD_TYPE_FXO) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 1] = CMD_RD(29);	/* Battery */
-		} else if (wc->modtype[card] == MOD_TYPE_QRV) {
-			wc->cmdq[card & 0xfc].cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
-		} else if (wc->modtype[card] == MOD_TYPE_BRI) {
-			wc->cmdq[card].cmds[USER_COMMANDS + 1] = wctdm_bri_checkisr(wc, card, 1);
+		} else if (mod->type == MOD_TYPE_FXO) {
+			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(29);	/* Battery */
+		} else if (mod->type == MOD_TYPE_QRV) {
+			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
+		} else if (mod->type == MOD_TYPE_BRI) {
+			mod->cmdq.cmds[USER_COMMANDS + 1] = wctdm_bri_checkisr(wc, card, 1);
 		}
 	}
 }
@@ -905,7 +911,7 @@ stuff_command(struct wctdm *wc, int card, unsigned int cmd, int *hit)
 	spin_lock_irqsave(&wc->reglock, flags);
 	*hit = empty_slot(wc, card);
 	if (*hit > -1)
-		wc->cmdq[card].cmds[*hit] = cmd;
+		wc->mods[card].cmdq.cmds[*hit] = cmd;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	return (*hit > -1);
@@ -919,8 +925,8 @@ wctdm_setreg_full(struct wctdm *wc, int card, int addr, int val, int inisr)
 	const unsigned int cmd = CMD_WR(addr, val);
 
 	/* QRV and BRI cards are only addressed at their first "port" */
-	if ((card & 0x03) && ((wc->modtype[card] ==  MOD_TYPE_QRV) ||
-	    (wc->modtype[card] ==  MOD_TYPE_BRI)))
+	if ((card & 0x03) && ((wc->mods[card].type ==  MOD_TYPE_QRV) ||
+	    (wc->mods[card].type ==  MOD_TYPE_BRI)))
 		return 0;
 
 	if (inisr) {
@@ -946,13 +952,14 @@ int wctdm_setreg(struct wctdm *wc, int card, int addr, int val)
 
 static bool cmd_finished(struct wctdm *wc, int card, int hit, u8 *val)
 {
+	struct wctdm_module *const mod = &wc->mods[card];
 	bool ret;
 	unsigned long flags;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	if (wc->cmdq[card].cmds[hit] & __CMD_FIN) {
-		*val = wc->cmdq[card].cmds[hit] & 0xff;
-		wc->cmdq[card].cmds[hit] = 0x00000000;
+	if (mod->cmdq.cmds[hit] & __CMD_FIN) {
+		*val = mod->cmdq.cmds[hit] & 0xff;
+		mod->cmdq.cmds[hit] = 0x00000000;
 		ret = true;
 	} else {
 		ret = false;
@@ -970,7 +977,7 @@ int wctdm_getreg(struct wctdm *wc, int card, int addr)
 	int ret;
 
 	/* if a QRV card, use only its first channel */  
-	if (wc->modtype[card] ==  MOD_TYPE_QRV) {
+	if (wc->mods[card].type ==  MOD_TYPE_QRV) {
 		if (card & 3)
 			return 0;
 	}
@@ -996,10 +1003,11 @@ static inline void cmd_retransmit(struct wctdm *wc)
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (x=0;x<MAX_COMMANDS;x++) {
 		for (y = 0; y < wc->mods_per_board; y++) {
-			if (wc->modtype[y] != MOD_TYPE_BRI) {
-				if (!(wc->cmdq[y].cmds[x] & __CMD_FIN))
-					wc->cmdq[y].cmds[x] &= ~(__CMD_TX | (0xff << 24));
-			}
+			struct wctdm_module *const mod = &wc->mods[y];
+			if (mod->type == MOD_TYPE_BRI)
+				continue;
+			if (!(mod->cmdq.cmds[x] & __CMD_FIN))
+				mod->cmdq.cmds[x] &= ~(__CMD_TX | (0xff << 24));
 		}
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -1173,7 +1181,7 @@ static int wctdm_proslic_setreg_indirect(struct wctdm *wc, int card, unsigned ch
 {
 	int res = -1;
 	/* Translate 3215 addresses */
-	if (wc->flags[card] & FLAG_3215) {
+	if (wc->mods[card].flags & FLAG_3215) {
 		address = translate_3215(address);
 		if (address == 255)
 			return 0;
@@ -1192,7 +1200,7 @@ static int wctdm_proslic_getreg_indirect(struct wctdm *wc, int card, unsigned ch
 	int res = -1;
 	char *p=NULL;
 	/* Translate 3215 addresses */
-	if (wc->flags[card] & FLAG_3215) {
+	if (wc->mods[card].flags & FLAG_3215) {
 		address = translate_3215(address);
 		if (address == 255)
 			return 0;
@@ -1242,10 +1250,12 @@ static int wctdm_proslic_verify_indirect_regs(struct wctdm *wc, int card)
 		}
 		initial= indirect_regs[i].initial;
 
-		if ( j != initial && (!(wc->flags[card] & FLAG_3215) || (indirect_regs[i].altaddr != 255)))
-		{
-			 dev_notice(&wc->vb.pdev->dev, "!!!!!!! %s  iREG %X = %X  should be %X\n",
-				indirect_regs[i].name,indirect_regs[i].address,j,initial );
+		if ((j != initial) && (!(wc->mods[card].flags & FLAG_3215) ||
+		    (indirect_regs[i].altaddr != 255))) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "!!!!!!! %s  iREG %X = %X  should be %X\n",
+				   indirect_regs[i].name,
+				   indirect_regs[i].address, j, initial);
 			 passed = 0;
 		}	
 	}
@@ -1263,7 +1273,8 @@ static int wctdm_proslic_verify_indirect_regs(struct wctdm *wc, int card)
 /* 1ms interrupt */
 static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct wctdm_module *const mod = &wc->mods[card];
+	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
 
 	/* Monitor the Pending LF state change, for the next 100ms */
@@ -1275,20 +1286,24 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 			return;
 		}
 
-		res = wc->cmdq[card].isrshadow[1];
+		res = mod->cmdq.isrshadow[1];
 		if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
 			fxs->lasttxhook &= SLIC_LF_SETMASK;
 			fxs->oppending_ms = 0;
 			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev, "SLIC_LF OK: card=%d shadow=%02x lasttxhook=%02x intcount=%d \n", card, res, fxs->lasttxhook, wc->intcount);
+				dev_info(&wc->vb.pdev->dev,
+					 "SLIC_LF OK: card=%d shadow=%02x "
+					 "lasttxhook=%02x intcount=%d\n", card,
+					 res, fxs->lasttxhook, wc->intcount);
 			}
-		} else if (fxs->oppending_ms) { /* if timing out */
-			if (--fxs->oppending_ms == 0) {
-				/* Timed out, resend the linestate */
-				wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
-				if (debug & DEBUG_CARD) {
-					dev_info(&wc->vb.pdev->dev, "SLIC_LF RETRY: card=%d shadow=%02x lasttxhook=%02x intcount=%d \n", card, res, fxs->lasttxhook, wc->intcount);
-				}
+		} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
+			/* Timed out, resend the linestate */
+			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+			if (debug & DEBUG_CARD) {
+				dev_info(&wc->vb.pdev->dev,
+					 "SLIC_LF RETRY: card=%d shadow=%02x "
+					 "lasttxhook=%02x intcount=%d\n", card,
+					 res, fxs->lasttxhook, wc->intcount);
 			}
 		} else { /* Start 100ms Timeout */
 			fxs->oppending_ms = 100;
@@ -1300,20 +1315,21 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 /* 256ms interrupt */
 static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct wctdm_module *const mod = &wc->mods[card];
+	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
 	unsigned long flags;
 #ifdef PAQ_DEBUG
-	res = wc->cmdq[card].isrshadow[1];
+	res = mod->cmdq.isrshadow[1];
 	res &= ~0x3;
 	if (res) {
-		wc->cmdq[card].isrshadow[1]=0;
+		mod->cmdq.isrshadow[1] = 0;
 		fxs->palarms++;
 		if (fxs->palarms < MAX_ALARMS) {
 			dev_notice(&wc->vb.pdev->dev, "Power alarm (%02x) on module %d, resetting!\n", res, card + 1);
-			wc->sethook[card] = CMD_WR(19, res);
+			mod->sethook = CMD_WR(19, res);
 			/* Update shadow register to avoid extra power alarms until next read */
-			wc->cmdq[card].isrshadow[1] = 0;
+			mod->cmdq.isrshadow[1] = 0;
 		} else {
 			if (fxs->palarms == MAX_ALARMS)
 				dev_notice(&wc->vb.pdev->dev, "Too many power alarms on card %d, NOT resetting!\n", card + 1);
@@ -1321,7 +1337,7 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 	}
 #else
 	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
-	res = wc->cmdq[card].isrshadow[1];
+	res = mod->cmdq.isrshadow[1];
 
 #if 0
 	/* This makes sure the lasthook was put in reg 64 the linefeed reg */
@@ -1332,7 +1348,7 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 				dev_info(&wc->vb.pdev->dev, "SLIC_LF OK: intcount=%d channel=%d shadow=%02x lasttxhook=%02x\n", wc->intcount, card, res, fxs->lasttxhook);
 			}
 		} else if (!(wc->intcount & 0x03)) {
-			wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
+			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 			if (debug & DEBUG_CARD) {
 				dev_info(&wc->vb.pdev->dev, "SLIC_LF RETRY: intcount=%d channel=%d shadow=%02x lasttxhook=%02x\n", wc->intcount, card, res, fxs->lasttxhook);
 			}
@@ -1361,11 +1377,11 @@ static inline void wctdm_proslic_recheck_sanity(struct wctdm *wc, int card)
 							SLIC_LF_ACTIVE_FWD;;
 			}
 			fxs->lasttxhook |= SLIC_LF_OPPENDING;
-			wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
+			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 
 			/* Update shadow register to avoid extra power alarms until next read */
-			wc->cmdq[card].isrshadow[1] = fxs->lasttxhook;
+			mod->cmdq.isrshadow[1] = fxs->lasttxhook;
 		} else {
 			if (fxs->palarms == MAX_ALARMS)
 				dev_notice(&wc->vb.pdev->dev, "Too many power alarms on card %d, NOT resetting!\n", card + 1);
@@ -1379,51 +1395,65 @@ static inline void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 	signed char b,b1;
 	int qrvcard = card & 0xfc;
 
-	
-	if (wc->qrvdebtime[card] >= 2) wc->qrvdebtime[card]--;
-	b = wc->cmdq[qrvcard].isrshadow[0];	/* Hook/Ring state */
+	if (wc->mods[card].qrvdebtime >= 2)
+		wc->mods[card].qrvdebtime--;
+	b = wc->mods[qrvcard].cmdq.isrshadow[0]; /* Hook/Ring state */
 	b &= 0xcc; /* use bits 3-4 and 6-7 only */
 
-	if (wc->radmode[qrvcard] & RADMODE_IGNORECOR) b &= ~4;
-	else if (!(wc->radmode[qrvcard] & RADMODE_INVERTCOR)) b ^= 4;
-	if (wc->radmode[qrvcard + 1] | RADMODE_IGNORECOR) b &= ~0x40;
-	else if (!(wc->radmode[qrvcard + 1] | RADMODE_INVERTCOR)) b ^= 0x40;
+	if (wc->mods[qrvcard].radmode & RADMODE_IGNORECOR)
+		b &= ~4;
+	else if (!(wc->mods[qrvcard].radmode & RADMODE_INVERTCOR))
+		b ^= 4;
+	if (wc->mods[qrvcard + 1].radmode | RADMODE_IGNORECOR)
+		b &= ~0x40;
+	else if (!(wc->mods[qrvcard + 1].radmode | RADMODE_INVERTCOR))
+		b ^= 0x40;
 
-	if ((wc->radmode[qrvcard] & RADMODE_IGNORECT) || 
-		(!(wc->radmode[qrvcard] & RADMODE_EXTTONE))) b &= ~8;
-	else if (!(wc->radmode[qrvcard] & RADMODE_EXTINVERT)) b ^= 8;
-	if ((wc->radmode[qrvcard + 1] & RADMODE_IGNORECT) || 
-		(!(wc->radmode[qrvcard + 1] & RADMODE_EXTTONE))) b &= ~0x80;
-	else if (!(wc->radmode[qrvcard + 1] & RADMODE_EXTINVERT)) b ^= 0x80;
+	if ((wc->mods[qrvcard].radmode & RADMODE_IGNORECT) ||
+	    (!(wc->mods[qrvcard].radmode & RADMODE_EXTTONE)))
+		b &= ~8;
+	else if (!(wc->mods[qrvcard].radmode & RADMODE_EXTINVERT))
+		b ^= 8;
+	if ((wc->mods[qrvcard + 1].radmode & RADMODE_IGNORECT) ||
+	    (!(wc->mods[qrvcard + 1].radmode & RADMODE_EXTTONE)))
+		b &= ~0x80;
+	else if (!(wc->mods[qrvcard + 1].radmode & RADMODE_EXTINVERT))
+		b ^= 0x80;
 	/* now b & MASK should be zero, if its active */
 	/* check for change in chan 0 */
-	if ((!(b & 0xc)) != wc->qrvhook[qrvcard + 2])
+	if ((!(b & 0xc)) != wc->mods[qrvcard + 2].qrvhook)
 	{
-		wc->qrvdebtime[qrvcard] = wc->debouncetime[qrvcard];
-		wc->qrvhook[qrvcard + 2] = !(b & 0xc);
+		wc->mods[qrvcard].qrvdebtime = wc->mods[qrvcard].debouncetime;
+		wc->mods[qrvcard + 2].qrvhook = !(b & 0xc);
 	} 
 	/* if timed-out and ready */
-	if (wc->qrvdebtime[qrvcard] == 1)
-	{
-		b1 = wc->qrvhook[qrvcard + 2];
-if (debug) dev_info(&wc->vb.pdev->dev, "QRV channel %d rx state changed to %d\n",qrvcard,wc->qrvhook[qrvcard + 2]);
+	if (wc->mods[qrvcard].qrvdebtime == 1) {
+		b1 = wc->mods[qrvcard + 2].qrvhook;
+		if (debug) {
+			dev_info(&wc->vb.pdev->dev,
+				 "QRV channel %d rx state changed to %d\n",
+				 qrvcard, wc->mods[qrvcard + 2].qrvhook);
+		}
 		dahdi_hooksig(wc->aspan->span.chans[qrvcard],
 			(b1) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
-		wc->qrvdebtime[card] = 0;
+		wc->mods[card].qrvdebtime = 0;
 	}
 	/* check for change in chan 1 */
-	if ((!(b & 0xc0)) != wc->qrvhook[qrvcard + 3])
+	if ((!(b & 0xc0)) != wc->mods[qrvcard + 3].qrvhook)
 	{
-		wc->qrvdebtime[qrvcard + 1] = QRV_DEBOUNCETIME;
-		wc->qrvhook[qrvcard + 3] = !(b & 0xc0);
+		wc->mods[qrvcard + 1].qrvdebtime = QRV_DEBOUNCETIME;
+		wc->mods[qrvcard + 3].qrvhook = !(b & 0xc0);
 	}
-	if (wc->qrvdebtime[qrvcard + 1] == 1)
-	{
-		b1 = wc->qrvhook[qrvcard + 3];
-if (debug) dev_info(&wc->vb.pdev->dev, "QRV channel %d rx state changed to %d\n",qrvcard + 1,wc->qrvhook[qrvcard + 3]);
+	if (wc->mods[qrvcard + 1].qrvdebtime == 1) {
+		b1 = wc->mods[qrvcard + 3].qrvhook;
+		if (debug) {
+			dev_info(&wc->vb.pdev->dev,
+				 "QRV channel %d rx state changed to %d\n",
+				 qrvcard + 1, wc->mods[qrvcard + 3].qrvhook);
+		}
 		dahdi_hooksig(wc->aspan->span.chans[qrvcard + 1],
 			(b1) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
-		wc->qrvdebtime[card] = 0;
+		wc->mods[card].qrvdebtime = 0;
 	}
 	return;
 }
@@ -1435,10 +1465,11 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 	unsigned char res;
 	signed char b;
 	unsigned int abs_voltage;
-	struct fxo *fxo = &wc->mods[card].fxo;
+	struct wctdm_module *const mod = &wc->mods[card];
+	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
-	b = wc->cmdq[card].isrshadow[0];	/* Hook/Ring state */
+	b = mod->cmdq.isrshadow[0];	/* Hook/Ring state */
 	b &= 0x9b;
 	if (fxo->offhook) {
 		if (b != 0x9)
@@ -1458,8 +1489,8 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 			* but not to have transitions between the two bits (i.e. no negative
 			* to positive or positive to negative transversals )
 			*/
-			res =  wc->cmdq[card].isrshadow[0] & 0x60;
-			if (0 == wc->mods[card].fxo.wasringing) {
+			res =  mod->cmdq.isrshadow[0] & 0x60;
+			if (0 == fxo->wasringing) {
 				if (res) {
 					/* Look for positive/negative crossings in ring status reg */
 					fxo->wasringing = 2;
@@ -1496,7 +1527,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 				}
 			}
 		} else {
-			res =  wc->cmdq[card].isrshadow[0];
+			res =  mod->cmdq.isrshadow[0];
 			if ((res & 0x60) && (fxo->battery == BATTERY_PRESENT)) {
 				fxo->ringdebounce += (DAHDI_CHUNKSIZE * 16);
 				if (fxo->ringdebounce >= DAHDI_CHUNKSIZE * ringdebounce) {
@@ -1524,7 +1555,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 		}
 	}
 
-	b = wc->cmdq[card].isrshadow[1]; /* Voltage */
+	b = mod->cmdq.isrshadow[1]; /* Voltage */
 	abs_voltage = abs(b);
 
 	if (fxovoltage) {
@@ -1673,7 +1704,7 @@ static inline void wctdm_voicedaa_check_hook(struct wctdm *wc, int card)
 		}
 	}
 	/* Look for neon mwi pulse */
-	if (neonmwi_monitor && !wc->mods[card].fxo.offhook) {
+	if (neonmwi_monitor && !fxo->offhook) {
 		/* Look for 4 consecutive voltage readings
 		* where the voltage is over the neon limit but
 		* does not vary greatly from the last reading
@@ -1720,7 +1751,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 {
 	int x = 0;
 	unsigned long flags;
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct fxs *const fxs = &wc->mods[card].mod.fxs;
 	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 	switch (txsig) {
 	case DAHDI_TXSIG_ONHOOK:
@@ -1769,7 +1800,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 
 	if (x != fxs->lasttxhook) {
 		fxs->lasttxhook = x | SLIC_LF_OPPENDING;
-		wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
+		wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 
 		if (debug & DEBUG_CARD) {
@@ -1784,7 +1815,7 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 
 static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct fxs *const fxs = &wc->mods[card].mod.fxs;
 
 	if (debug & DEBUG_CARD)
 		dev_info(&wc->vb.pdev->dev,
@@ -1811,7 +1842,7 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
 
 static void wctdm_fxs_on_hook(struct wctdm *wc, const int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct fxs *const fxs = &wc->mods[card].mod.fxs;
 	if (debug & DEBUG_CARD)
 		dev_info(&wc->vb.pdev->dev,
 			"fxs_on_hook: Card %d Going on hook\n", card);
@@ -1822,14 +1853,14 @@ static void wctdm_fxs_on_hook(struct wctdm *wc, const int card)
 
 static inline void wctdm_proslic_check_hook(struct wctdm *wc, const int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct fxs *const fxs = &wc->mods[card].mod.fxs;
 	char res;
 	int hook;
 
 	/* For some reason we have to debounce the
 	   hook detector.  */
 
-	res = wc->cmdq[card].isrshadow[0];	/* Hook state */
+	res = wc->mods[card].cmdq.isrshadow[0];	/* Hook state */
 	hook = (res & 1);
 	
 	if (hook != fxs->lastrxhook) {
@@ -1917,7 +1948,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 /* 1ms interrupt */
 static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 {
-	struct fxs *const fxs = &wc->mods[card].fxs;
+	struct fxs *const fxs = &wc->mods[card].mod.fxs;
 	unsigned long flags;
 
 	if (!(wc->intcount % 10000)) {
@@ -1952,7 +1983,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 				/* Apply the change if appropriate */
 				fxs->lasttxhook = SLIC_LF_OPPENDING | SLIC_LF_ACTIVE_FWD;
 				/* Data enqueued here */
-				wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
+				wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 				if (debug & DEBUG_CARD) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d OnHookTransfer "
@@ -1962,7 +1993,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, int card)
 				/* Apply the change if appropriate */
 				fxs->lasttxhook = SLIC_LF_OPPENDING | SLIC_LF_ACTIVE_REV;
 				/* Data enqueued here */
-				wc->sethook[card] = CMD_WR(LINE_STATE, fxs->lasttxhook);
+				wc->mods[card].sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 				if (debug & DEBUG_CARD) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d OnHookTransfer "
@@ -1993,11 +2024,12 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 		return;
 
 	for (x = 0; x < wc->mods_per_board; x++) {
+
 		spin_lock(&wc->reglock);
 		cmd_checkisr(wc, x);
 		spin_unlock(&wc->reglock);
 
-		switch (wc->modtype[x]) {
+		switch (wc->mods[x].type) {
 		case MOD_TYPE_FXS:
 			wctdm_isr_misc_fxs(wc, x);
 			break;
@@ -2127,7 +2159,7 @@ static int wctdm_proslic_insane(struct wctdm *wc, int card)
 	}
 	if (wctdm_getreg(wc, card, 1) & 0x80)
 		/* ProSLIC 3215, not a 3210 */
-		wc->flags[card] |= FLAG_3215;
+		wc->mods[card].flags |= FLAG_3215;
 
 	blah = wctdm_getreg(wc, card, 8);
 	if (blah != 0x2) {
@@ -2351,7 +2383,7 @@ static int wctdm_proslic_calibrate(struct wctdm *wc, int card)
  *******************************************************************/
 static int wctdm_set_hwgain(struct wctdm *wc, int card, __s32 gain, __u32 tx)
 {
-	if (!(wc->modtype[card] == MOD_TYPE_FXO)) {
+	if (!(wc->mods[card].type == MOD_TYPE_FXO)) {
 		dev_notice(&wc->vb.pdev->dev, "Cannot adjust gain.  Unsupported module type!\n");
 		return -1;
 	}
@@ -2414,7 +2446,7 @@ static int set_lasttxhook_interruptible(struct fxs *fxs, unsigned newval, int * 
 static int set_vmwi(struct wctdm *wc, int chan_idx)
 {
 	int x;
-	struct fxs *const fxs = &wc->mods[chan_idx].fxs;
+	struct fxs *const fxs = &wc->mods[chan_idx].mod.fxs;
 
 	/* Presently only supports line reversal MWI */
 	if ((fxs->vmwi_active_messages) &&
@@ -2431,7 +2463,8 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x |= SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x, &wc->sethook[chan_idx]);
+			set_lasttxhook_interruptible(fxs, x,
+					&wc->mods[chan_idx].sethook);
 		}
 	} else {
 		fxs->idletxhookstate &= ~SLIC_LF_REVMASK;
@@ -2440,7 +2473,8 @@ static int set_vmwi(struct wctdm *wc, int chan_idx)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x &= ~SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x, &wc->sethook[chan_idx]);
+			set_lasttxhook_interruptible(fxs, x,
+					&wc->mods[chan_idx].sethook);
 		}
 	}
 	if (debug) {
@@ -2469,17 +2503,17 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	unsigned long flags;
 	long newjiffies;
 
-	if ((wc->modtype[card & 0xfc] == MOD_TYPE_QRV) ||
-	    (wc->modtype[card & 0xfc] == MOD_TYPE_BRI))
+	if ((wc->mods[card & 0xfc].type == MOD_TYPE_QRV) ||
+	    (wc->mods[card & 0xfc].type == MOD_TYPE_BRI))
 		return -2;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->modtype[card] = MOD_TYPE_NONE;
+	wc->mods[card].type = MOD_TYPE_NONE;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->modtype[card] = MOD_TYPE_FXO;
+	wc->mods[card].type = MOD_TYPE_FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
@@ -2572,16 +2606,19 @@ static void wctdm_proslic_set_ts(struct wctdm *wc, int card, int ts)
 static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, int sane)
 {
 
+	struct wctdm_module *const mod = &wc->mods[card];
+	struct fxs *const fxs = &mod->mod.fxs;
 	unsigned short tmp[5];
 	unsigned long flags;
 	unsigned char r19,r9;
 	int x;
 	int fxsmode=0;
 
-	if (wc->modtype[card & 0xfc] == MOD_TYPE_QRV) return -2;
+	if (wc->mods[card & 0xfc].type == MOD_TYPE_QRV)
+		return -2;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->modtype[card] = MOD_TYPE_FXS;
+	mod->type = MOD_TYPE_FXS;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	msleep(100);
@@ -2591,15 +2628,14 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 		return -2;
 
 	/* Initialize VMWI settings */
-	memset(&(wc->mods[card].fxs.vmwisetting), 0, sizeof(wc->mods[card].fxs.vmwisetting));
-	wc->mods[card].fxs.vmwi_linereverse = 0;
+	memset(&(fxs->vmwisetting), 0, sizeof(fxs->vmwisetting));
+	fxs->vmwi_linereverse = 0;
 
 	/* By default, don't send on hook */
-	if (!reversepolarity != !wc->mods[card].fxs.reversepolarity) {
-		wc->mods[card].fxs.idletxhookstate = SLIC_LF_ACTIVE_REV;
-	} else {
-		wc->mods[card].fxs.idletxhookstate = SLIC_LF_ACTIVE_FWD;
-	}
+	if (!reversepolarity != !fxs->reversepolarity)
+		fxs->idletxhookstate = SLIC_LF_ACTIVE_REV;
+	else
+		fxs->idletxhookstate = SLIC_LF_ACTIVE_FWD;
 
 	if (sane) {
 		/* Make sure we turn off the DC->DC converter to prevent anything from blowing up */
@@ -2642,7 +2678,7 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	}
 
 	if (!fast) {
-		spin_lock_init(&wc->mods[card].fxs.lasttxhooklock);
+		spin_lock_init(&fxs->lasttxhooklock);
 
 		/* Check for power leaks */
 		if (wctdm_proslic_powerleak_test(wc, card)) {
@@ -2684,14 +2720,14 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 		}
 
 		/* Save calibration vectors */
-		for (x=0;x<NUM_CAL_REGS;x++)
-			wc->mods[card].fxs.calregs.vals[x] = wctdm_getreg(wc, card, 96 + x);
+		for (x = 0; x < NUM_CAL_REGS; x++)
+			fxs->calregs.vals[x] = wctdm_getreg(wc, card, 96 + x);
 #endif
 
 	} else {
 		/* Restore calibration registers */
-		for (x=0;x<NUM_CAL_REGS;x++)
-			wctdm_setreg(wc, card, 96 + x, wc->mods[card].fxs.calregs.vals[x]);
+		for (x = 0; x < NUM_CAL_REGS; x++)
+			wctdm_setreg(wc, card, 96 + x, fxs->calregs.vals[x]);
 	}
 	/* Calibration complete, restore original values */
 	for (x=0;x<5;x++) {
@@ -2814,13 +2850,13 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	if (debug)
 		dev_info(&wc->vb.pdev->dev, "DEBUG: fxstxgain:%s fxsrxgain:%s\n",((wctdm_getreg(wc, card, 9)/8) == 1)?"3.5":(((wctdm_getreg(wc,card,9)/4) == 1)?"-3.5":"0.0"),((wctdm_getreg(wc, card, 9)/2) == 1)?"3.5":((wctdm_getreg(wc,card,9)%2)?"-3.5":"0.0"));
 
-	wc->mods[card].fxs.lasttxhook = wc->mods[card].fxs.idletxhookstate;
-	wctdm_setreg(wc, card, LINE_STATE, wc->mods[card].fxs.lasttxhook);
+	fxs->lasttxhook = wc->mods[card].mod.fxs.idletxhookstate;
+	wctdm_setreg(wc, card, LINE_STATE, fxs->lasttxhook);
 
 	/* Preset the isrshadow register so that we won't get a power alarm
 	 * when we finish initialization, otherwise the line state register
 	 * may not have been read yet. */
-	wc->cmdq[card].isrshadow[1] = wc->mods[card].fxs.lasttxhook;
+	mod->cmdq.isrshadow[1] = fxs->lasttxhook;
 	return 0;
 }
 
@@ -2839,30 +2875,29 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 {
 	unsigned char x,y;
 
-	if (MOD_TYPE_BRI == wc->modtype[card & 0xfc])
+	if (MOD_TYPE_BRI == wc->mods[card & 0xfc].type)
 		return -2;
 
 	/* have to set this, at least for now */
-	wc->modtype[card] = MOD_TYPE_QRV;
+	wc->mods[card].type = MOD_TYPE_QRV;
 	if (!(card & 3)) /* if at base of card, reset and write it */
 	{
 		wctdm_setreg(wc,card,0,0x80); 
 		wctdm_setreg(wc,card,0,0x55);
 		wctdm_setreg(wc,card,1,0x69);
-		wc->qrvhook[card] = wc->qrvhook[card + 1] = 0;
-		wc->qrvhook[card + 2] = wc->qrvhook[card + 3] = 0xff;
-		wc->debouncetime[card] = wc->debouncetime[card + 1] = QRV_DEBOUNCETIME;
-		wc->qrvdebtime[card] = wc->qrvdebtime[card + 1] = 0;
-		wc->radmode[card] = wc->radmode[card + 1] = 0;
-		wc->txgain[card] = wc->txgain[card + 1] = 3599;
-		wc->rxgain[card] = wc->rxgain[card + 1] = 1199;
+		wc->mods[card].qrvhook = wc->mods[card + 1].qrvhook = 0;
+		wc->mods[card + 2].qrvhook = wc->mods[card + 3].qrvhook = 0xff;
+		wc->mods[card].debouncetime = wc->mods[card + 1].debouncetime = QRV_DEBOUNCETIME;
+		wc->mods[card].qrvdebtime = wc->mods[card + 1].qrvdebtime = 0;
+		wc->mods[card].radmode = wc->mods[card + 1].radmode = 0;
+		wc->mods[card].txgain = wc->mods[card + 1].txgain = 3599;
+		wc->mods[card].rxgain = wc->mods[card + 1].rxgain = 1199;
 	} else { /* channel is on same card as base, no need to test */
-		if (wc->modtype[card & 0x7c] == MOD_TYPE_QRV) 
-		{
+		if (wc->mods[card & 0x7c].type == MOD_TYPE_QRV) {
 			/* only lower 2 are valid */
 			if (!(card & 2)) return 0;
 		}
-		wc->modtype[card] = MOD_TYPE_NONE;
+		wc->mods[card].type = MOD_TYPE_NONE;
 		return 1;
 	}
 	x = wctdm_getreg(wc,card,0);
@@ -2870,7 +2905,7 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 	/* if not a QRV card, return as such */
 	if ((x != 0x55) || (y != 0x69))
 	{
-		wc->modtype[card] = MOD_TYPE_NONE;
+		wc->mods[card].type = MOD_TYPE_NONE;
 		return 1;
 	}
 	for (x = 0; x < 0x30; x++)
@@ -2914,51 +2949,76 @@ static void qrv_dosetup(struct dahdi_chan *chan,struct wctdm *wc)
 
 	/* actually do something with the values */
 	qrvcard = (chan->chanpos - 1) & 0xfc;
-	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ radmodes: %d,%d  rxgains: %d,%d   txgains: %d,%d\n",
-	wc->radmode[qrvcard],wc->radmode[qrvcard + 1],
-		wc->rxgain[qrvcard],wc->rxgain[qrvcard + 1],
-			wc->txgain[qrvcard],wc->txgain[qrvcard + 1]);
+	if (debug) {
+		dev_info(&wc->vb.pdev->dev,
+			 "@@@@@ radmodes: %d,%d  rxgains: %d,%d   "
+			 "txgains: %d,%d\n", wc->mods[qrvcard].radmode,
+			 wc->mods[qrvcard + 1].radmode,
+			 wc->mods[qrvcard].rxgain, wc->mods[qrvcard + 1].rxgain,
+			 wc->mods[qrvcard].txgain,
+			 wc->mods[qrvcard + 1].txgain);
+	}
 	r = 0;
-	if (wc->radmode[qrvcard] & RADMODE_DEEMP) r |= 4;		
-	if (wc->radmode[qrvcard + 1] & RADMODE_DEEMP) r |= 8;		
-	if (wc->rxgain[qrvcard] < 1200) r |= 1;
-	if (wc->rxgain[qrvcard + 1] < 1200) r |= 2;
+	if (wc->mods[qrvcard].radmode & RADMODE_DEEMP)
+		r |= 4;
+	if (wc->mods[qrvcard + 1].radmode & RADMODE_DEEMP)
+		r |= 8;
+	if (wc->mods[qrvcard].rxgain < 1200)
+		r |= 1;
+	if (wc->mods[qrvcard + 1].rxgain < 1200)
+		r |= 2;
 	wctdm_setreg(wc, qrvcard, 7, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 7 to %02x hex\n",r);
 	r = 0;
-	if (wc->radmode[qrvcard] & RADMODE_PREEMP) r |= 3;
-	else if (wc->txgain[qrvcard] >= 3600) r |= 1;
-	else if (wc->txgain[qrvcard] >= 1200) r |= 2;
-	if (wc->radmode[qrvcard + 1] & RADMODE_PREEMP) r |= 0xc;
-	else if (wc->txgain[qrvcard + 1] >= 3600) r |= 4;
-	else if (wc->txgain[qrvcard + 1] >= 1200) r |= 8;
+	if (wc->mods[qrvcard].radmode & RADMODE_PREEMP)
+		r |= 3;
+	else if (wc->mods[qrvcard].txgain >= 3600)
+		r |= 1;
+	else if (wc->mods[qrvcard].txgain >= 1200)
+		r |= 2;
+	if (wc->mods[qrvcard + 1].radmode & RADMODE_PREEMP)
+		r |= 0xc;
+	else if (wc->mods[qrvcard + 1].txgain >= 3600)
+		r |= 4;
+	else if (wc->mods[qrvcard + 1].txgain >= 1200)
+		r |= 8;
 	wctdm_setreg(wc, qrvcard, 4, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 4 to %02x hex\n",r);
 	r = 0;
-	if (wc->rxgain[qrvcard] >= 2400) r |= 1; 
-	if (wc->rxgain[qrvcard + 1] >= 2400) r |= 2; 
+	if (wc->mods[qrvcard].rxgain >= 2400)
+		r |= 1;
+	if (wc->mods[qrvcard + 1].rxgain >= 2400)
+		r |= 2;
 	wctdm_setreg(wc, qrvcard, 0x25, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x25 to %02x hex\n",r);
 	r = 0;
-	if (wc->txgain[qrvcard] < 2400) r |= 1; else r |= 4;
-	if (wc->txgain[qrvcard + 1] < 2400) r |= 8; else r |= 0x20;
+	if (wc->mods[qrvcard].txgain < 2400)
+		r |= 1;
+	else
+		r |= 4;
+	if (wc->mods[qrvcard + 1].txgain < 2400)
+		r |= 8;
+	else
+		r |= 0x20;
 	wctdm_setreg(wc, qrvcard, 0x26, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x26 to %02x hex\n",r);
-	l = ((long)(wc->rxgain[qrvcard] % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard].rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->rxgain[qrvcard] >= 2400) l += 181;
+	if (wc->mods[qrvcard].rxgain >= 2400)
+		l += 181;
 	wctdm_setreg(wc, qrvcard, 0x0b, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0b to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->rxgain[qrvcard + 1] % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard + 1].rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->rxgain[qrvcard + 1] >= 2400) l += 181;
+	if (wc->mods[qrvcard + 1].rxgain >= 2400)
+		l += 181;
 	wctdm_setreg(wc, qrvcard, 0x0c, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0c to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->txgain[qrvcard] % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard].txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
 	wctdm_setreg(wc, qrvcard, 0x0f, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0f to %02x hex\n", (unsigned char)l);
-	l = ((long)(wc->txgain[qrvcard + 1] % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard + 1].txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
 	wctdm_setreg(wc, qrvcard, 0x10,(unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x10 to %02x hex\n",(unsigned char)l);
@@ -3004,11 +3064,12 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		struct dahdi_radio_stat s;
 		struct dahdi_radio_param p;
 	} stack;
-	struct fxs *const fxs = &wc->mods[chan->chanpos - 1].fxs;
+	struct wctdm_module *const mod = &wc->mods[chan->chanpos - 1];
+	struct fxs *const fxs = &mod->mod.fxs;
 
 	switch (cmd) {
 	case DAHDI_ONHOOKTRANSFER:
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_FXS)
+		if (mod->type != MOD_TYPE_FXS)
 			return -EINVAL;
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
@@ -3025,7 +3086,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			x = set_lasttxhook_interruptible(fxs,
 				(POLARITY_XOR(chan->chanpos - 1) ?
 				SLIC_LF_OHTRAN_REV : SLIC_LF_OHTRAN_FWD),
-				&wc->sethook[chan->chanpos - 1]);
+				&mod->sethook);
 
 			if (debug & DEBUG_CARD) {
 				if (x) {
@@ -3043,7 +3104,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		}
 		break;
 	case DAHDI_VMWI_CONFIG:
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_FXS)
+		if (mod->type != MOD_TYPE_FXS)
 			return -EINVAL;
 		if (copy_from_user(&(fxs->vmwisetting),
 				   (__user void *)data,
@@ -3052,7 +3113,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		set_vmwi(wc, chan->chanpos - 1);
 		break;
 	case DAHDI_VMWI:
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_FXS)
+		if (mod->type != MOD_TYPE_FXS)
 			return -EINVAL;
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
@@ -3062,11 +3123,11 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		set_vmwi(wc, chan->chanpos - 1);
 		break;
 	case WCTDM_GET_STATS:
-		if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXS) {
+		if (mod->type == MOD_TYPE_FXS) {
 			stats.tipvolt = wctdm_getreg(wc, chan->chanpos - 1, 80) * -376;
 			stats.ringvolt = wctdm_getreg(wc, chan->chanpos - 1, 81) * -376;
 			stats.batvolt = wctdm_getreg(wc, chan->chanpos - 1, 82) * -376;
-		} else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXO) {
+		} else if (mod->type == MOD_TYPE_FXO) {
 			stats.tipvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
 			stats.ringvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
 			stats.batvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
@@ -3081,9 +3142,9 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (!regs)
 			return -ENOMEM;
 
-		if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXS)
+		if (mod->type == MOD_TYPE_FXS)
 			wctdm24xxp_get_fxs_regs(wc, chan, regs);
-		else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_QRV)
+		else if (mod->type == MOD_TYPE_QRV)
 			wctdm24xxp_get_qrv_regs(wc, chan, regs);
 		else
 			wctdm24xxp_get_fxo_regs(wc, chan, regs);
@@ -3100,7 +3161,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (copy_from_user(&regop, (__user void *) data, sizeof(regop)))
 			return -EFAULT;
 		if (regop.indirect) {
-			if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_FXS)
+			if (mod->type != MOD_TYPE_FXS)
 				return -EINVAL;
 			dev_info(&wc->vb.pdev->dev, "Setting indirect %d to 0x%04x on %d\n", regop.reg, regop.val, chan->chanpos);
 			wctdm_proslic_setreg_indirect(wc, chan->chanpos - 1, regop.reg, regop.val);
@@ -3119,7 +3180,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (copy_from_user(&echoregs, (__user void *) data, sizeof(echoregs)))
 			return -EFAULT;
 
-		if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXO) {
+		if (mod->type == MOD_TYPE_FXO) {
 			/* Set the ACIM register */
 			wctdm_setreg(wc, chan->chanpos - 1, 30, echoregs.acim);
 
@@ -3159,7 +3220,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 	case DAHDI_SETPOLARITY:
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_FXS)
+		if (mod->type != MOD_TYPE_FXS)
 			return -EINVAL;
 		/* Can't change polarity while ringing or when open */
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_RINGING) ||
@@ -3178,7 +3239,8 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			x = fxs->lasttxhook & SLIC_LF_SETMASK;
 			x |= SLIC_LF_REVMASK;
 			if (x != fxs->lasttxhook) { 
-				x = set_lasttxhook_interruptible(fxs, x, &wc->sethook[chan->chanpos - 1]);
+				x = set_lasttxhook_interruptible(fxs, x,
+								 &mod->sethook);
 				if ((debug & DEBUG_CARD) && x) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d TIMEOUT: Set Reverse "
@@ -3194,7 +3256,8 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			x = fxs->lasttxhook & SLIC_LF_SETMASK;
 			x &= ~SLIC_LF_REVMASK;
 			if (x != fxs->lasttxhook) { 
-				x = set_lasttxhook_interruptible(fxs, x, &wc->sethook[chan->chanpos - 1]);
+				x = set_lasttxhook_interruptible(fxs, x,
+								 &mod->sethook);
 				if ((debug & DEBUG_CARD) & x) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d TIMEOUT: Set Normal "
@@ -3208,57 +3271,50 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		}
 		break;
 	case DAHDI_RADIO_GETPARAM:
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_QRV) 
+		if (mod->type != MOD_TYPE_QRV)
 			return -ENOTTY;
 		if (copy_from_user(&stack.p, (__user void *) data, sizeof(stack.p)))
 			return -EFAULT;
 		stack.p.data = 0; /* start with 0 value in output */
 		switch(stack.p.radpar) {
 		case DAHDI_RADPAR_INVERTCOR:
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_INVERTCOR)
+			if (mod->radmode & RADMODE_INVERTCOR)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_IGNORECOR:
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_IGNORECOR)
+			if (mod->radmode & RADMODE_IGNORECOR)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_IGNORECT:
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_IGNORECT)
+			if (mod->radmode & RADMODE_IGNORECT)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_EXTRXTONE:
 			stack.p.data = 0;
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_EXTTONE)
-			{
+			if (mod->radmode & RADMODE_EXTTONE) {
 				stack.p.data = 1;
-				if (wc->radmode[chan->chanpos - 1] & RADMODE_EXTINVERT)
-				{
+				if (mod->radmode & RADMODE_EXTINVERT)
 					stack.p.data = 2;
-				}
 			}
 			break;
 		case DAHDI_RADPAR_DEBOUNCETIME:
-			stack.p.data = wc->debouncetime[chan->chanpos - 1];
+			stack.p.data = mod->debouncetime;
 			break;
 		case DAHDI_RADPAR_RXGAIN:
-			stack.p.data = wc->rxgain[chan->chanpos - 1] - 1199;
+			stack.p.data = mod->rxgain - 1199;
 			break;
 		case DAHDI_RADPAR_TXGAIN:
-			stack.p.data = wc->txgain[chan->chanpos - 1] - 3599;
+			stack.p.data = mod->txgain - 3599;
 			break;
 		case DAHDI_RADPAR_DEEMP:
 			stack.p.data = 0;
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_DEEMP)
-			{
+			if (mod->radmode & RADMODE_DEEMP)
 				stack.p.data = 1;
-			}
 			break;
 		case DAHDI_RADPAR_PREEMP:
 			stack.p.data = 0;
-			if (wc->radmode[chan->chanpos - 1] & RADMODE_PREEMP)
-			{
+			if (mod->radmode & RADMODE_PREEMP)
 				stack.p.data = 1;
-			}
 			break;
 		default:
 			return -EINVAL;
@@ -3267,41 +3323,41 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		    return -EFAULT;
 		break;
 	case DAHDI_RADIO_SETPARAM:
-		if (wc->modtype[chan->chanpos - 1] != MOD_TYPE_QRV) 
+		if (mod->type != MOD_TYPE_QRV)
 			return -ENOTTY;
 		if (copy_from_user(&stack.p, (__user void *) data, sizeof(stack.p)))
 			return -EFAULT;
 		switch(stack.p.radpar) {
 		case DAHDI_RADPAR_INVERTCOR:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_INVERTCOR;
+				mod->radmode |= RADMODE_INVERTCOR;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_INVERTCOR;
+				mod->radmode &= ~RADMODE_INVERTCOR;
 			return 0;
 		case DAHDI_RADPAR_IGNORECOR:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_IGNORECOR;
+				mod->radmode |= RADMODE_IGNORECOR;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_IGNORECOR;
+				mod->radmode &= ~RADMODE_IGNORECOR;
 			return 0;
 		case DAHDI_RADPAR_IGNORECT:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_IGNORECT;
+				mod->radmode |= RADMODE_IGNORECT;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_IGNORECT;
+				mod->radmode &= ~RADMODE_IGNORECT;
 			return 0;
 		case DAHDI_RADPAR_EXTRXTONE:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_EXTTONE;
+				mod->radmode |= RADMODE_EXTTONE;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_EXTTONE;
+				mod->radmode &= ~RADMODE_EXTTONE;
 			if (stack.p.data > 1)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_EXTINVERT;
+				mod->radmode |= RADMODE_EXTINVERT;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_EXTINVERT;
+				mod->radmode &= ~RADMODE_EXTINVERT;
 			return 0;
 		case DAHDI_RADPAR_DEBOUNCETIME:
-			wc->debouncetime[chan->chanpos - 1] = stack.p.data;
+			mod->debouncetime = stack.p.data;
 			return 0;
 		case DAHDI_RADPAR_RXGAIN:
 			/* if out of range */
@@ -3309,39 +3365,34 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			{
 				return -EINVAL;
 			}
-			wc->rxgain[chan->chanpos - 1] = stack.p.data + 1199;
+			mod->rxgain = stack.p.data + 1199;
 			break;
 		case DAHDI_RADPAR_TXGAIN:
 			/* if out of range */
-			if (wc->radmode[chan->chanpos -1] & RADMODE_PREEMP)
-			{
-				if ((stack.p.data <= -2400) || (stack.p.data > 0))
-				{
+			if (mod->radmode & RADMODE_PREEMP) {
+				if ((stack.p.data <= -2400) ||
+				    (stack.p.data > 0))
 					return -EINVAL;
-				}
-			}
-			else
-			{
-				if ((stack.p.data <= -3600) || (stack.p.data > 1200))
-				{
+			} else {
+				if ((stack.p.data <= -3600) ||
+				    (stack.p.data > 1200))
 					return -EINVAL;
-				}
 			}
-			wc->txgain[chan->chanpos - 1] = stack.p.data + 3599;
+			mod->txgain = stack.p.data + 3599;
 			break;
 		case DAHDI_RADPAR_DEEMP:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_DEEMP;
+				mod->radmode |= RADMODE_DEEMP;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_DEEMP;
-			wc->rxgain[chan->chanpos - 1] = 1199;
+				mod->radmode &= ~RADMODE_DEEMP;
+			mod->rxgain = 1199;
 			break;
 		case DAHDI_RADPAR_PREEMP:
 			if (stack.p.data)
-				wc->radmode[chan->chanpos - 1] |= RADMODE_PREEMP;
+				mod->radmode |= RADMODE_PREEMP;
 			else
-				wc->radmode[chan->chanpos - 1] &= ~RADMODE_PREEMP;
-			wc->txgain[chan->chanpos - 1] = 3599;
+				mod->radmode &= ~RADMODE_PREEMP;
+			mod->txgain = 3599;
 			break;
 		default:
 			return -EINVAL;
@@ -3356,23 +3407,20 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 static int wctdm_open(struct dahdi_chan *chan)
 {
-	struct wctdm *wc;
-	int channo;
+	struct wctdm *const wc = chan->pvt;
 	unsigned long flags;
-
-	wc = chan->pvt;
-	channo = chan->chanpos - 1;
+	struct wctdm_module *const mod = &wc->mods[chan->chanpos - 1];
 
 #if 0
 	if (wc->dead)
 		return -ENODEV;
 #endif
-	if (wc->modtype[channo] == MOD_TYPE_FXO) {
+	if (mod->type == MOD_TYPE_FXO) {
 		/* Reset the mwi indicators */
 		spin_lock_irqsave(&wc->reglock, flags);
-		wc->mods[channo].fxo.neonmwi_debounce = 0;
-		wc->mods[channo].fxo.neonmwi_offcounter = 0;
-		wc->mods[channo].fxo.neonmwi_state = 0;
+		mod->mod.fxo.neonmwi_debounce = 0;
+		mod->mod.fxo.neonmwi_offcounter = 0;
+		mod->mod.fxo.neonmwi_state = 0;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 	}
 
@@ -3400,26 +3448,27 @@ static int wctdm_close(struct dahdi_chan *chan)
 
 	wc = chan->pvt;
 	for (x = 0; x < wc->mods_per_board; x++) {
-		if (MOD_TYPE_FXS == wc->modtype[x]) {
-			wc->mods[x].fxs.idletxhookstate =
+		struct wctdm_module *const mod = &wc->mods[x];
+		if (MOD_TYPE_FXS == mod->type) {
+			mod->mod.fxs.idletxhookstate =
 				POLARITY_XOR(x) ? SLIC_LF_ACTIVE_REV :
 						  SLIC_LF_ACTIVE_FWD;
-		} else if (MOD_TYPE_QRV == wc->modtype[x]) {
+		} else if (MOD_TYPE_QRV == mod->type) {
 			int qrvcard = x & 0xfc;
 
-			wc->qrvhook[x] = 0;
-			wc->qrvhook[x + 2] = 0xff;
-			wc->debouncetime[x] = QRV_DEBOUNCETIME;
-			wc->qrvdebtime[x] = 0;
-			wc->radmode[x] = 0;
-			wc->txgain[x] = 3599;
-			wc->rxgain[x] = 1199;
+			mod->qrvhook = 0;
+			wc->mods[x + 2].qrvhook = 0xff;
+			mod->debouncetime = QRV_DEBOUNCETIME;
+			mod->qrvdebtime = 0;
+			mod->radmode = 0;
+			mod->txgain = 3599;
+			mod->rxgain = 1199;
 			reg = 0;
-			if (!wc->qrvhook[qrvcard])
+			if (!wc->mods[qrvcard].qrvhook)
 				reg |= 1;
-			if (!wc->qrvhook[qrvcard + 1])
+			if (!wc->mods[qrvcard + 1].qrvhook)
 				reg |= 0x10;
-			wc->sethook[qrvcard] = CMD_WR(3, reg);
+			wc->mods[qrvcard].sethook = CMD_WR(3, reg);
 			qrv_dosetup(chan,wc);
 		}
 	}
@@ -3431,42 +3480,45 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 {
 	struct wctdm *wc = chan->pvt;
 	int reg = 0, qrvcard;
+	struct wctdm_module *const mod = &wc->mods[chan->chanpos - 1];
 
-	if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_QRV) {
+	if (mod->type == MOD_TYPE_QRV) {
 		qrvcard = (chan->chanpos - 1) & 0xfc;
 		switch(txsig) {
 		case DAHDI_TXSIG_START:
 		case DAHDI_TXSIG_OFFHOOK:
-			wc->qrvhook[chan->chanpos - 1] = 1;
+			mod->qrvhook = 1;
 			break;
 		case DAHDI_TXSIG_ONHOOK:
-			wc->qrvhook[chan->chanpos - 1] = 0;
+			mod->qrvhook = 0;
 			break;
 		default:
 			dev_notice(&wc->vb.pdev->dev, "wctdm24xxp: Can't set tx state to %d\n", txsig);
 		}
 		reg = 0;
-		if (!wc->qrvhook[qrvcard]) reg |= 1;
-		if (!wc->qrvhook[qrvcard + 1]) reg |= 0x10;
-		wc->sethook[qrvcard] = CMD_WR(3, reg);
+		if (!wc->mods[qrvcard].qrvhook)
+			reg |= 1;
+		if (!wc->mods[qrvcard + 1].qrvhook)
+			reg |= 0x10;
+		wc->mods[qrvcard].sethook = CMD_WR(3, reg);
 		/* wctdm_setreg(wc, qrvcard, 3, reg); */
-	} else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXO) {
+	} else if (mod->type == MOD_TYPE_FXO) {
 		switch(txsig) {
 		case DAHDI_TXSIG_START:
 		case DAHDI_TXSIG_OFFHOOK:
-			wc->mods[chan->chanpos - 1].fxo.offhook = 1;
-			wc->sethook[chan->chanpos - 1] = CMD_WR(5, 0x9);
+			mod->mod.fxo.offhook = 1;
+			mod->sethook = CMD_WR(5, 0x9);
 			/* wctdm_setreg(wc, chan->chanpos - 1, 5, 0x9); */
 			break;
 		case DAHDI_TXSIG_ONHOOK:
-			wc->mods[chan->chanpos - 1].fxo.offhook = 0;
-			wc->sethook[chan->chanpos - 1] = CMD_WR(5, 0x8);
+			mod->mod.fxo.offhook = 0;
+			mod->sethook = CMD_WR(5, 0x8);
 			/* wctdm_setreg(wc, chan->chanpos - 1, 5, 0x8); */
 			break;
 		default:
 			dev_notice(&wc->vb.pdev->dev, "wctdm24xxp: Can't set tx state to %d\n", txsig);
 		}
-	} else if (wc->modtype[chan->chanpos - 1] == MOD_TYPE_FXS) {
+	} else if (mod->type == MOD_TYPE_FXS) {
 		wctdm_fxs_hooksig(wc, chan->chanpos - 1, txsig);
 	}
 	return 0;
@@ -3474,40 +3526,47 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 
 static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 {
+	unsigned int type;
 
-	if (wc->dacssrc[dstcard] > - 1) {
+	if (wc->mods[dstcard].dacssrc > -1) {
 		dev_notice(&wc->vb.pdev->dev, "wctdm_dacs_connect: Can't have double sourcing yet!\n");
 		return;
 	}
-	if (!((wc->modtype[srccard] == MOD_TYPE_FXS)||(wc->modtype[srccard] == MOD_TYPE_FXO))){
-		dev_notice(&wc->vb.pdev->dev, "wctdm_dacs_connect: Unsupported modtype for card %d\n", srccard);
+	type = wc->mods[srccard].type;
+	if ((type == MOD_TYPE_FXS) || (type == MOD_TYPE_FXO)) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "wctdm_dacs_connect: Unsupported modtype for "
+			   "card %d\n", srccard);
 		return;
 	}
-	if (!((wc->modtype[dstcard] == MOD_TYPE_FXS)||(wc->modtype[dstcard] == MOD_TYPE_FXO))){
-		dev_notice(&wc->vb.pdev->dev, "wctdm_dacs_connect: Unsupported modtype for card %d\n", dstcard);
+	type = wc->mods[dstcard].type;
+	if ((type != MOD_TYPE_FXS) && (type != MOD_TYPE_FXO)) {
+		dev_notice(&wc->vb.pdev->dev,
+			   "wctdm_dacs_connect: Unsupported modtype "
+			   "for card %d\n", dstcard);
 		return;
 	}
 	if (debug)
 		dev_info(&wc->vb.pdev->dev, "connect %d => %d\n", srccard, dstcard);
-	wc->dacssrc[dstcard] = srccard;
+	wc->mods[dstcard].dacssrc = srccard;
 
 	/* make srccard transmit to srccard+24 on the TDM bus */
-	if (wc->modtype[srccard] == MOD_TYPE_FXS) {
+	if (wc->mods[srccard].type == MOD_TYPE_FXS) {
 		/* proslic */
 		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_LSB, ((srccard+24) * 8) & 0xff); 
 		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_MSB, ((srccard+24) * 8) >> 8);
-	} else if (wc->modtype[srccard] == MOD_TYPE_FXO) {
+	} else if (wc->mods[srccard].type == MOD_TYPE_FXO) {
 		/* daa */
 		wctdm_setreg(wc, srccard, 34, ((srccard+24) * 8) & 0xff); /* TX */
 		wctdm_setreg(wc, srccard, 35, ((srccard+24) * 8) >> 8);   /* TX */
 	}
 
 	/* have dstcard receive from srccard+24 on the TDM bus */
-	if (wc->modtype[dstcard] == MOD_TYPE_FXS) {
+	if (wc->mods[dstcard].type == MOD_TYPE_FXS) {
 		/* proslic */
     	wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_LSB,  ((srccard+24) * 8) & 0xff);
 		wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_MSB,  ((srccard+24) * 8) >> 8);
-	} else if (wc->modtype[dstcard] == MOD_TYPE_FXO) {
+	} else if (wc->mods[dstcard].type == MOD_TYPE_FXO) {
 		/* daa */
 		wctdm_setreg(wc, dstcard, 36, ((srccard+24) * 8) & 0xff); /* RX */
 		wctdm_setreg(wc, dstcard, 37, ((srccard+24) * 8) >> 8);   /* RX */
@@ -3517,15 +3576,22 @@ static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 
 static void wctdm_dacs_disconnect(struct wctdm *wc, int card)
 {
-	if (wc->dacssrc[card] > -1) {
-		if (debug)
-			dev_info(&wc->vb.pdev->dev, "wctdm_dacs_disconnect: restoring TX for %d and RX for %d\n",wc->dacssrc[card], card);
+	struct wctdm_module *const mod = &wc->mods[card];
+
+	if (mod->dacssrc > -1) {
+		if (debug) {
+			dev_info(&wc->vb.pdev->dev,
+				 "wctdm_dacs_disconnect: restoring TX for %d "
+				 "and RX for %d\n", mod->dacssrc, card);
+		}
 
 		/* restore TX (source card) */
-		if (wc->modtype[wc->dacssrc[card]] == MOD_TYPE_FXS) {
-			wctdm_setreg(wc, wc->dacssrc[card], PCM_XMIT_START_COUNT_LSB, (wc->dacssrc[card] * 8) & 0xff);
-			wctdm_setreg(wc, wc->dacssrc[card], PCM_XMIT_START_COUNT_MSB, (wc->dacssrc[card] * 8) >> 8);
-		} else if (wc->modtype[wc->dacssrc[card]] == MOD_TYPE_FXO) {
+		if (wc->mods[mod->dacssrc].type == MOD_TYPE_FXS) {
+			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_LSB,
+				     (wc->mods[card].dacssrc * 8) & 0xff);
+			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_MSB,
+				     (wc->mods[card].dacssrc * 8) >> 8);
+		} else if (wc->mods[mod->dacssrc].type == MOD_TYPE_FXO) {
 			wctdm_setreg(wc, card, 34, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, 35, (card * 8) >> 8);
 		} else {
@@ -3533,17 +3599,17 @@ static void wctdm_dacs_disconnect(struct wctdm *wc, int card)
 		}
 
 		/* restore RX (this card) */
-		if (MOD_TYPE_FXS == wc->modtype[card]) {
+		if (MOD_TYPE_FXS == mod->type) {
 			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_LSB, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_MSB, (card * 8) >> 8);
-		} else if (MOD_TYPE_FXO == wc->modtype[card]) {
+		} else if (MOD_TYPE_FXO == mod->type) {
 			wctdm_setreg(wc, card, 36, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, 37, (card * 8) >> 8);
 		} else {
 			dev_warn(&wc->vb.pdev->dev, "WARNING: wctdm_dacs_disconnect() called on unsupported modtype\n");
 		}
 
-		wc->dacssrc[card] = -1;
+		mod->dacssrc = -1;
 	}
 }
 
@@ -3709,7 +3775,8 @@ static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chan
 
 	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s Board %d", wc->desc->name, wc->pos + 1);
 	snprintf(s->span.location, sizeof(s->span.location) - 1,
-		 "PCI%s Bus %02d Slot %02d", (wc->flags[0] & FLAG_EXPRESS) ? " Express" : "",
+		 "PCI%s Bus %02d Slot %02d",
+		 (wc->mods[0].flags & FLAG_EXPRESS) ? " Express" : "",
 		 pdev->bus->number, PCI_SLOT(pdev->devfn) + 1);
 	s->span.manufacturer = "Digium";
 	strncpy(s->span.devicetype, wc->desc->name, sizeof(s->span.devicetype) - 1);
@@ -3793,13 +3860,14 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 	s = &wc->spans[spanno]->span;
 
 	for (x = 0; x < wc->desc->ports; x++) {
+		struct wctdm_module *const mod = &wc->mods[x];
 		if (debug) {
 			dev_info(&wc->vb.pdev->dev,
 				 "fixup_analog: x=%d, y=%d modtype=%d, "
-				 "s->chans[%d]=%p\n", x, y, wc->modtype[x],
+				 "s->chans[%d]=%p\n", x, y, mod->type,
 				 y, s->chans[y]);
 		}
-		if (wc->modtype[x] == MOD_TYPE_FXO) {
+		if (mod->type == MOD_TYPE_FXO) {
 			int val;
 			s->chans[y++]->sigcap = DAHDI_SIG_FXSKS | DAHDI_SIG_FXSLS | DAHDI_SIG_SF | DAHDI_SIG_CLEAR;
 			val = should_set_alaw(wc) ? 0x20 : 0x28;
@@ -3807,11 +3875,11 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 			val = (digitalloopback) ? 0x30 : val;
 #endif
 			wctdm_setreg(wc, x, 33, val);
-		} else if (wc->modtype[x] == MOD_TYPE_FXS) {
+		} else if (mod->type == MOD_TYPE_FXS) {
 			s->chans[y++]->sigcap = DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS | DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
 			wctdm_setreg(wc, x, 1,
 				     (should_set_alaw(wc) ? 0x20 : 0x28));
-		} else if (wc->modtype[x] == MOD_TYPE_QRV) {
+		} else if (mod->type == MOD_TYPE_QRV) {
 			s->chans[y++]->sigcap = DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
 		} else {
 			s->chans[y++]->sigcap = 0;
@@ -3916,7 +3984,7 @@ static int wctdm_identify_modules(struct wctdm *wc)
  */
 
 	for (x = 0; x < wc->mods_per_board; x++)
-		wc->modtype[x] = MOD_TYPE_FXSINIT;
+		wc->mods[x].type = MOD_TYPE_FXSINIT;
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
@@ -3930,6 +3998,7 @@ static int wctdm_identify_modules(struct wctdm *wc)
 
 	/* Reset modules */
 	for (x = 0; x < wc->mods_per_board; x++) {
+		struct wctdm_module *const mod = &wc->mods[x];
 		int sane = 0, ret = 0, readi = 0;
 
 		if (fatal_signal_pending(current))
@@ -3970,23 +4039,24 @@ retry:
 					 "Port %d: Installed -- BRI "
 					 "quad-span module\n", x + 1);
 			} else {
-				if ((wc->desc->ports != 24) && ((x & 0x3) == 1) && !wc->altcs[x]) {
+				if ((wc->desc->ports != 24) &&
+				    ((x & 0x3) == 1) && !mod->altcs) {
 
 					spin_lock_irqsave(&wc->reglock, flags);
-					wc->altcs[x] = 2;
+					mod->altcs = 2;
 
 					if (wc->desc->ports == 4) {
-						wc->altcs[x+1] = 3;
-						wc->altcs[x+2] = 3;
+						wc->mods[x+1].altcs = 3;
+						wc->mods[x+2].altcs = 3;
 					}
 
-					wc->modtype[x] = MOD_TYPE_FXSINIT;
+					mod->type = MOD_TYPE_FXSINIT;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
 					msleep(20);
 
 					spin_lock_irqsave(&wc->reglock, flags);
-					wc->modtype[x] = MOD_TYPE_FXS;
+					mod->type = MOD_TYPE_FXS;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
 					if (debug & DEBUG_CARD)
@@ -3997,7 +4067,7 @@ retry:
 					dev_info(&wc->vb.pdev->dev,
 						 "Port %d: Not installed\n",
 						 x + 1);
-					wc->modtype[x] = MOD_TYPE_NONE;
+					mod->type = MOD_TYPE_NONE;
 				}
 			}
 		}
@@ -4556,7 +4626,7 @@ static void wctdm_set_tdm410_leds(struct wctdm *wc)
 	wc->tdm410leds = 0; /* all on by default */
 	for (i = 0; i < wc->desc->ports; ++i) {
 		/* Turn off the LED for any module that isn't installed. */
-		if (MOD_TYPE_NONE == wc->modtype[i])
+		if (MOD_TYPE_NONE == wc->mods[i].type)
 			wc->tdm410leds |= (1 << i);
 	}
 }
@@ -4672,8 +4742,8 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		wc->companding = DAHDI_LAW_DEFAULT;
 
 	for (i = 0; i < NUM_MODULES; i++) {
-		wc->flags[i] = wc->desc->flags;
-		wc->dacssrc[i] = -1;
+		wc->mods[i].flags = wc->desc->flags;
+		wc->mods[i].dacssrc = -1;
 	}
 
 	/* Start the hardware processing. */
@@ -4719,12 +4789,13 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	curchan = curspan = 0;
 	
 	for (i = 0; i < wc->mods_per_board; i++) {
+		struct wctdm_module *const mod = &wc->mods[i];
 		struct b400m *b4;
 
-		if (wc->modtype[i] == MOD_TYPE_NONE) {
+		if (mod->type == MOD_TYPE_NONE) {
 			++curspan;
 			continue;
-		} else if (wc->modtype[i] == MOD_TYPE_BRI) {
+		} else if (mod->type == MOD_TYPE_BRI) {
 			if (!is_hx8(wc)) {
 				dev_info(&wc->vb.pdev->dev, "Digital modules "
 					"detected on a non-hybrid card. "
@@ -4737,7 +4808,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 				wctdm_back_out_gracefully(wc);
 				return -EIO;
 			}
-			b4 = wc->mods[i].bri;
+			b4 = mod->mod.bri;
 			b400m_set_dahdi_span(b4, i & 0x03, wc->spans[curspan]);
 
 			++curspan;
@@ -4782,15 +4853,21 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	/* Now fix up the timeslots for the analog modules, since the digital
 	 * modules are always first */
 	for (i = 0; i < wc->mods_per_board; i++) {
-		if (wc->modtype[i] == MOD_TYPE_FXS) {
+		struct wctdm_module *const mod = &wc->mods[i];
+		switch (mod->type) {
+		case MOD_TYPE_FXS:
 			wctdm_proslic_set_ts(wc, i, (digimods * 12) + i);
-		} else if (wc->modtype[i] == MOD_TYPE_FXO) {
+			break;
+		case MOD_TYPE_FXO:
 			wctdm_voicedaa_set_ts(wc, i, (digimods * 12) + i);
-		} else if (wc->modtype[i] == MOD_TYPE_QRV) {
+			break;
+		case MOD_TYPE_QRV:
 			wctdm_qrvdri_set_ts(wc, i, (digimods * 12) + i);
+			break;
+		default:
+			break;
 		}
 	}
-
 
 	/* This shouldn't ever occur, but if we don't try to trap it, the driver
 	 * will be scribbling into memory it doesn't own. */
@@ -4904,7 +4981,7 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 
 		/* shut down any BRI modules */
 		for (i = 0; i < wc->mods_per_board; i += 4) {
-			if (wc->modtype[i] == MOD_TYPE_BRI)
+			if (wc->mods[i].type == MOD_TYPE_BRI)
 				wctdm_unload_b400m(wc, i);
 		}
 

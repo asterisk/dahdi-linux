@@ -151,6 +151,82 @@ struct wctdm_chan {
 	int timeslot;
 };
 
+struct fxo {
+	int wasringing;
+	int lastrdtx;
+	int lastrdtx_count;
+	int ringdebounce;
+	int offhook;
+	int battdebounce;
+	int battalarm;
+	enum battery_state battery;
+	int lastpol;
+	int polarity;
+	int polaritydebounce;
+	int neonmwi_state;
+	int neonmwi_last_voltage;
+	unsigned int neonmwi_debounce;
+	unsigned int neonmwi_offcounter;
+};
+
+struct fxs {
+	int oldrxhook;
+	int debouncehook;
+	int lastrxhook;
+	int debounce;
+	int ohttimer;
+	int idletxhookstate;	/* IDLE changing hook state */
+/* lasttxhook reflects the last value written to the proslic's reg
+* 64 (LINEFEED_CONTROL) in bits 0-2.  Bit 4 indicates if the last
+* write is pending i.e. it is in process of being written to the
+* register
+* NOTE: in order for this value to actually be written to the
+* proslic, the appropriate matching value must be written into the
+* sethook variable so that it gets queued and handled by the
+* voicebus ISR.
+*/
+	int lasttxhook;
+	int oppending_ms;
+	spinlock_t lasttxhooklock;
+	int palarms;
+	struct dahdi_vmwi_info vmwisetting;
+	int vmwi_active_messages;
+	int vmwi_linereverse;
+	int reversepolarity;	/* polarity reversal */
+	struct calregs calregs;
+};
+
+struct wctdm_module {
+	union {
+		struct fxo fxo;
+		struct fxs fxs;
+		struct b400m *bri;
+	} mod;
+	struct cmdq cmdq;
+
+	int type; /* type of module (FXO/FXS/QRV/etc.) */
+	int sethook; /* pending hook state command */
+	int dacssrc;
+	int flags;   /* bitmap of board-specific + module-specific flags */
+
+#define	RADMODE_INVERTCOR 1
+#define	RADMODE_IGNORECOR 2
+#define	RADMODE_EXTTONE 4
+#define	RADMODE_EXTINVERT 8
+#define	RADMODE_IGNORECT 16
+#define	RADMODE_PREEMP	32
+#define	RADMODE_DEEMP 64
+	unsigned short debouncetime;
+	signed short rxgain;
+	signed short txgain;
+	/* FIXME: why are all of these QRV-only members part of the main card
+	 * structure? */
+	char qrvhook;
+	unsigned short qrvdebtime;
+	int radmode;
+	int altcs;
+};
+
 struct wctdm {
 	const struct wctdm_desc *desc;
 	const char *board_name;
@@ -163,7 +239,6 @@ struct wctdm {
 	unsigned char txident;
 	unsigned char rxident;
 
-	int flags[NUM_MODULES];			/* bitmap of board-specific + module-specific flags */
 	u8 ctlreg;
 	u8 tdm410leds;
 
@@ -171,77 +246,10 @@ struct wctdm {
 	int digi_mods;				/* number of digital modules present */
 	int avchannels;				/* active "voice" (voice, B and D) channels */
 
-	int altcs[NUM_MODULES];
-
-/* FIXME: why are all of these QRV-only members part of the main card structure? */
-	char qrvhook[NUM_MODULES];
-	unsigned short qrvdebtime[NUM_MODULES];
-	int radmode[NUM_MODULES];
-#define	RADMODE_INVERTCOR 1
-#define	RADMODE_IGNORECOR 2
-#define	RADMODE_EXTTONE 4
-#define	RADMODE_EXTINVERT 8
-#define	RADMODE_IGNORECT 16
-#define	RADMODE_PREEMP	32
-#define	RADMODE_DEEMP 64
-	unsigned short debouncetime[NUM_MODULES];
-	signed short rxgain[NUM_MODULES];
-	signed short txgain[NUM_MODULES];
-
 	spinlock_t reglock;			/* held when accessing anything affecting the module array */
 	wait_queue_head_t regq;
 
-	union {
-		struct fxo {
-			int wasringing;
-			int lastrdtx;
-			int lastrdtx_count;
-			int ringdebounce;
-			int offhook;
-			int battdebounce;
-			int battalarm;
-			enum battery_state battery;
-			int lastpol;
-			int polarity;
-			int polaritydebounce;
-			int neonmwi_state;
-			int neonmwi_last_voltage;
-			unsigned int neonmwi_debounce;
-			unsigned int neonmwi_offcounter;
-		} fxo;
-		struct fxs {
-			int oldrxhook;
-			int debouncehook;
-			int lastrxhook;
-			int debounce;
-			int ohttimer;
-			int idletxhookstate;	/* IDLE changing hook state */
-	/* lasttxhook reflects the last value written to the proslic's reg
-	* 64 (LINEFEED_CONTROL) in bits 0-2.  Bit 4 indicates if the last
-	* write is pending i.e. it is in process of being written to the
-	* register
-	* NOTE: in order for this value to actually be written to the
-	* proslic, the appropriate matching value must be written into the
-	* sethook variable so that it gets queued and handled by the
-	* voicebus ISR.
-	*/
-			int lasttxhook;
-			int oppending_ms;
-			spinlock_t lasttxhooklock;
-			int palarms;
-			struct dahdi_vmwi_info vmwisetting;
-			int vmwi_active_messages;
-			int vmwi_linereverse;
-			int reversepolarity;	/* polarity reversal */
-			struct calregs calregs;
-		} fxs;
-		struct b400m *bri;
-	} mods[NUM_MODULES];
-
-	struct cmdq cmdq[NUM_MODULES];
-	int modtype[NUM_MODULES]; /* type of module (FXO/FXS/QRV/etc.) */
-	int sethook[NUM_MODULES]; /* pending hook state command */
-	int dacssrc[NUM_MODULES];
+	struct wctdm_module mods[NUM_MODULES];
 
 	struct vpmadt032 *vpmadt032;
 

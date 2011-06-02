@@ -2091,8 +2091,8 @@ static void b400m_enable_workqueues(struct wctdm *wc)
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (i = 0; i < wc->mods_per_board; i += 4) {
-		if (wc->modtype[i] == MOD_TYPE_BRI)
-			b4s[numb4s++] = wc->mods[i].bri;
+		if (wc->mods[i].type == MOD_TYPE_BRI)
+			b4s[numb4s++] = wc->mods[i].mod.bri;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
@@ -2111,8 +2111,8 @@ static void b400m_disable_workqueues(struct wctdm *wc)
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (i = 0; i < wc->mods_per_board; i += 4) {
-		if (wc->modtype[i] == MOD_TYPE_BRI)
-			b4s[numb4s++] = wc->mods[i].bri;
+		if (wc->mods[i].type == MOD_TYPE_BRI)
+			b4s[numb4s++] = wc->mods[i].mod.bri;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
@@ -2513,12 +2513,12 @@ int wctdm_bri_checkisr(struct wctdm *wc, int modpos, int offset)
 		return 0;
 
 	/* DEFINITELY don't do anything if our structures aren't ready! */
-	if (!wc || !wc->initialized || !(wc->mods[modpos].bri) ||
-	    !((struct b400m *)wc->mods[modpos].bri)->inited) {
+	if (!wc || !wc->initialized || !(wc->mods[modpos].mod.bri) ||
+	    !((struct b400m *)wc->mods[modpos].mod.bri)->inited) {
 		return 0;
 	}
 
-	b4 = (struct b400m *)wc->mods[modpos].bri;
+	b4 = (struct b400m *)wc->mods[modpos].mod.bri;
 	if (offset == 0) {
 		if (!b4->shutdown) {
 			/* if (!(wc->intcount % 50)) */
@@ -2584,7 +2584,7 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	/* which B400M in the system is this one? count all of them found so
 	 * far */
 	for (x = 0; x < modpos; x += 4) {
-		if (wc->modtype[x] == MOD_TYPE_BRI)
+		if (wc->mods[x].type == MOD_TYPE_BRI)
 			++b4->b400m_no;
 	}
 
@@ -2617,7 +2617,7 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	hfc_enable_interrupts(b4);
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->mods[modpos].bri = (void *)b4;
+	wc->mods[modpos].mod.bri = (void *)b4;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	return 0;
@@ -2642,33 +2642,33 @@ int wctdm_init_b400m(struct wctdm *wc, int card)
 	int ret = 0;
 	unsigned long flags;
 
-	if (wc->modtype[card & 0xfc] == MOD_TYPE_QRV)
+	if (wc->mods[card & 0xfc].type == MOD_TYPE_QRV)
 		return -2;
 
 	if (!(card & 0x03)) { /* only init if at lowest port in module */
 		spin_lock_irqsave(&wc->reglock, flags);
-		wc->modtype[card + 0] = MOD_TYPE_BRI;
-		wc->modtype[card + 1] = MOD_TYPE_BRI;
-		wc->modtype[card + 2] = MOD_TYPE_BRI;
-		wc->modtype[card + 3] = MOD_TYPE_BRI;
+		wc->mods[card + 0].type = MOD_TYPE_BRI;
+		wc->mods[card + 1].type = MOD_TYPE_BRI;
+		wc->mods[card + 2].type = MOD_TYPE_BRI;
+		wc->mods[card + 3].type = MOD_TYPE_BRI;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		msleep(20);
 
 		if (b400m_probe(wc, card) != 0) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			wc->modtype[card + 0] = MOD_TYPE_NONE;
-			wc->modtype[card + 1] = MOD_TYPE_NONE;
-			wc->modtype[card + 2] = MOD_TYPE_NONE;
-			wc->modtype[card + 3] = MOD_TYPE_NONE;
+			wc->mods[card + 0].type = MOD_TYPE_NONE;
+			wc->mods[card + 1].type = MOD_TYPE_NONE;
+			wc->mods[card + 2].type = MOD_TYPE_NONE;
+			wc->mods[card + 3].type = MOD_TYPE_NONE;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 			ret = -2;
 		}
 	} else {	/* for the "sub-cards" */
-		if (wc->modtype[card & 0xfc] == MOD_TYPE_BRI) {
+		if (wc->mods[card & 0xfc].type == MOD_TYPE_BRI) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			wc->modtype[card] = MOD_TYPE_BRI;
-			wc->mods[card].bri = wc->mods[card & 0xfc].bri;
+			wc->mods[card].type = MOD_TYPE_BRI;
+			wc->mods[card].mod.bri = wc->mods[card & 0xfc].mod.bri;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 		} else {
 			ret = -2;
@@ -2680,7 +2680,7 @@ int wctdm_init_b400m(struct wctdm *wc, int card)
 
 void wctdm_unload_b400m(struct wctdm *wc, int card)
 {
-	struct b400m *b4 = wc->mods[card].bri;
+	struct b400m *b4 = wc->mods[card].mod.bri;
 	int i;
 
 	/* TODO: shutdown once won't work if just a single card is hotswapped
@@ -2748,15 +2748,15 @@ void wctdm_unload_b400m(struct wctdm *wc, int card)
 
 		/* Set these to MOD_TYPE_NONE to ensure that our checkisr
 		 * routines are not entered */
-		wc->modtype[card] = MOD_TYPE_NONE;
-		wc->modtype[card + 1] = MOD_TYPE_NONE;
-		wc->modtype[card + 2] = MOD_TYPE_NONE;
-		wc->modtype[card + 3] = MOD_TYPE_NONE;
+		wc->mods[card].type = MOD_TYPE_NONE;
+		wc->mods[card + 1].type = MOD_TYPE_NONE;
+		wc->mods[card + 2].type = MOD_TYPE_NONE;
+		wc->mods[card + 3].type = MOD_TYPE_NONE;
 
-		wc->mods[card].bri = NULL;
-		wc->mods[card + 1].bri = NULL;
-		wc->mods[card + 2].bri = NULL;
-		wc->mods[card + 3].bri = NULL;
+		wc->mods[card].mod.bri = NULL;
+		wc->mods[card + 1].mod.bri = NULL;
+		wc->mods[card + 2].mod.bri = NULL;
+		wc->mods[card + 3].mod.bri = NULL;
 
 		msleep(voicebus_current_latency(&wc->vb) << 1);
 		b4_info(b4, "Driver unloaded.\n");
