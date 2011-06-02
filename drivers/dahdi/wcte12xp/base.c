@@ -2272,7 +2272,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	int res;
 	unsigned int index = -1;
 
-	for (x = 0; x < sizeof(ifaces) / sizeof(ifaces[0]); x++) {
+	for (x = 0; x < ARRAY_SIZE(ifaces); x++) {
 		if (!ifaces[x]) {
 			index = x;
 			break;
@@ -2285,12 +2285,12 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 		return -EIO;
 	}
 	
-	if (!(wc = kmalloc(sizeof(*wc), GFP_KERNEL))) {
+	wc = kzalloc(sizeof(*wc), GFP_KERNEL);
+	if (!wc)
 		return -ENOMEM;
-	}
 
 	ifaces[index] = wc;
-	memset(wc, 0, sizeof(*wc));
+
 	wc->ledstate = -1;
 	spin_lock_init(&wc->reglock);
 	INIT_LIST_HEAD(&wc->active_cmds);
@@ -2374,18 +2374,19 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	}
 
 	for (x = 0; x < (wc->spantype == TYPE_E1 ? 31 : 24); x++) {
-		if (!(wc->chans[x] = kmalloc(sizeof(*wc->chans[x]), GFP_KERNEL))) {
+		wc->chans[x] = kzalloc(sizeof(*wc->chans[x]), GFP_KERNEL);
+		if (!wc->chans[x]) {
 			free_wc(wc);
 			ifaces[index] = NULL;
 			return -ENOMEM;
 		}
-		memset(wc->chans[x], 0, sizeof(*wc->chans[x]));
-		if (!(wc->ec[x] = kmalloc(sizeof(*wc->ec[x]), GFP_KERNEL))) {
+
+		wc->ec[x] = kzalloc(sizeof(*wc->ec[x]), GFP_KERNEL);
+		if (!wc->ec[x]) {
 			free_wc(wc);
 			ifaces[index] = NULL;
 			return -ENOMEM;
 		}
-		memset(wc->ec[x], 0, sizeof(*wc->ec[x]));
 	}
 
 	mod_timer(&wc->timer, jiffies + HZ/5);
