@@ -178,7 +178,6 @@ struct fxs {
 */
 	int lasttxhook;
 	int oppending_ms;
-	spinlock_t lasttxhooklock;
 	int palarms;
 	struct dahdi_vmwi_info vmwisetting;
 	int vmwi_active_messages;

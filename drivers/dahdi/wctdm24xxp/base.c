@@ -1339,17 +1339,16 @@ static void
 wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
-	unsigned long flags;
 	int res;
 
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING))
 		return;
 
 	/* Monitor the Pending LF state change, for the next 100ms */
-	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
+	spin_lock(&wc->reglock);
 
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING)) {
-		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+		spin_unlock(&wc->reglock);
 		return;
 	}
 
@@ -1374,7 +1373,7 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 	} else { /* Start 100ms Timeout */
 		fxs->oppending_ms = 100;
 	}
-	spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+	spin_unlock(&wc->reglock);
 }
 
 /* 256ms interrupt */
@@ -1383,7 +1382,6 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
-	unsigned long flags;
 #ifdef PAQ_DEBUG
 	res = mod->isrshadow[1];
 	res &= ~0x3;
@@ -1401,7 +1399,7 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 		}
 	}
 #else
-	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
+	spin_lock(&wc->reglock);
 	res = mod->isrshadow[1];
 
 #if 0
@@ -1429,7 +1427,6 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 	res = !res &&    /* reg 64 has to be zero at last isr read */
 		!(fxs->lasttxhook & SLIC_LF_OPPENDING) && /* not a transition */
 		fxs->lasttxhook; /* not an intended zero */
-	spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 	
 	if (res) {
 		fxs->palarms++;
@@ -1437,7 +1434,6 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			dev_notice(&wc->vb.pdev->dev,
 				   "Power alarm on module %d, resetting!\n",
 				   mod->card + 1);
-			spin_lock_irqsave(&fxs->lasttxhooklock, flags);
 			if (fxs->lasttxhook == SLIC_LF_RINGING) {
 				fxs->lasttxhook = POLARITY_XOR(fxs) ?
 							SLIC_LF_ACTIVE_REV :
@@ -1445,7 +1441,6 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			}
 			fxs->lasttxhook |= SLIC_LF_OPPENDING;
 			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
-			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
 
 			/* Update shadow register to avoid extra power alarms until next read */
 			mod->isrshadow[1] = fxs->lasttxhook;
@@ -1457,6 +1452,7 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			}
 		}
 	}
+	spin_unlock(&wc->reglock);
 #endif
 }
 
@@ -1828,7 +1824,7 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 	unsigned long flags;
 	struct fxs *const fxs = &mod->mod.fxs;
 
-	spin_lock_irqsave(&fxs->lasttxhooklock, flags);
+	spin_lock_irqsave(&wc->reglock, flags);
 	switch (txsig) {
 	case DAHDI_TXSIG_ONHOOK:
 		switch (get_dahdi_chan(wc, mod)->sig) {
@@ -1868,7 +1864,7 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 		x = SLIC_LF_OPEN;
 		break;
 	default:
-		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+		spin_unlock_irqrestore(&wc->reglock, flags);
 		dev_notice(&wc->vb.pdev->dev,
 			"wctdm24xxp: Can't set tx state to %d\n", txsig);
 		return;
@@ -1877,7 +1873,7 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 	if (x != fxs->lasttxhook) {
 		fxs->lasttxhook = x | SLIC_LF_OPPENDING;
 		mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
-		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev, "Setting FXS hook state "
@@ -1885,7 +1881,7 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 				 wc->intcount);
 		}
 	} else {
-		spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+		spin_unlock_irqrestore(&wc->reglock, flags);
 	}
 }
 
@@ -2027,7 +2023,6 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
-	unsigned long flags;
 
 	if (!(wc->intcount % 10000)) {
 		/* Accept an alarm once per 10 seconds */
@@ -2056,7 +2051,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 			/* Switch to active */
 			fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_ACTIVE_REV :
 								    SLIC_LF_ACTIVE_FWD;
-			spin_lock_irqsave(&fxs->lasttxhooklock, flags);
+			spin_lock(&wc->reglock);
 			if (SLIC_LF_OHTRAN_FWD == fxs->lasttxhook) {
 				/* Apply the change if appropriate */
 				fxs->lasttxhook = SLIC_LF_OPPENDING | SLIC_LF_ACTIVE_FWD;
@@ -2078,7 +2073,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 						 "stop\n", mod->card);
 				}
 			}
-			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+			spin_unlock(&wc->reglock);
 		} else {
 			fxs->ohttimer = 0;
 			/* Switch to active */
@@ -2558,23 +2553,24 @@ wctdm_set_hwgain(struct wctdm *wc, struct wctdm_module *mod,
 	return 0;
 }
 
-static int set_lasttxhook_interruptible(struct fxs *fxs, unsigned newval, int * psethook)
+static int set_lasttxhook_interruptible(struct wctdm *wc, struct fxs *fxs,
+					unsigned newval, int *psethook)
 {
 	int res = 0;
 	unsigned long flags;
 	int timeout = 0;
 
 	do {
-		spin_lock_irqsave(&fxs->lasttxhooklock, flags);
+		spin_lock_irqsave(&wc->reglock, flags);
 		if (SLIC_LF_OPPENDING & fxs->lasttxhook) {
-			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+			spin_unlock_irqrestore(&wc->reglock, flags);
 			if (timeout++ > 100)
 				return -1;
 			msleep(1);
 		} else {
 			fxs->lasttxhook = (newval & SLIC_LF_SETMASK) | SLIC_LF_OPPENDING;
 			*psethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
-			spin_unlock_irqrestore(&fxs->lasttxhooklock, flags);
+			spin_unlock_irqrestore(&wc->reglock, flags);
 			break;
 		}
 	} while (1);
@@ -2603,7 +2599,7 @@ static int set_vmwi(struct wctdm *wc, struct wctdm_module *const mod)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x |= SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x, &mod->sethook);
+			set_lasttxhook_interruptible(wc, fxs, x, &mod->sethook);
 		}
 	} else {
 		fxs->idletxhookstate &= ~SLIC_LF_REVMASK;
@@ -2612,7 +2608,7 @@ static int set_vmwi(struct wctdm *wc, struct wctdm_module *const mod)
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)) {
 			x = fxs->lasttxhook;
 			x &= ~SLIC_LF_REVMASK;
-			set_lasttxhook_interruptible(fxs, x, &mod->sethook);
+			set_lasttxhook_interruptible(wc, fxs, x, &mod->sethook);
 		}
 	}
 	if (debug) {
@@ -2852,8 +2848,6 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	}
 
 	if (!fast) {
-		spin_lock_init(&fxs->lasttxhooklock);
-
 		/* Check for power leaks */
 		if (wctdm_proslic_powerleak_test(wc, mod)) {
 			dev_notice(&wc->vb.pdev->dev,
@@ -3301,7 +3295,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_ACTIVE_FWD) ||
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_ACTIVE_REV)) {
 
-			x = set_lasttxhook_interruptible(fxs,
+			x = set_lasttxhook_interruptible(wc, fxs,
 				(POLARITY_XOR(fxs) ?
 				SLIC_LF_OHTRAN_REV : SLIC_LF_OHTRAN_FWD),
 				&mod->sethook);
@@ -3458,7 +3452,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			x = fxs->lasttxhook & SLIC_LF_SETMASK;
 			x |= SLIC_LF_REVMASK;
 			if (x != fxs->lasttxhook) { 
-				x = set_lasttxhook_interruptible(fxs, x,
+				x = set_lasttxhook_interruptible(wc, fxs, x,
 								 &mod->sethook);
 				if ((debug & DEBUG_CARD) && x) {
 					dev_info(&wc->vb.pdev->dev,
@@ -3475,7 +3469,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			x = fxs->lasttxhook & SLIC_LF_SETMASK;
 			x &= ~SLIC_LF_REVMASK;
 			if (x != fxs->lasttxhook) { 
-				x = set_lasttxhook_interruptible(fxs, x,
+				x = set_lasttxhook_interruptible(wc, fxs, x,
 								 &mod->sethook);
 				if ((debug & DEBUG_CARD) & x) {
 					dev_info(&wc->vb.pdev->dev,
