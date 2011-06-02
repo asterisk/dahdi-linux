@@ -4754,7 +4754,6 @@ static int dahdi_ioctl_shutdown(unsigned long data)
 {
 	/* I/O CTL's for control interface */
 	int j;
-	int res = 0;
 	int x;
 	struct dahdi_span *s;
 
@@ -4768,8 +4767,14 @@ static int dahdi_ioctl_shutdown(unsigned long data)
 	for (x = 0; x < s->channels; x++)
 		s->chans[x]->sig = 0;
 
-	if (s->ops->shutdown)
-		res =  s->ops->shutdown(s);
+	if (s->ops->shutdown) {
+		int res = s->ops->shutdown(s);
+		if (res) {
+			put_span(s);
+			return res;
+		}
+	}
+
 	s->flags &= ~DAHDI_FLAG_RUNNING;
 	put_span(s);
 	return 0;
