@@ -4,6 +4,12 @@ FIRM_DIR	:= ../firmware
 
 EXTRA_CFLAGS += -I$(src)/.. $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
 
+# The OCT612X source files are from a vendor drop and we do not want to edit
+# them to make this warning go away. Therefore, turn off the
+# unused-but-set-variable warning for this driver.
+
+EXTRA_CFLAGS += $(call cc-option, -Wno-unused-but-set-variable)
+
 ifeq ($(HOTPLUG_FIRMWARE),yes)
   EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
 endif
