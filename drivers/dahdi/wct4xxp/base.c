@@ -2776,18 +2776,6 @@ static int t4_startup(struct dahdi_span *span)
 			dev_info(&wc->dev->dev, "SPAN %d: Quaternary Sync "
 					"Source\n", span->spanno);
 	}
-#ifdef VPM_SUPPORT
-	if (!alreadyrunning && !wc->vpm) {
-		wait_a_little();
-		t4_vpm400_init(wc);
-		if (!wc->vpm)
-			t4_vpm450_init(wc);
-		wc->dmactrl |= wc->vpm;
-		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
-		if (wc->vpm)
-			set_span_devicetype(wc);
-	}
-#endif
 	if (debug)
 		dev_info(&wc->dev->dev, "Completed startup!\n");
 	clear_bit(T4_IGNORE_LATENCY, &wc->checkflag);
@@ -4839,6 +4827,19 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	t4_pci_out(wc, WC_GPIO, wc->gpio);
 	t4_gpio_setdir(wc, (1 << 17), (1 << 17));
 	t4_gpio_setdir(wc, (0xff), (0xff));
+
+#ifdef VPM_SUPPORT
+	if (!wc->vpm) {
+		wait_a_little();
+		t4_vpm400_init(wc);
+		if (!wc->vpm)
+			t4_vpm450_init(wc);
+		wc->dmactrl |= wc->vpm;
+		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		if (wc->vpm)
+			set_span_devicetype(wc);
+	}
+#endif
 
 	create_sysfs_files(wc);
 	
