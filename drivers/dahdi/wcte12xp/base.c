@@ -829,7 +829,8 @@ static void t1_configure_t1(struct t1 *wc, int lineconfig, int txlevel)
 		break;
 	}
 
-	t1_info(wc, "Span configured for %s/%s\n", framing, line);
+	if (debug)
+		t1_info(wc, "Span configured for %s/%s\n", framing, line);
 }
 
 static void t1_configure_e1(struct t1 *wc, int lineconfig)
