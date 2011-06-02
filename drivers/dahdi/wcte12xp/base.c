@@ -72,7 +72,6 @@ static int vpmnlpmaxsupp = DEFAULT_NLPMAXSUPP;
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 static int t1xxp_clear_maint(struct dahdi_span *span);
-static int check_and_load_vpm(struct t1 *wc);
 
 static const struct dahdi_echocan_features vpm150m_ec_features = {
 	.NLP_automatic = 1,
@@ -935,7 +934,6 @@ static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 	unsigned int i;
 #endif
 
-	check_and_load_vpm(wc);
 	set_span_devicetype(wc);
 
 #ifndef CONFIG_VOICEBUS_ECREFERENCE
@@ -1605,6 +1603,9 @@ static int t1_software_init(struct t1 *wc)
 		wc->chans[x]->pvt = wc;
 		wc->chans[x]->chanpos = x + 1;
 	}
+
+	check_and_load_vpm(wc);
+
 	wc->span.ops = &t1_span_ops;
 	if (dahdi_register(&wc->span, 0)) {
 		t1_info(wc, "Unable to register span with DAHDI\n");
