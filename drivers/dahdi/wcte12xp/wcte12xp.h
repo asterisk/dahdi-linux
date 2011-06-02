@@ -115,6 +115,7 @@ struct t1 {
 	unsigned long bit_flags;
 	unsigned long alarmtimer;
 	unsigned char ledstate;
+	unsigned char vpm_check_count;
 	struct dahdi_span span;						/* Span */
 	struct dahdi_chan *chans[32];					/* Channels */
 	struct dahdi_echocan_state *ec[32];				/* Echocan state for channels */

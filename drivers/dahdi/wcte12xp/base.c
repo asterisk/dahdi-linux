@@ -2145,6 +2145,16 @@ static void vpm_check_func(struct work_struct *work)
 #endif
 	int res;
 	u16 version;
+	const int MAX_CHECKS = 5;
+
+	/* If there is a failed VPM module, do not block dahdi_cfg
+	 * indefinitely. */
+	if (++wc->vpm_check_count > MAX_CHECKS) {
+		set_bit(READY, &wc->bit_flags);
+		wc->vpm_check = MAX_JIFFY_OFFSET;
+		t1_info(wc, "Disabling VPMADT032 Checking.\n");
+		return;
+	}
 
 	if (!test_bit(INITIALIZED, &wc->bit_flags))
 		return;
@@ -2154,6 +2164,7 @@ static void vpm_check_func(struct work_struct *work)
 		if (!res) {
 			set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 			wc->vpm_check = jiffies + HZ*5;
+			wc->vpm_check_count = 0;
 			return;
 		}
 
