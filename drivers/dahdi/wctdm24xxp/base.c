@@ -590,7 +590,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 	int subaddr = card & 0x3;
 
 	/* QRV only use commands relating to the first channel */
-	if ((card & 0x03) && (mod->type == MOD_TYPE_QRV))
+	if ((card & 0x03) && (mod->type == QRV))
 		return;
 
 	if (mod->altcs)
@@ -613,17 +613,17 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 
 	if (!curcmd) {
 		/* If nothing else, use filler */
-		if (mod->type == MOD_TYPE_FXS)
+		if (mod->type == FXS)
 			curcmd = CMD_RD(LINE_STATE);
-		else if (mod->type == MOD_TYPE_FXO)
+		else if (mod->type == FXO)
 			curcmd = CMD_RD(12);
-		else if (mod->type == MOD_TYPE_BRI)
+		else if (mod->type == BRI)
 			curcmd = 0x101010;
-		else if (mod->type == MOD_TYPE_QRV)
+		else if (mod->type == QRV)
 			curcmd = CMD_RD(3);
 	}
 
-	if (mod->type == MOD_TYPE_FXS) {
+	if (mod->type == FXS) {
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = (1 << (subaddr));
 		if (curcmd & __CMD_WR)
 			eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0x7f;
@@ -631,7 +631,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 			eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x80 | ((curcmd >> 8) & 0x7f);
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 
-	} else if (mod->type == MOD_TYPE_FXO) {
+	} else if (mod->type == FXO) {
 		static const int FXO_ADDRS[4] = { 0x00, 0x08, 0x04, 0x0c };
 		int idx = CMD_BYTE(card, 0, mod->altcs);
 		if (curcmd & __CMD_WR)
@@ -641,7 +641,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 		eframe[CMD_BYTE(card, 1, mod->altcs)] = (curcmd >> 8) & 0xff;
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 
-	} else if (mod->type == MOD_TYPE_FXSINIT) {
+	} else if (mod->type == FXSINIT) {
 		/* Special case, we initialize the FXS's into the three-byte command mode then
 		   switch to the regular mode.  To send it into thee byte mode, treat the path as
 		   6 two-byte commands and in the last one we initialize register 0 to 0x80. All modules
@@ -653,7 +653,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 		else
 			eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x00;
 
-	} else if (mod->type == MOD_TYPE_BRI) {
+	} else if (mod->type == BRI) {
 
 		if (unlikely((curcmd != 0x101010) && (curcmd & 0x1010) == 0x1010)) /* b400m CPLD */
 			eframe[CMD_BYTE(card, 0, 0)] = 0x55;
@@ -662,7 +662,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 		eframe[CMD_BYTE(card, 1, 0)] = (curcmd >> 8) & 0xff;
 		eframe[CMD_BYTE(card, 2, 0)] = curcmd & 0xff;
 
-	} else if (mod->type == MOD_TYPE_QRV) {
+	} else if (mod->type == QRV) {
  
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x00;
 		if (!curcmd) {
@@ -675,7 +675,7 @@ static inline void cmd_dequeue(struct wctdm *wc, unsigned char *eframe, int card
 				eframe[CMD_BYTE(card, 1, mod->altcs)] = 0xc0 | ((curcmd >> 8) & 0x3f);
 			eframe[CMD_BYTE(card, 2, mod->altcs)] = curcmd & 0xff;
 		}
-	} else if (mod->type == MOD_TYPE_NONE) {
+	} else if (mod->type == NONE) {
 		eframe[CMD_BYTE(card, 0, mod->altcs)] = 0x10;
 		eframe[CMD_BYTE(card, 1, mod->altcs)] = 0x10;
 		eframe[CMD_BYTE(card, 2, mod->altcs)] = 0x10;
@@ -732,7 +732,7 @@ static inline void cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 	int x;
 
 	/* QRV modules only use commands relating to the first channel */
-	if ((card & 0x03) && (mod->type == MOD_TYPE_QRV))
+	if ((card & 0x03) && (mod->type == QRV))
 		return;
 
 	/* Skip audio */
@@ -772,28 +772,28 @@ static inline void cmd_checkisr(struct wctdm *wc, int card)
 		if (mod->sethook) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = mod->sethook;
 			mod->sethook = 0;
-		} else if (mod->type == MOD_TYPE_FXS) {
+		} else if (mod->type == FXS) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(68);	/* Hook state */
-		} else if (mod->type == MOD_TYPE_FXO) {
+		} else if (mod->type == FXO) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(5);	/* Hook/Ring state */
-		} else if (mod->type == MOD_TYPE_QRV) {
+		} else if (mod->type == QRV) {
 			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 0] = CMD_RD(3);	/* COR/CTCSS state */
-		} else if (mod->type == MOD_TYPE_BRI) {
+		} else if (mod->type == BRI) {
 			mod->cmdq.cmds[USER_COMMANDS + 0] = wctdm_bri_checkisr(wc, card, 0);
 		}
 	}
 	if (!mod->cmdq.cmds[USER_COMMANDS + 1]) {
-		if (mod->type == MOD_TYPE_FXS) {
+		if (mod->type == FXS) {
 #ifdef PAQ_DEBUG
 			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(19);	/* Transistor interrupts */
 #else
 			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(LINE_STATE);
 #endif
-		} else if (mod->type == MOD_TYPE_FXO) {
+		} else if (mod->type == FXO) {
 			mod->cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(29);	/* Battery */
-		} else if (mod->type == MOD_TYPE_QRV) {
+		} else if (mod->type == QRV) {
 			wc->mods[card & 0xfc].cmdq.cmds[USER_COMMANDS + 1] = CMD_RD(3);	/* Battery */
-		} else if (mod->type == MOD_TYPE_BRI) {
+		} else if (mod->type == BRI) {
 			mod->cmdq.cmds[USER_COMMANDS + 1] = wctdm_bri_checkisr(wc, card, 1);
 		}
 	}
@@ -925,8 +925,8 @@ wctdm_setreg_full(struct wctdm *wc, int card, int addr, int val, int inisr)
 	const unsigned int cmd = CMD_WR(addr, val);
 
 	/* QRV and BRI cards are only addressed at their first "port" */
-	if ((card & 0x03) && ((wc->mods[card].type ==  MOD_TYPE_QRV) ||
-	    (wc->mods[card].type ==  MOD_TYPE_BRI)))
+	if ((card & 0x03) && ((wc->mods[card].type ==  QRV) ||
+	    (wc->mods[card].type ==  BRI)))
 		return 0;
 
 	if (inisr) {
@@ -977,7 +977,7 @@ int wctdm_getreg(struct wctdm *wc, int card, int addr)
 	int ret;
 
 	/* if a QRV card, use only its first channel */  
-	if (wc->mods[card].type ==  MOD_TYPE_QRV) {
+	if (wc->mods[card].type ==  QRV) {
 		if (card & 3)
 			return 0;
 	}
@@ -1004,7 +1004,7 @@ static inline void cmd_retransmit(struct wctdm *wc)
 	for (x=0;x<MAX_COMMANDS;x++) {
 		for (y = 0; y < wc->mods_per_board; y++) {
 			struct wctdm_module *const mod = &wc->mods[y];
-			if (mod->type == MOD_TYPE_BRI)
+			if (mod->type == BRI)
 				continue;
 			if (!(mod->cmdq.cmds[x] & __CMD_FIN))
 				mod->cmdq.cmds[x] &= ~(__CMD_TX | (0xff << 24));
@@ -2030,14 +2030,16 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 		spin_unlock(&wc->reglock);
 
 		switch (wc->mods[x].type) {
-		case MOD_TYPE_FXS:
+		case FXS:
 			wctdm_isr_misc_fxs(wc, x);
 			break;
-		case MOD_TYPE_FXO:
+		case FXO:
 			wctdm_voicedaa_check_hook(wc, x);
 			break;
-		case MOD_TYPE_QRV:
+		case QRV:
 			wctdm_qrvdri_check_hook(wc, x);
+			break;
+		default:
 			break;
 		}
 	}
@@ -2383,7 +2385,7 @@ static int wctdm_proslic_calibrate(struct wctdm *wc, int card)
  *******************************************************************/
 static int wctdm_set_hwgain(struct wctdm *wc, int card, __s32 gain, __u32 tx)
 {
-	if (!(wc->mods[card].type == MOD_TYPE_FXO)) {
+	if (!(wc->mods[card].type == FXO)) {
 		dev_notice(&wc->vb.pdev->dev, "Cannot adjust gain.  Unsupported module type!\n");
 		return -1;
 	}
@@ -2503,17 +2505,17 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 	unsigned long flags;
 	long newjiffies;
 
-	if ((wc->mods[card & 0xfc].type == MOD_TYPE_QRV) ||
-	    (wc->mods[card & 0xfc].type == MOD_TYPE_BRI))
+	if ((wc->mods[card & 0xfc].type == QRV) ||
+	    (wc->mods[card & 0xfc].type == BRI))
 		return -2;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->mods[card].type = MOD_TYPE_NONE;
+	wc->mods[card].type = NONE;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->mods[card].type = MOD_TYPE_FXO;
+	wc->mods[card].type = FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(100);
 
@@ -2614,11 +2616,11 @@ static int wctdm_init_proslic(struct wctdm *wc, int card, int fast, int manual, 
 	int x;
 	int fxsmode=0;
 
-	if (wc->mods[card & 0xfc].type == MOD_TYPE_QRV)
+	if (wc->mods[card & 0xfc].type == QRV)
 		return -2;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	mod->type = MOD_TYPE_FXS;
+	mod->type = FXS;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	msleep(100);
@@ -2875,11 +2877,11 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 {
 	unsigned char x,y;
 
-	if (MOD_TYPE_BRI == wc->mods[card & 0xfc].type)
+	if (BRI == wc->mods[card & 0xfc].type)
 		return -2;
 
 	/* have to set this, at least for now */
-	wc->mods[card].type = MOD_TYPE_QRV;
+	wc->mods[card].type = QRV;
 	if (!(card & 3)) /* if at base of card, reset and write it */
 	{
 		wctdm_setreg(wc,card,0,0x80); 
@@ -2893,11 +2895,12 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 		wc->mods[card].mod.qrv.txgain = wc->mods[card + 1].mod.qrv.txgain = 3599;
 		wc->mods[card].mod.qrv.rxgain = wc->mods[card + 1].mod.qrv.rxgain = 1199;
 	} else { /* channel is on same card as base, no need to test */
-		if (wc->mods[card & 0x7c].type == MOD_TYPE_QRV) {
+		if (wc->mods[card & 0x7c].type == QRV) {
 			/* only lower 2 are valid */
-			if (!(card & 2)) return 0;
+			if (!(card & 2))
+				return 0;
 		}
-		wc->mods[card].type = MOD_TYPE_NONE;
+		wc->mods[card].type = NONE;
 		return 1;
 	}
 	x = wctdm_getreg(wc,card,0);
@@ -2905,7 +2908,7 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 	/* if not a QRV card, return as such */
 	if ((x != 0x55) || (y != 0x69))
 	{
-		wc->mods[card].type = MOD_TYPE_NONE;
+		wc->mods[card].type = NONE;
 		return 1;
 	}
 	for (x = 0; x < 0x30; x++)
@@ -3069,7 +3072,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 	switch (cmd) {
 	case DAHDI_ONHOOKTRANSFER:
-		if (mod->type != MOD_TYPE_FXS)
+		if (mod->type != FXS)
 			return -EINVAL;
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
@@ -3104,7 +3107,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		}
 		break;
 	case DAHDI_VMWI_CONFIG:
-		if (mod->type != MOD_TYPE_FXS)
+		if (mod->type != FXS)
 			return -EINVAL;
 		if (copy_from_user(&(fxs->vmwisetting),
 				   (__user void *)data,
@@ -3113,7 +3116,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		set_vmwi(wc, chan->chanpos - 1);
 		break;
 	case DAHDI_VMWI:
-		if (mod->type != MOD_TYPE_FXS)
+		if (mod->type != FXS)
 			return -EINVAL;
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
@@ -3123,11 +3126,11 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		set_vmwi(wc, chan->chanpos - 1);
 		break;
 	case WCTDM_GET_STATS:
-		if (mod->type == MOD_TYPE_FXS) {
+		if (mod->type == FXS) {
 			stats.tipvolt = wctdm_getreg(wc, chan->chanpos - 1, 80) * -376;
 			stats.ringvolt = wctdm_getreg(wc, chan->chanpos - 1, 81) * -376;
 			stats.batvolt = wctdm_getreg(wc, chan->chanpos - 1, 82) * -376;
-		} else if (mod->type == MOD_TYPE_FXO) {
+		} else if (mod->type == FXO) {
 			stats.tipvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
 			stats.ringvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
 			stats.batvolt = (signed char)wctdm_getreg(wc, chan->chanpos - 1, 29) * 1000;
@@ -3142,9 +3145,9 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (!regs)
 			return -ENOMEM;
 
-		if (mod->type == MOD_TYPE_FXS)
+		if (mod->type == FXS)
 			wctdm24xxp_get_fxs_regs(wc, chan, regs);
-		else if (mod->type == MOD_TYPE_QRV)
+		else if (mod->type == QRV)
 			wctdm24xxp_get_qrv_regs(wc, chan, regs);
 		else
 			wctdm24xxp_get_fxo_regs(wc, chan, regs);
@@ -3161,7 +3164,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (copy_from_user(&regop, (__user void *) data, sizeof(regop)))
 			return -EFAULT;
 		if (regop.indirect) {
-			if (mod->type != MOD_TYPE_FXS)
+			if (mod->type != FXS)
 				return -EINVAL;
 			dev_info(&wc->vb.pdev->dev, "Setting indirect %d to 0x%04x on %d\n", regop.reg, regop.val, chan->chanpos);
 			wctdm_proslic_setreg_indirect(wc, chan->chanpos - 1, regop.reg, regop.val);
@@ -3180,7 +3183,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		if (copy_from_user(&echoregs, (__user void *) data, sizeof(echoregs)))
 			return -EFAULT;
 
-		if (mod->type == MOD_TYPE_FXO) {
+		if (mod->type == FXO) {
 			/* Set the ACIM register */
 			wctdm_setreg(wc, chan->chanpos - 1, 30, echoregs.acim);
 
@@ -3220,7 +3223,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 	case DAHDI_SETPOLARITY:
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
-		if (mod->type != MOD_TYPE_FXS)
+		if (mod->type != FXS)
 			return -EINVAL;
 		/* Can't change polarity while ringing or when open */
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_RINGING) ||
@@ -3271,7 +3274,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		}
 		break;
 	case DAHDI_RADIO_GETPARAM:
-		if (mod->type != MOD_TYPE_QRV)
+		if (mod->type != QRV)
 			return -ENOTTY;
 		if (copy_from_user(&stack.p, (__user void *) data, sizeof(stack.p)))
 			return -EFAULT;
@@ -3323,7 +3326,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		    return -EFAULT;
 		break;
 	case DAHDI_RADIO_SETPARAM:
-		if (mod->type != MOD_TYPE_QRV)
+		if (mod->type != QRV)
 			return -ENOTTY;
 		if (copy_from_user(&stack.p, (__user void *) data, sizeof(stack.p)))
 			return -EFAULT;
@@ -3415,7 +3418,7 @@ static int wctdm_open(struct dahdi_chan *chan)
 	if (wc->dead)
 		return -ENODEV;
 #endif
-	if (mod->type == MOD_TYPE_FXO) {
+	if (mod->type == FXO) {
 		/* Reset the mwi indicators */
 		spin_lock_irqsave(&wc->reglock, flags);
 		mod->mod.fxo.neonmwi_debounce = 0;
@@ -3449,11 +3452,11 @@ static int wctdm_close(struct dahdi_chan *chan)
 	wc = chan->pvt;
 	for (x = 0; x < wc->mods_per_board; x++) {
 		struct wctdm_module *const mod = &wc->mods[x];
-		if (MOD_TYPE_FXS == mod->type) {
+		if (FXS == mod->type) {
 			mod->mod.fxs.idletxhookstate =
 				POLARITY_XOR(x) ? SLIC_LF_ACTIVE_REV :
 						  SLIC_LF_ACTIVE_FWD;
-		} else if (MOD_TYPE_QRV == mod->type) {
+		} else if (QRV == mod->type) {
 			int qrvcard = x & 0xfc;
 
 			mod->mod.qrv.hook = 0;
@@ -3482,7 +3485,7 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 	int reg = 0;
 	struct wctdm_module *const mod = &wc->mods[chan->chanpos - 1];
 
-	if (mod->type == MOD_TYPE_QRV) {
+	if (mod->type == QRV) {
 		const int qrvcard = (chan->chanpos - 1) & 0xfc;
 
 		switch(txsig) {
@@ -3503,7 +3506,7 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 			reg |= 0x10;
 		wc->mods[qrvcard].sethook = CMD_WR(3, reg);
 		/* wctdm_setreg(wc, qrvcard, 3, reg); */
-	} else if (mod->type == MOD_TYPE_FXO) {
+	} else if (mod->type == FXO) {
 		switch(txsig) {
 		case DAHDI_TXSIG_START:
 		case DAHDI_TXSIG_OFFHOOK:
@@ -3519,7 +3522,7 @@ static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 		default:
 			dev_notice(&wc->vb.pdev->dev, "wctdm24xxp: Can't set tx state to %d\n", txsig);
 		}
-	} else if (mod->type == MOD_TYPE_FXS) {
+	} else if (mod->type == FXS) {
 		wctdm_fxs_hooksig(wc, chan->chanpos - 1, txsig);
 	}
 	return 0;
@@ -3534,14 +3537,14 @@ static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 		return;
 	}
 	type = wc->mods[srccard].type;
-	if ((type == MOD_TYPE_FXS) || (type == MOD_TYPE_FXO)) {
+	if ((type == FXS) || (type == FXO)) {
 		dev_notice(&wc->vb.pdev->dev,
 			   "wctdm_dacs_connect: Unsupported modtype for "
 			   "card %d\n", srccard);
 		return;
 	}
 	type = wc->mods[dstcard].type;
-	if ((type != MOD_TYPE_FXS) && (type != MOD_TYPE_FXO)) {
+	if ((type != FXS) && (type != FXO)) {
 		dev_notice(&wc->vb.pdev->dev,
 			   "wctdm_dacs_connect: Unsupported modtype "
 			   "for card %d\n", dstcard);
@@ -3552,22 +3555,22 @@ static void wctdm_dacs_connect(struct wctdm *wc, int srccard, int dstcard)
 	wc->mods[dstcard].dacssrc = srccard;
 
 	/* make srccard transmit to srccard+24 on the TDM bus */
-	if (wc->mods[srccard].type == MOD_TYPE_FXS) {
+	if (wc->mods[srccard].type == FXS) {
 		/* proslic */
 		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_LSB, ((srccard+24) * 8) & 0xff); 
 		wctdm_setreg(wc, srccard, PCM_XMIT_START_COUNT_MSB, ((srccard+24) * 8) >> 8);
-	} else if (wc->mods[srccard].type == MOD_TYPE_FXO) {
+	} else if (wc->mods[srccard].type == FXO) {
 		/* daa */
 		wctdm_setreg(wc, srccard, 34, ((srccard+24) * 8) & 0xff); /* TX */
 		wctdm_setreg(wc, srccard, 35, ((srccard+24) * 8) >> 8);   /* TX */
 	}
 
 	/* have dstcard receive from srccard+24 on the TDM bus */
-	if (wc->mods[dstcard].type == MOD_TYPE_FXS) {
+	if (wc->mods[dstcard].type == FXS) {
 		/* proslic */
     	wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_LSB,  ((srccard+24) * 8) & 0xff);
 		wctdm_setreg(wc, dstcard, PCM_RCV_START_COUNT_MSB,  ((srccard+24) * 8) >> 8);
-	} else if (wc->mods[dstcard].type == MOD_TYPE_FXO) {
+	} else if (wc->mods[dstcard].type == FXO) {
 		/* daa */
 		wctdm_setreg(wc, dstcard, 36, ((srccard+24) * 8) & 0xff); /* RX */
 		wctdm_setreg(wc, dstcard, 37, ((srccard+24) * 8) >> 8);   /* RX */
@@ -3587,12 +3590,12 @@ static void wctdm_dacs_disconnect(struct wctdm *wc, int card)
 		}
 
 		/* restore TX (source card) */
-		if (wc->mods[mod->dacssrc].type == MOD_TYPE_FXS) {
+		if (wc->mods[mod->dacssrc].type == FXS) {
 			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_LSB,
 				     (wc->mods[card].dacssrc * 8) & 0xff);
 			wctdm_setreg(wc, mod->dacssrc, PCM_XMIT_START_COUNT_MSB,
 				     (wc->mods[card].dacssrc * 8) >> 8);
-		} else if (wc->mods[mod->dacssrc].type == MOD_TYPE_FXO) {
+		} else if (wc->mods[mod->dacssrc].type == FXO) {
 			wctdm_setreg(wc, card, 34, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, 35, (card * 8) >> 8);
 		} else {
@@ -3600,10 +3603,10 @@ static void wctdm_dacs_disconnect(struct wctdm *wc, int card)
 		}
 
 		/* restore RX (this card) */
-		if (MOD_TYPE_FXS == mod->type) {
+		if (FXS == mod->type) {
 			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_LSB, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, PCM_RCV_START_COUNT_MSB, (card * 8) >> 8);
-		} else if (MOD_TYPE_FXO == mod->type) {
+		} else if (FXO == mod->type) {
 			wctdm_setreg(wc, card, 36, (card * 8) & 0xff);
 			wctdm_setreg(wc, card, 37, (card * 8) >> 8);
 		} else {
@@ -3868,7 +3871,7 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 				 "s->chans[%d]=%p\n", x, y, mod->type,
 				 y, s->chans[y]);
 		}
-		if (mod->type == MOD_TYPE_FXO) {
+		if (mod->type == FXO) {
 			int val;
 			s->chans[y++]->sigcap = DAHDI_SIG_FXSKS | DAHDI_SIG_FXSLS | DAHDI_SIG_SF | DAHDI_SIG_CLEAR;
 			val = should_set_alaw(wc) ? 0x20 : 0x28;
@@ -3876,11 +3879,11 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 			val = (digitalloopback) ? 0x30 : val;
 #endif
 			wctdm_setreg(wc, x, 33, val);
-		} else if (mod->type == MOD_TYPE_FXS) {
+		} else if (mod->type == FXS) {
 			s->chans[y++]->sigcap = DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS | DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
 			wctdm_setreg(wc, x, 1,
 				     (should_set_alaw(wc) ? 0x20 : 0x28));
-		} else if (mod->type == MOD_TYPE_QRV) {
+		} else if (mod->type == QRV) {
 			s->chans[y++]->sigcap = DAHDI_SIG_SF | DAHDI_SIG_EM | DAHDI_SIG_CLEAR;
 		} else {
 			s->chans[y++]->sigcap = 0;
@@ -3971,7 +3974,7 @@ static int wctdm_identify_modules(struct wctdm *wc)
  * The FXS modules come out of reset in a two-byte, non-chainable SPI mode.
  * This is currently incompatible with how we do things, so we need to set
  * them to a chained, 3-byte command mode.  This is done by setting the module
- * type to MOD_TYPE_FXSINIT for a little while so that cmd_dequeue will
+ * type to FXSINIT for a little while so that cmd_dequeue will
  * initialize the SLIC into the appropriate mode.
  *
  * This "go to 3-byte chained mode" command, however, wreaks havoc with HybridBRI.
@@ -3979,13 +3982,13 @@ static int wctdm_identify_modules(struct wctdm *wc)
  * The solution:
  * Since HybridBRI is only designed to work in an 8-port card, and since the single-port
  * modules "show up" in SPI slots >= 8 in these cards, we only set SPI slots 8-23 to
- * MOD_TYPE_FXSINIT.  The HybridBRI will never see the command that causes it to freak
+ * FXSINIT.  The HybridBRI will never see the command that causes it to freak
  * out and the single-port FXS cards get what they need so that when we probe with altcs
  * we see them.
  */
 
 	for (x = 0; x < wc->mods_per_board; x++)
-		wc->mods[x].type = MOD_TYPE_FXSINIT;
+		wc->mods[x].type = FXSINIT;
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
@@ -4051,13 +4054,13 @@ retry:
 						wc->mods[x+2].altcs = 3;
 					}
 
-					mod->type = MOD_TYPE_FXSINIT;
+					mod->type = FXSINIT;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
 					msleep(20);
 
 					spin_lock_irqsave(&wc->reglock, flags);
-					mod->type = MOD_TYPE_FXS;
+					mod->type = FXS;
 					spin_unlock_irqrestore(&wc->reglock, flags);
 
 					if (debug & DEBUG_CARD)
@@ -4068,7 +4071,7 @@ retry:
 					dev_info(&wc->vb.pdev->dev,
 						 "Port %d: Not installed\n",
 						 x + 1);
-					mod->type = MOD_TYPE_NONE;
+					mod->type = NONE;
 				}
 			}
 		}
@@ -4627,7 +4630,7 @@ static void wctdm_set_tdm410_leds(struct wctdm *wc)
 	wc->tdm410leds = 0; /* all on by default */
 	for (i = 0; i < wc->desc->ports; ++i) {
 		/* Turn off the LED for any module that isn't installed. */
-		if (MOD_TYPE_NONE == wc->mods[i].type)
+		if (NONE == wc->mods[i].type)
 			wc->tdm410leds |= (1 << i);
 	}
 }
@@ -4793,10 +4796,10 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		struct wctdm_module *const mod = &wc->mods[i];
 		struct b400m *b4;
 
-		if (mod->type == MOD_TYPE_NONE) {
+		if (mod->type == NONE) {
 			++curspan;
 			continue;
-		} else if (mod->type == MOD_TYPE_BRI) {
+		} else if (mod->type == BRI) {
 			if (!is_hx8(wc)) {
 				dev_info(&wc->vb.pdev->dev, "Digital modules "
 					"detected on a non-hybrid card. "
@@ -4856,13 +4859,13 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	for (i = 0; i < wc->mods_per_board; i++) {
 		struct wctdm_module *const mod = &wc->mods[i];
 		switch (mod->type) {
-		case MOD_TYPE_FXS:
+		case FXS:
 			wctdm_proslic_set_ts(wc, i, (digimods * 12) + i);
 			break;
-		case MOD_TYPE_FXO:
+		case FXO:
 			wctdm_voicedaa_set_ts(wc, i, (digimods * 12) + i);
 			break;
-		case MOD_TYPE_QRV:
+		case QRV:
 			wctdm_qrvdri_set_ts(wc, i, (digimods * 12) + i);
 			break;
 		default:
@@ -4982,7 +4985,7 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 
 		/* shut down any BRI modules */
 		for (i = 0; i < wc->mods_per_board; i += 4) {
-			if (wc->mods[i].type == MOD_TYPE_BRI)
+			if (wc->mods[i].type == BRI)
 				wctdm_unload_b400m(wc, i);
 		}
 

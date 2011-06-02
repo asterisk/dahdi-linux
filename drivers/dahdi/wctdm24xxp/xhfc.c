@@ -2091,7 +2091,7 @@ static void b400m_enable_workqueues(struct wctdm *wc)
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (i = 0; i < wc->mods_per_board; i += 4) {
-		if (wc->mods[i].type == MOD_TYPE_BRI)
+		if (wc->mods[i].type == BRI)
 			b4s[numb4s++] = wc->mods[i].mod.bri;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -2111,7 +2111,7 @@ static void b400m_disable_workqueues(struct wctdm *wc)
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (i = 0; i < wc->mods_per_board; i += 4) {
-		if (wc->mods[i].type == MOD_TYPE_BRI)
+		if (wc->mods[i].type == BRI)
 			b4s[numb4s++] = wc->mods[i].mod.bri;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -2526,7 +2526,6 @@ int wctdm_bri_checkisr(struct wctdm *wc, int modpos, int offset)
 		}
 		b4->ticks++;
 	}
-
 	return ret;
 }
 
@@ -2584,7 +2583,7 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	/* which B400M in the system is this one? count all of them found so
 	 * far */
 	for (x = 0; x < modpos; x += 4) {
-		if (wc->mods[x].type == MOD_TYPE_BRI)
+		if (wc->mods[x].type == BRI)
 			++b4->b400m_no;
 	}
 
@@ -2642,32 +2641,36 @@ int wctdm_init_b400m(struct wctdm *wc, int card)
 	int ret = 0;
 	unsigned long flags;
 
-	if (wc->mods[card & 0xfc].type == MOD_TYPE_QRV)
+	if (wc->mods[card & 0xfc].type == QRV)
 		return -2;
 
 	if (!(card & 0x03)) { /* only init if at lowest port in module */
 		spin_lock_irqsave(&wc->reglock, flags);
-		wc->mods[card + 0].type = MOD_TYPE_BRI;
-		wc->mods[card + 1].type = MOD_TYPE_BRI;
-		wc->mods[card + 2].type = MOD_TYPE_BRI;
-		wc->mods[card + 3].type = MOD_TYPE_BRI;
+		wc->mods[card + 0].type = BRI;
+		wc->mods[card + 0].mod.bri = NULL;
+		wc->mods[card + 1].type = BRI;
+		wc->mods[card + 1].mod.bri = NULL;
+		wc->mods[card + 2].type = BRI;
+		wc->mods[card + 2].mod.bri = NULL;
+		wc->mods[card + 3].type = BRI;
+		wc->mods[card + 3].mod.bri = NULL;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		msleep(20);
 
 		if (b400m_probe(wc, card) != 0) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			wc->mods[card + 0].type = MOD_TYPE_NONE;
-			wc->mods[card + 1].type = MOD_TYPE_NONE;
-			wc->mods[card + 2].type = MOD_TYPE_NONE;
-			wc->mods[card + 3].type = MOD_TYPE_NONE;
+			wc->mods[card + 0].type = NONE;
+			wc->mods[card + 1].type = NONE;
+			wc->mods[card + 2].type = NONE;
+			wc->mods[card + 3].type = NONE;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 			ret = -2;
 		}
 	} else {	/* for the "sub-cards" */
-		if (wc->mods[card & 0xfc].type == MOD_TYPE_BRI) {
+		if (wc->mods[card & 0xfc].type == BRI) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			wc->mods[card].type = MOD_TYPE_BRI;
+			wc->mods[card].type = BRI;
 			wc->mods[card].mod.bri = wc->mods[card & 0xfc].mod.bri;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 		} else {
@@ -2746,12 +2749,12 @@ void wctdm_unload_b400m(struct wctdm *wc, int card)
 
 		destroy_workqueue(b4->xhfc_ws);
 
-		/* Set these to MOD_TYPE_NONE to ensure that our checkisr
+		/* Set these to NONE to ensure that our checkisr
 		 * routines are not entered */
-		wc->mods[card].type = MOD_TYPE_NONE;
-		wc->mods[card + 1].type = MOD_TYPE_NONE;
-		wc->mods[card + 2].type = MOD_TYPE_NONE;
-		wc->mods[card + 3].type = MOD_TYPE_NONE;
+		wc->mods[card].type = NONE;
+		wc->mods[card + 1].type = NONE;
+		wc->mods[card + 2].type = NONE;
+		wc->mods[card + 3].type = NONE;
 
 		wc->mods[card].mod.bri = NULL;
 		wc->mods[card + 1].mod.bri = NULL;

@@ -59,13 +59,6 @@
 
 #define MAX_ALARMS 10
 
-#define MOD_TYPE_NONE		0
-#define MOD_TYPE_FXS		1
-#define MOD_TYPE_FXO		2
-#define MOD_TYPE_FXSINIT	3
-#define MOD_TYPE_QRV		5
-#define MOD_TYPE_BRI		7
-
 #define MINPEGTIME	10 * 8		/* 30 ms peak to peak gets us no more than 100 Hz */
 #define PEGTIME		50 * 8		/* 50ms peak to peak gets us rings of 10 Hz or more */
 #define PEGCOUNT	5		/* 5 cycles of pegging means RING */
@@ -212,6 +205,15 @@ struct qrv {
 	signed short txgain;
 };
 
+enum module_type {
+	NONE = 0,
+	FXS,
+	FXO,
+	FXSINIT,
+	QRV,
+	BRI,
+};
+
 struct wctdm_module {
 	union {
 		struct fxo fxo;
@@ -222,7 +224,7 @@ struct wctdm_module {
 
 	struct cmdq cmdq;
 
-	int type; /* type of module (FXO/FXS/QRV/etc.) */
+	enum module_type type;
 	int sethook; /* pending hook state command */
 	int dacssrc;
 	int flags;   /* bitmap of board-specific + module-specific flags */
