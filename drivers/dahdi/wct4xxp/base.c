@@ -630,7 +630,8 @@ static inline unsigned int t4_pci_in(struct t4 *wc, const unsigned int addr)
 	return ret;
 }
 
-static inline unsigned int __t4_framer_in(struct t4 *wc, int unit, const unsigned int addr)
+static unsigned int __t4_framer_in(struct t4 *wc, int unit,
+				   const unsigned int addr)
 {
 	unsigned int ret;
 	unit &= 0x3;
@@ -656,7 +657,8 @@ static inline unsigned int __t4_framer_in(struct t4 *wc, int unit, const unsigne
 	return ret & 0xff;
 }
 
-static inline unsigned int t4_framer_in(struct t4 *wc, int unit, const unsigned int addr)
+static unsigned int
+t4_framer_in(struct t4 *wc, int unit, const unsigned int addr)
 {
 	unsigned long flags;
 	unsigned int ret;
@@ -667,7 +669,8 @@ static inline unsigned int t4_framer_in(struct t4 *wc, int unit, const unsigned 
 
 }
 
-static inline void __t4_framer_out(struct t4 *wc, int unit, const unsigned int addr, const unsigned int value)
+static void __t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
+			    const unsigned int value)
 {
 	unit &= 0x3;
 	if (unlikely(debug & DEBUG_REGS))
@@ -697,7 +700,8 @@ static inline void __t4_framer_out(struct t4 *wc, int unit, const unsigned int a
 #endif	
 }
 
-static inline void t4_framer_out(struct t4 *wc, int unit, const unsigned int addr, const unsigned int value)
+static void t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
+			  const unsigned int value)
 {
 	unsigned long flags;
 	spin_lock_irqsave(&wc->reglock, flags);
@@ -1516,6 +1520,21 @@ static void t4_hdlc_hard_xmit(struct dahdi_chan *chan)
 		t4_hdlc_xmit_fifo(wc, span, ts);
 }
 
+/**
+ * t4_set_framer_bits - Atomically set bits in a framer register.
+ */
+static void t4_set_framer_bits(struct t4 *wc, unsigned int spanno,
+			       unsigned int const addr, u16 bits)
+{
+	unsigned long flags;
+	unsigned int reg;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	reg = __t4_framer_in(wc, spanno, addr);
+	__t4_framer_out(wc, spanno, addr, (reg | bits));
+	spin_unlock_irqrestore(&wc->reglock, flags);
+}
+
 static int t4_maint(struct dahdi_span *span, int cmd)
 {
 	struct t4_span *ts = container_of(span, struct t4_span, span);
@@ -1533,22 +1552,19 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			dev_info(&wc->dev->dev,
 				 "Turning on local loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, LIM0_T);
-			t4_framer_out(wc, span->offset, LIM0_T, (reg|LIM0_LL));
+			t4_set_framer_bits(wc, span->offset, LIM0_T, LIM0_LL);
 			break;
 		case DAHDI_MAINT_NETWORKLINELOOP:
 			dev_info(&wc->dev->dev,
 				 "Turning on network line loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, LIM1_T);
-			t4_framer_out(wc, span->offset, LIM1_T, (reg|LIM1_RL));
+			t4_set_framer_bits(wc, span->offset, LIM1_T, LIM1_RL);
 			break;
 		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
 			dev_info(&wc->dev->dev,
 				 "Turning on network payload loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, FMR2_T);
-			t4_framer_out(wc, span->offset, FMR2_T, (reg|FMR2_PLB));
+			t4_set_framer_bits(wc, span->offset, FMR2_T, FMR2_PLB);
 			break;
 		case DAHDI_MAINT_LOOPUP:
 		case DAHDI_MAINT_LOOPDOWN:
@@ -1578,8 +1594,7 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			break;
 		case DAHDI_MAINT_ALARM_SIM:
 			dev_info(&wc->dev->dev, "Invoking alarm state");
-			reg = t4_framer_in(wc, span->offset, FMR0);
-			t4_framer_out(wc, span->offset, FMR0, (reg|FMR0_SIM));
+			t4_set_framer_bits(wc, span->offset, FMR0, FMR0_SIM);
 			break;
 		default:
 			dev_info(&wc->dev->dev,
@@ -1596,39 +1611,30 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			dev_info(&wc->dev->dev,
 				 "Turning on local loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, LIM0_T);
-			t4_framer_out(wc, span->offset, LIM0_T, (reg|LIM0_LL));
+			t4_set_framer_bits(wc, span->offset, LIM0_T, LIM0_LL);
 			break;
 		case DAHDI_MAINT_NETWORKLINELOOP:
 			dev_info(&wc->dev->dev,
 				 "Turning on network line loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, LIM1_T);
-			t4_framer_out(wc, span->offset, LIM1_T, (reg|LIM1_RL));
+			t4_set_framer_bits(wc, span->offset, LIM1_T, LIM1_RL);
 			break;
 		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
 			dev_info(&wc->dev->dev,
 				 "Turning on network payload loopback\n");
 			t4_clear_maint(span);
-			reg = t4_framer_in(wc, span->offset, FMR2_T);
-			t4_framer_out(wc, span->offset, FMR2_T, (reg|FMR2_PLB));
+			t4_set_framer_bits(wc, span->offset, FMR2_T, FMR2_PLB);
 			break;
 		case DAHDI_MAINT_LOOPUP:
 			dev_info(&wc->dev->dev, "Transmitting loopup code\n");
 			t4_clear_maint(span);
-			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t4_framer_in(wc, span->offset, FMR5);
-			__t4_framer_out(wc, span->offset, FMR5, (reg|FMR5_XLU));
-			spin_unlock_irqrestore(&wc->reglock, flags);
+			t4_set_framer_bits(wc, span->offset, FMR5, FMR5_XLU);
 			ts->span.maintstat = DAHDI_MAINT_REMOTELOOP;
 			break;
 		case DAHDI_MAINT_LOOPDOWN:
 			dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
 			t4_clear_maint(span);
-			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t4_framer_in(wc, span->offset, FMR5);
-			__t4_framer_out(wc, span->offset, FMR5, (reg|FMR5_XLD));
-			spin_unlock_irqrestore(&wc->reglock, flags);
+			t4_set_framer_bits(wc, span->offset, FMR5, FMR5_XLD);
 			ts->span.maintstat = DAHDI_MAINT_NONE;
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
@@ -1672,13 +1678,13 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			t4_reset_counters(span);
 			break;
 		case DAHDI_MAINT_ALARM_SIM:
-			reg = t4_framer_in(wc, span->offset, FMR0);
+			spin_lock_irqsave(&wc->reglock, flags);
+			reg = __t4_framer_in(wc, span->offset, FMR0);
 
 			/*
 			 * The alarm simulation state machine requires us to
 			 * bring this bit up and down for at least 1 clock cycle
 			 */
-			spin_lock_irqsave(&wc->reglock, flags);
 			__t4_framer_out(wc, span->offset,
 					FMR0, (reg | FMR0_SIM));
 			udelay(1);
@@ -1698,8 +1704,8 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			dev_info(&wc->dev->dev, "Unknown T1 maint command:%d\n",
 									cmd);
 			break;
-	   }
-    }
+		}
+	}
 	return 0;
 }
 
