@@ -1381,9 +1381,16 @@ typedef u32 __bitwise pm_message_t;
 #endif
 
 #ifndef DEFINE_MUTEX
-#define DEFINE_MUTEX DEFINE_SEMAPHORE
-#define mutex_lock(_x) down(_x)
-#define mutex_unlock(_x) up(_x)
+struct mutex {
+	struct semaphore sem;
+};
+#define DEFINE_MUTEX(name)					\
+	struct mutex name = {					\
+		.sem = __SEMAPHORE_INITIALIZER((name).sem, 1),	\
+	}
+#define mutex_lock(_x) down(&(_x)->sem)
+#define mutex_unlock(_x) up(&(_x)->sem)
+#define mutex_init(_x) sema_init(&(_x)->sem, 1)
 #endif
 
 #ifndef DEFINE_PCI_DEVICE_TABLE
