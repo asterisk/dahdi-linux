@@ -4157,50 +4157,51 @@ static void wctdm_initialize_vpm(struct wctdm *wc)
 		wc->ctlreg |= 0x10;
 }
 
-static int wctdm_identify_modules(struct wctdm *wc)
+static void wctdm_identify_modules(struct wctdm *wc)
 {
 	int x;
 	unsigned long flags;
 	wc->ctlreg = 0x00;
 
+	/*
+	 * This looks a little weird.
+	 *
+	 * There are only 8 physical ports on the TDM/AEX800, but the code
+	 * immediately below sets 24 modules up.  This has to do with the
+	 * altcs magic that allows us to have single-port and quad-port
+	 * modules on these products.  The variable "mods_per_board" is set to
+	 * the appropriate value just below the next code block.
+	 *
+	 * Now why this is important: The FXS modules come out of reset in a
+	 * two-byte, non-chainable SPI mode.  This is currently incompatible
+	 * with how we do things, so we need to set them to a chained, 3-byte
+	 * command mode.  This is done by setting the module type to FXSINIT
+	 * for a little while so that cmd_dequeue will initialize the SLIC
+	 * into the appropriate mode.
+	 *
+	 * This "go to 3-byte chained mode" command, however, wreaks havoc
+	 * with HybridBRI.
+	 *
+	 * The solution: Since HybridBRI is only designed to work in an 8-port
+	 * card, and since the single-port modules "show up" in SPI slots >= 8
+	 * in these cards, we only set SPI slots 8-23 to FXSINIT.  The
+	 * HybridBRI will never see the command that causes it to freak out
+	 * and the single-port FXS cards get what they need so that when we
+	 * probe with altcs we see them.
+	 */
+
 	/* Make sure all units go into daisy chain mode */
 	spin_lock_irqsave(&wc->reglock, flags);
-
-/*
- * This looks a little weird.
- *
- * There are only 8 physical ports on the TDM/AEX800, but the code immediately
- * below sets 24 modules up.  This has to do with the altcs magic that allows us
- * to have single-port and quad-port modules on these products.
- * The variable "mods_per_board" is set to the appropriate value just below the
- * next code block.
- *
- * Now why this is important:
- * The FXS modules come out of reset in a two-byte, non-chainable SPI mode.
- * This is currently incompatible with how we do things, so we need to set
- * them to a chained, 3-byte command mode.  This is done by setting the module
- * type to FXSINIT for a little while so that cmd_dequeue will
- * initialize the SLIC into the appropriate mode.
- *
- * This "go to 3-byte chained mode" command, however, wreaks havoc with HybridBRI.
- *
- * The solution:
- * Since HybridBRI is only designed to work in an 8-port card, and since the single-port
- * modules "show up" in SPI slots >= 8 in these cards, we only set SPI slots 8-23 to
- * FXSINIT.  The HybridBRI will never see the command that causes it to freak
- * out and the single-port FXS cards get what they need so that when we probe with altcs
- * we see them.
- */
-
-	for (x = 0; x < wc->mods_per_board; x++)
+	for (x = 0; x < ARRAY_SIZE(wc->mods); x++)
 		wc->mods[x].type = FXSINIT;
-
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-/* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI commands in the appropriate mode(s). */
+	/* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI
+	 * commands in the appropriate mode(s). */
 	msleep(20);
 
-/* Now that all the cards have been reset, we can stop checking them all if there aren't as many */
+	/* Now that all the cards have been reset, we can stop checking them
+	 * all if there aren't as many */
 	spin_lock_irqsave(&wc->reglock, flags);
 	wc->mods_per_board = wc->desc->ports;
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -4208,12 +4209,14 @@ static int wctdm_identify_modules(struct wctdm *wc)
 	/* Reset modules */
 	for (x = 0; x < wc->mods_per_board; x++) {
 		struct wctdm_module *const mod = &wc->mods[x];
-		int sane = 0, ret = 0, readi = 0;
+		enum {SANE = 1, UNKNOWN = 0};
+		int ret = 0, readi = 0;
 
 		if (fatal_signal_pending(current))
 			break;
 retry:
-		if (!(ret = wctdm_init_proslic(wc, mod, 0, 0, sane))) {
+		ret = wctdm_init_proslic(wc, mod, 0, 0, UNKNOWN);
+		if (!ret) {
 			if (debug & DEBUG_CARD) {
 				readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
 				dev_info(&wc->vb.pdev->dev,
@@ -4222,70 +4225,84 @@ retry:
 			}
 			dev_info(&wc->vb.pdev->dev,
 				 "Port %d: Installed -- AUTO FXS/DPO\n", x + 1);
-		} else {
-			if (ret != -2) {
-				sane = 1;
-				/* Init with Manual Calibration */
-				if (!wctdm_init_proslic(wc, mod, 0, 1, sane)) {
-
-					if (debug & DEBUG_CARD) {
-						readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
-						dev_info(&wc->vb.pdev->dev, "Proslic module %d loop current is %dmA\n", x, ((readi*3)+20));
-					}
-
-					dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- MANUAL FXS\n",x + 1);
-				} else {
-					dev_notice(&wc->vb.pdev->dev, "Port %d: FAILED FXS (%s)\n", x + 1, fxshonormode ? fxo_modes[_opermode].name : "FCC");
-				}
-
-			} else if (!(ret = wctdm_init_voicedaa(wc, mod, 0, 0, sane))) {
-				dev_info(&wc->vb.pdev->dev,
-					 "Port %d: Installed -- AUTO FXO "
-					 "(%s mode)\n", x + 1,
-					 fxo_modes[_opermode].name);
-			} else if (!wctdm_init_qrvdri(wc, x)) {
-				dev_info(&wc->vb.pdev->dev,
-					 "Port %d: Installed -- QRV DRI card\n", x + 1);
-			} else if (is_hx8(wc) && !wctdm_init_b400m(wc, x)) {
-				dev_info(&wc->vb.pdev->dev,
-					 "Port %d: Installed -- BRI "
-					 "quad-span module\n", x + 1);
-			} else {
-				if ((wc->desc->ports != 24) &&
-				    ((x & 0x3) == 1) && !mod->altcs) {
-
-					spin_lock_irqsave(&wc->reglock, flags);
-					mod->altcs = 2;
-
-					if (wc->desc->ports == 4) {
-						wc->mods[x+1].altcs = 3;
-						wc->mods[x+2].altcs = 3;
-					}
-
-					mod->type = FXSINIT;
-					spin_unlock_irqrestore(&wc->reglock, flags);
-
-					msleep(20);
-
-					spin_lock_irqsave(&wc->reglock, flags);
-					mod->type = FXS;
-					spin_unlock_irqrestore(&wc->reglock, flags);
-
-					if (debug & DEBUG_CARD)
-						dev_info(&wc->vb.pdev->dev, "Trying port %d with alternate chip select\n", x + 1);
-					goto retry;
-
-				} else {
-					dev_info(&wc->vb.pdev->dev,
-						 "Port %d: Not installed\n",
-						 x + 1);
-					mod->type = NONE;
-				}
-			}
+			continue;
 		}
-	}	/* for (x...) */
 
-	return 0;
+		if (ret != -2) {
+			/* Init with Manual Calibration */
+			if (!wctdm_init_proslic(wc, mod, 0, 1, SANE)) {
+
+				if (debug & DEBUG_CARD) {
+					readi = wctdm_getreg(wc, mod,
+							     LOOP_I_LIMIT);
+					dev_info(&wc->vb.pdev->dev,
+						 "Proslic module %d loop "
+						 "current is %dmA\n", x,
+						 ((readi*3)+20));
+				}
+
+				dev_info(&wc->vb.pdev->dev,
+					 "Port %d: Installed -- MANUAL FXS\n",
+					 x + 1);
+			} else {
+				dev_notice(&wc->vb.pdev->dev,
+					   "Port %d: FAILED FXS (%s)\n",
+					   x + 1, fxshonormode ?
+					   fxo_modes[_opermode].name : "FCC");
+			}
+			continue;
+		}
+
+		ret = wctdm_init_voicedaa(wc, mod, 0, 0, UNKNOWN);
+		if (!ret) {
+			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- "
+				 "AUTO FXO (%s mode)\n", x + 1,
+				 fxo_modes[_opermode].name);
+			continue;
+		}
+
+		if (!wctdm_init_qrvdri(wc, x)) {
+			dev_info(&wc->vb.pdev->dev,
+				 "Port %d: Installed -- QRV DRI card\n", x + 1);
+			continue;
+		}
+
+		if (is_hx8(wc) && !wctdm_init_b400m(wc, x)) {
+			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- BRI "
+				 "quad-span module\n", x + 1);
+			continue;
+		}
+
+		if ((wc->desc->ports != 24) && ((x&0x3) == 1) && !mod->altcs) {
+
+			spin_lock_irqsave(&wc->reglock, flags);
+			mod->altcs = 2;
+
+			if (wc->desc->ports == 4) {
+				wc->mods[x+1].altcs = 3;
+				wc->mods[x+2].altcs = 3;
+			}
+
+			mod->type = FXSINIT;
+			spin_unlock_irqrestore(&wc->reglock, flags);
+
+			msleep(20);
+
+			spin_lock_irqsave(&wc->reglock, flags);
+			mod->type = FXS;
+			spin_unlock_irqrestore(&wc->reglock, flags);
+
+			if (debug & DEBUG_CARD) {
+				dev_info(&wc->vb.pdev->dev,
+					 "Trying port %d with alternate chip "
+					 "select\n", x + 1);
+			}
+			goto retry;
+		}
+
+		mod->type = NONE;
+		dev_info(&wc->vb.pdev->dev, "Port %d: Not installed\n", x + 1);
+	} /* for (x...) */
 }
 
 static struct pci_driver wctdm_driver;
