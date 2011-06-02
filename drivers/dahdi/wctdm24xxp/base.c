@@ -4047,6 +4047,7 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 		kfree(frame);
 	}
 
+	kfree(wc->board_name);
 	kfree(wc);
 }
 
@@ -4594,6 +4595,22 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 	up(&ifacelock);
 
+	wc->desc = (struct wctdm_desc *)ent->driver_data;
+
+	/* This is to insure that the analog span is given lowest priority */
+	sema_init(&wc->syncsem, 1);
+	INIT_LIST_HEAD(&wc->frame_list);
+	spin_lock_init(&wc->frame_list_lock);
+	init_waitqueue_head(&wc->regq);
+	spin_lock_init(&wc->reglock);
+	wc->oldsync = -1;
+
+	wc->board_name = kasprintf(GFP_KERNEL, "%s%d", wctdm_driver.name, i);
+	if (!wc->board_name) {
+		wctdm_back_out_gracefully(wc);
+		return -ENOMEM;
+	}
+
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 	for (i = 0; i < ARRAY_SIZE(wc->ec_reference); ++i) {
 		/* 256 is the smallest power of 2 that will contains the
@@ -4608,17 +4625,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 	}
 #endif
-
-
-	wc->desc = (struct wctdm_desc *)ent->driver_data;
-
-	/* This is to insure that the analog span is given lowest priority */
-	wc->oldsync = -1;
-	sema_init(&wc->syncsem, 1);
-	INIT_LIST_HEAD(&wc->frame_list);
-	spin_lock_init(&wc->frame_list_lock);
-
-	snprintf(wc->board_name, sizeof(wc->board_name)-1, "%s%d", wctdm_driver.name, i);
 
 	pci_set_drvdata(pdev, wc);
 	wc->vb.ops = &voicebus_operations;
@@ -4636,7 +4642,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	if (ret) {
-		kfree(wc);
+		wctdm_back_out_gracefully(wc);
 		return ret;
 	}
 
@@ -4644,9 +4650,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	voicebus_lock_latency(&wc->vb);
 
-	init_waitqueue_head(&wc->regq);
-
-	spin_lock_init(&wc->reglock);
 	wc->mods_per_board = NUM_MODULES;
 	wc->pos = i;
 	wc->txident = 1;
@@ -4682,7 +4685,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		ret = hx8_check_firmware(wc);
 		if (ret) {
 			voicebus_release(&wc->vb);
-			kfree(wc);
+			wctdm_back_out_gracefully(wc);
 			return -EIO;
 		}
 
