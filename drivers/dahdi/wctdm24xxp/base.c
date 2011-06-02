@@ -1277,39 +1277,40 @@ static inline void wctdm_proslic_check_oppending(struct wctdm *wc, int card)
 	struct fxs *const fxs = &mod->mod.fxs;
 	int res;
 
+	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING))
+		return;
+
 	/* Monitor the Pending LF state change, for the next 100ms */
-	if (fxs->lasttxhook & SLIC_LF_OPPENDING) {
-		spin_lock(&fxs->lasttxhooklock);
+	spin_lock(&fxs->lasttxhooklock);
 
-		if (!(fxs->lasttxhook & SLIC_LF_OPPENDING)) {
-			spin_unlock(&fxs->lasttxhooklock);
-			return;
-		}
-
-		res = mod->cmdq.isrshadow[1];
-		if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
-			fxs->lasttxhook &= SLIC_LF_SETMASK;
-			fxs->oppending_ms = 0;
-			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev,
-					 "SLIC_LF OK: card=%d shadow=%02x "
-					 "lasttxhook=%02x intcount=%d\n", card,
-					 res, fxs->lasttxhook, wc->intcount);
-			}
-		} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
-			/* Timed out, resend the linestate */
-			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
-			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev,
-					 "SLIC_LF RETRY: card=%d shadow=%02x "
-					 "lasttxhook=%02x intcount=%d\n", card,
-					 res, fxs->lasttxhook, wc->intcount);
-			}
-		} else { /* Start 100ms Timeout */
-			fxs->oppending_ms = 100;
-		}
+	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING)) {
 		spin_unlock(&fxs->lasttxhooklock);
+		return;
 	}
+
+	res = mod->cmdq.isrshadow[1];
+	if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
+		fxs->lasttxhook &= SLIC_LF_SETMASK;
+		fxs->oppending_ms = 0;
+		if (debug & DEBUG_CARD) {
+			dev_info(&wc->vb.pdev->dev,
+				 "SLIC_LF OK: card=%d shadow=%02x "
+				 "lasttxhook=%02x intcount=%d\n", card,
+				 res, fxs->lasttxhook, wc->intcount);
+		}
+	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
+		/* Timed out, resend the linestate */
+		mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+		if (debug & DEBUG_CARD) {
+			dev_info(&wc->vb.pdev->dev,
+				 "SLIC_LF RETRY: card=%d shadow=%02x "
+				 "lasttxhook=%02x intcount=%d\n", card,
+				 res, fxs->lasttxhook, wc->intcount);
+		}
+	} else { /* Start 100ms Timeout */
+		fxs->oppending_ms = 100;
+	}
+	spin_unlock(&fxs->lasttxhooklock);
 }
 
 /* 256ms interrupt */
