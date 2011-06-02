@@ -111,6 +111,7 @@ struct t1 {
 	int loopdowncnt;
 #define INITIALIZED 1
 #define SHUTDOWN    2
+#define READY	    3
 	unsigned long bit_flags;
 	unsigned long alarmtimer;
 	unsigned char ledstate;

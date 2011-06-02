@@ -957,6 +957,18 @@ static int t1xxp_chanconfig(struct file *file,
 			    struct dahdi_chan *chan, int sigtype)
 {
 	struct t1 *wc = chan->pvt;
+
+	if (file->f_flags & O_NONBLOCK) {
+		if (!test_bit(READY, &wc->bit_flags))
+			return -EAGAIN;
+	} else {
+		while (!test_bit(READY, &wc->bit_flags)) {
+			if (fatal_signal_pending(current))
+				return -EIO;
+			msleep_interruptible(250);
+		}
+	}
+
 	if (test_bit(DAHDI_FLAGBIT_RUNNING, &chan->span->flags) &&
 		(wc->spantype != TYPE_E1)) {
 		__t1xxp_set_clear(wc);
@@ -1368,6 +1380,12 @@ setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 }
 
 #ifdef VPM_SUPPORT
+
+struct vpm_load_work {
+	struct work_struct work;
+	struct t1 *wc;
+};
+
 static int check_and_load_vpm(struct t1 *wc)
 {
 	int res;
@@ -1489,6 +1507,17 @@ t1xxp_spanconfig(struct file *file, struct dahdi_span *span,
 {
 	struct t1 *wc = container_of(span, struct t1, span);
 	int i;
+
+	if (file->f_flags & O_NONBLOCK) {
+		if (!test_bit(READY, &wc->bit_flags))
+			return -EAGAIN;
+	} else {
+		while (!test_bit(READY, &wc->bit_flags)) {
+			if (fatal_signal_pending(current))
+				return -EIO;
+			msleep_interruptible(250);
+		}
+	}
 
 	/* Do we want to SYNC on receive or not */
 	if (lc->sync) {
@@ -2110,6 +2139,7 @@ static void vpm_check_func(struct work_struct *work)
 	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 	t1_info(wc, "VPMADT032 is reenabled.\n");
 	wc->vpm_check = jiffies + HZ*5;
+	set_bit(READY, &wc->bit_flags);
 	return;
 }
 
@@ -2361,6 +2391,11 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	t1_software_init(wc);
 	t1_info(wc, "Found a %s\n", wc->variety);
 	voicebus_unlock_latency(&wc->vb);
+
+	/* If there is VPMADT032 module attached to this device, it will
+	 * signal ready after the channels are configured and ready for use. */
+	if (!wc->vpmadt032)
+		set_bit(READY, &wc->bit_flags);
 	return 0;
 }
 
