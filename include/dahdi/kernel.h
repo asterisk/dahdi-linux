@@ -1395,6 +1395,12 @@ typedef u32 __bitwise pm_message_t;
 #define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
 
+/* WARN_ONCE first showed up in the kernel in 2.6.27 but it may have been
+ * backported. */
+#ifndef WARN_ONCE
+#define WARN_ONCE(condition, format...) WARN_ON_ONCE(condition)
+#endif
+
 #define	DAHDI_CTL	0
 #define	DAHDI_TRANSCODE	250
 #define	DAHDI_TIMER	253

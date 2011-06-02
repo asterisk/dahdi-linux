@@ -1743,6 +1743,11 @@ static void wctdm_fxs_hooksig(struct wctdm *wc, const int card, enum dahdi_txsig
 					SLIC_LF_RING_OPEN :
 					SLIC_LF_TIP_OPEN;
 			break;
+		default:
+			WARN_ONCE(1, "%x is an invalid signaling state for "
+				  "an FXS module.\n",
+				  wc->aspan->span.chans[card]->sig);
+			break;
 		}
 		break;
 	case DAHDI_TXSIG_OFFHOOK:
