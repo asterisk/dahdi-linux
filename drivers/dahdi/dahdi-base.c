@@ -1430,12 +1430,12 @@ static void close_channel(struct dahdi_chan *chan)
 	if (chan->span && oldconf)
 		dahdi_disable_dacs(chan);
 
+	spin_unlock_irqrestore(&chan->lock, flags);
+
 	if (ec_state) {
 		ec_state->ops->echocan_free(chan, ec_state);
 		release_echocan(ec_current);
 	}
-
-	spin_unlock_irqrestore(&chan->lock, flags);
 
 	/* release conference resource, if any to release */
 	if (oldconf)
