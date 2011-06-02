@@ -2335,7 +2335,7 @@ wctdm_proslic_insane(struct wctdm *wc, struct wctdm_module *const mod)
 static int
 wctdm_proslic_powerleak_test(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	unsigned long origjiffies;
+	unsigned long start;
 	unsigned char vbat;
 
 	/* Turn off linefeed */
@@ -2344,16 +2344,15 @@ wctdm_proslic_powerleak_test(struct wctdm *wc, struct wctdm_module *const mod)
 	/* Power down */
 	wctdm_setreg(wc, mod, 14, 0x10);
 
-	/* Wait for one second */
-	origjiffies = jiffies;
+	start = jiffies;
 
-	/* TODO: Why is this sleep necessary.  WIthout it, the first read
+	/* TODO: Why is this sleep necessary.  Without it, the first read
 	 * comes back with a 0 value. */
 	msleep(20);
 
 	while ((vbat = wctdm_getreg(wc, mod, 82)) > 0x6) {
-		if ((jiffies - origjiffies) >= (HZ/2))
-			break;;
+		if (time_after(jiffies, start + HZ/4))
+			break;
 	}
 
 	if (vbat < 0x06) {
@@ -2361,7 +2360,7 @@ wctdm_proslic_powerleak_test(struct wctdm *wc, struct wctdm_module *const mod)
 			   "Excessive leakage detected on module %d: %d "
 			   "volts (%02x) after %d ms\n", mod->card,
 			   376 * vbat / 1000, vbat,
-			   (int)((jiffies - origjiffies) * 1000 / HZ));
+			   (int)((jiffies - start) * 1000 / HZ));
 		return -1;
 	} else if (debug & DEBUG_CARD) {
 		dev_info(&wc->vb.pdev->dev,
@@ -2701,12 +2700,12 @@ wctdm_init_voicedaa(struct wctdm *wc, struct wctdm_module *mod,
 	spin_lock_irqsave(&wc->reglock, flags);
 	mod->type = NONE;
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	msleep(100);
+	msleep(20);
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	mod->type = FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	msleep(100);
+	msleep(20);
 
 	if (!sane && wctdm_voicedaa_insane(wc, mod))
 		return -2;
@@ -2837,7 +2836,7 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	mod->type = FXS;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	msleep(100);
+	/* msleep(100); */
 
 	/* Sanity check the ProSLIC */
 	if (!sane && wctdm_proslic_insane(wc, mod))
@@ -4280,7 +4279,7 @@ static void wctdm_identify_modules(struct wctdm *wc)
 
 	/* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI
 	 * commands in the appropriate mode(s). */
-	msleep(20);
+	udelay(2000);
 
 	/* Now that all the cards have been reset, we can stop checking them
 	 * all if there aren't as many */
