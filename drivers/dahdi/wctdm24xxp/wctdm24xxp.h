@@ -196,19 +196,7 @@ struct fxs {
 	struct calregs calregs;
 };
 
-struct wctdm_module {
-	union {
-		struct fxo fxo;
-		struct fxs fxs;
-		struct b400m *bri;
-	} mod;
-	struct cmdq cmdq;
-
-	int type; /* type of module (FXO/FXS/QRV/etc.) */
-	int sethook; /* pending hook state command */
-	int dacssrc;
-	int flags;   /* bitmap of board-specific + module-specific flags */
-
+struct qrv {
 #define	RADMODE_INVERTCOR 1
 #define	RADMODE_IGNORECOR 2
 #define	RADMODE_EXTTONE 4
@@ -216,14 +204,29 @@ struct wctdm_module {
 #define	RADMODE_IGNORECT 16
 #define	RADMODE_PREEMP	32
 #define	RADMODE_DEEMP 64
+	char hook;
 	unsigned short debouncetime;
+	unsigned short debtime;
+	int radmode;
 	signed short rxgain;
 	signed short txgain;
-	/* FIXME: why are all of these QRV-only members part of the main card
-	 * structure? */
-	char qrvhook;
-	unsigned short qrvdebtime;
-	int radmode;
+};
+
+struct wctdm_module {
+	union {
+		struct fxo fxo;
+		struct fxs fxs;
+		struct qrv qrv;
+		struct b400m *bri;
+	} mod;
+
+	struct cmdq cmdq;
+
+	int type; /* type of module (FXO/FXS/QRV/etc.) */
+	int sethook; /* pending hook state command */
+	int dacssrc;
+	int flags;   /* bitmap of board-specific + module-specific flags */
+
 	int altcs;
 };
 

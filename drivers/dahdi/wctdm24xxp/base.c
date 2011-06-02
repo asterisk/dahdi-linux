@@ -1395,65 +1395,65 @@ static inline void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 	signed char b,b1;
 	int qrvcard = card & 0xfc;
 
-	if (wc->mods[card].qrvdebtime >= 2)
-		wc->mods[card].qrvdebtime--;
+	if (wc->mods[card].mod.qrv.debtime >= 2)
+		wc->mods[card].mod.qrv.debtime--;
 	b = wc->mods[qrvcard].cmdq.isrshadow[0]; /* Hook/Ring state */
 	b &= 0xcc; /* use bits 3-4 and 6-7 only */
 
-	if (wc->mods[qrvcard].radmode & RADMODE_IGNORECOR)
+	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_IGNORECOR)
 		b &= ~4;
-	else if (!(wc->mods[qrvcard].radmode & RADMODE_INVERTCOR))
+	else if (!(wc->mods[qrvcard].mod.qrv.radmode & RADMODE_INVERTCOR))
 		b ^= 4;
-	if (wc->mods[qrvcard + 1].radmode | RADMODE_IGNORECOR)
+	if (wc->mods[qrvcard + 1].mod.qrv.radmode | RADMODE_IGNORECOR)
 		b &= ~0x40;
-	else if (!(wc->mods[qrvcard + 1].radmode | RADMODE_INVERTCOR))
+	else if (!(wc->mods[qrvcard + 1].mod.qrv.radmode | RADMODE_INVERTCOR))
 		b ^= 0x40;
 
-	if ((wc->mods[qrvcard].radmode & RADMODE_IGNORECT) ||
-	    (!(wc->mods[qrvcard].radmode & RADMODE_EXTTONE)))
+	if ((wc->mods[qrvcard].mod.qrv.radmode & RADMODE_IGNORECT) ||
+	    (!(wc->mods[qrvcard].mod.qrv.radmode & RADMODE_EXTTONE)))
 		b &= ~8;
-	else if (!(wc->mods[qrvcard].radmode & RADMODE_EXTINVERT))
+	else if (!(wc->mods[qrvcard].mod.qrv.radmode & RADMODE_EXTINVERT))
 		b ^= 8;
-	if ((wc->mods[qrvcard + 1].radmode & RADMODE_IGNORECT) ||
-	    (!(wc->mods[qrvcard + 1].radmode & RADMODE_EXTTONE)))
+	if ((wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_IGNORECT) ||
+	    (!(wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_EXTTONE)))
 		b &= ~0x80;
-	else if (!(wc->mods[qrvcard + 1].radmode & RADMODE_EXTINVERT))
+	else if (!(wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_EXTINVERT))
 		b ^= 0x80;
 	/* now b & MASK should be zero, if its active */
 	/* check for change in chan 0 */
-	if ((!(b & 0xc)) != wc->mods[qrvcard + 2].qrvhook)
+	if ((!(b & 0xc)) != wc->mods[qrvcard + 2].mod.qrv.hook)
 	{
-		wc->mods[qrvcard].qrvdebtime = wc->mods[qrvcard].debouncetime;
-		wc->mods[qrvcard + 2].qrvhook = !(b & 0xc);
+		wc->mods[qrvcard].mod.qrv.debtime = wc->mods[qrvcard].mod.qrv.debouncetime;
+		wc->mods[qrvcard + 2].mod.qrv.hook = !(b & 0xc);
 	} 
 	/* if timed-out and ready */
-	if (wc->mods[qrvcard].qrvdebtime == 1) {
-		b1 = wc->mods[qrvcard + 2].qrvhook;
+	if (wc->mods[qrvcard].mod.qrv.debtime == 1) {
+		b1 = wc->mods[qrvcard + 2].mod.qrv.hook;
 		if (debug) {
 			dev_info(&wc->vb.pdev->dev,
 				 "QRV channel %d rx state changed to %d\n",
-				 qrvcard, wc->mods[qrvcard + 2].qrvhook);
+				 qrvcard, wc->mods[qrvcard + 2].mod.qrv.hook);
 		}
 		dahdi_hooksig(wc->aspan->span.chans[qrvcard],
 			(b1) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
-		wc->mods[card].qrvdebtime = 0;
+		wc->mods[card].mod.qrv.debtime = 0;
 	}
 	/* check for change in chan 1 */
-	if ((!(b & 0xc0)) != wc->mods[qrvcard + 3].qrvhook)
+	if ((!(b & 0xc0)) != wc->mods[qrvcard + 3].mod.qrv.hook)
 	{
-		wc->mods[qrvcard + 1].qrvdebtime = QRV_DEBOUNCETIME;
-		wc->mods[qrvcard + 3].qrvhook = !(b & 0xc0);
+		wc->mods[qrvcard + 1].mod.qrv.debtime = QRV_DEBOUNCETIME;
+		wc->mods[qrvcard + 3].mod.qrv.hook = !(b & 0xc0);
 	}
-	if (wc->mods[qrvcard + 1].qrvdebtime == 1) {
-		b1 = wc->mods[qrvcard + 3].qrvhook;
+	if (wc->mods[qrvcard + 1].mod.qrv.debtime == 1) {
+		b1 = wc->mods[qrvcard + 3].mod.qrv.hook;
 		if (debug) {
 			dev_info(&wc->vb.pdev->dev,
 				 "QRV channel %d rx state changed to %d\n",
-				 qrvcard + 1, wc->mods[qrvcard + 3].qrvhook);
+				 qrvcard + 1, wc->mods[qrvcard + 3].mod.qrv.hook);
 		}
 		dahdi_hooksig(wc->aspan->span.chans[qrvcard + 1],
 			(b1) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
-		wc->mods[card].qrvdebtime = 0;
+		wc->mods[card].mod.qrv.debtime = 0;
 	}
 	return;
 }
@@ -2885,13 +2885,13 @@ static int wctdm_init_qrvdri(struct wctdm *wc, int card)
 		wctdm_setreg(wc,card,0,0x80); 
 		wctdm_setreg(wc,card,0,0x55);
 		wctdm_setreg(wc,card,1,0x69);
-		wc->mods[card].qrvhook = wc->mods[card + 1].qrvhook = 0;
-		wc->mods[card + 2].qrvhook = wc->mods[card + 3].qrvhook = 0xff;
-		wc->mods[card].debouncetime = wc->mods[card + 1].debouncetime = QRV_DEBOUNCETIME;
-		wc->mods[card].qrvdebtime = wc->mods[card + 1].qrvdebtime = 0;
-		wc->mods[card].radmode = wc->mods[card + 1].radmode = 0;
-		wc->mods[card].txgain = wc->mods[card + 1].txgain = 3599;
-		wc->mods[card].rxgain = wc->mods[card + 1].rxgain = 1199;
+		wc->mods[card].mod.qrv.hook = wc->mods[card + 1].mod.qrv.hook = 0;
+		wc->mods[card + 2].mod.qrv.hook = wc->mods[card + 3].mod.qrv.hook = 0xff;
+		wc->mods[card].mod.qrv.debouncetime = wc->mods[card + 1].mod.qrv.debouncetime = QRV_DEBOUNCETIME;
+		wc->mods[card].mod.qrv.debtime = wc->mods[card + 1].mod.qrv.debtime = 0;
+		wc->mods[card].mod.qrv.radmode = wc->mods[card + 1].mod.qrv.radmode = 0;
+		wc->mods[card].mod.qrv.txgain = wc->mods[card + 1].mod.qrv.txgain = 3599;
+		wc->mods[card].mod.qrv.rxgain = wc->mods[card + 1].mod.qrv.rxgain = 1199;
 	} else { /* channel is on same card as base, no need to test */
 		if (wc->mods[card & 0x7c].type == MOD_TYPE_QRV) {
 			/* only lower 2 are valid */
@@ -2952,73 +2952,73 @@ static void qrv_dosetup(struct dahdi_chan *chan,struct wctdm *wc)
 	if (debug) {
 		dev_info(&wc->vb.pdev->dev,
 			 "@@@@@ radmodes: %d,%d  rxgains: %d,%d   "
-			 "txgains: %d,%d\n", wc->mods[qrvcard].radmode,
-			 wc->mods[qrvcard + 1].radmode,
-			 wc->mods[qrvcard].rxgain, wc->mods[qrvcard + 1].rxgain,
-			 wc->mods[qrvcard].txgain,
-			 wc->mods[qrvcard + 1].txgain);
+			 "txgains: %d,%d\n", wc->mods[qrvcard].mod.qrv.radmode,
+			 wc->mods[qrvcard + 1].mod.qrv.radmode,
+			 wc->mods[qrvcard].mod.qrv.rxgain, wc->mods[qrvcard + 1].mod.qrv.rxgain,
+			 wc->mods[qrvcard].mod.qrv.txgain,
+			 wc->mods[qrvcard + 1].mod.qrv.txgain);
 	}
 	r = 0;
-	if (wc->mods[qrvcard].radmode & RADMODE_DEEMP)
+	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_DEEMP)
 		r |= 4;
-	if (wc->mods[qrvcard + 1].radmode & RADMODE_DEEMP)
+	if (wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_DEEMP)
 		r |= 8;
-	if (wc->mods[qrvcard].rxgain < 1200)
+	if (wc->mods[qrvcard].mod.qrv.rxgain < 1200)
 		r |= 1;
-	if (wc->mods[qrvcard + 1].rxgain < 1200)
+	if (wc->mods[qrvcard + 1].mod.qrv.rxgain < 1200)
 		r |= 2;
 	wctdm_setreg(wc, qrvcard, 7, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 7 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].radmode & RADMODE_PREEMP)
+	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_PREEMP)
 		r |= 3;
-	else if (wc->mods[qrvcard].txgain >= 3600)
+	else if (wc->mods[qrvcard].mod.qrv.txgain >= 3600)
 		r |= 1;
-	else if (wc->mods[qrvcard].txgain >= 1200)
+	else if (wc->mods[qrvcard].mod.qrv.txgain >= 1200)
 		r |= 2;
-	if (wc->mods[qrvcard + 1].radmode & RADMODE_PREEMP)
+	if (wc->mods[qrvcard + 1].mod.qrv.radmode & RADMODE_PREEMP)
 		r |= 0xc;
-	else if (wc->mods[qrvcard + 1].txgain >= 3600)
+	else if (wc->mods[qrvcard + 1].mod.qrv.txgain >= 3600)
 		r |= 4;
-	else if (wc->mods[qrvcard + 1].txgain >= 1200)
+	else if (wc->mods[qrvcard + 1].mod.qrv.txgain >= 1200)
 		r |= 8;
 	wctdm_setreg(wc, qrvcard, 4, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 4 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].rxgain >= 2400)
+	if (wc->mods[qrvcard].mod.qrv.rxgain >= 2400)
 		r |= 1;
-	if (wc->mods[qrvcard + 1].rxgain >= 2400)
+	if (wc->mods[qrvcard + 1].mod.qrv.rxgain >= 2400)
 		r |= 2;
 	wctdm_setreg(wc, qrvcard, 0x25, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x25 to %02x hex\n",r);
 	r = 0;
-	if (wc->mods[qrvcard].txgain < 2400)
+	if (wc->mods[qrvcard].mod.qrv.txgain < 2400)
 		r |= 1;
 	else
 		r |= 4;
-	if (wc->mods[qrvcard + 1].txgain < 2400)
+	if (wc->mods[qrvcard + 1].mod.qrv.txgain < 2400)
 		r |= 8;
 	else
 		r |= 0x20;
 	wctdm_setreg(wc, qrvcard, 0x26, r);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x26 to %02x hex\n",r);
-	l = ((long)(wc->mods[qrvcard].rxgain % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard].mod.qrv.rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->mods[qrvcard].rxgain >= 2400)
+	if (wc->mods[qrvcard].mod.qrv.rxgain >= 2400)
 		l += 181;
 	wctdm_setreg(wc, qrvcard, 0x0b, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0b to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->mods[qrvcard + 1].rxgain % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard + 1].mod.qrv.rxgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
-	if (wc->mods[qrvcard + 1].rxgain >= 2400)
+	if (wc->mods[qrvcard + 1].mod.qrv.rxgain >= 2400)
 		l += 181;
 	wctdm_setreg(wc, qrvcard, 0x0c, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0c to %02x hex\n",(unsigned char)l);
-	l = ((long)(wc->mods[qrvcard].txgain % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard].mod.qrv.txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
 	wctdm_setreg(wc, qrvcard, 0x0f, (unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x0f to %02x hex\n", (unsigned char)l);
-	l = ((long)(wc->mods[qrvcard + 1].txgain % 1200) * 10000) / 46875;
+	l = ((long)(wc->mods[qrvcard + 1].mod.qrv.txgain % 1200) * 10000) / 46875;
 	if (l == 0) l = 1;
 	wctdm_setreg(wc, qrvcard, 0x10,(unsigned char)l);
 	if (debug) dev_info(&wc->vb.pdev->dev, "@@@@@ setting reg 0x10 to %02x hex\n",(unsigned char)l);
@@ -3278,42 +3278,42 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		stack.p.data = 0; /* start with 0 value in output */
 		switch(stack.p.radpar) {
 		case DAHDI_RADPAR_INVERTCOR:
-			if (mod->radmode & RADMODE_INVERTCOR)
+			if (mod->mod.qrv.radmode & RADMODE_INVERTCOR)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_IGNORECOR:
-			if (mod->radmode & RADMODE_IGNORECOR)
+			if (mod->mod.qrv.radmode & RADMODE_IGNORECOR)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_IGNORECT:
-			if (mod->radmode & RADMODE_IGNORECT)
+			if (mod->mod.qrv.radmode & RADMODE_IGNORECT)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_EXTRXTONE:
 			stack.p.data = 0;
-			if (mod->radmode & RADMODE_EXTTONE) {
+			if (mod->mod.qrv.radmode & RADMODE_EXTTONE) {
 				stack.p.data = 1;
-				if (mod->radmode & RADMODE_EXTINVERT)
+				if (mod->mod.qrv.radmode & RADMODE_EXTINVERT)
 					stack.p.data = 2;
 			}
 			break;
 		case DAHDI_RADPAR_DEBOUNCETIME:
-			stack.p.data = mod->debouncetime;
+			stack.p.data = mod->mod.qrv.debouncetime;
 			break;
 		case DAHDI_RADPAR_RXGAIN:
-			stack.p.data = mod->rxgain - 1199;
+			stack.p.data = mod->mod.qrv.rxgain - 1199;
 			break;
 		case DAHDI_RADPAR_TXGAIN:
-			stack.p.data = mod->txgain - 3599;
+			stack.p.data = mod->mod.qrv.txgain - 3599;
 			break;
 		case DAHDI_RADPAR_DEEMP:
 			stack.p.data = 0;
-			if (mod->radmode & RADMODE_DEEMP)
+			if (mod->mod.qrv.radmode & RADMODE_DEEMP)
 				stack.p.data = 1;
 			break;
 		case DAHDI_RADPAR_PREEMP:
 			stack.p.data = 0;
-			if (mod->radmode & RADMODE_PREEMP)
+			if (mod->mod.qrv.radmode & RADMODE_PREEMP)
 				stack.p.data = 1;
 			break;
 		default:
@@ -3330,34 +3330,34 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 		switch(stack.p.radpar) {
 		case DAHDI_RADPAR_INVERTCOR:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_INVERTCOR;
+				mod->mod.qrv.radmode |= RADMODE_INVERTCOR;
 			else
-				mod->radmode &= ~RADMODE_INVERTCOR;
+				mod->mod.qrv.radmode &= ~RADMODE_INVERTCOR;
 			return 0;
 		case DAHDI_RADPAR_IGNORECOR:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_IGNORECOR;
+				mod->mod.qrv.radmode |= RADMODE_IGNORECOR;
 			else
-				mod->radmode &= ~RADMODE_IGNORECOR;
+				mod->mod.qrv.radmode &= ~RADMODE_IGNORECOR;
 			return 0;
 		case DAHDI_RADPAR_IGNORECT:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_IGNORECT;
+				mod->mod.qrv.radmode |= RADMODE_IGNORECT;
 			else
-				mod->radmode &= ~RADMODE_IGNORECT;
+				mod->mod.qrv.radmode &= ~RADMODE_IGNORECT;
 			return 0;
 		case DAHDI_RADPAR_EXTRXTONE:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_EXTTONE;
+				mod->mod.qrv.radmode |= RADMODE_EXTTONE;
 			else
-				mod->radmode &= ~RADMODE_EXTTONE;
+				mod->mod.qrv.radmode &= ~RADMODE_EXTTONE;
 			if (stack.p.data > 1)
-				mod->radmode |= RADMODE_EXTINVERT;
+				mod->mod.qrv.radmode |= RADMODE_EXTINVERT;
 			else
-				mod->radmode &= ~RADMODE_EXTINVERT;
+				mod->mod.qrv.radmode &= ~RADMODE_EXTINVERT;
 			return 0;
 		case DAHDI_RADPAR_DEBOUNCETIME:
-			mod->debouncetime = stack.p.data;
+			mod->mod.qrv.debouncetime = stack.p.data;
 			return 0;
 		case DAHDI_RADPAR_RXGAIN:
 			/* if out of range */
@@ -3365,11 +3365,11 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			{
 				return -EINVAL;
 			}
-			mod->rxgain = stack.p.data + 1199;
+			mod->mod.qrv.rxgain = stack.p.data + 1199;
 			break;
 		case DAHDI_RADPAR_TXGAIN:
 			/* if out of range */
-			if (mod->radmode & RADMODE_PREEMP) {
+			if (mod->mod.qrv.radmode & RADMODE_PREEMP) {
 				if ((stack.p.data <= -2400) ||
 				    (stack.p.data > 0))
 					return -EINVAL;
@@ -3378,21 +3378,21 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 				    (stack.p.data > 1200))
 					return -EINVAL;
 			}
-			mod->txgain = stack.p.data + 3599;
+			mod->mod.qrv.txgain = stack.p.data + 3599;
 			break;
 		case DAHDI_RADPAR_DEEMP:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_DEEMP;
+				mod->mod.qrv.radmode |= RADMODE_DEEMP;
 			else
-				mod->radmode &= ~RADMODE_DEEMP;
-			mod->rxgain = 1199;
+				mod->mod.qrv.radmode &= ~RADMODE_DEEMP;
+			mod->mod.qrv.rxgain = 1199;
 			break;
 		case DAHDI_RADPAR_PREEMP:
 			if (stack.p.data)
-				mod->radmode |= RADMODE_PREEMP;
+				mod->mod.qrv.radmode |= RADMODE_PREEMP;
 			else
-				mod->radmode &= ~RADMODE_PREEMP;
-			mod->txgain = 3599;
+				mod->mod.qrv.radmode &= ~RADMODE_PREEMP;
+			mod->mod.qrv.txgain = 3599;
 			break;
 		default:
 			return -EINVAL;
@@ -3456,17 +3456,17 @@ static int wctdm_close(struct dahdi_chan *chan)
 		} else if (MOD_TYPE_QRV == mod->type) {
 			int qrvcard = x & 0xfc;
 
-			mod->qrvhook = 0;
-			wc->mods[x + 2].qrvhook = 0xff;
-			mod->debouncetime = QRV_DEBOUNCETIME;
-			mod->qrvdebtime = 0;
-			mod->radmode = 0;
-			mod->txgain = 3599;
-			mod->rxgain = 1199;
+			mod->mod.qrv.hook = 0;
+			wc->mods[x + 2].mod.qrv.hook = 0xff;
+			mod->mod.qrv.debouncetime = QRV_DEBOUNCETIME;
+			mod->mod.qrv.debtime = 0;
+			mod->mod.qrv.radmode = 0;
+			mod->mod.qrv.txgain = 3599;
+			mod->mod.qrv.rxgain = 1199;
 			reg = 0;
-			if (!wc->mods[qrvcard].qrvhook)
+			if (!wc->mods[qrvcard].mod.qrv.hook)
 				reg |= 1;
-			if (!wc->mods[qrvcard + 1].qrvhook)
+			if (!wc->mods[qrvcard + 1].mod.qrv.hook)
 				reg |= 0x10;
 			wc->mods[qrvcard].sethook = CMD_WR(3, reg);
 			qrv_dosetup(chan,wc);
@@ -3479,26 +3479,27 @@ static int wctdm_close(struct dahdi_chan *chan)
 static int wctdm_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 {
 	struct wctdm *wc = chan->pvt;
-	int reg = 0, qrvcard;
+	int reg = 0;
 	struct wctdm_module *const mod = &wc->mods[chan->chanpos - 1];
 
 	if (mod->type == MOD_TYPE_QRV) {
-		qrvcard = (chan->chanpos - 1) & 0xfc;
+		const int qrvcard = (chan->chanpos - 1) & 0xfc;
+
 		switch(txsig) {
 		case DAHDI_TXSIG_START:
 		case DAHDI_TXSIG_OFFHOOK:
-			mod->qrvhook = 1;
+			mod->mod.qrv.hook = 1;
 			break;
 		case DAHDI_TXSIG_ONHOOK:
-			mod->qrvhook = 0;
+			mod->mod.qrv.hook = 0;
 			break;
 		default:
 			dev_notice(&wc->vb.pdev->dev, "wctdm24xxp: Can't set tx state to %d\n", txsig);
 		}
 		reg = 0;
-		if (!wc->mods[qrvcard].qrvhook)
+		if (!wc->mods[qrvcard].mod.qrv.hook)
 			reg |= 1;
-		if (!wc->mods[qrvcard + 1].qrvhook)
+		if (!wc->mods[qrvcard + 1].mod.qrv.hook)
 			reg |= 0x10;
 		wc->mods[qrvcard].sethook = CMD_WR(3, reg);
 		/* wctdm_setreg(wc, qrvcard, 3, reg); */
