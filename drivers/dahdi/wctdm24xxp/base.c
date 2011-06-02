@@ -1209,12 +1209,11 @@ wctdm_proslic_setreg_indirect(struct wctdm *wc, struct wctdm_module *const mod,
 			      unsigned char address, unsigned short data)
 {
 	int res = -1;
-	/* Translate 3215 addresses */
-	if (mod->flags & FLAG_3215) {
-		address = translate_3215(address);
-		if (address == 255)
-			return 0;
-	}
+
+	address = translate_3215(address);
+	if (address == 255)
+		return 0;
+
 	if (!wait_access(wc, mod)) {
 		wctdm_setreg(wc, mod, IDA_LO, (u8)(data & 0xFF));
 		wctdm_setreg(wc, mod, IDA_HI, (u8)((data & 0xFF00)>>8));
@@ -1230,12 +1229,11 @@ wctdm_proslic_getreg_indirect(struct wctdm *wc, struct wctdm_module *const mod,
 { 
 	int res = -1;
 	char *p=NULL;
-	/* Translate 3215 addresses */
-	if (mod->flags & FLAG_3215) {
-		address = translate_3215(address);
-		if (address == 255)
-			return 0;
-	}
+
+	address = translate_3215(address);
+	if (address == 255)
+		return 0;
+
 	if (!wait_access(wc, mod)) {
 		wctdm_setreg(wc, mod, IAA, address);
 		if (!wait_access(wc, mod)) {
@@ -1283,8 +1281,7 @@ wctdm_proslic_verify_indirect_regs(struct wctdm *wc, struct wctdm_module *mod)
 		}
 		initial = indirect_regs[i].initial;
 
-		if ((j != initial) && (!(mod->flags & FLAG_3215) ||
-		    (indirect_regs[i].altaddr != 255))) {
+		if ((j != initial) && (indirect_regs[i].altaddr != 255)) {
 			dev_notice(&wc->vb.pdev->dev,
 				   "!!!!!!! %s  iREG %X = %X  should be %X\n",
 				   indirect_regs[i].name,
@@ -2214,16 +2211,6 @@ wctdm_proslic_insane(struct wctdm *wc, struct wctdm_module *const mod)
 		}
 		return -1;
 	}
-
-	if ((blah & 0xf) < 2) {
-		dev_info(&wc->vb.pdev->dev,
-			 "ProSLIC 3210 version %d is too old\n", blah & 0xf);
-		return -1;
-	}
-
-	if (wctdm_getreg(wc, mod, 1) & 0x80)
-		/* ProSLIC 3215, not a 3210 */
-		mod->flags |= FLAG_3215;
 
 	blah = wctdm_getreg(wc, mod, 8);
 	if (blah != 0x2) {
@@ -3993,7 +3980,7 @@ static struct wctdm_span *wctdm_init_span(struct wctdm *wc, int spanno, int chan
 	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s Board %d", wc->desc->name, wc->pos + 1);
 	snprintf(s->span.location, sizeof(s->span.location) - 1,
 		 "PCI%s Bus %02d Slot %02d",
-		 (wc->mods[0].flags & FLAG_EXPRESS) ? " Express" : "",
+		 (wc->desc->flags & FLAG_EXPRESS) ? " Express" : "",
 		 pdev->bus->number, PCI_SLOT(pdev->devfn) + 1);
 	s->span.manufacturer = "Digium";
 	strncpy(s->span.devicetype, wc->desc->name, sizeof(s->span.devicetype) - 1);
@@ -4962,7 +4949,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		wc->companding = DAHDI_LAW_DEFAULT;
 
 	for (i = 0; i < NUM_MODULES; i++) {
-		wc->mods[i].flags = wc->desc->flags;
 		wc->mods[i].dacssrc = -1;
 		wc->mods[i].card = i;
 	}

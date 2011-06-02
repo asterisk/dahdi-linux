@@ -50,8 +50,7 @@
 
 #define OHT_TIMER		6000	/* How long after RING to retain OHT */
 
-#define FLAG_3215	(1 << 0)
-#define FLAG_EXPRESS	(1 << 1)
+#define FLAG_EXPRESS	(1 << 0)
 
 #define EFRAME_SIZE 108L
 #define EFRAME_GAP 20L
@@ -227,7 +226,6 @@ struct wctdm_module {
 	enum module_type type;
 	int sethook; /* pending hook state command */
 	int dacssrc;
-	int flags;   /* bitmap of board-specific + module-specific flags */
 
 	int altcs;
 	u8 card;
