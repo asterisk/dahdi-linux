@@ -864,6 +864,12 @@ struct dahdi_span_ops {
 	int (*audio_notify)(struct dahdi_chan *chan, int yes);
 #endif
 
+	/*! Opt: Enable preechocan stream from inline HW echocanceler. */
+	int (*enable_hw_preechocan)(struct dahdi_chan *chan);
+
+	/*! Opt: Disable preechocan stream from inline HW echocanceler. */
+	void (*disable_hw_preechocan)(struct dahdi_chan *chan);
+
 	/*! Opt: Dacs the contents of chan2 into chan1 if possible */
 	int (*dacs)(struct dahdi_chan *chan1, struct dahdi_chan *chan2);
 

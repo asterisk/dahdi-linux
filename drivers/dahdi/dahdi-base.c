@@ -1343,6 +1343,75 @@ static inline bool is_gain_allocated(const struct dahdi_chan *chan)
 	return (chan->rxgain && (chan->rxgain != defgain));
 }
 
+static const char *hwec_def_name = "HWEC";
+static const char *hwec_get_name(const struct dahdi_chan *chan)
+{
+	if (chan && chan->span && chan->span->ops->echocan_name)
+		return chan->span->ops->echocan_name(chan);
+	else
+		return hwec_def_name;
+}
+
+static int hwec_echocan_create(struct dahdi_chan *chan,
+	struct dahdi_echocanparams *ecp, struct dahdi_echocanparam *p,
+	struct dahdi_echocan_state **ec)
+{
+	if (chan->span && chan->span->ops->echocan_create)
+		return chan->span->ops->echocan_create(chan, ecp, p, ec);
+	else
+		return -ENODEV;
+}
+
+static const struct dahdi_echocan_factory hwec_factory = {
+	.get_name = hwec_get_name,
+	.owner = THIS_MODULE,
+	.echocan_create = hwec_echocan_create,
+};
+
+/**
+ * dahdi_enable_hw_preechocan - Let the board driver enable hwpreec if possible.
+ * @chan:	The channel to monitor.
+ *
+ * Returns 0 on success, if there is a software echocanceler attached on
+ * the channel, or the span does not have an enable_hw_preechocan callback.
+ * Otherwise an error code.
+ *
+ */
+static int dahdi_enable_hw_preechocan(struct dahdi_chan *chan)
+{
+	int res;
+	unsigned long flags;
+
+	spin_lock_irqsave(&chan->lock, flags);
+	if (chan->ec_factory != &hwec_factory)
+		res = -ENODEV;
+	else
+		res = 0;
+	spin_unlock_irqrestore(&chan->lock, flags);
+
+	if (-ENODEV == res)
+		return 0;
+
+	if (chan->span->ops->enable_hw_preechocan)
+		return chan->span->ops->enable_hw_preechocan(chan);
+	else
+		return 0;
+}
+
+/**
+ * dahdi_disable_hw_preechocan - Disable any hardware pre echocan monitoring.
+ * @chan:	The channel to stop monitoring.
+ *
+ * Give the board driver the option to free any resources needed to monitor
+ * the preechocan stream.
+ *
+ */
+static void dahdi_disable_hw_preechocan(struct dahdi_chan *chan)
+{
+	if (chan->span->ops->disable_hw_preechocan)
+		chan->span->ops->disable_hw_preechocan(chan);
+}
+
 /* 
  * close_channel - close the channel, resetting any channel variables
  * @chan: the dahdi_chan to close
@@ -1365,6 +1434,23 @@ static void close_channel(struct dahdi_chan *chan)
 #endif
 
 	might_sleep();
+
+	if (chan->conf_chan &&
+	    ((DAHDI_CONF_MONITOR_RX_PREECHO == chan->confmode) ||
+	     (DAHDI_CONF_MONITOR_TX_PREECHO == chan->confmode) ||
+	     (DAHDI_CONF_MONITORBOTH_PREECHO == chan->confmode))) {
+		void *readchunkpreec;
+
+		spin_lock_irqsave(&chan->conf_chan->lock, flags);
+		readchunkpreec = chan->conf_chan->readchunkpreec;
+		chan->conf_chan->readchunkpreec = NULL;
+		spin_unlock_irqrestore(&chan->conf_chan->lock, flags);
+
+		if (readchunkpreec) {
+			dahdi_disable_hw_preechocan(chan->conf_chan);
+			kfree(readchunkpreec);
+		}
+	}
 
 	/* XXX Buffers should be send out before reallocation!!! XXX */
 	if (!(chan->flags & DAHDI_FLAG_NOSTDTXRX))
@@ -1443,8 +1529,11 @@ static void close_channel(struct dahdi_chan *chan)
 
 	if (rxgain)
 		kfree(rxgain);
-	if (readchunkpreec)
+
+	if (readchunkpreec) {
+		dahdi_disable_hw_preechocan(chan);
 		kfree(readchunkpreec);
+	}
 
 #ifdef CONFIG_DAHDI_PPP
 	if (ppp) {
@@ -5108,6 +5197,7 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	unsigned long flags;
 	unsigned int confmode;
 	int oldconf;
+	enum {NONE, ENABLE_HWPREEC, DISABLE_HWPREEC} preec = NONE;
 
 	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
 		return -EFAULT;
@@ -5184,21 +5274,50 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 		chan->_confn = dahdi_get_conf_alias(conf.confno);
 	}
 
+	spin_unlock(&chan->lock);
+
 	if (conf_chan) {
 		if ((confmode == DAHDI_CONF_MONITOR_RX_PREECHO) ||
 		    (confmode == DAHDI_CONF_MONITOR_TX_PREECHO) ||
 		    (confmode == DAHDI_CONF_MONITORBOTH_PREECHO)) {
-			void *temp = kmalloc(sizeof(*chan->readchunkpreec) *
-					     DAHDI_CHUNKSIZE, GFP_ATOMIC);
-			conf_chan->readchunkpreec = temp;
+			if (!conf_chan->readchunkpreec) {
+				void *temp = kmalloc(sizeof(short) *
+						DAHDI_CHUNKSIZE, GFP_ATOMIC);
+				if (temp) {
+					preec = ENABLE_HWPREEC;
+
+					spin_lock(&conf_chan->lock);
+					conf_chan->readchunkpreec = temp;
+					spin_unlock(&conf_chan->lock);
+				}
+			}
 		} else {
+			preec = DISABLE_HWPREEC;
+
+			spin_lock(&conf_chan->lock);
 			kfree(conf_chan->readchunkpreec);
 			conf_chan->readchunkpreec = NULL;
+			spin_unlock(&conf_chan->lock);
 		}
 	}
 
-	spin_unlock(&chan->lock);
 	spin_unlock_irqrestore(&chan_lock, flags);
+
+	if (ENABLE_HWPREEC == preec) {
+		int res = dahdi_enable_hw_preechocan(conf_chan);
+		if (res) {
+			spin_lock_irqsave(&chan_lock, flags);
+			spin_lock(&conf_chan->lock);
+			kfree(conf_chan->readchunkpreec);
+			conf_chan->readchunkpreec = NULL;
+			spin_unlock(&conf_chan->lock);
+			spin_unlock_irqrestore(&chan_lock, flags);
+		}
+		return res;
+	} else if (DISABLE_HWPREEC == preec) {
+		dahdi_disable_hw_preechocan(conf_chan);
+	}
+
 	dahdi_check_conf(oldconf);
 	if (copy_to_user((void __user *)data, &conf, sizeof(conf)))
 		return -EFAULT;
@@ -6497,6 +6616,13 @@ static int _dahdi_register(struct dahdi_span *span, int prefmaster)
 	if (!span || !span->ops || !span->ops->owner)
 		return -EINVAL;
 
+	if (span->ops->enable_hw_preechocan ||
+	    span->ops->disable_hw_preechocan) {
+		if ((NULL == span->ops->enable_hw_preechocan) ||
+		    (NULL == span->ops->disable_hw_preechocan))
+			return -EINVAL;
+	}
+
 	if (!span->deflaw) {
 		module_printk(KERN_NOTICE, "Span %s didn't specify default law.  "
 				"Assuming mulaw, please fix driver!\n", span->name);
@@ -7750,6 +7876,8 @@ void __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk,
 	short rxlin;
 	int x;
 
+	spin_lock(&ss->lock);
+
 	if (ss->readchunkpreec) {
 		/* Save a copy of the audio before the echo can has its way with it */
 		for (x = 0; x < DAHDI_CHUNKSIZE; x++)
@@ -7811,6 +7939,8 @@ void __dahdi_ec_chunk(struct dahdi_chan *ss, u8 *rxchunk,
 		dahdi_kernel_fpu_end();
 #endif
 	}
+
+	spin_unlock(&ss->lock);
 }
 EXPORT_SYMBOL(__dahdi_ec_chunk);
 
@@ -7829,10 +7959,7 @@ void _dahdi_ec_span(struct dahdi_span *span)
 		struct dahdi_chan *const chan = span->chans[x];
 		if (!chan->ec_current)
 			continue;
-
-		spin_lock(&chan->lock);
 		_dahdi_ec_chunk(chan, chan->readchunk, chan->writechunk);
-		spin_unlock(&chan->lock);
 	}
 }
 EXPORT_SYMBOL(_dahdi_ec_span);
@@ -9371,31 +9498,6 @@ static void __exit watchdog_cleanup(void)
 }
 
 #endif
-
-static const char *hwec_def_name = "HWEC";
-static const char *hwec_get_name(const struct dahdi_chan *chan)
-{
-	if (chan && chan->span && chan->span->ops->echocan_name)
-		return chan->span->ops->echocan_name(chan);
-	else
-		return hwec_def_name;
-}
-
-static int hwec_echocan_create(struct dahdi_chan *chan,
-	struct dahdi_echocanparams *ecp, struct dahdi_echocanparam *p,
-	struct dahdi_echocan_state **ec)
-{
-	if (chan->span && chan->span->ops->echocan_create)
-		return chan->span->ops->echocan_create(chan, ecp, p, ec);
-	else
-		return -ENODEV;
-}
-
-static const struct dahdi_echocan_factory hwec_factory = {
-	.get_name = hwec_get_name,
-	.owner = THIS_MODULE,
-	.echocan_create = hwec_echocan_create,
-};
 
 static int __init dahdi_init(void)
 {
