@@ -4056,8 +4056,7 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 	else
 		sprintf(s->span.name, "WCTDM/%d", card_position);
 
-	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s Board %d",
-		 wc->desc->name, card_position + 1);
+	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s", wc->desc->name);
 	snprintf(s->span.location, sizeof(s->span.location) - 1,
 		 "PCI%s Bus %02d Slot %02d",
 		 (wc->desc->flags & FLAG_EXPRESS) ? " Express" : "",
