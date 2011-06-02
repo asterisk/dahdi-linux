@@ -1475,9 +1475,17 @@ static int dahdi_ioctl_freezone(unsigned long data)
 	}
 	if (found) {
 		list_del(&found->node);
-		tone_zone_put(found);
 	}
 	spin_unlock(&zone_lock);
+
+	if (found) {
+		if (debug) {
+			module_printk(KERN_INFO,
+				      "Unregistering tone zone %d (%s)\n",
+				      found->num, found->name);
+		}
+		tone_zone_put(found);
+	}
 	return 0;
 }
 
@@ -1496,8 +1504,11 @@ static int dahdi_register_tone_zone(struct dahdi_zone *zone)
 	}
 	if (!res) {
 		list_add_tail(&zone->node, &tone_zones);
-		module_printk(KERN_INFO, "Registered tone zone %d (%s)\n",
-			      zone->num, zone->name);
+		if (debug) {
+			module_printk(KERN_INFO,
+				      "Registered tone zone %d (%s)\n",
+				      zone->num, zone->name);
+		}
 	}
 	spin_unlock(&zone_lock);
 
