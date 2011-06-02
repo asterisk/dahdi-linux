@@ -2183,10 +2183,18 @@ int b400m_spanconfig(struct file *file, struct dahdi_span *span,
 	struct wctdm *wc;
 	int te_mode, term;
 	int pos;
+	int res;
 
 	bspan = bspan_from_dspan(span);
 	b4 = bspan->parent;
 	wc = b4->wc;
+
+	if ((file->f_flags & O_NONBLOCK) && !wc->initialized)
+		return -EAGAIN;
+
+	res = wctdm_wait_for_ready(wc);
+	if (res)
+		return res;
 
 	b400m_disable_workqueues(b4->wc);
 
@@ -2257,6 +2265,13 @@ int b400m_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	struct b400m_span *bspan = bspan_from_dspan(chan->span);
 	struct b400m *b4 = bspan->parent;
 	int res;
+
+	if ((file->f_flags & O_NONBLOCK) && !b4->wc->initialized)
+		return -EAGAIN;
+
+	res = wctdm_wait_for_ready(b4->wc);
+	if (res)
+		return res;
 
 	alreadyrunning = bspan->wspan->span.flags & DAHDI_FLAG_RUNNING;
 

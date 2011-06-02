@@ -3564,6 +3564,42 @@ static int wctdm_dacs(struct dahdi_chan *dst, struct dahdi_chan *src)
 	return 0;
 }
 
+/**
+ * wctdm_wait_for_ready
+ *
+ * Check if the board has finished any setup and is ready to start processing
+ * calls.
+ */
+int wctdm_wait_for_ready(const struct wctdm *wc)
+{
+	while (!wc->initialized) {
+		if (fatal_signal_pending(current))
+			return -EIO;
+		msleep_interruptible(250);
+	}
+	return 0;
+}
+
+/**
+ * wctdm_chanconfig - Called when the channels are being configured.
+ *
+ * Ensure that the card is completely ready to go before we allow the channels
+ * to be completely configured. This is to allow lengthy initialization
+ * actions to take place in background on driver load and ensure we're synced
+ * up by the time dahdi_cfg is run.
+ *
+ */
+static int
+wctdm_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
+{
+	struct wctdm *wc = chan->pvt;
+
+	if ((file->f_flags & O_NONBLOCK) && !wc->initialized)
+		return -EAGAIN;
+
+	return wctdm_wait_for_ready(wc);
+}
+
 static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.owner = THIS_MODULE,
 	.hooksig = wctdm_hooksig,
@@ -3571,6 +3607,7 @@ static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.close = wctdm_close,
 	.ioctl = wctdm_ioctl,
 	.watchdog = wctdm_watchdog,
+	.chanconfig = wctdm_chanconfig,
 	.dacs = wctdm_dacs,
 #ifdef VPM_SUPPORT
 	.echocan_create = wctdm_echocan_create,

@@ -270,6 +270,8 @@ struct wctdm {
 int wctdm_getreg(struct wctdm *wc, int card, int addr);
 int wctdm_setreg(struct wctdm *wc, int card, int addr, int val);
 
+int wctdm_wait_for_ready(const struct wctdm *wc);
+
 extern struct semaphore ifacelock;
 extern struct wctdm *ifaces[WC_MAX_IFACES];
 
