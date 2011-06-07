@@ -33,6 +33,7 @@
 #include <linux/types.h>
 #include <linux/ppp_defs.h> 
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include "bittest.h"
@@ -64,30 +65,40 @@ void print_packet(unsigned char *buf, int len)
 	printf("}\n");
 }
 
-int channel_open(char *name, int *bs)
+int channel_open(const char *name, int *bs)
 {
-	int 			channo;
-	int			fd;
-	struct 			dahdi_params tp;
-	char 			*dev;
+	int	channo, fd;
+	struct	dahdi_params tp;
+	struct	stat filestat;
 
-	channo = atoi(name);
-	/* channo==0: The user passed a file name to be opened. */
-	dev = channo ? DEVICE : name;
-
-	fd = open(dev, O_RDWR, 0600);
-
-	if (fd < 0) {
-		perror(DEVICE);
+	/* stat file, if character device, open it */
+	channo = strtoul(name, NULL, 10);
+	fd = stat(name, &filestat);
+	if (!fd && S_ISCHR(filestat.st_mode)) {
+		fd = open(name, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(name);
+			return -1;
+		}
+	/* try out the dahdi_specify interface */
+	} else if (channo > 0) {
+		fd = open(DEVICE, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(DEVICE);
+			return -1;
+		}
+		if (ioctl(fd, DAHDI_SPECIFY, &channo) < 0) {
+			perror("DAHDI_SPECIFY ioctl failed");
+			return -1;
+		}
+	/* die */
+	} else {
+		fprintf(stderr, "Specified channel is not a valid character "
+			"device or channel number");
 		return -1;
 	}
 
-	/* If we got a channel number, get it from /dev/dahdi/channel: */
-	if(channo && ioctl(fd, DAHDI_SPECIFY, &channo) < 0) {
-		perror("SPECIFY");
-		return -1;
-	}
-	if(ioctl(fd, DAHDI_SET_BLOCKSIZE, bs) < 0) {
+	if (ioctl(fd, DAHDI_SET_BLOCKSIZE, bs) < 0) {
 		perror("SET_BLOCKSIZE");
 		return -1;
 	}

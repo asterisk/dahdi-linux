@@ -39,6 +39,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
@@ -47,6 +48,7 @@
 #include "dahdi_tools_version.h"
 
 #define BLOCK_SIZE	2039
+#define DEVICE	"/dev/dahdi/channel"
 
 #define CONTEXT_SIZE	7
 /* Prints a set of bytes in hex format */
@@ -97,12 +99,57 @@ static void usage(const char * progname)
 	printf("\n\t Also accepts old style usage:\n\t  %s <device name> [<timeout in secs>]\n", progname);
 }
 
+int channel_open(const char *name, int *bs)
+{
+	int	channo, fd;
+	struct	dahdi_params tp;
+	struct	stat filestat;
+
+	/* stat file, if character device, open it */
+	channo = strtoul(name, NULL, 10);
+	fd = stat(name, &filestat);
+	if (!fd && S_ISCHR(filestat.st_mode)) {
+		fd = open(name, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(name);
+			return -1;
+		}
+	/* try out the dahdi_specify interface */
+	} else if (channo > 0) {
+		fd = open(DEVICE, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(DEVICE);
+			return -1;
+		}
+		if (ioctl(fd, DAHDI_SPECIFY, &channo) < 0) {
+			perror("DAHDI_SPECIFY ioctl failed");
+			return -1;
+		}
+	/* die */
+	} else {
+		fprintf(stderr, "Specified channel is not a valid character "
+			"device or channel number");
+		return -1;
+	}
+
+	if (ioctl(fd, DAHDI_SET_BLOCKSIZE, bs) < 0) {
+		perror("SET_BLOCKSIZE");
+		return -1;
+	}
+
+	if (ioctl(fd, DAHDI_GET_PARAMS, &tp)) {
+		fprintf(stderr, "Unable to get channel parameters\n");
+		return -1;
+	}
+
+	return fd;
+}
+
 int main(int argc, char *argv[])
 {
 	int fd;
 	int res, x;
 	int i;
-	struct dahdi_params tp;
 	int bs = BLOCK_SIZE;
 	int skipcount = 10;
 	unsigned char c=0,c1=0;
@@ -173,19 +220,9 @@ int main(int argc, char *argv[])
 	
 	time_t start_time = 0;
 
-	fd = open(device, O_RDWR, 0600);
-	if (fd < 0) {
-		fprintf(stderr, "Unable to open %s: %s\n", device, strerror(errno));
+	fd = channel_open(device, &bs);
+	if (fd < 0)
 		exit(1);
-	}
-	if (ioctl(fd, DAHDI_SET_BLOCKSIZE, &bs)) {
-		fprintf(stderr, "Unable to set block size to %d: %s\n", bs, strerror(errno));
-		exit(1);
-	}
-	if (ioctl(fd, DAHDI_GET_PARAMS, &tp)) {
-		fprintf(stderr, "Unable to get channel parameters\n");
-		exit(1);
-	}
 	ioctl(fd, DAHDI_GETEVENT);
 
 	i = DAHDI_FLUSH_ALL;
@@ -299,3 +336,4 @@ read_again:
 	}
 	
 }
+
