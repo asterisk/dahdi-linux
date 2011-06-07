@@ -145,7 +145,6 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 int main(int argc, char *argv[])
 {
 	char			*devpath = NULL;
-	struct astribank_device *astribank;
 	int			opt_pic = 0;
 	int			opt_dest = 0;
 	enum dev_dest		dest = DEST_NONE;
@@ -244,7 +243,7 @@ int main(int argc, char *argv[])
 				return 1;
 			}
 		}
+		astribank_close(astribank, 0);
 	}
-	astribank_close(astribank, 0);
 	return 0;
 }
