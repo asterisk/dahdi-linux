@@ -2233,13 +2233,14 @@ static void handle_hx8_transmit(struct voicebus *vb, struct list_head *buffers)
 
 static int wctdm_voicedaa_insane(struct wctdm *wc, struct wctdm_module *mod)
 {
-	int blah[] = {2, 11};
-	wctdm_getregs(wc, mod, blah, ARRAY_SIZE(blah));
-	if (blah[0] != 0x3)
+	int blah;
+	blah = wctdm_getreg(wc, mod, 2);
+	if (blah != 0x3)
 		return -2;
+	blah = wctdm_getreg(wc, mod, 11);
 	if (debug & DEBUG_CARD) {
 		dev_info(&wc->vb.pdev->dev,
-			 "VoiceDAA System: %02x\n", blah[1] & 0xf);
+			 "VoiceDAA System: %02x\n", blah & 0xf);
 	}
 	return 0;
 }
