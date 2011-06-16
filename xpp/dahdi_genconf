@@ -38,7 +38,7 @@ sub spans_prep($@) {
 	my $gconfig = shift || die;
 	my @spans = @_;
 	foreach my $span (@spans) {
-		if($span->is_pri) {
+		if($span->is_pri || $span->is_bri) {
 			$span->pri_set_fromconfig($gconfig);
 		}
 	}

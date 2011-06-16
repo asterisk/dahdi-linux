@@ -151,6 +151,11 @@ my @pri_strings = (
 		'WP(E1|T1)/.* "wanpipe',           # Sangoma E1/T1
 		);
 
+my @soft_term_type_strings = (
+		'Xorcom XPD.*: (E1|T1)',           # Astribank PRI
+		'(WCBRI)', # has selectable NT/TE modes via dahdi_cfg
+);
+
 our $DAHDI_BRI_NET = 'bri_net';
 our $DAHDI_BRI_CPE = 'bri_cpe';
 
@@ -196,6 +201,7 @@ sub new($$) {
 			$self->{TYPE} = "BRI_$termtype";
 			$self->{DCHAN_IDX} = 2;
 			$self->{BCHAN_LIST} = [ 0, 1 ];
+			$self->init_proto('BRI');
 			last;
 		}
 	}
@@ -214,6 +220,13 @@ sub new($$) {
 			$self->{IS_PRI} = 1;
 			$self->{TERMTYPE} = $termtype;
 			$self->init_proto($proto);
+			last;
+		}
+	}
+	$self->{IS_SOFT_TERM_TYPE} = 0;
+	foreach my $cardtype (@soft_term_type_strings) {
+		if($head =~ m/$cardtype/) {
+			$self->{IS_SOFT_TERM_TYPE} = 1;
 			last;
 		}
 	}
@@ -305,7 +318,11 @@ sub set_termtype($$) {
 	my $span = shift || die;
 	my $termtype = shift || die;
 	$span->{TERMTYPE} = $termtype;
-	$span->{SIGNALLING} = ($termtype eq 'NT') ? $DAHDI_PRI_NET : $DAHDI_PRI_CPE ;
+	if ($span->is_pri) {
+		$span->{SIGNALLING} = ($termtype eq 'NT') ? $DAHDI_PRI_NET : $DAHDI_PRI_CPE ;
+	} elsif ($span->is_bri) {
+		$span->{SIGNALLING} = ($termtype eq 'NT') ? $DAHDI_BRI_NET : $DAHDI_BRI_CPE ;
+	}
 	$span->{TYPE} = $span->proto . "_$termtype";
 }
 
@@ -313,6 +330,7 @@ sub pri_set_fromconfig($$) {
 	my $span = shift || die;
 	my $genconf = shift || die;
 	my $name = $span->name;
+	return unless $span->is_soft_term_type;
 #	if(defined $termtype) {
 #		die "Termtype for $name already defined as $termtype\n";
 #	}
