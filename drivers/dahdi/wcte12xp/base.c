@@ -1666,8 +1666,6 @@ static int t1_software_init(struct t1 *wc)
 		return -1;
 	}
 
-	set_bit(INITIALIZED, &wc->bit_flags);
-
 	return 0;
 }
 
@@ -2454,8 +2452,16 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 		}
 	}
 
+	res = t1_software_init(wc);
+	if (res) {
+		voicebus_release(&wc->vb);
+		free_wc(wc);
+		return res;
+	}
+
+	set_bit(INITIALIZED, &wc->bit_flags);
 	mod_timer(&wc->timer, jiffies + HZ/5);
-	t1_software_init(wc);
+
 	t1_info(wc, "Found a %s\n", wc->variety);
 	voicebus_unlock_latency(&wc->vb);
 
