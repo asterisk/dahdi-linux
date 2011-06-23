@@ -97,7 +97,7 @@ sub by_type {
 }
 
 sub by_xpporder {
-	my $cmp = $a->xpporder cmp $b->xpporder;
+	my $cmp = $a->xpporder <=> $b->xpporder;
 	return $cmp if $cmp != 0;
 	return $a->connector cmp $b->connector;
 }
