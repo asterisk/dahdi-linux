@@ -8751,39 +8751,13 @@ static void process_timers(void)
 	spin_unlock(&dahdi_timer_lock);
 }
 
-/**
- * dahdi_timer_poll - Poll function for a dahdi_timer.
- * @file:	Open timer handle.
- * @wait_table: Just passing through...
- *
- * Returns 0 if there isn't anything to wake us up, otherwise POLLPRI if there
- * is an event waiting on the timer.
- *
- * Older versions of Asterisk depend on the behavior that this poll will block
- * indefintely if the timer has not been configured, so if there is no rate
- * attached to the timer, this function must return 0.
- *
- */
-static unsigned int
-dahdi_timer_poll(struct file *file, struct poll_table_struct *wait_table)
+static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct *wait_table)
 {
 	struct dahdi_timer *timer = file->private_data;
-	struct dahdi_timer_rate *rate;
+	struct dahdi_timer_rate *rate = timer->rate;
 
-	if (!timer)
+	if (!rate || !timer)
 		return -EINVAL;
-
-	rate = timer->rate;
-
-	if (!rate) {
-		static bool __once;
-		if (!__once) {
-			__once = true;
-			module_printk(KERN_NOTICE,
-				      "Calling poll on unconfigured timer.\n");
-		}
-		return 0;
-	}
 
 	poll_wait(file, &rate->sel, wait_table);
 	if (atomic_read(&timer->tripped) || atomic_read(&timer->ping))
