@@ -1160,7 +1160,7 @@ static int xhfc_find_sync_with_timingcable(struct b400m *b4)
 	}
 
 	for (j = 0; j < WC_MAX_IFACES && ifaces[j]; j++) {
-		if (!ifaces[j]->initialized) {
+		if (is_initialized(ifaces[j])) {
 			set_bit(WCTDM_CHECK_TIMING, &wc->checkflag);
 			osrc = -2;
 			goto out;
@@ -2194,7 +2194,7 @@ int b400m_spanconfig(struct file *file, struct dahdi_span *span,
 	b4 = bspan->parent;
 	wc = b4->wc;
 
-	if ((file->f_flags & O_NONBLOCK) && !wc->initialized)
+	if ((file->f_flags & O_NONBLOCK) && !is_initialized(wc))
 		return -EAGAIN;
 
 	res = wctdm_wait_for_ready(wc);
@@ -2271,7 +2271,7 @@ int b400m_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	struct b400m *b4 = bspan->parent;
 	int res;
 
-	if ((file->f_flags & O_NONBLOCK) && !b4->wc->initialized)
+	if ((file->f_flags & O_NONBLOCK) && !is_initialized(b4->wc))
 		return -EAGAIN;
 
 	res = wctdm_wait_for_ready(b4->wc);
@@ -2395,7 +2395,7 @@ static void xhfc_work(struct work_struct *work)
 	int i, j, k, fifo;
 	unsigned char b, b2;
 
-	if (b4->shutdown || !b4->wc->initialized)
+	if (b4->shutdown || !is_initialized(b4->wc))
 		return;
 
 	b4->irq_oview = b400m_getreg(b4, R_IRQ_OVIEW);
@@ -2518,7 +2518,7 @@ void wctdm_bri_checkisr(struct wctdm *wc, struct wctdm_module *const mod,
 		return;
 
 	/* DEFINITELY don't do anything if our structures aren't ready! */
-	if (!wc->initialized || !b4 || !b4->inited)
+	if (!is_initialized(wc) || !b4 || !b4->inited)
 		return;
 
 	if (offset == 0) {

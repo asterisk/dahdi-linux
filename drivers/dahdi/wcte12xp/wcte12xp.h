@@ -139,7 +139,7 @@ struct t1 {
 	struct timer_list timer;
 	struct work_struct timer_work;
 	struct workqueue_struct *wq;
-	bool initialized;	/* 0 when entire card is ready to go */
+	unsigned int not_ready;	/* 0 when entire card is ready to go */
 };
 
 #define t1_info(t1, format, arg...)         \

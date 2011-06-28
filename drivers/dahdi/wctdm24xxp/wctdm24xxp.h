@@ -273,10 +273,16 @@ struct wctdm {
 	struct semaphore syncsem;
 	int oldsync;
 
-	int initialized;	 /* 0 when the entire card is ready to go */
+	int not_ready;		 /* 0 when the entire card is ready to go */
 	unsigned long checkflag; /* Internal state flags and task bits */
 	int companding;
 };
+
+static inline bool is_initialized(struct wctdm *wc)
+{
+	WARN_ON(wc->not_ready < 0);
+	return (wc->not_ready == 0);
+}
 
 /* Atomic flag bits for checkflag field */
 #define WCTDM_CHECK_TIMING	0

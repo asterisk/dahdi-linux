@@ -23,6 +23,7 @@
  */
 
 #include <linux/jiffies.h>
+#include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/crc32.h>
 
@@ -291,9 +292,36 @@ error:
 	return -1;
 }
 
+/**
+ * vpmoct_get_mode - Return the current operating mode of the VPMOCT032.
+ * @vpm:	The vpm to query.
+ *
+ * Will be either BOOTLOADER, APPLICATION, or UNKNOWN.
+ *
+ */
+static enum vpmoct_mode vpmoct_get_mode(struct vpmoct *vpm)
+{
+	int i;
+	enum vpmoct_mode ret = UNKNOWN;
+	char identifier[11] = {0};
+
+	for (i = 0; i < ARRAY_SIZE(identifier) - 1; i++)
+		identifier[i] = vpmoct_read_byte(vpm, VPMOCT_IDENT+i);
+
+	if (!memcmp(identifier, "bootloader", sizeof(identifier) - 1))
+		ret = BOOTLOADER;
+	else if (!memcmp(identifier, "VPMOCT032\0", sizeof(identifier) - 1))
+		ret = APPLICATION;
+
+	dev_dbg(vpm->dev, "vpmoct identifier: %s\n", identifier);
+	return ret;
+}
+
+
 static inline short
 vpmoct_check_firmware_crc(struct vpmoct *vpm, size_t size, u8 major, u8 minor)
 {
+	short ret = 0;
 	u8 status;
 
 	/* Load firmware size */
@@ -311,15 +339,29 @@ vpmoct_check_firmware_crc(struct vpmoct *vpm, size_t size, u8 major, u8 minor)
 		dev_info(vpm->dev,
 			 "vpmoct firmware CRC check failed: %x\n", status);
 		/* TODO: Try the load again */
-		return -1;
+		ret = -1;
 	} else {
-		dev_info(vpm->dev, "vpmoct firmware uploaded successfully\n");
+
 		/* Switch to application code */
 		vpmoct_write_dword(vpm, VPMOCT_BOOT_ADDRESS2, 0xDEADBEEF);
-		/* Soft reset the processor */
 		vpmoct_write_byte(vpm, VPMOCT_BOOT_CMD, VPMOCT_BOOT_REBOOT);
-		return 0;
+
+		msleep(250);
+		status = vpmoct_resync(vpm);
+
+		if (APPLICATION != vpmoct_get_mode(vpm)) {
+			dev_info(vpm->dev,
+				 "vpmoct firmware failed to switch to "
+				 "application. (%x)\n", status);
+			ret = -1;
+		} else {
+			vpm->mode = APPLICATION;
+			dev_info(vpm->dev,
+				 "vpmoct firmware uploaded successfully\n");
+		}
 	}
+
+	return ret;
 }
 
 static inline short vpmoct_switch_to_boot(struct vpmoct *vpm)
@@ -330,8 +372,60 @@ static inline short vpmoct_switch_to_boot(struct vpmoct *vpm)
 		dev_info(vpm->dev, "Failed to switch to bootloader\n");
 		return -1;
 	}
-	vpm->mode = VPMOCT_MODE_BOOTLOADER;
+	vpm->mode = BOOTLOADER;
 	return 0;
+}
+
+struct vpmoct_load_work {
+	struct vpmoct *vpm;
+	struct work_struct work;
+	struct workqueue_struct *wq;
+	load_complete_func_t load_complete;
+	bool operational;
+};
+
+/**
+ * vpmoct_load_complete_fn -
+ *
+ * This function should run in the context of one of the system workqueues so
+ * that it can destroy any workqueues that may have been created to setup a
+ * long running firmware load.
+ *
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void vpmoct_load_complete_fn(void *data)
+{
+	struct vpmoct_load_work *work = data;
+#else
+static void vpmoct_load_complete_fn(struct work_struct *data)
+{
+	struct vpmoct_load_work *work =
+			container_of(data, struct vpmoct_load_work, work);
+#endif
+	/* Do not touch work->vpm after calling load complete. It may have
+	 * been freed in the function by the board driver. */
+	work->load_complete(work->vpm->dev, work->operational);
+	destroy_workqueue(work->wq);
+	kfree(work);
+}
+
+/**
+ * vpmoct_load_complete - Call the load_complete function in a system workqueue.
+ * @work:
+ * @operational:	Whether the VPM is functioning or not.
+ *
+ */
+static void
+vpmoct_load_complete(struct vpmoct_load_work *work, bool operational)
+{
+	work->operational = operational;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&work->work, vpmoct_load_complete_fn, work);
+#else
+	INIT_WORK(&work->work, vpmoct_load_complete_fn);
+#endif
+	schedule_work(&work->work);
 }
 
 static bool is_valid_vpmoct_firmware(const struct firmware *fw)
@@ -353,38 +447,38 @@ static void vpmoct_set_defaults(struct vpmoct *vpm)
  * vpmoct_load_flash - Check the current flash version and possibly load.
  * @vpm:  The VPMOCT032 module to check / load.
  *
- * Returns 0 on success, otherwise an error message.
- *
- * Must be called in process context.
- *
  */
-static int vpmoct_load_flash(struct vpmoct *vpm)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void vpmoct_load_flash(void *data)
 {
-	int firm;
+	struct vpmoct_load_work *work = data;
+#else
+static void vpmoct_load_flash(struct work_struct *data)
+{
+	struct vpmoct_load_work *work =
+			container_of(data, struct vpmoct_load_work, work);
+#endif
+	int res;
+	struct vpmoct *const vpm = work->vpm;
 	const struct firmware *fw;
 	const struct vpmoct_header *header;
 	char serial[VPMOCT_SERIAL_SIZE+1];
 	const char *const FIRMWARE_NAME = "dahdi-fw-vpmoct032.bin";
 	int i;
 
-	/* Load the firmware */
-	firm = request_firmware(&fw, FIRMWARE_NAME, vpm->dev);
-	if (firm) {
-		dev_info(vpm->dev, "vpmoct: Failed to load firmware from"\
-				" userspace!, %d\n", firm);
-		return -ENOMEM;
-	}
-
-	if (!is_valid_vpmoct_firmware(fw)) {
+	res = request_firmware(&fw, FIRMWARE_NAME, vpm->dev);
+	if (res) {
 		dev_warn(vpm->dev,
-			 "%s is invalid. Please reinstall.\n", FIRMWARE_NAME);
-		release_firmware(fw);
-		return -EINVAL;
+			 "vpmoct: Failed to load firmware from userspace! %d\n",
+			 res);
+		header = NULL;
+		fw = NULL;
+	} else {
+		header = (const struct vpmoct_header *)fw->data;
 	}
 
-	header = (const struct vpmoct_header *)fw->data;
+	if (vpm->mode == APPLICATION) {
 
-	if (vpm->mode == VPMOCT_MODE_APPLICATION) {
 		/* Check the running application firmware
 		 * for the proper version */
 		vpm->major = vpmoct_read_byte(vpm, VPMOCT_MAJOR);
@@ -393,16 +487,37 @@ static int vpmoct_load_flash(struct vpmoct *vpm)
 			serial[i] = vpmoct_read_byte(vpm, VPMOCT_SERIAL+i);
 		serial[VPMOCT_SERIAL_SIZE] = '\0';
 
-		dev_info(vpm->dev, "vpmoct: Detected firmware v%d.%d\n",
-				vpm->major, vpm->minor);
-		dev_info(vpm->dev, "vpmoct: Serial %s\n", serial);
+		dev_info(vpm->dev,
+			 "vpmoct: Detected firmware v%d.%d Serial: %s\n",
+			 vpm->major, vpm->minor,
+			 (serial[0] != -1) ? serial : "(None)");
+
+		if (!fw) {
+			/* Again, we'll use the existing loaded firmware. */
+			vpmoct_set_defaults(vpm);
+			vpmoct_load_complete(work, true);
+			return;
+		}
+
+		if (!is_valid_vpmoct_firmware(fw)) {
+			dev_warn(vpm->dev,
+				 "%s is invalid. Please reinstall.\n",
+				 FIRMWARE_NAME);
+
+			/* Just use the old version of the fimware. */
+			release_firmware(fw);
+			vpmoct_set_defaults(vpm);
+			vpmoct_load_complete(work, true);
+			return;
+		}
 
 		if (vpm->minor == header->minor &&
 		    vpm->major == header->major) {
 			/* Proper version is running */
 			release_firmware(fw);
 			vpmoct_set_defaults(vpm);
-			return 0;
+			vpmoct_load_complete(work, true);
+			return;
 		} else {
 
 			/* Incorrect version of application code is
@@ -410,6 +525,15 @@ static int vpmoct_load_flash(struct vpmoct *vpm)
 			if (vpmoct_switch_to_boot(vpm))
 				goto error;
 		}
+	}
+
+	if (!fw) {
+		vpmoct_load_complete(work, false);
+		return;
+	} else if (!is_valid_vpmoct_firmware(fw)) {
+		dev_warn(vpm->dev,
+			 "%s is invalid. Please reinstall.\n", FIRMWARE_NAME);
+		goto error;
 	}
 
 	dev_info(vpm->dev, "vpmoct: Uploading firmware, v%d.%d. This can "\
@@ -426,12 +550,15 @@ static int vpmoct_load_flash(struct vpmoct *vpm)
 		goto error;
 	release_firmware(fw);
 	vpmoct_set_defaults(vpm);
-	return 0;
+	vpmoct_load_complete(work, true);
+	return;
 
 error:
 	dev_info(vpm->dev, "Unable to load firmware\n");
 	release_firmware(fw);
-	return -1;
+	/* TODO: Should we disable module if the firmware doesn't load? */
+	vpmoct_load_complete(work, false);
+	return;
 }
 
 struct vpmoct *vpmoct_alloc(void)
@@ -452,44 +579,82 @@ EXPORT_SYMBOL(vpmoct_alloc);
 
 void vpmoct_free(struct vpmoct *vpm)
 {
+	unsigned long flags;
+	struct vpmoct_cmd *cmd;
+	LIST_HEAD(list);
+
+	if (!vpm)
+		return;
+
+	spin_lock_irqsave(&vpm->list_lock, flags);
+	list_splice(&vpm->active_list, &list);
+	list_splice(&vpm->pending_list, &list);
+	spin_unlock_irqrestore(&vpm->list_lock, flags);
+
+	while (!list_empty(&list)) {
+		cmd = list_entry(list.next, struct vpmoct_cmd, node);
+		list_del(&cmd->node);
+		kfree(cmd);
+	}
+
 	kfree(vpm);
 }
 EXPORT_SYMBOL(vpmoct_free);
 
 /**
  * vpmoct_init - Check for / initialize VPMOCT032 module.
- * @vpm:	struct vpmoct allocated with vpmoct_alloc
+ * @vpm:		struct vpmoct allocated with vpmoct_alloc
+ * @load_complete_fn:	Function to call when the load is complete.
  *
- * Returns 0 on success or an error code.
+ * Check to see if there is a VPMOCT module installed. If there appears to be
+ * one return 0 and perform any necessary setup in the background. The
+ * load_complete function will be called in a system global workqueue when the
+ * initialization is complete.
  *
  * Must be called in process context.
  */
-int vpmoct_init(struct vpmoct *vpm)
+int vpmoct_init(struct vpmoct *vpm, load_complete_func_t load_complete)
 {
-	unsigned int i;
-	char identifier[10];
+	struct vpmoct_load_work *work;
 
-	if (vpmoct_resync(vpm))
-		return -ENODEV;
+	if (!vpm || !vpm->dev || !load_complete)
+		return -EINVAL;
 
-	/* Probe for vpmoct ident string */
-	for (i = 0; i < ARRAY_SIZE(identifier); i++)
-		identifier[i] = vpmoct_read_byte(vpm, VPMOCT_IDENT+i);
-
-	if (!memcmp(identifier, "bootloader", sizeof(identifier))) {
-		/* vpmoct is in bootloader mode */
-		dev_info(vpm->dev, "Detected vpmoct bootloader, attempting "\
-				"to load firmware\n");
-		vpm->mode = VPMOCT_MODE_BOOTLOADER;
-		return vpmoct_load_flash(vpm);
-	} else if (!memcmp(identifier, "VPMOCT032\0", sizeof(identifier))) {
-		/* vpmoct is in application mode */
-		vpm->mode = VPMOCT_MODE_APPLICATION;
-		return vpmoct_load_flash(vpm);
-	} else {
-		/* No vpmoct is installed */
+	if (vpmoct_resync(vpm)) {
+		load_complete(vpm->dev, false);
 		return -ENODEV;
 	}
+
+	vpm->mode = vpmoct_get_mode(vpm);
+
+	if (UNKNOWN == vpm->mode) {
+		load_complete(vpm->dev, false);
+		return -ENODEV;
+	}
+
+	work = kzalloc(sizeof(*work), GFP_KERNEL);
+	if (!work) {
+		load_complete(vpm->dev, false);
+		return -ENOMEM;
+	}
+
+	work->wq = create_singlethread_workqueue("vpmoct");
+	if (!work->wq) {
+		kfree(work);
+		load_complete(vpm->dev, false);
+		return -ENOMEM;
+	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&work->work, vpmoct_load_flash, work);
+#else
+	INIT_WORK(&work->work, vpmoct_load_flash);
+#endif
+
+	work->vpm = vpm;
+	work->load_complete = load_complete;
+	queue_work(work->wq, &work->work);
+	return 0;
 }
 EXPORT_SYMBOL(vpmoct_init);
 

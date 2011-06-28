@@ -1054,8 +1054,24 @@ static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 
 static inline bool is_initialized(struct t1 *wc)
 {
-	WARN_ON(wc->initialized < 0);
-	return (wc->initialized == 0);
+	WARN_ON(wc->not_ready < 0);
+	return (wc->not_ready == 0);
+}
+
+/**
+ * t1_wait_for_ready
+ *
+ * Check if the board has finished any setup and is ready to start processing
+ * calls.
+ */
+static int t1_wait_for_ready(struct t1 *wc)
+{
+	while (!is_initialized(wc)) {
+		if (fatal_signal_pending(current))
+			return -EIO;
+		msleep_interruptible(250);
+	}
+	return 0;
 }
 
 static int t1xxp_chanconfig(struct file *file,
@@ -1066,11 +1082,7 @@ static int t1xxp_chanconfig(struct file *file,
 	if (file->f_flags & O_NONBLOCK && !is_initialized(wc)) {
 			return -EAGAIN;
 	} else {
-		while (!is_initialized(wc)) {
-			if (fatal_signal_pending(current))
-				return -EIO;
-			msleep_interruptible(250);
-		}
+		t1_wait_for_ready(wc);
 	}
 
 	if (test_bit(DAHDI_FLAGBIT_RUNNING, &chan->span->flags) &&
@@ -1539,7 +1551,7 @@ static void vpm_load_func(struct work_struct *work)
 		set_bit(0, &wc->ctlreg);
 	}
 
-	wc->initialized--;
+	wc->not_ready--;
 	kfree(w);
 }
 
@@ -1561,26 +1573,42 @@ static int vpm_start_load(struct t1 *wc)
 	return 0;
 }
 
-static int check_and_load_vpm(struct t1 *wc)
+static void t1_vpm_load_complete(struct device *dev, bool operational)
 {
-	int res;
 	unsigned long flags;
-	struct vpmadt032_options options;
-	struct vpmadt032 *vpm = NULL;
+	struct pci_dev *pdev = container_of(dev, struct pci_dev, dev);
+	struct t1 *wc = pci_get_drvdata(pdev);
+	struct vpmoct *vpm = NULL;
 
-	if (!vpmsupport) {
-		t1_info(wc, "VPM Support Disabled\n");
-		vpmadt032_free(wc->vpmadt032);
-		wc->vpmadt032 = NULL;
-		return 0;
+	if (!wc || is_initialized(wc)) {
+		WARN_ON(!wc);
+		return;
 	}
 
-	/* The firmware may already be loaded. */
-	if (wc->vpmadt032) {
-		u16 version;
-		res = gpakPingDsp(wc->vpmadt032->dspid, &version);
-		if (!res)
-			return 0;
+	spin_lock_irqsave(&wc->reglock, flags);
+	wc->not_ready--;
+	if (operational) {
+		set_bit(VPM150M_ACTIVE, &wc->ctlreg);
+	} else {
+		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
+		vpm = wc->vpmoct;
+		wc->vpmoct = NULL;
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	if (vpm)
+		vpmoct_free(vpm);
+}
+
+static void check_and_load_vpm(struct t1 *wc)
+{
+	unsigned long flags;
+	struct vpmadt032_options options;
+	struct vpmadt032 *vpmadt = NULL;
+
+	if (!vpmsupport) {
+		t1_info(wc, "VPM Support Disabled via module parameter\n");
+		return;
 	}
 
 	memset(&options, 0, sizeof(options));
@@ -1594,69 +1622,49 @@ static int check_and_load_vpm(struct t1 *wc)
 	 * done setting it up here, an hour should cover it... */
 	wc->vpm_check = jiffies + HZ*3600;
 
-	vpm = vpmadt032_alloc(&options);
-	if (!vpm)
-		return -ENOMEM;
+	vpmadt = vpmadt032_alloc(&options);
+	if (!vpmadt)
+		return;
 
-	vpm->setchanconfig_from_state = setchanconfig_from_state;
+	vpmadt->setchanconfig_from_state = setchanconfig_from_state;
 
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->vpmadt032 = vpm;
+	wc->vpmadt032 = vpmadt;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	res = vpmadt032_test(vpm, &wc->vb);
-	if (-ENODEV == res) {
-		struct vpmoct *vpmoct;
-
+	/* Probe for and attempt to load a vpmadt032 module */
+	if (vpmadt032_test(vpmadt, &wc->vb) || vpm_start_load(wc)) {
 		/* There does not appear to be a VPMADT032 installed. */
 		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
 		spin_unlock_irqrestore(&wc->reglock, flags);
-		vpmadt032_free(vpm);
+		vpmadt032_free(vpmadt);
+	}
+
+	/* Probe for and attempt to load a vpmoct032 module */
+	if (NULL == wc->vpmadt032) {
+		struct vpmoct *vpmoct;
 
 		/* Check for vpmoct */
 		vpmoct = vpmoct_alloc();
 		if (!vpmoct)
-			return -ENOMEM;
+			return;
 
 		vpmoct->dev = &wc->vb.pdev->dev;
 
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmoct = vpmoct;
+		wc->not_ready++;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
-		res = vpmoct_init(wc->vpmoct);
-		if (res) {
-			dev_info(&wc->vb.pdev->dev,
-				"Unable to initialize vpmoct module\n");
-			spin_lock_irqsave(&wc->reglock, flags);
-			wc->vpmoct = NULL;
-			spin_unlock_irqrestore(&wc->reglock, flags);
-			vpmoct_free(vpmoct);
-		} else {
-			set_bit(VPM150M_ACTIVE, &wc->ctlreg);
-		}
-
-		return res;
+		vpmoct_init(vpmoct, t1_vpm_load_complete);
 	}
-
-	res = vpm_start_load(wc);
-	if (res) {
-		/* There does not appear to be a VPMADT032 installed. */
-		clear_bit(VPM150M_ACTIVE, &wc->ctlreg);
-		spin_lock_irqsave(&wc->reglock, flags);
-		wc->vpmadt032 = NULL;
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		vpmadt032_free(vpm);
-		return res;
-	}
-	return res;
 }
 #else
-static inline int check_and_load_vpm(const struct t1 *wc)
+static inline void check_and_load_vpm(const struct t1 *wc)
 {
-	return 0;
+	return;
 }
 #endif
 
@@ -1706,11 +1714,7 @@ t1xxp_spanconfig(struct file *file, struct dahdi_span *span,
 		if (!is_initialized(wc))
 			return -EAGAIN;
 	} else {
-		while (!is_initialized(wc)) {
-			if (fatal_signal_pending(current))
-				return -EIO;
-			msleep_interruptible(250);
-		}
+		t1_wait_for_ready(wc);
 	}
 
 	/* Do we want to SYNC on receive or not */
@@ -2340,7 +2344,7 @@ static void vpm_check_func(struct work_struct *work)
 	/* If there is a failed VPM module, do not block dahdi_cfg
 	 * indefinitely. */
 	if (++wc->vpm_check_count > MAX_CHECKS) {
-		wc->initialized--;
+		wc->not_ready--;
 		wc->vpm_check = MAX_JIFFY_OFFSET;
 		t1_info(wc, "Disabling VPMADT032 Checking.\n");
 		return;
@@ -2395,7 +2399,7 @@ static void vpm_check_func(struct work_struct *work)
 	set_bit(VPM150M_ACTIVE, &wc->ctlreg);
 	t1_info(wc, "VPMADT032 is reenabled.\n");
 	wc->vpm_check = jiffies + HZ*5;
-	wc->initialized--;
+	wc->not_ready--;
 	return;
 }
 
@@ -2544,7 +2548,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	if (!wc)
 		return -ENOMEM;
 
-	wc->initialized = 1;
+	wc->not_ready = 1;
 
 	ifaces[index] = wc;
 
@@ -2659,11 +2663,10 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	t1_info(wc, "Found a %s\n", wc->variety);
 	voicebus_unlock_latency(&wc->vb);
 
-	/* If there is VPMADT032 or VPMOCT032 module attached to this device,
-	 * it will signal ready after the channels are configured and ready
-	 * for use. */
-	if (!wc->vpmadt032 && !wc->vpmoct)
-		wc->initialized--;
+	/* If there is VPMADT032 module attached to this device, it will
+	 * signal ready after the channels are configured and ready for use. */
+	if (!wc->vpmadt032)
+		wc->not_ready--;
 	return 0;
 }
 
@@ -2671,7 +2674,9 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 {
 	struct t1 *wc = pci_get_drvdata(pdev);
 #ifdef VPM_SUPPORT
-	struct vpmadt032 *vpm = wc->vpmadt032;
+	unsigned long flags;
+	struct vpmadt032 *vpmadt = wc->vpmadt032;
+	struct vpmoct	 *vpmoct = wc->vpmoct;
 #endif
 	if (!wc)
 		return;
@@ -2685,20 +2690,30 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
 #ifdef VPM_SUPPORT
-	if (vpm)
-		flush_workqueue(vpm->wq);
+	if (vpmadt) {
+		clear_bit(VPM150M_ACTIVE, &vpmadt->control);
+		flush_workqueue(vpmadt->wq);
+	} else if (vpmoct) {
+		while (t1_wait_for_ready(wc))
+			schedule();
+	}
 #endif
 	del_timer_sync(&wc->timer);
 
 	voicebus_release(&wc->vb);
 
 #ifdef VPM_SUPPORT
-	if(vpm) {
+	if (vpmadt) {
+		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
-		clear_bit(VPM150M_ACTIVE, &vpm->control);
-		vpmadt032_free(vpm);
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpmadt);
+	} else if (vpmoct) {
+		spin_lock_irqsave(&wc->reglock, flags);
+		wc->vpmoct = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmoct_free(vpmoct);
 	}
-
 #endif
 
 	t1_info(wc, "Freed a Wildcard TE12xP.\n");

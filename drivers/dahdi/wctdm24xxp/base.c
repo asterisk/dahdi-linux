@@ -309,12 +309,6 @@ static inline __attribute_const__ int VPM_CMD_BYTE(int timeslot, int bit)
 	return ((((timeslot) & 0x3) * 3 + (bit)) * 7) + ((timeslot) >> 2);
 }
 
-static inline bool is_initialized(struct wctdm *wc)
-{
-	WARN_ON(wc->initialized < 0);
-	return (wc->initialized == 0);
-}
-
 static void
 setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 			 GpakChannelConfig_t *chanconfig)
@@ -2131,6 +2125,7 @@ static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
 		return vpmadt032_name;
 	else if (wc->vpmoct)
 		return vpmoct_name;
+
 	return NULL;
 }
 
@@ -4374,12 +4369,37 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	return 0;
 }
 
+static void wctdm_vpm_load_complete(struct device *dev, bool operational)
+{
+	unsigned long flags;
+	struct pci_dev *pdev = container_of(dev, struct pci_dev, dev);
+	struct wctdm *wc = pci_get_drvdata(pdev);
+	struct vpmoct *vpm = NULL;
+
+	WARN_ON(!wc || !wc->not_ready);
+	if (!wc || !wc->not_ready)
+		return;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	wc->not_ready--;
+	if (operational) {
+		wc->ctlreg |= 0x10;
+	} else {
+		vpm = wc->vpmoct;
+		wc->vpmoct = NULL;
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	if (vpm)
+		vpmoct_free(vpm);
+}
+
 static void wctdm_initialize_vpm(struct wctdm *wc)
 {
 	int res = 0;
 
 	if (!vpmsupport)
-		goto cleanup;
+		return;
 
 	res = wctdm_initialize_vpmadt032(wc);
 	if (!res) {
@@ -4393,29 +4413,26 @@ static void wctdm_initialize_vpm(struct wctdm *wc)
 		if (!vpm) {
 			dev_info(&wc->vb.pdev->dev,
 			    "Unable to allocate memory for struct vpmoct\n");
-			goto cleanup;
+			return;
 		}
 
 		vpm->dev = &wc->vb.pdev->dev;
 
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmoct = vpm;
+		wc->not_ready++;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
-		if (!vpmoct_init(vpm)) {
-			wc->ctlreg |= 0x10;
-			return;
-		} else {
+		res = vpmoct_init(vpm, wctdm_vpm_load_complete);
+		if (-EINVAL == res) {
 			spin_lock_irqsave(&wc->reglock, flags);
 			wc->vpmoct = NULL;
+			wc->not_ready--;
 			spin_unlock_irqrestore(&wc->reglock, flags);
 			vpmoct_free(vpm);
-			goto cleanup;
 		}
 	}
-
-cleanup:
-	dev_info(&wc->vb.pdev->dev, "VPM: Support Disabled\n");
+	return;
 }
 
 static void wctdm_identify_modules(struct wctdm *wc)
@@ -5214,7 +5231,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (!wc)
 		return -ENOMEM;
 
-	wc->initialized = 1;
+	wc->not_ready = 1;
 
 	down(&ifacelock);
 	/* \todo this is a candidate for removal... */
@@ -5460,7 +5477,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 	}
 
-	wc->initialized--;
+	wc->not_ready--;
 
 	dev_info(&wc->vb.pdev->dev,
 		 "Found a %s: %s (%d BRI spans, %d analog %s)\n",
@@ -5531,38 +5548,51 @@ static void wctdm_release(struct wctdm *wc)
 
 static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 {
-	struct wctdm *wc = pci_get_drvdata(pdev);
-	struct vpmadt032 *vpm = wc->vpmadt032;
 	int i;
+	unsigned long flags;
+	struct wctdm *wc = pci_get_drvdata(pdev);
+	struct vpmadt032 *vpmadt032;
+	struct vpmoct	 *vpmoct;
 
+	if (!wc)
+		return;
 
-	if (wc) {
+	vpmadt032 = wc->vpmadt032;
+	vpmoct = wc->vpmoct;
 
-		remove_sysfs_files(wc);
+	remove_sysfs_files(wc);
 
-		if (vpm) {
-			clear_bit(VPM150M_ACTIVE, &vpm->control);
-			flush_scheduled_work();
-		}
-
-		/* shut down any BRI modules */
-		for (i = 0; i < wc->mods_per_board; i += 4) {
-			if (wc->mods[i].type == BRI)
-				wctdm_unload_b400m(wc, i);
-		}
-
-		voicebus_stop(&wc->vb);
-
-		if (vpm) {
-			vpmadt032_free(wc->vpmadt032);
-			wc->vpmadt032 = NULL;
-		}
-
-		dev_info(&wc->vb.pdev->dev, "Freed a %s\n",
-				(is_hx8(wc)) ? "Hybrid card" : "Wildcard");
-		/* Release span */
-		wctdm_release(wc);
+	if (vpmadt032) {
+		clear_bit(VPM150M_ACTIVE, &vpmadt032->control);
+		flush_scheduled_work();
+	} else if (vpmoct) {
+		while (wctdm_wait_for_ready(wc))
+			schedule();
 	}
+
+	/* shut down any BRI modules */
+	for (i = 0; i < wc->mods_per_board; i += 4) {
+		if (wc->mods[i].type == BRI)
+			wctdm_unload_b400m(wc, i);
+	}
+
+	voicebus_stop(&wc->vb);
+
+	if (vpmadt032) {
+		vpmadt032_free(vpmadt032);
+		wc->vpmadt032 = NULL;
+	} else if (vpmoct) {
+		spin_lock_irqsave(&wc->reglock, flags);
+		wc->vpmoct = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmoct_free(vpmoct);
+	}
+
+	dev_info(&wc->vb.pdev->dev, "Freed a %s\n",
+			(is_hx8(wc)) ? "Hybrid card" : "Wildcard");
+
+	/* Release span */
+	wctdm_release(wc);
 }
 
 static DEFINE_PCI_DEVICE_TABLE(wctdm_pci_tbl) = {

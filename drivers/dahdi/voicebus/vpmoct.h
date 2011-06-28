@@ -61,15 +61,14 @@
 #define VPMOCT_BOOT_ADDRESS2 0x1c
 #define VPMOCT_BOOT_RAM 0x20
 
-#define VPMOCT_MODE_BOOTLOADER  0
-#define VPMOCT_MODE_APPLICATION 1
+enum vpmoct_mode { UNKNOWN = 0, APPLICATION, BOOTLOADER };
 
 struct vpmoct {
 	struct list_head pending_list;
 	struct list_head active_list;
 	spinlock_t list_lock;
 	struct mutex mutex;
-	unsigned short int mode;
+	enum vpmoct_mode mode;
 	struct device *dev;
 	u32 companding;
 	u32 echo;
@@ -99,7 +98,8 @@ static inline bool is_vpmoct_cmd_read(const struct vpmoct_cmd *cmd)
 
 struct vpmoct *vpmoct_alloc(void);
 void vpmoct_free(struct vpmoct *vpm);
-int vpmoct_init(struct vpmoct *vpm);
+typedef void (*load_complete_func_t)(struct device *dev, bool operational);
+int vpmoct_init(struct vpmoct *vpm, load_complete_func_t load_complete);
 int vpmoct_echocan_create(struct vpmoct *vpm,
 			   int channo,
 			   int companding);
