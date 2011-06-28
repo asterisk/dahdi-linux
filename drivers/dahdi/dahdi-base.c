@@ -289,44 +289,18 @@ static inline void dahdi_kernel_fpu_end(void)
 
 #endif
 
-/**
- * struct dahdi_timer_rate - A collection of timers of a given rate.
- * @rate_samples: Samples until these timers fire.
- * @cur_samples:  Samples processed since last firing.
- * @sel:	  Wait queue for timer waiters.
- * @timers:	  List of individual timers at this rate.
- * @node:	  For storing on dahdi_timer_rates list.
- *
- */
-struct dahdi_timer_rate {
-	int rate_samples;
-	int cur_samples;
-	wait_queue_head_t sel;
-	struct list_head timers;
-	struct list_head node;
-};
-
-/**
- * struct dahdi_timer - A dahdi timer opened from user space.
- * @ping:	1 if we should operate in "continuous mode".
- * @tripped:	Count of times we've tripped.
- * @rate:	The rate this timer fires at.
- * @node:	To store on rate->timers list.
- *
- * When a timer is in "continuous" mode, it should always return immediately
- * from a poll call from user space.
- *
- */
 struct dahdi_timer {
-	atomic_t ping;
-	atomic_t tripped;
-	struct dahdi_timer_rate *rate;
-	struct list_head node;
+	int ms;			/* Countdown */
+	int pos;		/* Position */
+	int ping;		/* Whether we've been ping'd */
+	int tripped;	/* Whether we're tripped */
+	struct list_head list;
+	wait_queue_head_t sel;
 };
 
-static LIST_HEAD(dahdi_timer_rates);
+static LIST_HEAD(dahdi_timers);
+
 static DEFINE_SPINLOCK(dahdi_timer_lock);
-static DEFINE_MUTEX(dahdi_timer_mutex);
 
 #define DEFAULT_TONE_ZONE (-1)
 
@@ -2856,47 +2830,48 @@ static int initialize_channel(struct dahdi_chan *chan)
 static int dahdi_timing_open(struct file *file)
 {
 	struct dahdi_timer *t;
+	unsigned long flags;
 
-	t = kzalloc(sizeof(*t), GFP_KERNEL);
-	if (!t)
+	if (!(t = kzalloc(sizeof(*t), GFP_KERNEL)))
 		return -ENOMEM;
 
-	INIT_LIST_HEAD(&t->node);
+	init_waitqueue_head(&t->sel);
+	INIT_LIST_HEAD(&t->list);
 	file->private_data = t;
+
+	spin_lock_irqsave(&dahdi_timer_lock, flags);
+	list_add(&t->list, &dahdi_timers);
+	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 
 	return 0;
 }
 
-/**
- * _dahdi_remove_timer - Removes the timer from the rate it's associated with.
- *
- * Must be called with dahdi_timer_mutex held.
- */
-static void _dahdi_remove_timer(struct dahdi_timer *timer)
-{
-	unsigned long flags;
-	struct dahdi_timer_rate *const rate = timer->rate;
-
-	spin_lock_irqsave(&dahdi_timer_lock, flags);
-	list_del(&timer->node);
-	if (rate && list_empty(&rate->timers)) {
-		list_del(&rate->node);
-		kfree(rate);
-	}
-	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-	timer->rate = NULL;
-}
-
 static int dahdi_timer_release(struct file *file)
 {
-	struct dahdi_timer *timer = file->private_data;
-	if (!timer)
+	struct dahdi_timer *t, *cur, *next;
+	unsigned long flags;
+
+	if (!(t = file->private_data))
 		return 0;
 
-	mutex_lock(&dahdi_timer_mutex);
-	_dahdi_remove_timer(timer);
-	mutex_unlock(&dahdi_timer_mutex);
-	file->private_data = NULL;
+	spin_lock_irqsave(&dahdi_timer_lock, flags);
+
+	list_for_each_entry_safe(cur, next, &dahdi_timers, list) {
+		if (t == cur) {
+			list_del(&cur->list);
+			break;
+		}
+	}
+
+	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+
+	if (!cur) {
+		module_printk(KERN_NOTICE, "Timer: Not on list??\n");
+		return 0;
+	}
+
+	kfree(cur);
+
 	return 0;
 }
 
@@ -3784,80 +3759,48 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 	}
 }
 
-static int
-dahdi_timer_ioctl(struct file *file, unsigned int cmd,
-		  unsigned long data, struct dahdi_timer *timer)
+static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long data, struct dahdi_timer *timer)
 {
 	int j;
-	struct dahdi_timer_rate *rate, *c_rate;
 	unsigned long flags;
-
 	switch(cmd) {
 	case DAHDI_TIMERCONFIG:
 		get_user(j, (int __user *)data);
 		if (j < 0)
 			j = 0;
-
-		mutex_lock(&dahdi_timer_mutex);
-		if (timer->rate)
-			_dahdi_remove_timer(timer);
-
-		rate = NULL;
-		list_for_each_entry(c_rate, &dahdi_timer_rates, node) {
-			if (c_rate->rate_samples == j) {
-				rate = c_rate;
-				break;
-			}
-		}
-		if (!rate) {
-			/* If we didn't find a rate, we need to create a new
-			 * one */
-			rate = kzalloc(sizeof(*rate), GFP_KERNEL);
-			if (!rate) {
-				mutex_unlock(&dahdi_timer_mutex);
-				return -ENOMEM;
-			}
-			init_waitqueue_head(&rate->sel);
-			rate->rate_samples = rate->cur_samples = j;
-			INIT_LIST_HEAD(&rate->timers);
-			timer->rate = rate;
-			list_add_tail(&timer->node, &rate->timers);
-			spin_lock_irqsave(&dahdi_timer_lock, flags);
-			list_add_tail(&rate->node, &dahdi_timer_rates);
-			spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-		} else {
-			/* Otherwise, just add this new timer to the existing
-			 * rates. */
-			timer->rate = rate;
-			spin_lock_irqsave(&dahdi_timer_lock, flags);
-			list_add_tail(&timer->node, &rate->timers);
-			spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-		}
-		mutex_unlock(&dahdi_timer_mutex);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		timer->ms = timer->pos = j;
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
-
 	case DAHDI_TIMERACK:
 		get_user(j, (int __user *)data);
-		if ((j < 1) || (j > atomic_read(&timer->tripped)))
-			j = atomic_read(&timer->tripped);
-		atomic_sub(j, &timer->tripped);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		if ((j < 1) || (j > timer->tripped))
+			j = timer->tripped;
+		timer->tripped -= j;
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	case DAHDI_GETEVENT:  /* Get event on queue */
 		j = DAHDI_EVENT_NONE;
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
 		  /* set up for no event */
-		if (atomic_read(&timer->tripped))
+		if (timer->tripped)
 			j = DAHDI_EVENT_TIMER_EXPIRED;
-		if (atomic_read(&timer->ping))
+		if (timer->ping)
 			j = DAHDI_EVENT_TIMER_PING;
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		put_user(j, (int __user *)data);
 		break;
 	case DAHDI_TIMERPING:
-		atomic_set(&timer->ping, 1);
-		if (timer->rate)
-			wake_up_interruptible(&timer->rate->sel);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		timer->ping = 1;
+		wake_up_interruptible(&timer->sel);
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	case DAHDI_TIMERPONG:
-		atomic_set(&timer->ping, 0);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		timer->ping = 0;
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 		break;
 	default:
 		return -ENOTTY;
@@ -8727,26 +8670,21 @@ int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int
 
 static void process_timers(void)
 {
-	struct dahdi_timer_rate *cur_rate;
-	struct dahdi_timer *cur_timer;
+	struct dahdi_timer *cur;
 
-	if (list_empty(&dahdi_timer_rates))
+	if (list_empty(&dahdi_timers))
 		return;
 
 	spin_lock(&dahdi_timer_lock);
-	list_for_each_entry(cur_rate, &dahdi_timer_rates, node) {
-		if (!cur_rate->rate_samples)
-			continue;
-
-		cur_rate->cur_samples -= DAHDI_CHUNKSIZE;
-		if (cur_rate->cur_samples > 0)
-			continue;
-
-		list_for_each_entry(cur_timer, &cur_rate->timers, node)
-			atomic_inc(&cur_timer->tripped);
-
-		cur_rate->cur_samples = cur_rate->rate_samples;
-		wake_up_interruptible(&cur_rate->sel);
+	list_for_each_entry(cur, &dahdi_timers, list) {
+		if (cur->ms) {
+			cur->pos -= DAHDI_CHUNKSIZE;
+			if (cur->pos <= 0) {
+				cur->tripped++;
+				cur->pos = cur->ms;
+				wake_up_interruptible(&cur->sel);
+			}
+		}
 	}
 	spin_unlock(&dahdi_timer_lock);
 }
@@ -8754,16 +8692,17 @@ static void process_timers(void)
 static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct *wait_table)
 {
 	struct dahdi_timer *timer = file->private_data;
-	struct dahdi_timer_rate *rate = timer->rate;
-
-	if (!rate || !timer)
-		return -EINVAL;
-
-	poll_wait(file, &rate->sel, wait_table);
-	if (atomic_read(&timer->tripped) || atomic_read(&timer->ping))
-		return POLLPRI;
-
-	return 0;
+	unsigned long flags;
+	int ret = 0;
+	if (timer) {
+		poll_wait(file, &timer->sel, wait_table);
+		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		if (timer->tripped || timer->ping)
+			ret |= POLLPRI;
+		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+	} else
+		ret = -EINVAL;
+	return ret;
 }
 
 /* device poll routine */
