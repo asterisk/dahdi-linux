@@ -129,6 +129,7 @@ struct t1 {
 	struct voicebus vb;
 	atomic_t txints;
 	struct vpmadt032 *vpmadt032;
+	struct vpmoct *vpmoct;
 	unsigned long vpm_check;
 	struct work_struct vpm_check_work;
 
@@ -138,6 +139,7 @@ struct t1 {
 	struct timer_list timer;
 	struct work_struct timer_work;
 	struct workqueue_struct *wq;
+	bool initialized;	/* 0 when entire card is ready to go */
 };
 
 #define t1_info(t1, format, arg...)         \

@@ -7,7 +7,7 @@
  * Support for Hx8 by Andrew Kohlsmith <akohlsmith@mixdown.ca> and Matthew
  * Fredrickson <creslin@digium.com>
  *
- * Copyright (C) 2005 - 2010 Digium, Inc.
+ * Copyright (C) 2005 - 2011 Digium, Inc.
  * All rights reserved.
  *
  * Sections for QRV cards written by Jim Dixon <jim@lambdatel.com>
@@ -165,6 +165,7 @@ static alpha  indirect_regs[] =
 
 /* names of HWEC modules */
 static const char *vpmadt032_name = "VPMADT032";
+static const char *vpmoct_name = "VPMOCT032";
 
 /* Undefine to enable Power alarm / Transistor debug -- note: do not
    enable for normal operation! */
@@ -308,6 +309,12 @@ static inline __attribute_const__ int VPM_CMD_BYTE(int timeslot, int bit)
 	return ((((timeslot) & 0x3) * 3 + (bit)) * 7) + ((timeslot) >> 2);
 }
 
+static inline bool is_initialized(struct wctdm *wc)
+{
+	WARN_ON(wc->initialized < 0);
+	return (wc->initialized == 0);
+}
+
 static void
 setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 			 GpakChannelConfig_t *chanconfig)
@@ -435,7 +442,8 @@ static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
 			dev_info(&wc->vb.pdev->dev, "Configured McBSP ports successfully\n");
 	}
 
-	if ((res = gpakPingDsp(vpm->dspid, &vpm->version))) {
+	res = gpakPingDsp(vpm->dspid, &vpm->version);
+	if (res) {
 		dev_notice(&wc->vb.pdev->dev, "Error pinging DSP (%d)\n", res);
 		return -1;
 	}
@@ -488,6 +496,52 @@ static inline bool is_good_frame(const u8 *sframe)
         const u8 a = sframe[0*(EFRAME_SIZE+EFRAME_GAP) + (EFRAME_SIZE+1)];
         const u8 b = sframe[1*(EFRAME_SIZE+EFRAME_GAP) + (EFRAME_SIZE+1)];
         return a != b;
+}
+
+static inline void cmd_dequeue_vpmoct(struct wctdm *wc, u8 *eframe)
+{
+	struct vpmoct *vpm = wc->vpmoct;
+	struct vpmoct_cmd *cmd;
+	u8 i;
+
+	/* Pop a command off pending list */
+	spin_lock(&vpm->list_lock);
+	if (list_empty(&vpm->pending_list)) {
+		spin_unlock(&vpm->list_lock);
+		return;
+	}
+
+	cmd = list_entry(vpm->pending_list.next, struct vpmoct_cmd, node);
+	if (is_vpmoct_cmd_read(cmd))
+		list_move_tail(&cmd->node, &vpm->active_list);
+	else
+		list_del_init(&cmd->node);
+
+	/* Skip audio (24 bytes) and ignore first 6 timeslots */
+	eframe += 30;
+
+	/* Save ident so we can match the return eframe */
+	cmd->txident = wc->txident;
+
+	/* We have four timeslots to work with for a regular spi packet */
+	/* TODO: Create debug flag for this in dev */
+
+	/* The vpmoct requires a "sync" spi command as the first three bytes
+	 * of an eframe */
+	eframe[7*0] = 0x12;
+	eframe[7*1] = 0x34;
+	eframe[7*2] = 0x56;
+	eframe[7*3] = cmd->command;
+	eframe[7*4] = cmd->address;
+	eframe[7*5] = cmd->data[0];
+	for (i = 1; i < cmd->chunksize; i++)
+		eframe[(7*5)+7*i] = cmd->data[i];
+
+	/* Clean up fire-and-forget messages from memory */
+	if (list_empty(&cmd->node))
+		kfree(cmd);
+
+	spin_unlock(&vpm->list_lock);
 }
 
 static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
@@ -709,6 +763,40 @@ static void _cmd_dequeue(struct wctdm *wc, u8 *eframe, int card, int pos)
 	}
 }
 
+static inline void cmd_decipher_vpmoct(struct wctdm *wc, const u8 *eframe)
+{
+	struct vpmoct *vpm = wc->vpmoct;
+	struct vpmoct_cmd *cmd;
+	int i;
+
+	/* Skip audio and first 6 timeslots */
+	eframe += 30;
+
+	spin_lock(&vpm->list_lock);
+	/* No command to handle, just exit */
+	if (list_empty(&vpm->active_list)) {
+		spin_unlock(&vpm->list_lock);
+		return;
+	}
+
+	cmd = list_entry(vpm->active_list.next, struct vpmoct_cmd, node);
+	if (wc->rxident == cmd->txident)
+		list_del_init(&cmd->node);
+	else
+		cmd = NULL;
+	spin_unlock(&vpm->list_lock);
+
+	if (!cmd)
+		return;
+
+	/* Store result, Ignoring the first "sync spi command" bytes */
+	cmd->command = eframe[7*3];
+	cmd->address = eframe[7*4];
+	for (i = 0; i < cmd->chunksize; ++i)
+		cmd->data[i] = eframe[7*(5+i)];
+	complete(&cmd->complete);
+}
+
 static inline void cmd_decipher_vpmadt032(struct wctdm *wc, const u8 *eframe)
 {
 	struct vpmadt032 *const vpm = wc->vpmadt032;
@@ -923,7 +1011,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 	unsigned char *eframe = sframe;
 
 	/* Calculate Transmission */
-	if (likely(wc->initialized)) {
+	if (likely(is_initialized(wc))) {
 		for (x = 0; x < MAX_SPANS; x++) {
 			if (wc->spans[x]) {
 				s = &wc->spans[x]->span;
@@ -953,11 +1041,10 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 				_cmd_dequeue(wc, eframe, y, x);
 		}
 
-		if (wc->vpmadt032) {
+		if (wc->vpmadt032)
 			cmd_dequeue_vpmadt032(wc, eframe);
-		} else if (wc->vpmadt032) {
-			cmd_dequeue_vpmadt032(wc, eframe);
-		}
+		else if (wc->vpmoct)
+			cmd_dequeue_vpmoct(wc, eframe);
 
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			eframe[EFRAME_SIZE] = wc->ctlreg;
@@ -1171,6 +1258,22 @@ static void extract_tdm_data(struct wctdm *wc, const u8 *sframe)
 		chanchunk[6] = sframe[3 + i + (EFRAME_SIZE + EFRAME_GAP)*6];
 		chanchunk[7] = sframe[3 + i + (EFRAME_SIZE + EFRAME_GAP)*7];
 	}
+
+	/* Pre-echo with the vpmoct overwrites the 24th timeslot with the
+	 * specified channel's pre-echo audio stream. This data is ignored
+	 * on all but the 24xx card, so we store it in a temporary buffer.
+	 */
+	if (wc->vpmoct && wc->vpmoct->preecho_enabled) {
+		chanchunk = &wc->vpmoct->preecho_buf[0];
+		chanchunk[0] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*0];
+		chanchunk[1] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*1];
+		chanchunk[2] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*2];
+		chanchunk[3] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*3];
+		chanchunk[4] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*4];
+		chanchunk[5] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*5];
+		chanchunk[6] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*6];
+		chanchunk[7] = sframe[23 + (EFRAME_SIZE + EFRAME_GAP)*7];
+	}
 }
 
 static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
@@ -1184,10 +1287,11 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 	if (unlikely(!is_good_frame(sframe)))
 		return;
 
-	if (likely(wc->initialized))
+	spin_lock_irqsave(&wc->reglock, flags);
+
+	if (likely(is_initialized(wc)))
 		extract_tdm_data(wc, sframe);
 
-	spin_lock_irqsave(&wc->reglock, flags);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		if (x < DAHDI_CHUNKSIZE - 1) {
 			expected = wc->rxident + 1;
@@ -1203,13 +1307,15 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 
 		if (wc->vpmadt032)
 			cmd_decipher_vpmadt032(wc, eframe);
+		else if (wc->vpmoct)
+			cmd_decipher_vpmoct(wc, eframe);
 
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	/* XXX We're wasting 8 taps.  We should get closer :( */
-	if (likely(wc->initialized)) {
+	if (likely(is_initialized(wc))) {
 		for (x = 0; x < wc->avchannels; x++) {
 			struct wctdm_chan *const wchan = wc->chans[x];
 			struct dahdi_chan *const c = &wchan->chan;
@@ -1219,7 +1325,16 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 				    ARRAY_SIZE(buffer));
 			dahdi_ec_chunk(c, c->readchunk, buffer);
 #else
-			dahdi_ec_chunk(c, c->readchunk, c->writechunk);
+			if ((wc->vpmoct) &&
+			    (wchan->timeslot == wc->vpmoct->preecho_timeslot) &&
+			    (wc->vpmoct->preecho_enabled)) {
+				__dahdi_ec_chunk(c, c->readchunk,
+						 wc->vpmoct->preecho_buf,
+						 c->writechunk);
+			} else {
+				__dahdi_ec_chunk(c, c->readchunk, c->readchunk,
+						 c->writechunk);
+			}
 #endif
 		}
 
@@ -2014,6 +2129,8 @@ static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
 	struct wctdm *wc = chan->pvt;
 	if (wc->vpmadt032)
 		return vpmadt032_name;
+	else if (wc->vpmoct)
+		return vpmoct_name;
 	return NULL;
 }
 
@@ -2033,21 +2150,31 @@ static int wctdm_echocan_create(struct dahdi_chan *chan,
 	if (!vpmsupport)
 		return -ENODEV;
 #endif
-	if (!wc->vpmadt032)
+	if (wc->vpmadt032) {
+		ops = &vpm_ec_ops;
+		features = &vpm_ec_features;
+
+		*ec = &wchan->ec;
+		(*ec)->ops = ops;
+		(*ec)->features = *features;
+
+		comp = (DAHDI_LAW_ALAW == chan->span->deflaw) ?
+					ADT_COMP_ALAW : ADT_COMP_ULAW;
+
+		return vpmadt032_echocan_create(wc->vpmadt032, wchan->timeslot,
+						comp, ecp, p);
+	} else if (wc->vpmoct) {
+		ops = &vpm_ec_ops;
+		features = &vpm_ec_features;
+
+		*ec = &wchan->ec;
+		(*ec)->ops = ops;
+		(*ec)->features = *features;
+		return vpmoct_echocan_create(wc->vpmoct, wchan->timeslot,
+					     chan->span->deflaw);
+	} else {
 		return -ENODEV;
-
-	ops = &vpm_ec_ops;
-	features = &vpm_ec_features;
-
-	*ec = &wchan->ec;
-	(*ec)->ops = ops;
-	(*ec)->features = *features;
-
-	comp = (DAHDI_LAW_ALAW == chan->span->deflaw) ?
-				ADT_COMP_ALAW : ADT_COMP_ULAW;
-
-	return vpmadt032_echocan_create(wc->vpmadt032, wchan->timeslot,
-					comp, ecp, p);
+	}
 }
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec)
@@ -2058,6 +2185,9 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 	if (wc->vpmadt032) {
 		memset(ec, 0, sizeof(*ec));
 		vpmadt032_echocan_free(wc->vpmadt032, wchan->timeslot, ec);
+	} else if (wc->vpmoct) {
+		memset(ec, 0, sizeof(*ec));
+		vpmoct_echocan_free(wc->vpmoct, wchan->timeslot);
 	}
 }
 
@@ -2135,7 +2265,7 @@ static inline void wctdm_isr_misc(struct wctdm *wc)
 {
 	int x;
 
-	if (unlikely(!wc->initialized))
+	if (unlikely(!is_initialized(wc)))
 		return;
 
 	for (x = 0; x < wc->mods_per_board; x++) {
@@ -3920,14 +4050,36 @@ static int wctdm_dacs(struct dahdi_chan *dst, struct dahdi_chan *src)
  * Check if the board has finished any setup and is ready to start processing
  * calls.
  */
-int wctdm_wait_for_ready(const struct wctdm *wc)
+int wctdm_wait_for_ready(struct wctdm *wc)
 {
-	while (!wc->initialized) {
+	while (!is_initialized(wc)) {
 		if (fatal_signal_pending(current))
 			return -EIO;
 		msleep_interruptible(250);
 	}
 	return 0;
+}
+
+static int wctdm_enable_hw_preechocan(struct dahdi_chan *chan)
+{
+	struct wctdm *wc = chan->pvt;
+	struct wctdm_chan *wchan = container_of(chan, struct wctdm_chan, chan);
+
+	if (!wc->vpmoct)
+		return 0;
+
+	return vpmoct_preecho_enable(wc->vpmoct, wchan->timeslot);
+}
+
+static void wctdm_disable_hw_preechocan(struct dahdi_chan *chan)
+{
+	struct wctdm *wc = chan->pvt;
+	struct wctdm_chan *wchan = container_of(chan, struct wctdm_chan, chan);
+
+	if (!wc->vpmoct)
+		return;
+
+	vpmoct_preecho_disable(wc->vpmoct, wchan->timeslot);
 }
 
 /**
@@ -3944,7 +4096,7 @@ wctdm_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 {
 	struct wctdm *wc = chan->pvt;
 
-	if ((file->f_flags & O_NONBLOCK) && !wc->initialized)
+	if ((file->f_flags & O_NONBLOCK) && !is_initialized(wc))
 		return -EAGAIN;
 
 	return wctdm_wait_for_ready(wc);
@@ -3960,6 +4112,8 @@ static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.chanconfig = wctdm_chanconfig,
 	.dacs = wctdm_dacs,
 #ifdef VPM_SUPPORT
+	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
+	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
 	.echocan_create = wctdm_echocan_create,
 	.echocan_name = wctdm_echocan_name,
 #endif
@@ -3976,6 +4130,8 @@ static const struct dahdi_span_ops wctdm24xxp_digital_span_ops = {
 	.chanconfig = b400m_chanconfig,
 	.dacs = wctdm_dacs,
 #ifdef VPM_SUPPORT
+	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
+	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
 	.echocan_create = wctdm_echocan_create,
 	.echocan_name = wctdm_echocan_name,
 #endif
@@ -4222,14 +4378,44 @@ static void wctdm_initialize_vpm(struct wctdm *wc)
 {
 	int res = 0;
 
-	if (!vpmsupport) {
-		dev_notice(&wc->vb.pdev->dev, "VPM: Support Disabled\n");
-		return;
-	}
+	if (!vpmsupport)
+		goto cleanup;
 
 	res = wctdm_initialize_vpmadt032(wc);
-	if (!res)
+	if (!res) {
 		wc->ctlreg |= 0x10;
+		return;
+	} else {
+		struct vpmoct *vpm;
+		unsigned long flags;
+
+		vpm = vpmoct_alloc();
+		if (!vpm) {
+			dev_info(&wc->vb.pdev->dev,
+			    "Unable to allocate memory for struct vpmoct\n");
+			goto cleanup;
+		}
+
+		vpm->dev = &wc->vb.pdev->dev;
+
+		spin_lock_irqsave(&wc->reglock, flags);
+		wc->vpmoct = vpm;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+
+		if (!vpmoct_init(vpm)) {
+			wc->ctlreg |= 0x10;
+			return;
+		} else {
+			spin_lock_irqsave(&wc->reglock, flags);
+			wc->vpmoct = NULL;
+			spin_unlock_irqrestore(&wc->reglock, flags);
+			vpmoct_free(vpm);
+			goto cleanup;
+		}
+	}
+
+cleanup:
+	dev_info(&wc->vb.pdev->dev, "VPM: Support Disabled\n");
 }
 
 static void wctdm_identify_modules(struct wctdm *wc)
@@ -4904,6 +5090,45 @@ static ssize_t vpm_firmware_version_show(struct device *dev,
 
 static DEVICE_ATTR(vpm_firmware_version, 0400,
 		   vpm_firmware_version_show, NULL);
+static ssize_t
+enable_vpm_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	unsigned long flags;
+	struct wctdm *wc = dev_get_drvdata(dev);
+	unsigned int enable_vpm;
+	spin_lock_irqsave(&wc->reglock, flags);
+	enable_vpm = (wc->ctlreg & 0x10) != 0;
+	spin_unlock_irqrestore(&wc->reglock, flags);
+	return sprintf(buf, "%d\n", enable_vpm);
+}
+
+static ssize_t
+enable_vpm_store(struct device *dev, struct device_attribute *attr,
+		 const char *buf, size_t count)
+{
+	unsigned long flags;
+	struct wctdm *wc = dev_get_drvdata(dev);
+	unsigned int enable_vpm;
+	if (count < 2)
+		return -EINVAL;
+
+	if (('0' == buf[0]) || (0 == buf[0]))
+		enable_vpm = 0;
+	else
+		enable_vpm = 1;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	if (enable_vpm)
+		wc->ctlreg |= 0x10;
+	else
+		wc->ctlreg &= ~0x10;
+	spin_unlock_irqrestore(&wc->reglock, flags);
+	return count;
+}
+
+static DEVICE_ATTR(enable_vpm, 0644,
+		   enable_vpm_show, enable_vpm_store);
 
 static void create_sysfs_files(struct wctdm *wc)
 {
@@ -4921,10 +5146,20 @@ static void create_sysfs_files(struct wctdm *wc)
 		dev_info(&wc->vb.pdev->dev,
 			"Failed to create device attributes.\n");
 	}
+
+	ret = device_create_file(&wc->vb.pdev->dev,
+				 &dev_attr_enable_vpm);
+	if (ret) {
+		dev_info(&wc->vb.pdev->dev,
+			"Failed to create device attributes.\n");
+	}
 }
 
 static void remove_sysfs_files(struct wctdm *wc)
 {
+	device_remove_file(&wc->vb.pdev->dev,
+			   &dev_attr_enable_vpm);
+
 	device_remove_file(&wc->vb.pdev->dev,
 			   &dev_attr_vpm_firmware_version);
 
@@ -4978,6 +5213,8 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	wc = kzalloc(sizeof(*wc), GFP_KERNEL);
 	if (!wc)
 		return -ENOMEM;
+
+	wc->initialized = 1;
 
 	down(&ifacelock);
 	/* \todo this is a candidate for removal... */
@@ -5223,7 +5460,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 	}
 
-	wc->initialized = 1;
+	wc->initialized--;
 
 	dev_info(&wc->vb.pdev->dev,
 		 "Found a %s: %s (%d BRI spans, %d analog %s)\n",
@@ -5275,7 +5512,7 @@ static void wctdm_release(struct wctdm *wc)
 {
 	int i;
 
-	if (wc->initialized) {
+	if (is_initialized(wc)) {
 		for (i = 0; i < MAX_SPANS; i++) {
 			if (wc->spans[i])
 				dahdi_unregister(&wc->spans[i]->span);

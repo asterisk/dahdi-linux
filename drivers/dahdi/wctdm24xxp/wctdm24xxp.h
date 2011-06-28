@@ -99,6 +99,8 @@
 #include "voicebus/GpakCust.h"
 #endif
 
+#include "voicebus/vpmoct.h"
+
 struct calregs {
 	unsigned char vals[NUM_CAL_REGS];
 };
@@ -140,6 +142,7 @@ struct wctdm_chan {
 	struct dahdi_chan chan;
 	struct dahdi_echocan_state ec;
 	int timeslot;
+	unsigned int hwpreec_enabled:1;
 };
 
 struct fxo {
@@ -256,7 +259,7 @@ struct wctdm {
 	struct wctdm_module mods[NUM_MODULES];
 
 	struct vpmadt032 *vpmadt032;
-
+	struct vpmoct *vpmoct;
 	struct voicebus vb;
 	struct wctdm_span *aspan;			/* pointer to the spans[] holding the analog span */
 	struct wctdm_span *spans[MAX_SPANS];
@@ -270,8 +273,8 @@ struct wctdm {
 	struct semaphore syncsem;
 	int oldsync;
 
-	int initialized;				/* =1 when the entire card is ready to go */
-	unsigned long checkflag;			/* Internal state flags and task bits */
+	int initialized;	 /* 0 when the entire card is ready to go */
+	unsigned long checkflag; /* Internal state flags and task bits */
 	int companding;
 };
 
@@ -282,7 +285,7 @@ int wctdm_getreg(struct wctdm *wc, struct wctdm_module *const mod, int addr);
 int wctdm_setreg(struct wctdm *wc, struct wctdm_module *const mod,
 		 int addr, int val);
 
-int wctdm_wait_for_ready(const struct wctdm *wc);
+int wctdm_wait_for_ready(struct wctdm *wc);
 
 extern struct semaphore ifacelock;
 extern struct wctdm *ifaces[WC_MAX_IFACES];
