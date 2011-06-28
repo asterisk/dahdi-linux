@@ -4828,6 +4828,21 @@ static int dahdi_ioctl_shutdown(unsigned long data)
 	return 0;
 }
 
+/**
+ * dahdi_is_hwec_available - Is hardware echocan available on a channel?
+ * @chan: The channel to check
+ *
+ * Returns true if there is a hardware echocan available for the attached
+ * channel, or false otherwise.
+ *
+ */
+static bool dahdi_is_hwec_available(const struct dahdi_chan *chan)
+{
+	if (!hwec_factory.get_name(chan))
+		return false;
+	return true;
+}
+
 static int dahdi_ioctl_attach_echocan(unsigned long data)
 {
 	unsigned long flags;
@@ -4842,7 +4857,15 @@ static int dahdi_ioctl_attach_echocan(unsigned long data)
 	if (!chan)
 		return -EINVAL;
 
-	ae.echocan[sizeof(ae.echocan) - 1] = 0;
+	if (dahdi_is_hwec_available(chan)) {
+		/* If there is a hardware echocan available we'll always use
+		 * it instead of any configured software echocan. This matches
+		 * the behavior in dahdi 2.4.1.2 and earlier releases. */
+		strlcpy(ae.echocan, hwec_def_name, sizeof(ae.echocan));
+	} else {
+		ae.echocan[sizeof(ae.echocan) - 1] = 0;
+	}
+
 	if (ae.echocan[0]) {
 		new = find_echocan(ae.echocan);
 		if (!new)
