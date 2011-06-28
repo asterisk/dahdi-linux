@@ -149,6 +149,8 @@ struct phonedev {
 	struct dahdi_span	span;
 	struct dahdi_chan	*chans[32];
 #define	XPD_CHAN(xpd,chan)	(PHONEDEV(xpd).chans[(chan)])
+	struct dahdi_echocan_state *ec[32];
+
 	int		channels;
 	xpd_direction_t	direction;		/* TO_PHONE, TO_PSTN */
 	xpp_line_t	no_pcm;			/* Temporary: disable PCM (for USB-1) */
@@ -198,6 +200,7 @@ struct xpd {
 #define kref_to_xpd(k) container_of(k, struct xpd, kref)
 
 	xbus_t *xbus;			/* The XBUS we are connected to */
+	struct device	*echocancel;
 
 	spinlock_t	lock;
 

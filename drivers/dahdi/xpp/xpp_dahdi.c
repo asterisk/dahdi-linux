@@ -463,6 +463,8 @@ static void phonedev_cleanup(xpd_t *xpd)
 		if (phonedev->chans[x]) {
 			KZFREE(phonedev->chans[x]);
 		}
+		if (phonedev->ec[x])
+			KZFREE(phonedev->ec[x]);
 	}
 }
 
@@ -484,6 +486,13 @@ __must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_ta
 	for (x = 0; x < phonedev->channels; x++) {
 		if (!(phonedev->chans[x] = KZALLOC(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
 			ERR("%s: Unable to allocate channel %d\n", __FUNCTION__, x);
+			goto err;
+		}
+		phonedev->ec[x] = KZALLOC(sizeof(*(phonedev->ec[x])),
+				GFP_KERNEL);
+		if (!phonedev->ec[x]) {
+			ERR("%s: Unable to allocate ec state %d\n", __func__,
+					x);
 			goto err;
 		}
 	}
@@ -887,6 +896,86 @@ static int xpp_watchdog(struct dahdi_span *span, int cause)
 }
 #endif
 
+/*
+ * Hardware Echo Canceller management
+ */
+static void echocan_free(struct dahdi_chan *chan,
+		struct dahdi_echocan_state *ec)
+{
+	xpd_t			*xpd;
+	xbus_t			*xbus;
+	int			pos = chan->chanpos - 1;
+	const struct echoops	*echoops;
+
+	xpd = chan->pvt;
+	xbus = xpd->xbus;
+	echoops = ECHOOPS(xbus);
+	if (!echoops)
+		return;
+	LINE_NOTICE(xpd, pos, "%s: mode=0x%X\n", __func__, ec->status.mode);
+	CALL_EC_METHOD(ec_set, xbus, xpd, pos, 0);
+	CALL_EC_METHOD(ec_update, xbus, xbus);
+}
+
+static const struct dahdi_echocan_features xpp_ec_features = {
+};
+
+static const struct dahdi_echocan_ops xpp_ec_ops = {
+	.echocan_free = echocan_free,
+};
+
+const char *xpp_echocan_name(const struct dahdi_chan *chan)
+{
+	xpd_t	*xpd;
+	xbus_t	*xbus;
+	int	pos;
+
+	if (!chan) {
+		NOTICE("%s(NULL)\n", __func__);
+		return "XPP";
+	}
+	xpd = chan->pvt;
+	xbus = xpd->xbus;
+	pos = chan->chanpos - 1;
+	LINE_DBG(GENERAL, xpd, pos, "%s:\n", __func__);
+	if (!ECHOOPS(xbus))
+		return NULL;
+	return "XPP";
+}
+EXPORT_SYMBOL(xpp_echocan_name);
+
+int xpp_echocan_create(struct dahdi_chan *chan,
+				struct dahdi_echocanparams *ecp,
+				struct dahdi_echocanparam *p,
+				struct dahdi_echocan_state **ec)
+{
+	xpd_t			*xpd;
+	xbus_t			*xbus;
+	int			pos;
+	struct phonedev		*phonedev;
+	const struct echoops	*echoops;
+	int			ret;
+
+	xpd = chan->pvt;
+	xbus = xpd->xbus;
+	pos = chan->chanpos - 1;
+	echoops = ECHOOPS(xbus);
+	if (!echoops)
+		return -ENODEV;
+	phonedev = &PHONEDEV(xpd);
+	*ec = phonedev->ec[pos];
+	(*ec)->ops = &xpp_ec_ops;
+	(*ec)->features = xpp_ec_features;
+	LINE_NOTICE(xpd, pos, "%s: (tap=%d, param_count=%d)\n",
+		__func__,
+		ecp->tap_length, ecp->param_count);
+	ret = CALL_EC_METHOD(ec_set, xbus, xpd, pos, 1);
+	CALL_EC_METHOD(ec_update, xbus, xbus);
+	return ret;
+}
+EXPORT_SYMBOL(xpp_echocan_create);
+
+
 /**
  * Unregister an xpd from dahdi and release related resources
  * @xpd The xpd to be unregistered
@@ -940,6 +1029,8 @@ static const struct dahdi_span_ops xpp_span_ops = {
 	.close = xpp_close,
 	.ioctl = xpp_ioctl,
 	.maint = xpp_maint,
+	.echocan_create = xpp_echocan_create,
+	.echocan_name = xpp_echocan_name,
 };
 
 static const struct dahdi_span_ops xpp_rbs_span_ops = {
@@ -949,6 +1040,8 @@ static const struct dahdi_span_ops xpp_rbs_span_ops = {
 	.close = xpp_close,
 	.ioctl = xpp_ioctl,
 	.maint = xpp_maint,
+	.echocan_create = xpp_echocan_create,
+	.echocan_name = xpp_echocan_name,
 };
 
 int dahdi_register_xpd(xpd_t *xpd)

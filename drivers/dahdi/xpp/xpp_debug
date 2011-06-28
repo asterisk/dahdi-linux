@@ -3,7 +3,7 @@
 # xpp_debug: Turn on/off debugging flags via /sys/module/*/parameters/debug
 #
 
-modules="xpp xpp_usb xpd_fxs xpd_fxo xpd_bri xpd_pri"
+modules="xpp xpp_usb xpd_fxs xpd_fxo xpd_bri xpd_pri xpd_echo"
 dbg_names="DEFAULT PCM LEDS SYNC SIGNAL PROC REGS DEVICES COMMANDS"
 
 usage() {

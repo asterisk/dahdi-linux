@@ -1213,6 +1213,8 @@ static const struct dahdi_span_ops PRI_span_ops = {
 	.close = xpp_close,
 	.ioctl = xpp_ioctl,
 	.maint = xpp_maint,
+	.echocan_create = xpp_echocan_create,
+	.echocan_name = xpp_echocan_name,
 #ifdef	DAHDI_SYNC_TICK
 	.sync_tick = dahdi_sync_tick,
 #endif
@@ -1793,7 +1795,38 @@ int PRI_timing_priority(xpd_t *xpd)
 	return -ENOENT;
 }
 
+static int PRI_echocancel_timeslot(xpd_t *xpd, int pos)
+{
+	/*
+	 * Skip ts=0 (used for PRI sync)
+	 */
+	return (1 + pos) * 4 + xpd->addr.subunit;
+}
 
+static int PRI_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask)
+{
+	struct PRI_priv_data *priv;
+	int i;
+
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	XPD_DBG(GENERAL, xpd, "0x%8X\n", ec_mask);
+	if (!ECHOOPS(xpd->xbus)) {
+		XPD_DBG(GENERAL, xpd,
+				"No echo canceller in XBUS: Doing nothing.\n");
+		return -EINVAL;
+	}
+	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
+		int	on = BIT(i) & ec_mask;
+
+		if (i == PRI_DCHAN_IDX(priv))
+			on = 0;
+		CALL_EC_METHOD(ec_set, xpd->xbus, xpd, i, on);
+	}
+	CALL_EC_METHOD(ec_update, xpd->xbus, xpd->xbus);
+	return 0;
+}
 
 /*---------------- PRI: HOST COMMANDS -------------------------------------*/
 
@@ -2111,6 +2144,8 @@ static const struct phoneops	pri_phoneops = {
 	.card_pcm_recompute	= PRI_card_pcm_recompute,
 	.card_pcm_fromspan	= PRI_card_pcm_fromspan,
 	.card_pcm_tospan	= PRI_card_pcm_tospan,
+	.echocancel_timeslot	= PRI_echocancel_timeslot,
+	.echocancel_setmask	= PRI_echocancel_setmask,
 	.card_timing_priority	= PRI_timing_priority,
 	.card_ioctl	= PRI_card_ioctl,
 	.card_close	= PRI_card_close,

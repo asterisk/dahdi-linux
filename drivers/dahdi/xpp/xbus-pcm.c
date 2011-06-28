@@ -935,6 +935,32 @@ out:
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
 
+int generic_echocancel_timeslot(xpd_t *xpd, int pos)
+{
+	return xpd->addr.unit * 32 + pos;
+}
+EXPORT_SYMBOL(generic_echocancel_timeslot);
+
+int generic_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask)
+{
+	int i;
+
+	BUG_ON(!xpd);
+	XPD_DBG(GENERAL, xpd, "0x%8X\n", ec_mask);
+	if (!ECHOOPS(xpd->xbus)) {
+		XPD_DBG(GENERAL, xpd,
+				"No echo canceller in XBUS: Doing nothing.\n");
+		return -EINVAL;
+	}
+	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
+		int on = BIT(i) & ec_mask;
+		CALL_EC_METHOD(ec_set, xpd->xbus, xpd, i, on);
+	}
+	CALL_EC_METHOD(ec_update, xpd->xbus, xpd->xbus);
+	return 0;
+}
+EXPORT_SYMBOL(generic_echocancel_setmask);
+
 static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 {
 	byte		*xframe_end;

@@ -807,6 +807,103 @@ void xpd_device_unregister(xpd_t *xpd)
 	dev_set_drvdata(dev, NULL);
 }
 
+static DEVICE_ATTR_READER(echocancel_show, dev, buf)
+{
+	xpd_t *xpd;
+	unsigned long flags;
+	int len = 0;
+	xpp_line_t ec_mask = 0;
+	int i;
+	int ret;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	if (!xpd)
+		return -ENODEV;
+	if (!ECHOOPS(xpd->xbus))
+		return -ENODEV;
+	spin_lock_irqsave(&xpd->lock, flags);
+	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
+		ret = CALL_EC_METHOD(ec_get, xpd->xbus, xpd, i);
+		if (ret < 0) {
+			LINE_ERR(xpd, i, "ec_get failed\n");
+			len = -ENODEV;
+			goto out;
+		}
+		if (ret)
+			ec_mask |= (1 << i);
+	}
+	len += sprintf(buf, "0x%08X\n", ec_mask);
+out:
+	spin_unlock_irqrestore(&xpd->lock, flags);
+	return len;
+}
+
+static DEVICE_ATTR_WRITER(echocancel_store, dev, buf, count)
+{
+	xpd_t *xpd;
+	char *endp;
+	unsigned long mask;
+	int channels;
+	int ret;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	XPD_DBG(GENERAL, xpd, "%s\n", buf);
+	if (!xpd)
+		return -ENODEV;
+	if (!ECHOOPS(xpd->xbus)) {
+		XPD_ERR(xpd, "No echo canceller in this XBUS\n");
+		return -ENODEV;
+	}
+	if (!IS_PHONEDEV(xpd)) {
+		XPD_ERR(xpd, "Not a phone device\n");
+		return -ENODEV;
+	}
+	channels = PHONEDEV(xpd).channels;
+	mask = simple_strtoul(buf, &endp, 0);
+	if (*endp != '\0' && *endp != '\n' && *endp != '\r') {
+		XPD_ERR(xpd, "Too many channels: %d\n", channels);
+		return -EINVAL;
+	}
+	if (mask != 0 && __ffs(mask) > channels) {
+		XPD_ERR(xpd,
+			"Channel mask (0x%lX) larger than available channels (%d)\n",
+			mask, channels);
+		return -EINVAL;
+	}
+	XPD_DBG(GENERAL, xpd, "ECHOCANCEL channels: 0x%lX\n", mask);
+	ret = CALL_PHONE_METHOD(echocancel_setmask, xpd, mask);
+	if (ret < 0) {
+		XPD_ERR(xpd, "echocancel_setmask failed\n");
+		return ret;
+	}
+	return count;
+}
+
+static	DEVICE_ATTR(echocancel, S_IRUGO | S_IWUSR, echocancel_show,
+		echocancel_store);
+
+int echocancel_xpd(xpd_t *xpd, int on)
+{
+	int ret;
+
+	XPD_DBG(GENERAL, xpd, "echocancel_xpd(%s)\n", (on) ? "on" : "off");
+	if (!on) {
+		device_remove_file(xpd->echocancel, &dev_attr_echocancel);
+		return 0;
+	}
+
+	ret = device_create_file(&xpd->xpd_dev, &dev_attr_echocancel);
+	if (ret)
+		XPD_ERR(xpd,
+			"%s: device_create_file(echocancel) failed: %d\n",
+			__func__, ret);
+
+	return ret;
+}
+EXPORT_SYMBOL(echocancel_xpd);
+
 /*--------- Sysfs Device handling ----*/
 
 void xbus_sysfs_transport_remove(xbus_t *xbus)

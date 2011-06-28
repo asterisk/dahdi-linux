@@ -156,6 +156,28 @@ void	put_xbus(const char *msg, xbus_t *xbus);
 int	refcount_xbus(xbus_t *xbus);
 
 /*
+ * Echo canceller related data
+ */
+#define	ECHO_TIMESLOTS	128
+
+struct echoops {
+	int	(*ec_set)(xpd_t *xpd, int pos, bool on);
+	int	(*ec_get)(xpd_t *xpd, int pos);
+	int	(*ec_update)(xbus_t *xbus);
+	void	(*ec_dump)(xbus_t *xbus);
+};
+
+struct xbus_echo_state {
+	const struct echoops	*echoops;
+	byte			timeslots[ECHO_TIMESLOTS];
+	int			xpd_idx;
+	struct device_attribute	*da[MAX_XPDS];
+};
+#define	ECHOOPS(xbus)			((xbus)->echo_state.echoops)
+#define	EC_METHOD(name, xbus)		(ECHOOPS(xbus)->name)
+#define	CALL_EC_METHOD(name, xbus, ...)	(EC_METHOD(name, (xbus))(__VA_ARGS__))
+
+/*
  * An xbus is a transport layer for Xorcom Protocol commands
  */
 struct xbus {
@@ -169,6 +191,7 @@ struct xbus {
 
 	int			num;
 	struct xpd		*xpds[MAX_XPDS];
+	struct xbus_echo_state	echo_state;
 
 	int			command_tick_counter;
 	int			usec_nosend;		/* Firmware flow control */
@@ -311,6 +334,7 @@ int	xbus_xpd_unbind(xbus_t *xbus, xpd_t *xpd);
 /* sysfs */
 int	xpd_device_register(xbus_t *xbus, xpd_t *xpd);
 void	xpd_device_unregister(xpd_t *xpd);
+int	echocancel_xpd(xpd_t *xpd, int on);
 
 int	xpp_driver_init(void);
 void	xpp_driver_exit(void);

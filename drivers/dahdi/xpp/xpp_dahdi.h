@@ -35,6 +35,11 @@ xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype, int subunits,
 void xpd_free(xpd_t *xpd);
 void xpd_remove(xpd_t *xpd);
 void update_xpd_status(xpd_t *xpd, int alarm_flag);
+const char *xpp_echocan_name(const struct dahdi_chan *chan);
+int xpp_echocan_create(struct dahdi_chan *chan,
+				struct dahdi_echocanparams *ecp,
+				struct dahdi_echocanparam *p,
+				struct dahdi_echocan_state **ec);
 void hookstate_changed(xpd_t *xpd, int pos, bool good);
 int xpp_open(struct dahdi_chan *chan);
 int xpp_close(struct dahdi_chan *chan);

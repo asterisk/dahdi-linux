@@ -455,6 +455,8 @@ int xproto_register(const xproto_table_t *proto_table)
 		CHECK_PHONEOP(phoneops, card_pcm_recompute);
 		CHECK_PHONEOP(phoneops, card_pcm_fromspan);
 		CHECK_PHONEOP(phoneops, card_pcm_tospan);
+		CHECK_PHONEOP(phoneops, echocancel_timeslot);
+		CHECK_PHONEOP(phoneops, echocancel_setmask);
 		CHECK_PHONEOP(phoneops, card_dahdi_preregistration);
 		CHECK_PHONEOP(phoneops, card_dahdi_postregistration);
 		/* optional method -- call after testing: */

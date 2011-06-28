@@ -78,6 +78,7 @@ struct xpacket_header {
 #define	XPD_TYPE_FXO		2	// TO_PSTN
 #define	XPD_TYPE_BRI		3	// TO_PSTN/TO_PHONE (from hardware)
 #define	XPD_TYPE_PRI		4	// TO_PSTN/TO_PHONE (runtime)
+#define	XPD_TYPE_ECHO		5	// Octasic echo canceller
 #define	XPD_TYPE_NOMODULE	7
 
 typedef	byte	xpd_type_t;
@@ -233,6 +234,8 @@ struct phoneops {
 	void (*card_pcm_recompute)(xpd_t *xpd, xpp_line_t pcm_mask);
 	void (*card_pcm_fromspan)(xpd_t *xpd, xpacket_t *pack);
 	void (*card_pcm_tospan)(xpd_t *xpd, xpacket_t *pack);
+	int (*echocancel_timeslot)(xpd_t *xpd, int pos);
+	int (*echocancel_setmask)(xpd_t *xpd, xpp_line_t ec_mask);
 	int (*card_timing_priority)(xpd_t *xpd);
 	int (*card_dahdi_preregistration)(xpd_t *xpd, bool on);
 	int (*card_dahdi_postregistration)(xpd_t *xpd, bool on);
@@ -265,6 +268,7 @@ struct xproto_table {
 	xproto_entry_t		entries[256];	/* Indexed by opcode */
 	const struct xops	*xops;		/* Card level operations */
 	const struct phoneops	*phoneops;	/* DAHDI operations */
+	const struct echoops	*echoops;	/* Echo Canceller operations */
 	xpd_type_t	type;
 	byte		ports_per_subunit;
 	const char	*name;

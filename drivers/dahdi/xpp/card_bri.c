@@ -863,6 +863,8 @@ static const struct dahdi_span_ops BRI_span_ops = {
 	.hooksig = xpp_hooksig,	/* Only with RBS bits */
 	.ioctl = xpp_ioctl,
 	.maint = xpp_maint,
+	.echocan_create = xpp_echocan_create,
+	.echocan_name = xpp_echocan_name,
 #ifdef	DAHDI_SYNC_TICK
 	.sync_tick = dahdi_sync_tick,
 #endif
@@ -1428,7 +1430,33 @@ static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 	}
 }
 
+int BRI_echocancel_timeslot(xpd_t *xpd, int pos)
+{
+	return xpd->addr.subunit * 4 + pos;
+}
 
+static int BRI_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask)
+{
+	struct BRI_priv_data	*priv;
+	int i;
+
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	XPD_DBG(GENERAL, xpd, "0x%8X\n", ec_mask);
+	if (!ECHOOPS(xpd->xbus)) {
+		XPD_DBG(GENERAL, xpd,
+				"No echo canceller in XBUS: Doing nothing.\n");
+		return -EINVAL;
+	}
+	for (i = 0; i < PHONEDEV(xpd).channels - 1; i++) {
+		int	on = BIT(i) & ec_mask;
+
+		CALL_EC_METHOD(ec_set, xpd->xbus, xpd, i, on);
+	}
+	CALL_EC_METHOD(ec_update, xpd->xbus, xpd->xbus);
+	return 0;
+}
 
 /*---------------- BRI: HOST COMMANDS -------------------------------------*/
 
@@ -1670,6 +1698,8 @@ static const struct phoneops	bri_phoneops = {
 	.card_pcm_fromspan	= BRI_card_pcm_fromspan,
 	.card_pcm_tospan	= BRI_card_pcm_tospan,
 	.card_timing_priority	= generic_timing_priority,
+	.echocancel_timeslot	= BRI_echocancel_timeslot,
+	.echocancel_setmask	= BRI_echocancel_setmask,
 	.card_ioctl	= BRI_card_ioctl,
 	.card_open	= BRI_card_open,
 	.card_close	= BRI_card_close,

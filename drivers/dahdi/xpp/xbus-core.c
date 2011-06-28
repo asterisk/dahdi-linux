@@ -630,6 +630,7 @@ static int new_card(xbus_t *xbus,
 	int			subunits;
 	int			ret = 0;
 	int			remaining_ports;
+	const struct echoops	*echoops;
 
 	proto_table = xproto_get(type);
 	if(!proto_table) {
@@ -637,6 +638,18 @@ static int new_card(xbus_t *xbus,
 			"CARD %d: missing protocol table for type %d. Ignored.\n",
 			unit, type);
 		return -EINVAL;
+	}
+	echoops = proto_table->echoops;
+	if (echoops) {
+		XBUS_INFO(xbus, "Detected ECHO Canceler (%d)\n", unit);
+		if (ECHOOPS(xbus)) {
+			XBUS_NOTICE(xbus,
+				"CARD %d: tryies to define echoops (type %d) but we already have one. Ignored.\n",
+				unit, type);
+			return -EINVAL;
+		}
+		xbus->echo_state.echoops = echoops;
+		xbus->echo_state.xpd_idx = XPD_IDX(unit, 0);
 	}
 	remaining_ports = ports;
 	subunits = (ports + proto_table->ports_per_subunit - 1) /
@@ -748,6 +761,11 @@ static int xpd_initialize(xpd_t *xpd)
 	}
 	xpd->card_present = 1;
 	if (IS_PHONEDEV(xpd)) {
+		/*
+		 * Set echo canceler channels (off)
+		 * Asterisk will tell us when/if it's needed.
+		 */
+		CALL_PHONE_METHOD(echocancel_setmask, xpd, 0);
 		CALL_PHONE_METHOD(card_state, xpd, 1);	/* Turn on all channels */
 	}
 	if(!xpd_setstate(xpd, XPD_STATE_READY)) {
@@ -758,6 +776,34 @@ static int xpd_initialize(xpd_t *xpd)
 	ret = 0;
 out:
 	return ret;
+}
+
+static int xbus_echocancel(xbus_t *xbus, int on)
+{
+	int unit;
+	int subunit;
+	xpd_t *xpd;
+
+	if (!ECHOOPS(xbus))
+		return 0;
+	for (unit = 0; unit < MAX_UNIT; unit++) {
+		xpd = xpd_byaddr(xbus, unit, 0);
+		if (!xpd || !IS_PHONEDEV(xpd))
+			continue;
+		for (subunit = 0; subunit < MAX_SUBUNIT; subunit++) {
+			int	ret;
+
+			xpd = xpd_byaddr(xbus, unit, subunit);
+			if (!xpd || !IS_PHONEDEV(xpd))
+				continue;
+			ret = echocancel_xpd(xpd, on);
+			if (ret < 0) {
+				XPD_ERR(xpd, "Fail in xbus_echocancel()\n");
+				return ret;
+			}
+		}
+	}
+	return 0;
 }
 
 static int xbus_initialize(xbus_t *xbus)
@@ -807,6 +853,7 @@ static int xbus_initialize(xbus_t *xbus)
 				goto err;
 		}
 	}
+	xbus_echocancel(xbus, 1);
 	do_gettimeofday(&time_end);
 	timediff = usec_diff(&time_end, &time_start);
 	timediff /= 1000*100;
@@ -1154,6 +1201,7 @@ void xbus_deactivate(xbus_t *xbus)
 		return;
 	xbus_request_sync(xbus, SYNC_MODE_NONE);	/* no more ticks */
 	elect_syncer("deactivate");
+	xbus_echocancel(xbus, 0);
 	xbus_request_removal(xbus);
 	XBUS_DBG(DEVICES, xbus, "[%s] Waiting for queues\n", xbus->label);
 	xbus_command_queue_clean(xbus);
