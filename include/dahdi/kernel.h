@@ -1326,6 +1326,11 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 	(signal_pending((p)) && sigismember(&(p)->pending.signal, SIGKILL))
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
+
+#ifndef __packed                                                                                         
+#define __packed  __attribute__((packed))                                                                
+#endif 
+
 #include <linux/ctype.h>
 /* A define of 'clamp_val' happened to be added in the patch
  * linux-2.6-sata-prep-work-for-rhel5-3.patch kernel-2.6.spec that also
