@@ -2053,7 +2053,8 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, struct wctdm_module *const mod)
 						SLIC_LF_ACTIVE_FWD;
 		break;
 	}
-	wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_OFFHOOK);
+	if ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
+		wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_OFFHOOK);
 	dahdi_hooksig(get_dahdi_chan(wc, mod), DAHDI_RXSIG_OFFHOOK);
 
 #ifdef DEBUG
@@ -2063,6 +2064,17 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	fxs->oldrxhook = 1;
 }
 
+/**
+ * wctdm_fxs_on_hook - Report on hook to DAHDI.
+ * @wc:		Board hosting the module.
+ * @card:	Index of the module / port to place on hook.
+ *
+ * If we are intentionally dropping battery to signal a forward
+ * disconnect we do not want to place the line "On-Hook". In this
+ * case, the core of DAHDI will place us on hook when one of the RBS
+ * timers expires.
+ *
+ */
 static void wctdm_fxs_on_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
@@ -2070,7 +2082,8 @@ static void wctdm_fxs_on_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		dev_info(&wc->vb.pdev->dev,
 			"fxs_on_hook: Card %d Going on hook\n", mod->card);
 	}
-	wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_ONHOOK);
+	if ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
+		wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_ONHOOK);
 	dahdi_hooksig(get_dahdi_chan(wc, mod), DAHDI_RXSIG_ONHOOK);
 	fxs->oldrxhook = 0;
 }
