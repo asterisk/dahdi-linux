@@ -233,6 +233,7 @@ static char *opermode = "FCC";
 static int fxshonormode = 0;
 static int alawoverride = 0;
 static char *companding = "auto";
+static int fastpickup = -1; /* -1 auto, 0 no, 1 yes */
 static int fxotxgain = 0;
 static int fxorxgain = 0;
 static int fxstxgain = 0;
@@ -2869,7 +2870,8 @@ wctdm_init_voicedaa(struct wctdm *wc, struct wctdm_module *mod,
 	wctdm_setreg(wc, mod, 30, reg30);
 
 	/* Misc. DAA parameters */
-	reg31 = 0xa3;
+	reg32 = (fastpickup) ? 0xb3 : 0xa3;
+
 	reg31 |= (fxo_modes[_opermode].ohs2 << 3);
 	wctdm_setreg(wc, mod, 31, reg31);
 
@@ -5671,6 +5673,13 @@ static int __init wctdm_init(void)
 		fxshonormode = 1;
 	}
 
+	if (-1 == fastpickup) {
+		if (!strcmp(opermode, "JAPAN"))
+			fastpickup = 1;
+		else
+			fastpickup = 0;
+	}
+
 	/* for the voicedaa_check_hook defaults, if the user has not overridden
 	   them by specifying them as module parameters, then get the values
 	   from the selected operating mode
@@ -5704,6 +5713,12 @@ static void __exit wctdm_cleanup(void)
 
 
 module_param(debug, int, 0600);
+module_param(fastpickup, int, 0400);
+MODULE_PARM_DESC(fastpickup,
+		 "Set to 1 to shorten the calibration delay when taking " \
+		 "an FXO port off hook. This can be required for Type-II " \
+		 "CID. If -1 the calibration delay will depend on the " \
+		 "current opermode.\n");
 module_param(fxovoltage, int, 0600);
 module_param(loopcurrent, int, 0600);
 module_param(reversepolarity, int, 0600);
