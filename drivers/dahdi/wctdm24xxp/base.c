@@ -1817,7 +1817,8 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, const int card)
 						SLIC_LF_ACTIVE_FWD;
 		break;
 	}
-	wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_OFFHOOK);
+	if ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
+		wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_OFFHOOK);
 	dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_OFFHOOK);
 
 #ifdef DEBUG
@@ -1833,7 +1834,8 @@ static void wctdm_fxs_on_hook(struct wctdm *wc, const int card)
 	if (debug & DEBUG_CARD)
 		dev_info(&wc->vb.pdev->dev,
 			"fxs_on_hook: Card %d Going on hook\n", card);
-	wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_ONHOOK);
+	if ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
+		wctdm_fxs_hooksig(wc, card, DAHDI_TXSIG_ONHOOK);
 	dahdi_hooksig(wc->aspan->span.chans[card], DAHDI_RXSIG_ONHOOK);
 	fxs->oldrxhook = 0;
 }
