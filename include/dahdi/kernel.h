@@ -906,7 +906,7 @@ struct dahdi_span {
 	int syncsrc;			/*!< current sync src (gets copied here) */
 	struct dahdi_count count;	/*!< Performance and Error counters */
 
-	enum dahdi_maint_mode maintstat; /*!< Maintenance state */
+	int maintstat;			/*!< Maintenance state */
 	int mainttimer;			/*!< Maintenance timer */
 
 	int irqmisses;			/*!< Interrupt misses */

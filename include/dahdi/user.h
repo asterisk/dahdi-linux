@@ -327,24 +327,23 @@ enum {
 #define DAHDI_ALARM_LFA			(1 << 9) /* Loss of Frame Alignment */
 #define DAHDI_ALARM_LMFA		(1 << 10)/* Loss of Multi-Frame Align */
 
-enum dahdi_maint_mode {
-	DAHDI_MAINT_NONE		= 0,	/* Normal Mode */
-	DAHDI_MAINT_LOCALLOOP		= 1,	/* Local Loopback */
-	DAHDI_MAINT_REMOTELOOP		= 2,	/* Remote Loopback */
-	DAHDI_MAINT_NETWORKLINELOOP	= 2,	/* Remote Loopback */
-	DAHDI_MAINT_LOOPUP		= 3,	/* send loopup code */
-	DAHDI_MAINT_LOOPDOWN		= 4,	/* send loopdown code */
-	DAHDI_MAINT_FAS_DEFECT		= 6,	/* insert a FAS defect */
-	DAHDI_MAINT_MULTI_DEFECT	= 7,	/* insert a Multiframe defect */
-	DAHDI_MAINT_CRC_DEFECT		= 8,	/* insert a FAS defect */
-	DAHDI_MAINT_CAS_DEFECT		= 9,	/* insert a FAS defect */
-	DAHDI_MAINT_PRBS_DEFECT		= 10,	/* insert a FAS defect */
-	DAHDI_MAINT_BIPOLAR_DEFECT	= 11,	/* insert a FAS defect */
-	DAHDI_MAINT_PRBS		= 12,	/* enable the PRBS gen/mon */
-	DAHDI_MAINT_NETWORKPAYLOADLOOP	= 13,	/* Remote Loopback */
-	DAHDI_RESET_COUNTERS		= 14,	/* Clear the error counters */
-	DAHDI_MAINT_ALARM_SIM		= 15,	/* Simulate alarms */
-};
+/* Maintenance modes */
+#define DAHDI_MAINT_NONE		0	/* Normal Mode */
+#define DAHDI_MAINT_LOCALLOOP		1	/* Local Loopback */
+#define DAHDI_MAINT_REMOTELOOP		2	/* Remote Loopback */
+#define DAHDI_MAINT_NETWORKLINELOOP	2	/* Remote Loopback */
+#define DAHDI_MAINT_LOOPUP		3	/* send loopup code */
+#define DAHDI_MAINT_LOOPDOWN		4	/* send loopdown code */
+#define DAHDI_MAINT_FAS_DEFECT		6	/* insert a FAS defect */
+#define DAHDI_MAINT_MULTI_DEFECT	7	/* insert a Multiframe defect */
+#define DAHDI_MAINT_CRC_DEFECT		8	/* insert a FAS defect */
+#define DAHDI_MAINT_CAS_DEFECT		9	/* insert a FAS defect */
+#define DAHDI_MAINT_PRBS_DEFECT		10	/* insert a FAS defect */
+#define DAHDI_MAINT_BIPOLAR_DEFECT	11	/* insert a FAS defect */
+#define DAHDI_MAINT_PRBS		12	/* enable the PRBS gen/mon */
+#define DAHDI_MAINT_NETWORKPAYLOADLOOP	13	/* Remote Loopback */
+#define DAHDI_RESET_COUNTERS		14	/* Clear the error counters */
+#define DAHDI_MAINT_ALARM_SIM		15	/* Simulate alarms */
 
 /* Flag Value for IOMUX, read avail */
 #define DAHDI_IOMUX_READ	1
