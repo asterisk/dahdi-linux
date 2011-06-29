@@ -2870,7 +2870,7 @@ wctdm_init_voicedaa(struct wctdm *wc, struct wctdm_module *mod,
 	wctdm_setreg(wc, mod, 30, reg30);
 
 	/* Misc. DAA parameters */
-	reg32 = (fastpickup) ? 0xb3 : 0xa3;
+	reg31 = (fastpickup) ? 0xb3 : 0xa3;
 
 	reg31 |= (fxo_modes[_opermode].ohs2 << 3);
 	wctdm_setreg(wc, mod, 31, reg31);
