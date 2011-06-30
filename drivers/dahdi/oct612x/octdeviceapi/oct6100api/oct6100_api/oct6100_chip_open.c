@@ -37,7 +37,15 @@ $Octasic_Revision: 347 $
 #include <sys/types.h>
 #include <dahdi/compat/bsd.h>
 #else
+#ifndef __KERNEL__
+#include <stdlib.h>
+#define kmalloc(size, type)	malloc(size)
+#define kfree(ptr)		free(ptr)
+#define GFP_ATOMIC		0 /*Dummy */
+#else
 #include <linux/slab.h>
+#include <linux/kernel.h>
+#endif
 #endif
 
 #include "octdef.h"

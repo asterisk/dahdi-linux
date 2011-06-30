@@ -40,6 +40,14 @@ $Octasic_Revision: 90 $
 
 /*****************************  TYPES  ***************************************/
 
+#ifndef	__KERNEL__
+#include	<stdint.h>
+#endif
+
+#ifndef	PTR_TYPE
+#define	PTR_TYPE	UINT16
+#endif
+
 typedef struct _OCT6100_API_CHANNEL_TDM_
 {
 	/* Laws. */
@@ -293,10 +301,10 @@ typedef struct _OCT6100_API_CHANNEL_
 	/*=======================================================================*/
 	/* Buffer playout information. */
 
-	UINT16	ulRinBufWritePtr;
-	UINT16	ulRinBufSkipPtr;
-	UINT16	ulSoutBufWritePtr;
-	UINT16	ulSoutBufSkipPtr;
+	PTR_TYPE	ulRinBufWritePtr;
+	PTR_TYPE	ulRinBufSkipPtr;
+	PTR_TYPE	ulSoutBufWritePtr;
+	PTR_TYPE	ulSoutBufSkipPtr;
 
 	/* User channel ID, transparently passed to the user. */
 	
@@ -324,19 +332,19 @@ typedef struct _OCT6100_API_CHANNEL_
 	UINT16	usPhasingTsstIndex;
 
 	/* Mode of operation of the channel based on the extended tone detection configuration. */
-	UINT16	ulExtToneChanMode;
+	PTR_TYPE	ulExtToneChanMode;
 
 	/*=======================================================================*/
 
 	/* Tone detection state. */
 	/* This array is configured as follow. */
 	/* Index 0 contain event 0 to 31 and Index 1 contains event 32 - 55 */
-	UINT16	ulLastSSToneDetected;
-	UINT16	ulLastSSToneTimestamp;
+	PTR_TYPE	ulLastSSToneDetected;
+	PTR_TYPE	ulLastSSToneTimestamp;
 
 
-	UINT16	ulRinUserBufPlayoutEventId;
-	UINT16	ulSoutUserBufPlayoutEventId;
+	PTR_TYPE	ulRinUserBufPlayoutEventId;
+	PTR_TYPE	ulSoutUserBufPlayoutEventId;
 
 	UINT32	aulToneConf[2];
 	UINT32	ulUserChanId;

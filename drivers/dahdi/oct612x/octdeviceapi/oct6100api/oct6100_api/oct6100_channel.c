@@ -36,7 +36,17 @@ $Octasic_Revision: 492 $
 #include <sys/types.h>
 #include <dahdi/compat/bsd.h>
 #else
+#ifndef __KERNEL__
+#include <stdlib.h>
+#include <stdio.h>
+#define kmalloc(size, type)    malloc(size)
+#define kfree(ptr)             free(ptr)
+#define GFP_ATOMIC             0 /* Dummy */
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+#else
 #include <linux/slab.h>
+#include <linux/kernel.h>
+#endif
 #endif
 
 #include "octdef.h"

@@ -56,7 +56,7 @@ $Octasic_Revision: 171 $
 #define cOCT6100_INVALID_HANDLE				cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_TIMESLOT			cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_STREAM				cOCT6100_FFFFFFFF
-#define cOCT6100_INVALID_VALUE				-1
+#define cOCT6100_INVALID_VALUE				cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_STAT				cOCT6100_FFFFFFFF
 #define cOCT6100_INVALID_STAT_W				cOCT6100_FFFF
 #define cOCT6100_INVALID_PCM_LAW			cOCT6100_FF
@@ -249,7 +249,9 @@ $Octasic_Revision: 171 $
 
 /* Chip open defines.*/
 #define cOCT6100_INTERNAL_TONE_ARRAY_SIZE	256		/* in words.*/
+#ifndef	cOCT6100_INTERNAL_SUPER_ARRAY_SIZE
 #define cOCT6100_INTERNAL_SUPER_ARRAY_SIZE	128		/* in words.*/
+#endif
 
 /* Internal memory mapping.*/
 
@@ -394,7 +396,9 @@ $Octasic_Revision: 171 $
 #define cOCT6100_IMAGE_AF_CST_OFFSET			0x1000;
 
 /* Max defines.*/
+#ifndef	cOCT6100_MAX_ECHO_CHANNELS
 #define cOCT6100_MAX_ECHO_CHANNELS				128
+#endif
 #define cOCT6100_MAX_TSI_CNCTS					1530
 #define cOCT6100_MAX_CALLER_ID_PLAYOUT_BUFFERS	( 3328 + 6 )
 #define cOCT6100_MAX_PLAYOUT_BUFFERS			( 1344 + cOCT6100_MAX_CALLER_ID_PLAYOUT_BUFFERS )
@@ -484,7 +488,9 @@ $Octasic_Revision: 171 $
 /* CPTAG:  No application needs for mixer events.  */
 /* 2 needed for head and tail nodes.  2 more needed to get through channel modify function. */
 /* Careful.  This value cannot be zero.  */
+#ifndef	cOCT6100_MAX_MIXER_EVENTS
 #define cOCT6100_MAX_MIXER_EVENTS						4
+#endif
 #define cOCT6100_MAX_FLEX_CONF_PARTICIPANTS_PER_BRIDGE	32
 #define cOCT6100_CONF_DOMINANT_SPEAKER_UNASSIGNED		672
 #define cOCT6100_CONF_NO_DOMINANT_SPEAKER_HNDL			cOCT6100_FFFFFFFE
@@ -588,6 +594,8 @@ $Octasic_Revision: 171 $
 #define cOCT6100_TONE_INFO_START_STRING			"[ToneDetectorInfo]"
 #define cOCT6100_TONE_INFO_STOP_STRING			"[~ToneDetectorInfo]"
 #define cOCT6100_TONE_INFO_EVENT_STRING			"TONEEVENT=0x"
+
+#define cOCT6100_MAX_NLP_CONF_DWORD				20
 
 /* Tail displacement info.*/
 #define cOCT6100_MAX_TAIL_DISPLACEMENT			896
