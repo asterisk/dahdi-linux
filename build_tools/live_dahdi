@@ -89,6 +89,9 @@ set_modules_to_load() {
 			if [ -r "$MODULES_DIR/xpp/xpd_bri.ko" ]; then
 				MODULES_LOAD="$MODULES_LOAD xpp/xpd_bri"
 			fi
+			if [ -r "$MODULES_DIR/xpp/xpd_echo.ko" ]; then
+				MODULES_LOAD="$MODULES_LOAD xpp/xpd_echo"
+			fi
 			MODULES_LOAD="$MODULES_LOAD xpp/xpp_usb"
 			;;
 		wctdm24xxp | wcte12xp)
