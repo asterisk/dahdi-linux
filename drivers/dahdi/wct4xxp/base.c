@@ -213,6 +213,7 @@ static int hardhdlcmode = 0xff;
 static int latency = 1;
 
 static int ms_per_irq = 1;
+static int ignore_rotary;
 
 #ifdef FANCY_ALARM
 static int altab[] = {
@@ -2119,7 +2120,7 @@ static void init_spans(struct t4 *wc)
 		snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
 			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
 		ts->span.manufacturer = "Digium";
-		if (order_index[wc->order] == 1)
+		if (!ignore_rotary && (1 == order_index[wc->order]))
 			snprintf(ts->span.location, sizeof(ts->span.location) - 1, "Board ID Switch %d", wc->order);
 		else
 			snprintf(ts->span.location, sizeof(ts->span.location) - 1,
@@ -4641,8 +4642,36 @@ static void free_wc(struct t4 *wc)
 	kfree(wc);
 }
 
+/**
+ * wct4xxp_sort_cards - Sort the cards in card array by rotary switch settings.
+ *
+ */
+static void wct4xxp_sort_cards(void)
+{
+	int x;
+
+	/* get the current number of probed cards and run a slice of a tail
+	 * insertion sort */
+	for (x = 0; x < MAX_T4_CARDS; x++) {
+		if (!cards[x+1])
+			break;
+	}
+	for ( ; x > 0; x--) {
+		if (cards[x]->order < cards[x-1]->order) {
+			struct t4 *tmp = cards[x];
+			cards[x] = cards[x-1];
+			cards[x-1] = tmp;
+		} else {
+			/* if we're not moving it, we won't move any more
+			 * since all cards are sorted on addition */
+			break;
+		}
+	}
+}
+
 static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
+	int res;
 	struct t4 *wc;
 	struct devtype *dt;
 	unsigned int x, f;
@@ -4806,23 +4835,9 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	}
 	
 	init_spans(wc);
-	/* get the current number of probed cards and run a slice of a tail
-	 * insertion sort */
-	for (x = 0; x < MAX_T4_CARDS; x++) {
-		if (!cards[x+1])
-			break;
-	}
-	for ( ; x > 0; x--) {
-		if (cards[x]->order < cards[x-1]->order) {
-			struct t4 *tmp = cards[x];
-			cards[x] = cards[x-1];
-			cards[x-1] = tmp;
-		} else {
-			/* if we're not moving it, we won't move any more
-			 * since all cards are sorted on addition */
-			break;
-		}
-	}
+
+	if (!ignore_rotary)
+		wct4xxp_sort_cards();
 	
 	dev_info(&wc->dev->dev, "Found a Wildcard: %s\n", wc->variety);
 	wc->gpio = 0x00000000;
@@ -4858,7 +4873,11 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	}
 #endif
 
-	return 0;
+	res = 0;
+	if (ignore_rotary)
+		res = t4_launch(wc);
+
+	return res;
 }
 
 static int t4_hardware_stop(struct t4 *wc)
@@ -5015,20 +5034,25 @@ static int __init t4_init(void)
 		printk(KERN_NOTICE "wct4xxp: Ident of first card is not zero (%d)\n",
 			cards[0]->order);
 	}
-	for (i = 0; cards[i]; i++) {
-		/* warn the user of duplicate ident values it is probably
-		 * unintended */
-		if (debug && res < 15 && cards[i+1] &&
-		    cards[res]->order == cards[i+1]->order) {
-			printk(KERN_NOTICE "wct4xxp: Duplicate ident value found (%d)\n",
-				cards[i]->order);
-		}
-		res = t4_launch(cards[i]);
-		if (res) {
-			int j;
-			for (j = 0; j < i; ++j)
-				_t4_remove_one(cards[j]);
-			break;
+
+	/* If we're ignoring the rotary switch settings, then we've already
+	 * registered in the context of .probe */
+	if (!ignore_rotary) {
+		for (i = 0; cards[i]; i++) {
+			/* warn the user of duplicate ident values it is
+			 * probably unintended */
+			if (debug && res < 15 && cards[i+1] &&
+			    cards[res]->order == cards[i+1]->order) {
+				printk(KERN_NOTICE "wct4xxp: Duplicate ident "
+				       "value found (%d)\n", cards[i]->order);
+			}
+			res = t4_launch(cards[i]);
+			if (res) {
+				int j;
+				for (j = 0; j < i; ++j)
+					_t4_remove_one(cards[j]);
+				break;
+			}
 		}
 	}
 	return res;
@@ -5059,6 +5083,10 @@ module_param(j1mode, int, 0600);
 module_param(sigmode, int, 0600);
 module_param(latency, int, 0600);
 module_param(ms_per_irq, int, 0600);
+module_param(ignore_rotary, int, 0400);
+MODULE_PARM_DESC(ignore_rotary, "Set to > 0 to ignore the rotary switch when " \
+		 "registering with DAHDI.");
+
 #ifdef VPM_SUPPORT
 module_param(vpmsupport, int, 0600);
 module_param(vpmdtmfsupport, int, 0600);
