@@ -103,10 +103,6 @@ static char *companding = "alaw";
 #define MAX_B4_CARDS 64
 static struct b4xxp *cards[MAX_B4_CARDS];
 
-/* names of HWEC modules */
-static const char *lasvegas2_name = "LASVEGAS2";
-static const char *noec_name = "NONE";
-
 static int led_fader_table[] = {
 	 0,  0,  0,  1,  2,  3,  4,  6,  8,  9, 11, 13, 16, 18, 20, 22, 24,
 	25, 27, 28, 29, 30, 31, 31, 32, 31, 31, 30, 29, 28, 27, 25, 23, 22,
@@ -2210,8 +2206,8 @@ static const char *b4xxp_echocan_name(const struct dahdi_chan *chan)
 	struct b4xxp_span *bspan = container_of(chan->span, struct b4xxp_span,
 						span);
 	if (bspan->parent->card_type == B410P)
-		return lasvegas2_name;
-	return noec_name;
+		return "LASVEGAS2";
+	return NULL;
 }
 
 static int b4xxp_echocan_create(struct dahdi_chan *chan,
