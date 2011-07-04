@@ -615,7 +615,6 @@ out:
 #else
 static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 {
-	xbus_t			*xbus;
 	struct BRI_priv_data	*priv;
 	byte			*src;
 	struct dahdi_chan	*dchan;
@@ -633,7 +632,6 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	xbus = xpd->xbus;
 	dchan = XPD_CHAN(xpd, 2);
 	if(!IS_OFFHOOK(xpd, 2)) {	/* D-chan is used? */
 		static int rate_limit;

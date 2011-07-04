@@ -63,7 +63,6 @@ static xpd_t *ECHO_card_new(xbus_t *xbus, int unit, int subunit,
 		int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t *xpd = NULL;
-	struct ECHO_priv_data *priv;
 	int channels = 0;
 
 	if (subunit_ports != 1) {
@@ -76,21 +75,16 @@ static xpd_t *ECHO_card_new(xbus_t *xbus, int unit, int subunit,
 	if (!xpd)
 		return NULL;
 	xpd->type_name = "ECHO";
-	priv = xpd->priv;
 	return xpd;
 }
 
 static int ECHO_card_init(xbus_t *xbus, xpd_t *xpd)
 {
-	struct ECHO_priv_data *priv;
-	xproto_table_t *proto_table;
 	int ret = 0;
 
 	BUG_ON(!xpd);
 	XPD_DBG(GENERAL, xpd, "\n");
 	xpd->type = XPD_TYPE_ECHO;
-	proto_table = &PROTO_TABLE(ECHO);
-	priv = xpd->priv;
 	XPD_DBG(DEVICES, xpd, "%s\n", xpd->type_name);
 	ret = CALL_EC_METHOD(ec_update, xbus, xbus);
 	return ret;
@@ -98,10 +92,7 @@ static int ECHO_card_init(xbus_t *xbus, xpd_t *xpd)
 
 static int ECHO_card_remove(xbus_t *xbus, xpd_t *xpd)
 {
-	struct ECHO_priv_data *priv;
-
 	BUG_ON(!xpd);
-	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "\n");
 	return 0;
 }
@@ -121,15 +112,11 @@ static int ECHO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	unsigned long flags;
 	struct xpd_addr addr;
 	xpd_t *orig_xpd;
-	byte regnum;
-	byte data_low;
 
 	/* Map UNIT + PORTNUM to XPD */
 	orig_xpd = xpd;
 	addr.unit = orig_xpd->addr.unit;
 	addr.subunit = info->portnum;
-	regnum = REG_FIELD(info, regnum);
-	data_low = REG_FIELD(info, data_low);
 	xpd = xpd_byaddr(xbus, addr.unit, addr.subunit);
 	if (!xpd) {
 		static int rate_limit;
