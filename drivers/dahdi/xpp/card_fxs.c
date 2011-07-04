@@ -41,6 +41,7 @@ static DEF_PARM(uint, poll_digital_inputs, 1000, 0644, "Poll Digital Inputs");
 #endif
 
 static DEF_PARM_BOOL(vmwi_ioctl, 1, 0644, "Asterisk support VMWI notification via ioctl");
+static DEF_PARM_BOOL(ring_trapez, 0, 0664, "Use trapezoid ring type");
 
 /* Signaling is opposite (fxo signalling for fxs card) */
 #if 1
@@ -576,6 +577,28 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x32, 0xF0);
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x33, 0x05);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x1D, 0x00, 0x46);
+	} else if (ring_trapez) {
+		LINE_DBG(SIGNAL, xpd, pos, "RINGER: Trapez ring\n");
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x16, 0xC8, 0x00);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x15, 0xAB, 0x5E);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x14, 0x8C, 0x01);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x22, 0x01);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x4A, 0x34);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x30, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x31, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x32, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x33, 0x00);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos,
+				SLIC_WRITE, 0x1D, 0x00, 0x36);
 	} else {
 		/* A write to register 0x40 will now turn on/off the ringer */
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER\n");
@@ -589,6 +612,8 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x31, 0x00);
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x32, 0x00);
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x33, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+				0x4A, 0x34);/* High Vbat~ -82V[Dc] */
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x1D, 0x00, 0x36);
 	}
 	return (ret ? -EPROTO : 0);
