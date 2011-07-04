@@ -1934,7 +1934,7 @@ static int decode_cas_e1(xpd_t *xpd, byte regnum, byte data_low)
 	BUG_ON(!priv->is_cas);
 	BUG_ON(priv->pri_protocol != PRI_PROTO_E1);
 	XPD_DBG(SIGNAL, xpd, "RBS: RX: data_low=0x%02X\n", data_low);
-	if(pos < 0 || pos >= NUM_CAS_RS_E) {
+	if(pos >= NUM_CAS_RS_E) {
 		XPD_ERR(xpd, "%s: got bad pos=%d [0-%d]\n", __FUNCTION__, pos, NUM_CAS_RS_E);
 		return -EINVAL;
 	}
@@ -1975,7 +1975,7 @@ static int decode_cas_t1(xpd_t *xpd, byte regnum, byte data_low)
 	BUG_ON(!priv->is_cas);
 	BUG_ON(priv->pri_protocol != PRI_PROTO_T1);
 	rsnum = regnum - REG_RS1_E;
-	if(rsnum < 0 || rsnum >= 12) {
+	if(rsnum >= 12) {
 		XPD_ERR(xpd, "Bad rsnum=%d\n", rsnum);
 		return 0;
 	}
@@ -2321,7 +2321,7 @@ static DEVICE_ATTR_READER(pri_alarms_show, dev, buf)
 	struct PRI_priv_data	*priv;
 	unsigned long		flags;
 	int			len = 0;
-	const static struct {
+	static const struct {
 		byte		bits;
 		const char	*name;
 	} alarm_types[] = {

@@ -81,12 +81,12 @@ static const char *xhfc_state_name(bool is_nt, enum xhfc_states state)
 	};
 #undef	_E
 	if(is_nt) {
-		if ((state < ST_RESET) || (state > ST_NT_DEACTIVTING))
+		if (state > ST_NT_DEACTIVTING)
 			p = "NT ???";
 		else
 			p = nt_names[state];
 	} else {
-		if ((state < ST_RESET) || (state > ST_TE_LOST_FRAMING))
+		if (state > ST_TE_LOST_FRAMING)
 			p = "TE ???";
 		else
 			p = te_names[state];
