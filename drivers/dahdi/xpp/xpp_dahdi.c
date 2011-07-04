@@ -940,6 +940,26 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 	LINE_DBG(GENERAL, xpd, pos, "%s:\n", __func__);
 	if (!ECHOOPS(xbus))
 		return NULL;
+	/*
+	 * quirks and limitations
+	 */
+	if (xbus->quirks.has_fxo) {
+		if (
+			xbus->quirks.has_digital_span &&
+			xpd->type == XPD_TYPE_FXO) {
+			LINE_NOTICE(xpd, pos,
+				"quirk: give up HWEC on FXO: "
+				"AB has digital span\n");
+			return NULL;
+		} else if (
+			xbus->sync_mode != SYNC_MODE_AB &&
+			xpd->type == XPD_TYPE_FXS) {
+			LINE_NOTICE(xpd, pos,
+				"quirk: give up HWEC on FXS: "
+				"AB has FXO and is sync slave\n");
+			return NULL;
+		}
+	}
 	return "XPP";
 }
 EXPORT_SYMBOL(xpp_echocan_name);

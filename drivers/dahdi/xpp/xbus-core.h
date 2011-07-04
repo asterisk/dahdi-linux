@@ -207,6 +207,10 @@ struct xbus {
 	int			cpu_rcv_intr[NR_CPUS];
 	int			cpu_rcv_tasklet[NR_CPUS];
 
+	struct quirks {
+		int	has_fxo:1;
+		int	has_digital_span:1;
+	}			quirks;
 	bool			self_ticking;
 	enum sync_mode		sync_mode;
 	/* Managed by low-level drivers: */

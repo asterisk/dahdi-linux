@@ -664,6 +664,10 @@ static int new_card(xbus_t *xbus,
 			subunits,
 			port_dir
 		);
+	if (type == XPD_TYPE_PRI || type == XPD_TYPE_BRI)
+		xbus->quirks.has_digital_span = 1;
+	if (type == XPD_TYPE_FXO)
+		xbus->quirks.has_fxo = 1;
 	xbus->worker.num_units += subunits - 1;
 	for(i = 0; i < subunits; i++) {
 		int	subunit_ports = proto_table->ports_per_subunit;
