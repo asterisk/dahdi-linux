@@ -718,8 +718,8 @@ UINT32 Oct6100ApiTransferToneEvents(
 									break;
 								case 2:
 									/* This is the "STOP" event, invalidate the last value.  The user does not want to know about this. */
-									pEchoChannel->ulLastSSToneDetected = cOCT6100_INVALID_VALUE;
-									pEchoChannel->ulLastSSToneTimestamp = cOCT6100_INVALID_VALUE;
+									pEchoChannel->ulLastSSToneDetected = (PTR_TYPE)cOCT6100_INVALID_VALUE;
+									pEchoChannel->ulLastSSToneTimestamp = (PTR_TYPE)cOCT6100_INVALID_VALUE;
 									break;
 								default:
 									break;
@@ -860,8 +860,8 @@ UINT32 Oct6100ApiTransferToneEvents(
 									break;
 								case 2:
 									/* This is the "STOP" event, invalidate the last value.  The user does not want to know about this. */
-									pEchoChannel->ulLastSSToneDetected = cOCT6100_INVALID_VALUE;
-									pEchoChannel->ulLastSSToneTimestamp = cOCT6100_INVALID_VALUE;
+									pEchoChannel->ulLastSSToneDetected = (PTR_TYPE)cOCT6100_INVALID_VALUE;
+									pEchoChannel->ulLastSSToneTimestamp = (PTR_TYPE)cOCT6100_INVALID_VALUE;
 									break;
 								default:
 									break;

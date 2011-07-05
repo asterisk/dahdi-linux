@@ -2759,8 +2759,8 @@ UINT32 Oct6100ApiUpdateChannelEntry(
 	/* Index 0 contain event 0 to 31 (msb = event 31) and Index 1 contain index 32 - 55  */
 	pChanEntry->aulToneConf[ 0 ] = 0;
 	pChanEntry->aulToneConf[ 1 ] = 0;
-	pChanEntry->ulLastSSToneDetected = cOCT6100_INVALID_VALUE;
-	pChanEntry->ulLastSSToneTimestamp = cOCT6100_INVALID_VALUE;
+	pChanEntry->ulLastSSToneDetected = (PTR_TYPE)cOCT6100_INVALID_VALUE;
+	pChanEntry->ulLastSSToneTimestamp = (PTR_TYPE)cOCT6100_INVALID_VALUE;
 
 	/* Initialize the bidirectional flag.*/
 	pChanEntry->fBiDirChannel = FALSE;
