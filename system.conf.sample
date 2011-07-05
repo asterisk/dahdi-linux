@@ -32,6 +32,12 @@
 # Incorrect timing sync may cause clicks/noise in the audio, poor quality or failed
 # faxes, unreliable modem operation, and is a general all round bad thing.
 #
+# NOTE: The B410P card cannot reliably connect one of its four ports
+# configured in TE mode to another one configured in NT mode. It will not
+# reliably sync clock from itself. Please use another physical card and
+# configure one to provide clock and one to recover clock in any B410P test
+# environments.
+#
 # The line build-out (or LBO) is an integer, from the following table:
 #
 #  0: 0 db (CSU) / 0-133 feet (DSX-1)
