@@ -1,0 +1,51 @@
+#!/usr/bin/php
+
+<?php
+/*
+ * Written by Jared Smith and Kevin P. Fleming
+ *
+ * Copyright (C) 2006, Jared Smith and Digium, Inc.
+ *
+ */
+
+# create an array of all the different prefixes you want to match on,
+# as Perl-compatible regular expressions
+# (yes, this is a stupid example, as the second one is just a simplified
+# version of the first, but it's just an example)
+$prefixes = array('\.text\.Oct');
+
+$fp = fopen('test.map','r');
+
+while (!feof($fp))
+{
+        # Loop until we find the top of section we want
+        while ($line = fgets($fp))
+        {
+                if (preg_match('/Discarded input sections/i',$line))
+                {
+                        break;
+                }
+        }
+
+        # Now loop until we find the next section
+        while ($line = fgets($fp))
+        {
+                if (preg_match('/Memory Configuration/i',$line))
+                {
+                        # we found it!
+                        break;
+                }
+                foreach ($prefixes as $prefix)
+                {
+                        if (preg_match("/$prefix/i",$line))
+                        {
+				preg_match("/Oct.*/", $line, $matches);
+                                $line2 = fgets($fp);
+				echo "#define SKIP_".$matches[0]." 1\n";
+                                break;
+                        }
+                }
+        }
+}
+fclose($fp);
+?>

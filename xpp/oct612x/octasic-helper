@@ -1,0 +1,39 @@
+#!/bin/sh
+
+#
+# Jeffrey C. Ollie <jeff@ocjtech.us>
+#
+# $1 == information requested
+# $2 == path to octasic directory
+#
+
+APIDIR=$2/octdeviceapi/oct6100api/oct6100_api
+
+case $1 in
+    objects)
+	echo $APIDIR/oct6100_adpcm_chan.o \
+	    $APIDIR/oct6100_channel.o \
+	    $APIDIR/oct6100_chip_open.o \
+	    $APIDIR/oct6100_chip_stats.o \
+	    $APIDIR/oct6100_conf_bridge.o \
+	    $APIDIR/oct6100_debug.o \
+	    $APIDIR/oct6100_events.o \
+	    $APIDIR/oct6100_interrupts.o \
+	    $APIDIR/oct6100_memory.o \
+	    $APIDIR/oct6100_miscellaneous.o \
+	    $APIDIR/oct6100_mixer.o \
+	    $APIDIR/oct6100_phasing_tsst.o \
+	    $APIDIR/oct6100_playout_buf.o \
+	    $APIDIR/oct6100_remote_debug.o \
+	    $APIDIR/oct6100_tlv.o \
+	    $APIDIR/oct6100_tone_detection.o \
+	    $APIDIR/oct6100_tsi_cnct.o \
+	    $APIDIR/oct6100_tsst.o \
+	    $2/apilib/bt/octapi_bt0.o \
+	    $2/apilib/largmath/octapi_largmath.o \
+	    $2/apilib/llman/octapi_llman.o
+	;;
+    cflags)
+	echo -I$2/include -I$2/octdeviceapi -I$2/octdeviceapi/oct6100api
+	;;
+esac
