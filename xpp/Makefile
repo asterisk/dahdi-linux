@@ -37,8 +37,23 @@ PERL_MODS	:= $(shell cd perl_modules; echo $(PERL_MODS_PAT))
 # FIXME: Are those values really sane?
 HOSTCC		?= $(CC)
 
+USE_OCTASIC	:= yes
+OCTASIC_DIR	:= oct612x
 
-CFLAGS		+= -g -Wall $(USB_INCLUDE)
+ifneq (no,$(USE_OCTASIC))
+
+OCT_OBJS	= $(shell $(OCTASIC_DIR)/octasic-helper objects $(OCTASIC_DIR))
+OCT_SRCS	= $(shell echo $(OCT_OBJS) | tr -s ' ' '\n' | sed 's/\.o$$/.c/g')
+OCT_HERE_OBJS	= $(shell echo $(OCT_OBJS) | tr -s ' ' '\n' | sed 's,^.*/,,')
+OCT_CFLAGS	= $(shell $(OCTASIC_DIR)/octasic-helper cflags $(OCTASIC_DIR))
+OCT_DEFINES	= \
+	-DPTR_TYPE=uint32_t	\
+	-DcOCT6100_INTERNAL_SUPER_ARRAY_SIZE=1024	\
+	-DcOCT6100_MAX_ECHO_CHANNELS=672		\
+	-DcOCT6100_MAX_MIXER_EVENTS=1344
+
+ECHO_LOADER	= echo_loader.o
+endif
 
 %.8: %
 	pod2man --section 8 $^ > $@ || $(RM) $@
@@ -57,7 +72,7 @@ PERL_MANS	= $(PERL_SCRIPTS:%=%.8)
 XTALK_OBJS		= xtalk/xtalk.o xtalk/xusb.o xtalk/xlist.o xtalk/debug.o
 ASTRIBANK_OBJS		= astribank_usb.o mpptalk.o $(XTALK_OBJS)
 
-ABHEXLOAD_OBJS		= astribank_hexload.o hexfile.o pic_loader.o $(ASTRIBANK_OBJS) $(OCT_OBJS)
+ABHEXLOAD_OBJS		= astribank_hexload.o hexfile.o pic_loader.o $(ECHO_LOADER) $(ASTRIBANK_OBJS) $(OCT_HERE_OBJS)
 ABTOOL_OBJS		= astribank_tool.o $(ASTRIBANK_OBJS)
 ABALLOW_OBJS		= astribank_allow.o $(ASTRIBANK_OBJS)
 
@@ -112,6 +127,7 @@ fpga_load: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 
 astribank_hexload: $(ABHEXLOAD_OBJS)
 astribank_hexload: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
+astribank_hexload: CFLAGS+=$(OCT_CFLAGS)
 
 astribank_tool: $(ABTOOL_OBJS)
 astribank_tool: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
@@ -124,8 +140,25 @@ astribank_is_starting: LIBS+=$(EXTRA_LIBS)
 
 fpga_load.o: CFLAGS+=-D_GNU_SOURCE	# We use memrchr()
 
+hex2iic: hex2iic.o iic.o hexfile.o
+
 test_parse: test_parse.o hexfile.o
 test_parse: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
+
+ifneq (no,$(USE_OCTASIC))
+.octasic.depend: $(OCTASIC_DIR)/octasic-helper Makefile ../config.status
+	$(CC) -MM $(OCT_CFLAGS) \
+		`$(OCTASIC_DIR)/octasic-helper objects | \
+		tr -s ' ' '\n' | \
+		sed -e 's,.*,$(OCTASIC_DIR)/&,' -e 's/\.o$$/.c/'` > $@
+
+-include .octasic.depend
+
+$(OCT_HERE_OBJS): Makefile
+	$(CC) -c $(CFLAGS) $(OCT_CFLAGS) $(OCT_DEFINES) $(OCT_SRCS)
+
+endif
+
 
 %: %.o
 	$(CC) $(LDFLAGS) $^ $(LIBS) -o $@
@@ -135,7 +168,7 @@ test_parse: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 	touch $@
 
 clean:
-	$(RM) .depend *.o xtalk/*.o $(TARGETS)
+	$(RM) .depend .octasic.depend *.o xtalk/*.o $(OCT_HERE_OBJS) $(TARGETS)
 
 .PHONY: depend
 depend: .depend

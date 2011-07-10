@@ -327,6 +327,14 @@ sub new($$$$$) {
 # static xpd related helper functions
 #------------------------------------
 
+# Returns only the telephony XPD's from a list
+# of one or more XPD's.
+# I.e: Filters-out ECHO cancelers
+sub telephony_devs {
+	my @devs = grep { $_->channels } @_;
+	return @devs;
+}
+
 sub format_rank($$) {
 	my ($rank, $prio) = @_;
 	my $width = 2;

@@ -67,9 +67,11 @@ USB_PREFIX=
 FIRMWARE_DIR="${FIRMWARE_DIR:-/usr/share/dahdi}"
 ASTRIBANK_HEXLOAD=${ASTRIBANK_HEXLOAD:-/usr/sbin/astribank_hexload}
 ASTRIBANK_TOOL=${ASTRIBANK_TOOL:-/usr/sbin/astribank_tool}
+XPP_CONFIG="${XPP_CONFIG:-/etc/dahdi/xpp.conf}"
 XPP_UDEV_SLEEP_TIME="${XPP_UDEV_SLEEP_TIME:-15}"
 
 USB_FW="${USB_FW:-USB_FW.hex}"
+USB_RECOV="${USB_RECOV:-USB_RECOV.hex}"
 
 if [ -r "$DEFAULTS" ]; then
 	. "$DEFAULTS"
@@ -151,6 +153,38 @@ load_fw_device() {
 	debug "FPGA loading $fw into $dev"
 	run_astribank_hexload -D "$dev" -F "$FIRMWARE_DIR/$fw"
 	if [ "$fw" = "FPGA_1161.hex" ]; then
+	        echo_file="$FIRMWARE_DIR/OCT6104E-256D.ima"
+		law=''
+		law_str='uLaw'
+		abtool_output=`$ASTRIBANK_TOOL -D "$dev" -Q 2>/dev/null`
+		card_type=`echo "$abtool_output" | grep '^CARD 4:' |  cut -d= -f2 | cut -d. -f1`
+		if [ "$card_type" = '5' ]; then
+			debug "ECHO burning into $dev: $echo_file"
+			card_type_first=`echo "$abtool_output" | grep '^CARD 0:' |  cut -d= -f2 | cut -d. -f1`
+			case "$card_type_first" in
+			3) 	law="-A";;
+			4)
+				pri_protocol=''
+				if [ -r "$XPP_CONFIG" ]; then
+					pri_protocol=`awk '/^pri_protocol/ {print $2}' $XPP_CONFIG`
+				fi
+				# "E1" or empty (implied E1) means aLaw
+				if [ "$pri_protocol" != 'T1' ]; then
+					law='-A'
+				fi
+				;;
+			esac
+			if [ "$law" = '-A' ]; then
+				law_str="aLaw"
+			fi
+			caps_num=`echo "$abtool_output" | grep 'ECHO ports' | sed -e 's/.*: *//'`
+			debug "ECHO: 1st module is $law_str, $caps_num channels allowed."
+			if [ "$caps_num" != '0' ]; then
+				run_astribank_hexload -D "$dev" -O $law "$echo_file"
+			else
+				$LOGGER "WARNING: ECHO burning was skipped (no capabilities)"
+			fi
+		fi
 		pic_files=`echo "$FIRMWARE_DIR"/PIC_TYPE_[1-4].hex`
 		debug "PIC burning into $dev: $pic_files"
 		run_astribank_hexload -D "$dev" -p $pic_files

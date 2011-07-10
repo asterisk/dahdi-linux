@@ -31,7 +31,9 @@
 #include "hexfile.h"
 #include "mpptalk.h"
 #include "pic_loader.h"
+#include "echo_loader.h"
 #include "astribank_usb.h"
+#include "../autoconfig.h"
 
 #define	DBG_MASK	0x80
 #define	MAX_HEX_LINES	10000
@@ -43,9 +45,14 @@ static void usage()
 	fprintf(stderr, "Usage: %s [options...] -D {/proc/bus/usb|/dev/bus/usb}/<bus>/<dev> hexfile...\n", progname);
 	fprintf(stderr, "\tOptions: {-F|-p}\n");
 	fprintf(stderr, "\t\t[-E]               # Burn to EEPROM\n");
+#if HAVE_OCTASIC
+	fprintf(stderr, "\t\t[-O]               # Load Octasic firmware\n");
+	fprintf(stderr, "\t\t[-o]               # Show Octasic version\n");
+#endif
 	fprintf(stderr, "\t\t[-F]               # Load FPGA firmware\n");
 	fprintf(stderr, "\t\t[-p]               # Load PIC firmware\n");
 	fprintf(stderr, "\t\t[-v]               # Increase verbosity\n");
+	fprintf(stderr, "\t\t[-A]               # Set A-Law for 1st module\n");
 	fprintf(stderr, "\t\t[-d mask]          # Debug mask (0xFF for everything)\n");
 	exit(1);
 }
@@ -146,9 +153,15 @@ int main(int argc, char *argv[])
 {
 	char			*devpath = NULL;
 	int			opt_pic = 0;
+	int			opt_echo = 0;
+	int			opt_ecver = 0;
+#if HAVE_OCTASIC
+	int			opt_alaw = 0;
+#endif
 	int			opt_dest = 0;
+	int			opt_sum = 0;
 	enum dev_dest		dest = DEST_NONE;
-	const char		options[] = "vd:D:EFp";
+	const char		options[] = "vd:D:EFOopA";
 	int			iface_num;
 	int			ret;
 
@@ -169,7 +182,7 @@ int main(int argc, char *argv[])
 					ERR("The -F and -E options are mutually exclusive.\n");
 					usage();
 				}
-				opt_dest = 1;
+				opt_dest++;
 				dest = DEST_EEPROM;
 				break;
 			case 'F':
@@ -177,9 +190,20 @@ int main(int argc, char *argv[])
 					ERR("The -F and -E options are mutually exclusive.\n");
 					usage();
 				}
-				opt_dest = 1;
+				opt_dest++;
 				dest = DEST_FPGA;
 				break;
+#if HAVE_OCTASIC
+			case 'O':
+				opt_echo = 1;
+				break;
+			case 'o':
+				opt_ecver = 1;
+				break;
+			case 'A':
+				opt_alaw = 1;
+				break;
+#endif
 			case 'p':
 				opt_pic = 1;
 				break;
@@ -195,12 +219,17 @@ int main(int argc, char *argv[])
 				usage();
 		}
 	}
-	if((opt_dest ^ opt_pic) == 0) {
-		ERR("The -F, -E and -p options are mutually exclusive.\n");
+	opt_sum = opt_dest + opt_pic + opt_echo;
+	if(opt_sum > 1 || (opt_sum == 0 && opt_ecver == 0)) {
+		ERR("The -F, -E"
+#if HAVE_OCTASIC
+			", -O"
+#endif
+			" and -p options are mutually exclusive, if neither is used then -o should present\n");
 		usage();
 	}
 	iface_num = (opt_dest) ? 1 : 0;
-	if(!opt_pic) {
+	if(!opt_pic && !opt_ecver) {
 		if(optind != argc - 1) {
 			ERR("Got %d hexfile names (Need exactly one hexfile)\n",
 				argc - 1 - optind);
@@ -227,7 +256,7 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 		astribank_close(astribank, 0);
-	} else if(opt_pic) {
+	} else if(opt_pic || opt_echo || opt_ecver) {
 		/*
 		 * XPP Interface
 		 */
@@ -237,11 +266,28 @@ int main(int argc, char *argv[])
 			ERR("%s: Opening astribank failed\n", devpath);
 			return 1;
 		}
+		//show_astribank_info(astribank);
+#if HAVE_OCTASIC
+		if (opt_ecver) {
+			if((ret = echo_ver(astribank)) < 0) {
+				ERR("%s: Get Octasic version failed (Is Echo canceller card connected?)\n", devpath);
+				return 1;
+			} else 
+				INFO("Octasic version: 0x%0X\n", ret);
+		}
+#endif
 		if (opt_pic) {
 			if ((ret = load_pic(astribank, argc - optind, argv + optind)) < 0) {
 				ERR("%s: Loading PIC's failed\n", devpath);
 				return 1;
 			}
+#if HAVE_OCTASIC
+		} else if (opt_echo) {
+			if((ret = load_echo(astribank, argv[optind], opt_alaw)) < 0) {
+				ERR("%s: Loading ECHO's failed\n", devpath);
+				return 1;
+			}
+#endif
 		}
 		astribank_close(astribank, 0);
 	}

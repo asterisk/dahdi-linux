@@ -15,6 +15,7 @@ use Dahdi;
 use Dahdi::Span;
 use Dahdi::Xpp;
 use Dahdi::Xpp::Xbus;
+use Dahdi::Xpp::Xpd;
 use Getopt::Std;
 
 sub usage {
@@ -64,7 +65,7 @@ foreach my $xbus (Dahdi::Xpp::xbuses($sorter)) {
 	myprintf "%-10s\t%3s-%s\t%s\n",
 		$xbus->name, $xbus->xpporder, $xbus->label, $xbus->connector;
 	next unless $xbus->status eq 'CONNECTED';
-	foreach my $xpd ($xbus->xpds()) {
+	foreach my $xpd (Dahdi::Xpp::Xpd::telephony_devs($xbus->xpds())) {
 		my $prev = $xpd->dahdi_registration($on);
 		if(!defined($prev)) {			# Failure
 			printf "%s: Failed %s\n", $xpd->fqn, $!;

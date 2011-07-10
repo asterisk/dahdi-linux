@@ -95,7 +95,7 @@ static int show_hardware(struct astribank_device *astribank)
 	if(astribank->eeprom_type == EEPROM_TYPE_LARGE) {
 		show_capabilities(&capabilities, stdout);
 		if(STATUS_FPGA_LOADED(astribank->status)) {
-			for(unit = 0; unit < 4; unit++) {
+			for(unit = 0; unit < 5; unit++) {
 				ret = mpps_card_info(astribank, unit, &card_type, &card_status);
 				if(ret < 0)
 					return ret;

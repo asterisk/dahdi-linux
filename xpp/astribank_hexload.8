@@ -1,11 +1,19 @@
-.TH "ASTRIBANK_HEXLOAD" "8" "29 March 2009" "" ""
+.TH "ASTRIBANK_HEXLOAD" "8" "30 May 2011" "" ""
 
 .SH NAME
 astribank_tool \- Xorcom Astribank (xpp) firmware loader
 .SH SYNOPSIS
-.B astribank_tool \-D \fIdevice-path\fR <\fB\-F|\-p\fR> [\fIoptions\fR] \fIhexfile\fR
+.B astribank_tool \-D \fIdevice-path\fR \-F [\fIoptions\fR] \fIhexfile\fR
 
-.B astribank_tool [\-h]
+.B astribank_tool \-D \fIdevice-path\fR \-p [\fIoptions\fR] \fIhexfile1 .. hexfile4\fR
+
+.B astribank_tool \-D \fIdevice-path\fR \-O [-A] [\fIoptions\fR] \fIimagefile\fR
+
+.B astribank_tool \-D \fIdevice-path\fR \-o [\fIoptions\fR]
+
+.B astribank_tool \-D \fIdevice-path\fR \-E [\fIoptions\fR] \fIhexfile\fR
+
+.B astribank_tool \-h
 
 .SH DESCRIPTION
 .B astribank_hexload
@@ -28,6 +36,8 @@ which would be /dev/bus/usb/\fIbus_num\fR/\fIdevice_num\fR, or
 /proc/bus/usb/\fIbus_num\fR/\fIdevice_num\fR.
 .RE
 
+One of the following is required:
+
 .B \-F
 .RS
 The firmware to load is a FPGA firmware.
@@ -35,8 +45,28 @@ The firmware to load is a FPGA firmware.
 
 .B \-p
 .RS
-The firmware to load is a PIC firmware.
+The firmwares to load is are PIC firmwares. All (typically 4) should be
+on the command-line.
 .RE
+
+.B \-O
+.RS
+The firmware to load is an Octasic echo canceller firmware image file.
+.RE
+
+.B \-o
+.RS
+Don't load firmware. Just print the version number of the currently-loaded
+Octasic echo canceller firmware.
+.RE
+
+.B \-E
+.RS
+The firmware to load is a special EEPROM burning one.
+.RE
+
+
+Other options:
 
 .B \-v
 .RS
@@ -51,6 +81,14 @@ Set debug mask to \fImask\fR. Default is 0, 0xFF is "everything".
 .B \-h
 .RS
 Displays usage message.
+.RE
+
+.B \-A
+.RS
+When loading a Octasic echo canceller firmware, set the channels of the
+first Astribank module to use aLaw (G.711a). This is what you'd normally
+use for BRI and E1. If not set, the default mu-Law (G.711u), which is
+what you'd normally use for FXS, FXO and T1.
 .RE
 
 .SH SEE ALSO

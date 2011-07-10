@@ -106,6 +106,7 @@ static int write_to_file(struct eeprom_table *eeprom_table, struct capabilities 
 	fprintf(f, "Capabilities.Port.FXO: %d\n", caps->ports_fxo);
 	fprintf(f, "Capabilities.Port.BRI: %d\n", caps->ports_bri);
 	fprintf(f, "Capabilities.Port.PRI: %d\n", caps->ports_pri);
+	fprintf(f, "Capabilities.Port.ECHO: %d\n", caps->ports_echo);
 	fprintf(f, "Capabilities.Twinstar: %d\n", CAP_EXTRA_TWINSTAR(caps));
 	fprintf(f, "Data:\n");
 	bin_to_file(eeprom_table, sizeof(*eeprom_table), f);

@@ -955,6 +955,9 @@ following command in order to load the FPGA firmware manually:
   # pick the right name according to the device ID. FPGA_1161.hex is for
   # 116x Astribanks:
   astribank_hexload -D /dev/bus/usb/MMM/NNN -F /usr/share/dahdi/FPGA_1161.hex
+  # If the device has an echo canceller unit (If the unit is BRI/E1, you
+  # need to add an extra -A to the command-line after the -O)
+  #astribank_hexload -D /dev/bus/usb/MMM/NNN -O /usr/share/dahdi/OCT6104E-256D.ima
   # Note the shell expantion in this line:
   astribank_hexload -D /dev/bus/usb/MMM/NNN -p /usr/share/dahdi/PIC_TYPE_[1-4].hex
   # reenumerate (disconnect and reconnect)
@@ -1072,6 +1075,9 @@ xpd_bri::
   BRI ("ISDN") modules. Module type 3.
 xpd_pri::
   The module for controlling E1/T1 modules. Module type 4.
+xpd_echo::
+  The module for controlling hardware echo canceller modules. Module type 5.
+  Does not generate a span.
 xpp_usb::
   The functionality needed to connect to the USB bus.
 

@@ -56,7 +56,7 @@ fi
 
 # Wait for driver and first device
 echo -n 1>&2 "Astribanks detection "
-tries=10
+tries=40
 while [ ! -e "/sys/bus/astribanks/devices/xbus-00" ]
 do
 	if [ "$tries" -le 0 ]; then
