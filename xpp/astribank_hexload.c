@@ -37,6 +37,7 @@
 
 #define	DBG_MASK	0x80
 #define	MAX_HEX_LINES	10000
+#define HAVE_OCTASIC	1
 
 static char	*progname;
 
