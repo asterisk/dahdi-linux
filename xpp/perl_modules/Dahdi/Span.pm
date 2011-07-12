@@ -236,7 +236,8 @@ sub new($$) {
 	$self->{CHANS} = [];
 	my @channels;
 	my $index = 0;
-	while(<F>) {
+	my @channel_lines = <F>;
+	foreach (@channel_lines) {
 		chomp;
 		s/^\s*//;
 		s/\s*$//;
