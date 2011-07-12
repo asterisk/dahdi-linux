@@ -146,6 +146,8 @@ int debug;
 #define DEBUG_MAIN	(1 << 0)
 #define DEBUG_RBS	(1 << 5)
 
+static int hwec_overrides_swec = 1;
+
 /*!
  * \brief states for transmit signalling
  */
@@ -4857,13 +4859,23 @@ static int dahdi_ioctl_attach_echocan(unsigned long data)
 	if (!chan)
 		return -EINVAL;
 
+	ae.echocan[sizeof(ae.echocan) - 1] = '\0';
 	if (dahdi_is_hwec_available(chan)) {
-		/* If there is a hardware echocan available we'll always use
-		 * it instead of any configured software echocan. This matches
-		 * the behavior in dahdi 2.4.1.2 and earlier releases. */
-		strlcpy(ae.echocan, hwec_def_name, sizeof(ae.echocan));
-	} else {
-		ae.echocan[sizeof(ae.echocan) - 1] = 0;
+		if (hwec_overrides_swec) {
+			chan_dbg(GENERAL, chan,
+				"Using echocan '%s' instead of requested " \
+				"'%s'.\n", hwec_def_name, ae.echocan);
+			/* If there is a hardware echocan available we'll
+			 * always use it instead of any configured software
+			 * echocan. This matches the behavior in dahdi 2.4.1.2
+			 * and earlier releases. */
+			strlcpy(ae.echocan, hwec_def_name, sizeof(ae.echocan));
+
+		} else if (strcasecmp(ae.echocan, hwec_def_name) != 0) {
+			chan_dbg(GENERAL, chan,
+				"Using '%s' on channel even though '%s' is " \
+				"available.\n", ae.echocan, hwec_def_name);
+		}
 	}
 
 	if (ae.echocan[0]) {
@@ -9347,6 +9359,9 @@ module_param(deftaps, int, 0644);
 
 module_param(max_pseudo_channels, int, 0644);
 MODULE_PARM_DESC(max_pseudo_channels, "Maximum number of pseudo channels.");
+
+module_param(hwec_overrides_swec, int, 0644);
+MODULE_PARM_DESC(hwec_overrides_swec, "When true, a hardware echo canceller is used instead of configured SWEC.");
 
 static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,
