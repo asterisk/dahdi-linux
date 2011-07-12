@@ -912,7 +912,7 @@ static void echocan_free(struct dahdi_chan *chan,
 	echoops = ECHOOPS(xbus);
 	if (!echoops)
 		return;
-	LINE_NOTICE(xpd, pos, "%s: mode=0x%X\n", __func__, ec->status.mode);
+	LINE_DBG(GENERAL, xpd, pos, "mode=0x%X\n", ec->status.mode);
 	CALL_EC_METHOD(ec_set, xbus, xpd, pos, 0);
 	CALL_EC_METHOD(ec_update, xbus, xbus);
 }
@@ -986,8 +986,7 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 	*ec = phonedev->ec[pos];
 	(*ec)->ops = &xpp_ec_ops;
 	(*ec)->features = xpp_ec_features;
-	LINE_NOTICE(xpd, pos, "%s: (tap=%d, param_count=%d)\n",
-		__func__,
+	LINE_DBG(GENERAL, xpd, pos, "(tap=%d, param_count=%d)\n",
 		ecp->tap_length, ecp->param_count);
 	ret = CALL_EC_METHOD(ec_set, xbus, xpd, pos, 1);
 	CALL_EC_METHOD(ec_update, xbus, xbus);
