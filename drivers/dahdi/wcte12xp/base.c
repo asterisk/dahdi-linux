@@ -2381,6 +2381,7 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	remove_sysfs_files(wc);
 
 	clear_bit(INITIALIZED, &wc->bit_flags);
+	smp_mb__after_clear_bit();
 
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
