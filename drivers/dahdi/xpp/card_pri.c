@@ -1783,7 +1783,7 @@ static void PRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
 
-int PRI_timing_priority(xpd_t *xpd)
+static int PRI_timing_priority(xpd_t *xpd)
 {
 	struct PRI_priv_data	*priv;
 
