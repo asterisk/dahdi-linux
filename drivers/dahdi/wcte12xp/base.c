@@ -1937,7 +1937,7 @@ static inline void t1_check_alarms(struct t1 *wc)
 		/* Detect loopup code if we're not sending one */
 		if ((!wc->span.mainttimer) && (d & 0x08)) {
 			/* Loop-up code detected */
-			if ((wc->loopupcnt++ > 80)  && (wc->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
+			if ((wc->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
 				t1_notice(wc, "Loopup detected,"\
 					" enabling remote loop\n");
 				t1_setreg(wc, 0x36, 0x08);	/* LIM0: Disable any local loop */
@@ -1949,7 +1949,7 @@ static inline void t1_check_alarms(struct t1 *wc)
 		/* Same for loopdown code */
 		if ((!wc->span.mainttimer) && (d & 0x10)) {
 			/* Loop-down code detected */
-			if ((wc->loopdowncnt++ > 80)  && (wc->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
+			if ((wc->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
 				t1_notice(wc, "Loopdown detected,"\
 					" disabling remote loop\n");
 				t1_setreg(wc, 0x36, 0x08);	/* LIM0: Disable any local loop */
