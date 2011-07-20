@@ -244,9 +244,11 @@ static int altab[] = {
 #define CANARY 0xc0de
 
 /* names of available HWEC modules */
+#ifdef VPM_SUPPORT
 static const char *vpm400_name = "VPM400M";
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
+#endif
 
 #define PORTS_PER_FRAMER 4
 
@@ -2032,6 +2034,7 @@ static void set_span_devicetype(struct t4 *wc)
 		ts = wc->tspans[x];
 		strlcpy(ts->span.devicetype, wc->variety,
 			sizeof(ts->span.devicetype));
+#ifdef VPM_SUPPORT
 		if (wc->vpm == T4_VPM_PRESENT) {
 			if (!wc->vpm450m)
 				strncat(ts->span.devicetype, " (VPM400M)", sizeof(ts->span.devicetype) - 1);
@@ -2039,6 +2042,7 @@ static void set_span_devicetype(struct t4 *wc)
 				strncat(ts->span.devicetype, (wc->numspans > 2) ? " (VPMOCT128)" : " (VPMOCT064)",
 					sizeof(ts->span.devicetype) - 1);
 		}
+#endif
 	}
 }
 
@@ -4015,6 +4019,7 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			t4_framer_interrupt(wc, 3);
 	}
 
+#ifdef VPM_SUPPORT
 	if (wc->vpm && vpmdtmfsupport) {
 		if (wc->vpm450m) {
 			/* How stupid is it that the octasic can't generate an
@@ -4028,6 +4033,7 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			set_bit(T4_CHECK_VPM, &wc->checkflag);
 		}
 	}
+#endif
 
 	spin_lock(&wc->reglock);
 
@@ -4919,10 +4925,12 @@ static void _t4_remove_one(struct t4 *wc)
 	/* Stop hardware */
 	t4_hardware_stop(wc);
 	
+#ifdef VPM_SUPPORT
 	/* Release vpm450m */
 	if (wc->vpm450m)
 		release_vpm450m(wc->vpm450m);
 	wc->vpm450m = NULL;
+#endif
 	/* Unregister spans */
 
 	basesize = DAHDI_MAX_CHUNKSIZE * 32 * 4;
