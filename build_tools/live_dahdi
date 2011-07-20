@@ -193,7 +193,6 @@ unload_dynamic() {
 }
 
 genconf() {
-	mkdir -p "$DESTDIR/etc/asterisk"
 	GENCONF_PARAMETERS=$DESTDIR/etc/dahdi/genconf_parameters \
 	DAHDI_CONF_FILE=$DESTDIR/etc/dahdi/system.conf \
 	DAHDI_MODS_FILE=$DESTDIR/etc/dahdi/modules \
