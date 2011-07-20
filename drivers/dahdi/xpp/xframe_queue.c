@@ -48,6 +48,7 @@ static void __xframe_dump_queue(struct xframe_queue *q)
 static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 {
 	int			ret = 1;
+	static int		overflow_cnt = 0;
 
 	if(unlikely(q->disabled)) {
 		ret = 0;
@@ -55,7 +56,8 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	}
 	if(q->count >= q->max_count) {
 		q->overflows++;
-		NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
+		if ((overflow_cnt++ % 1000) < 5) {
+			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
 				q->name,
 				q->steady_state_count,
 				q->count,
@@ -64,7 +66,8 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 				q->overflows,
 				q->worst_lag_usec / 1000,
 				q->worst_lag_usec % 1000);
-		__xframe_dump_queue(q);
+			__xframe_dump_queue(q);
+		}
 		ret = 0;
 		goto out;
 	}
