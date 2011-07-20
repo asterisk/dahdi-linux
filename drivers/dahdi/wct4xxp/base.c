@@ -1637,7 +1637,6 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
 			t4_clear_maint(span);
 			t4_set_framer_bits(wc, span->offset, FMR5, FMR5_XLD);
-			ts->span.maintstat = DAHDI_MAINT_NONE;
 			break;
 		case DAHDI_MAINT_FAS_DEFECT:
 			t4_framer_out(wc, span->offset, IERR_T, IFASE);
