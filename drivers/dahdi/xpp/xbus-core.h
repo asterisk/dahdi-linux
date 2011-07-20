@@ -208,8 +208,8 @@ struct xbus {
 	int			cpu_rcv_tasklet[NR_CPUS];
 
 	struct quirks {
-		int	has_fxo:1;
-		int	has_digital_span:1;
+		unsigned int has_fxo:1;
+		unsigned int has_digital_span:1;
 	}			quirks;
 	bool			self_ticking;
 	enum sync_mode		sync_mode;
