@@ -322,6 +322,7 @@ xpp-firm)
 		"$FIRMWARE_DIR/xpp_fxloader" reset
 	sleep 5
 	XPP_FIRMWARE_DIR=$FIRMWARE_DIR \
+	XPP_CONFIG="$DESTDIR/etc/dahdi/xpp.conf" \
 		"$FIRMWARE_DIR/xpp_fxloader" load
 	;;
 help|'')
