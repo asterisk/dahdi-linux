@@ -3065,6 +3065,7 @@ static void dahdi_free_pseudo(struct dahdi_chan *chan)
 	if (!chan)
 		return;
 
+	mutex_lock(&registration_mutex);
 	pseudo = chan_to_pseudo(chan);
 
 	spin_lock_irqsave(&chan_lock, flags);
@@ -3073,6 +3074,7 @@ static void dahdi_free_pseudo(struct dahdi_chan *chan)
 	spin_unlock_irqrestore(&chan_lock, flags);
 
 	dahdi_chan_unreg(chan);
+	mutex_unlock(&registration_mutex);
 	kfree(pseudo);
 }
 
