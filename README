@@ -380,6 +380,20 @@ A list of modules to remove when unloading. Will be resolved
 recursively. The default is 'dahdi'. You may also want to have 'oslec'
 or 'hpec' there if you use them.
 
+===== KVERS
+If you want to build DAHDI for a different kernel version than the one
+currently running on the system (mostly useful for a remote install).
+Note that you will normally need to export this, in order for this to
+take effect on the 'make' command. In live/live.conf itself have the line:
+
+  export KVERS="2.6.39-local"
+
+===== KSRC
+Alternatively, if you want to point to an exact kernel source tree,
+set it with KSRC. Just like KVERS above, it needs to be explicitly exported.
+
+  export KSRC="/usr/src/tree/linux"
+
 
 Module Parameters
 -----------------
