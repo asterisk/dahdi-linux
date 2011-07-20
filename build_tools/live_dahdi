@@ -224,6 +224,7 @@ usage() {
 	echo "$me xpp-firm       (Reset and load xpp firmware)"
 	echo "$me genconf        dahdi_genconf; dahdi_cfg"
 	echo "$me asterisk       /etc/init.d/asterisk start"
+	echo "$me symlink_ast    symlink dahdi-channels.conf"
 	echo "$me rsync TARGET   (copy filea to /tmp/live in host TARGET)"
 	echo "$me exec  COMMAND  (Run COMMAND in 'live' environment)"
 	echo ""
@@ -298,6 +299,9 @@ genconf)
 	;;
 asterisk)
 	run_asterisk
+	;;
+symlink_ast)
+	ln -sf "$DESTDIR/etc/asterisk/dahdi-channels.conf" /etc/asterisk/
 	;;
 reload)
 	$0 unload
