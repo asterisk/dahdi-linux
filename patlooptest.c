@@ -167,6 +167,7 @@ int main(int argc, char *argv[])
 	char * device;
 	int opt;
 	int oldstyle_cmdline = 1;
+	unsigned int event_count = 0;
 
 	/* Parse the command line arguments */
 	while((opt = getopt(argc, argv, "b:s:t:r:v?h")) != -1) {
@@ -248,9 +249,14 @@ int main(int argc, char *argv[])
 write_again:
 		res = write(fd,outbuf,bs);
 		if (res != bs) {
-			printf("W: Res is %d: %s\n", res, strerror(errno));
- 			ioctl(fd, DAHDI_GETEVENT, &x);
- 			printf("Event: %d\n", x);
+			if (ELAST == errno) {
+				ioctl(fd, DAHDI_GETEVENT, &x);
+				if (event_count > 0)
+					printf("Event: %d\n", x);
+				++event_count;
+			} else {
+				printf("W: Res is %d: %s\n", res, strerror(errno));
+			}
 			goto write_again;
 		}
 
