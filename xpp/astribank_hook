@@ -27,6 +27,10 @@ else
 	dahdi_conf="/etc/dahdi"
 fi
 
+if [ "$XPP_HOTPLUG_DAHDI" != yes ]; then
+	exit 0
+fi
+
 export XPPORDER_CONF="$dahdi_conf/xpp_order"
 if [ ! -r "$XPPORDER_CONF" ]; then
 	(
@@ -62,26 +66,24 @@ matched_devices() {
 
 NUM_WANTED=`clean_lines | sed '/^$/d' | wc -l`
 NUM_GOOD=`matched_devices | wc -l`
+LOCK="/var/lock/twinstar_startup"
 
 start_dahdi() {
 	script=/etc/init.d/dahdi
-	if [ "$XPP_HOTPLUG_DAHDI" = yes ]; then
-		echo "Starting $script."
-		"$script" start | logger -i -t "$script"
-		status=$?
-		echo "Status($script): $status"
-	else
-		echo "$0: Skip($script): No XPP_HOTPLUG_DAHDI=yes in /etc/dahdi/init.conf"
-		exit 0
-	fi
+	echo "Starting $script."
+	"$script" start | logger -i -t "$script"
+	status=$?
+	echo "Status($script): $status"
 	if [ -x "$dir/twinstar_hook" ]; then
 		"$dir/twinstar_hook"
 	fi
 	# Finished astribanks
 	echo "Removing semaphore"
 	astribank_is_starting -v -r
+	rm -f "$LOCK"
 }
 
+#echo "$0: $ACTION($XBUS_NAME)" | $LOGGER
 case "$ACTION" in
 add)
 	;;
@@ -90,9 +92,28 @@ remove)
 online)
 	echo "$ACTION($XBUS_NAME): $NUM_GOOD/$NUM_WANTED from $XPPORDER_CONF" | $LOGGER
 	if [ "$NUM_GOOD" -eq "$NUM_WANTED" ]; then
-		echo "START-DAHDI: Total $NUM_GOOD online." | $LOGGER
-		# Fork services
-		start_dahdi < /dev/null 2>&1 | $LOGGER &
+		(
+			# Delay the initialization of the Astribank until the filesystem
+			# is mounted read-write:
+			test_file="/var/lock/astribank_test_file"
+			for i in `seq 1 20`; do
+				if touch $test_file 2> /dev/null; then
+					rm -f $test_file
+					break
+				else
+					echo "$0: [$i] - Failed writing '$test_file'...waiting" | $LOGGER
+					sleep 1;
+				fi
+		        done
+
+			if ln -s "$XBUS_NAME" "$LOCK"; then
+				echo "START-DAHDI: Total $NUM_GOOD online." | $LOGGER
+				# Fork services
+				start_dahdi < /dev/null 2>&1 | $LOGGER
+			else
+				echo "$0: Was started: $(ls -l $LOCK)" | $LOGGER
+			fi
+		) < /dev/null 2>&1 | $LOGGER &
 	fi
 	;;
 offline)
@@ -100,8 +121,9 @@ offline)
 	if [ "$NUM_GOOD" -eq 0 ]; then
 		echo "All Astribanks offline" | $LOGGER
 		if [ -x "$dir/twinstar_hook" ]; then
-			"$dir/twinstar_hook"
+			"$dir/twinstar_hook" || :
 		fi
+		rm -f "$LOCK"
 	fi
 	;;
 *)
