@@ -4842,8 +4842,10 @@ static int dahdi_ioctl_shutdown(unsigned long data)
  */
 static bool dahdi_is_hwec_available(const struct dahdi_chan *chan)
 {
-	if (!hwec_factory.get_name(chan))
+	if (!chan->span || !chan->span->ops->echocan_name ||
+	    !hwec_factory.get_name(chan))
 		return false;
+
 	return true;
 }
 
