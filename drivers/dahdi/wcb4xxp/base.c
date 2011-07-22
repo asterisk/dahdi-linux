@@ -2303,6 +2303,9 @@ static int b4xxp_chanconfig(struct dahdi_chan *chan, int sigtype)
 
 		if (alreadyrunning && bspan->sigchan) {
 			hdlc_stop(b4, fifo);
+			atomic_set(&bspan->hdlc_pending, 0);
+			bspan->sigactive = 0;
+			smp_mb();
 			bspan->sigchan = NULL;
 		}
 
