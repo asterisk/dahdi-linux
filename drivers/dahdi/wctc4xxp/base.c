@@ -1615,6 +1615,20 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 {
 	int res;
 
+	/* If we're shutdown all commands will timeout. Just complete the
+	 * command here with the timeout flag */
+	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
+		if (cmd->flags & DO_NOT_AUTO_FREE) {
+			cmd->flags |= DTE_CMD_TIMEOUT;
+			list_del_init(&cmd->node);
+			complete(&cmd->complete);
+		} else {
+			list_del(&cmd->node);
+			free_cmd(cmd);
+		}
+		return;
+	}
+
 	if (cmd->data_len < MIN_PACKET_LEN) {
 		memset((u8 *)(cmd->data) + cmd->data_len, 0,
 		       MIN_PACKET_LEN-cmd->data_len);
@@ -2741,11 +2755,10 @@ wctc4xxp_start_dma(struct wcdte *wc)
 }
 
 static void
-wctc4xxp_stop_dma(struct wcdte *wc)
+_wctc4xxp_stop_dma(struct wcdte *wc)
 {
 	/* Disable interrupts and reset */
 	unsigned int reg;
-	unsigned long newjiffies;
 	/* Disable interrupts */
 	wctc4xxp_setintmask(wc, 0x00000000);
 	wctc4xxp_setctl(wc, 0x0084, 0x00000000);
@@ -2754,14 +2767,20 @@ wctc4xxp_stop_dma(struct wcdte *wc)
 	reg = wctc4xxp_getctl(wc, 0x0000);
 	reg |= 0x00000001;
 	wctc4xxp_setctl(wc, 0x0000, reg);
+}
 
+static void
+wctc4xxp_stop_dma(struct wcdte *wc)
+{
+	unsigned long newjiffies;
+
+	_wctc4xxp_stop_dma(wc);
 	newjiffies = jiffies + HZ; /* One second timeout */
 	/* We'll wait here for the part to come out of reset */
 	while (((wctc4xxp_getctl(wc, 0x0000)) & 0x00000001) &&
 		(newjiffies > jiffies))
 			msleep(1);
 }
-
 
 #define MDIO_SHIFT_CLK		0x10000
 #define MDIO_DATA_WRITE1 	0x20000
@@ -3307,13 +3326,19 @@ wctc4xxp_watchdog(unsigned long data)
 		if (time_after(jiffies, cmd->timeout)) {
 			if (++cmd->retries > MAX_RETRIES) {
 				if (!(cmd->flags & TX_COMPLETE)) {
+
+					cmd->flags |= DTE_CMD_TIMEOUT;
+					list_del_init(&cmd->node);
+					complete(&cmd->complete);
+
 					set_bit(DTE_SHUTDOWN, &wc->flags);
 					spin_unlock(&wc->cmd_list_lock);
-					wctc4xxp_stop_dma(wc);
+					_wctc4xxp_stop_dma(wc);
 					DTE_PRINTK(ERR,
 					  "Board malfunctioning.  " \
 					  "Halting operation.\n");
-					return;
+					reschedule_timer = 0;
+					break;
 				}
 				/* ERROR:  We've retried the command and
 				 * haven't received the ACK or the response.
