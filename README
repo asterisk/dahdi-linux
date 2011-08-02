@@ -4,7 +4,7 @@ Asterisk Development Team <asteriskteam@digium.com>
 $Revision$, $Date$
 
 DAHDI stands for Digium Asterisk Hardware Device Interface. This
-package contains the userspace tools to configure the kernel modules
+package contains the user-space tools to configure the kernel modules
 included in the package dahdi-linux.
 
 Build Requirements
@@ -14,7 +14,7 @@ dahdi-linux before building dahdi-tools.
 
 Build System
 ~~~~~~~~~~~~
-gcc and friends. Generally you will need to install the package gcc.
+GCC and friends. Generally you will need to install the package gcc.
 There may be cases where you will need a specific version of gcc to build
 kernel modules.
 
@@ -51,7 +51,7 @@ There are some make targets that are provided to build or install just
 parts of DAHDI:
 
 . Build targets:
-  - make: Build DAHDI userspace programs. partial 
+  - make: Build DAHDI user-space programs. partial
     targets of it:
     * make 'utilname': builds 'utilname' alone (e.g: `make dahdi_diag`)
     * make utils: Build libtonezone.
@@ -89,7 +89,7 @@ run, use:
 To re-run ./configure with the same parameters it was run with last
 time, use:
 
-  ./ocnfig.status --recheck
+  ./config.status --recheck
 
 
 Configuration
@@ -146,14 +146,14 @@ include::tonezones.txt[]
 DAHDI PERL modules
 ~~~~~~~~~~~~~~~~~~
 The directory xpp has, in addition to helper utilities for the
-Xorcom Astribank, a collection of perl modules to provide information
-related to DAHDI. The perl modules themselves are under xpp/perl_modules/ .
+Xorcom Astribank, a collection of PERL modules to provide information
+related to DAHDI. The PERL modules themselves are under xpp/perl_modules/ .
 In xpp/ there are several utilities that use those modules:
 - xpp-specific: dahdi_registration, xpp_sync, xpp_blink .
 - General: lsdahdi, dahdi_genconf, dahdi_hardware, dahdi_drivers
 
-The DAHDI perl modules will currently only be automatically installed if you
-happen to install the xpp directory. Those utilities require the perl modules 
+The DAHDI PERL modules will currently only be automatically installed if you
+happen to install the xpp directory. Those utilities require the PERL modules
 to be installed, however they will also look for them in the directory 
 perl_modules, and thus can be run directly from the DAHDI source tree. For 
 example:
@@ -167,7 +167,7 @@ instance:
   perldoc ./xpp/lsdahdi
 
 Some of them are specific for the Xorcom Astribank and described in its
-docuemntation. the others are:
+documentation. the others are:
 
 lsdahdi:: 
   A somewhat glorified `cat /proc/dahdi/*`.
@@ -176,9 +176,9 @@ dahdi_genconf::
   /etc/dahdi/genconf_parameters (replaces genzaptelconf as well).
 dahdi_drivers::
   A two-liner script (not installed by default) that simply returns the
-  modules that should be modprobed on this system.
+  modules that should be modprobe-d on this system.
 dahdi_hardware:: 
-  Uses the information from sysfs and its own knowledge to show
+  Uses the information from SysFS and its own knowledge to show
   what PCI/USB DAHDI hardware is connected and if it is currently used
   by a driver. Shows also some more information for Astribanks from
   /proc/xpp .
@@ -186,8 +186,8 @@ dahdi_hardware::
 
 PPP Support
 ~~~~~~~~~~~
-DAHDI digital cards can provide data channels through ppp as
-point-to-point connections. This requires a plugin to the ppp daemon
+DAHDI digital cards can provide data channels through PPP as
+point-to-point connections. This requires a plug-in to the PPP daemon
 that is included in the ppp/ subdirectory. To install it:
 
 1. Make sure you have the PPP source / headers installed. On Debian:
