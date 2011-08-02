@@ -66,7 +66,7 @@ Installation to a Subtree
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 The following may be useful when testing the package or when preparing a
 package for a binary distribution (such as an rpm package) installing
-onto a subtree rather than on th real system. 
+onto a subtree rather than on the real system.
 
   make install DESTDIR=targetdir
 
@@ -138,7 +138,7 @@ include::genconf_parameters.asciidoc[]
 Tonezones
 ~~~~~~~~~
 The file zonedata.c contains the information about the tone zones used
-in libtonezone (and hence also in ztcfg). Here is a list of those zones:
+in libtonezone (and hence also in dahdi_cfg). Here is a list of those zones:
 
 include::tonezones.txt[]
 
