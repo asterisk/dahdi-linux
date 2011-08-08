@@ -394,22 +394,16 @@ struct wcdte {
 #endif
 };
 
-#ifdef HAVE_NETDEV_PRIV
 struct wcdte_netdev_priv {
 	struct wcdte *wc;
 };
-#endif
 
 static inline struct wcdte *
 wcdte_from_netdev(struct net_device *netdev)
 {
-#ifdef HAVE_NETDEV_PRIV
 	struct wcdte_netdev_priv *priv;
 	priv = netdev_priv(netdev);
 	return priv->wc;
-#else
-	return netdev->priv;
-#endif
 }
 
 
@@ -686,23 +680,14 @@ wctc4xxp_net_register(struct wcdte *wc)
 {
 	int res;
 	struct net_device *netdev;
-#	ifdef HAVE_NETDEV_PRIV
 	struct wcdte_netdev_priv *priv;
-#	endif
 	const char our_mac[] = { 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
 
-#	ifdef HAVE_NETDEV_PRIV
 	netdev = alloc_netdev(sizeof(*priv), wc->board_name, ether_setup);
 	if (!netdev)
 		return -ENOMEM;
 	priv = netdev_priv(netdev);
 	priv->wc = wc;
-#	else
-	netdev = alloc_netdev(0, wc->board_name, ether_setup);
-	if (!netdev)
-		return -ENOMEM;
-	netdev->priv = wc;
-#	endif
 	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
 
 #	ifdef HAVE_NET_DEVICE_OPS
