@@ -368,7 +368,7 @@ SPEC:
 		#print STDERR "match: $match\n";
 		foreach my $pattern (@patlist) {
 			#print STDERR "testmatch: $pattern =~ $match\n";
-			if($pattern =~ $match) {
+			if($pattern =~ /^$match$/) {
 				#print STDERR "MATCH '$pattern' ~ '$match' termtype=$termtype\n";
 				$match_termtype = $termtype;
 				last SPEC;
