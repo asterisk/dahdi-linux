@@ -43,27 +43,42 @@ an FXO module of two ports.
 
 Building and Installation
 -------------------------
-Apart from the standard DAHDI build requirements, you also need libusb
-development headers to build the fpga_load firmware loader. This is
-typically the package libusb-dev on Debian (and derivatives like Ubuntu)
-or libusb-devel on RedHat (and derivatives like CentOS/Trixbox).
+Apart from the standard DAHDI build requirements, you also need:
 
-Patch for BRI
-~~~~~~~~~~~~~
-(As of DAHDI 2.2 this patch is no longer needed. Furthermore, it does
-not apply. The same directory has a newer patch that applies. This
-section is kept in the document for the time being for the benefit of
-those with older versions)
+* *libusb development headers* to build the fpga_load firmware loader.
+  This is typically the package libusb-dev on Debian (and derivatives
+  like Ubuntu) or libusb-devel on RedHat (and derivatives like
+  CentOS/Trixbox).
+* *Echo Canceller Module firmware*: If you have an Astribank with an
+  echo canceller module, see the following section.
 
-In order for the BRI module (xpd_bri.ko) to build, you still need an
-external patch: 
+Follow the build instructions of DAHDI-linux and DAHDI-tools. But
+Basically, in dahdi-linux run:
 
-http://updates.xorcom.com/astribank/bristuff/dahdi_bri_dchan.diff[]
+  make
+  make install # as root
 
-You need to apply it to the dahdi-linux tarball before building:
+And later in dahdi-tools:
 
-  wget http://updates.xorcom.com/astribank/bristuff/dahdi_bri_dchan.diff
-  patch -p1 <dahdi_bri_dchan.diff
+  ./configure
+  make
+  make install # as root
+
+
+Echo Canceller Firmware
+~~~~~~~~~~~~~~~~~~~~~~~
+If you install from source, you should copy OCT6104E-256D.ima to the
+source tree (before running make install:
+
+  wget http://updates.xorcom.com/astribank/hwec/OCT6104E-256D.ima
+  mv OCT6104E-256D.ima drivers/dahdi/xpp/firmwares/
+
+Alternatively, if you have already installed DAHDI-linux (e.g. from a
+binary package that does not include the firmware) you can just copy
+it directly to the target directory, /usr/share/dahdi using:
+
+  cd /usr/share/dahdi
+  wget http://updates.xorcom.com/astribank/hwec/OCT6104E-256D.ima
 
 
 Installation Scenarios
