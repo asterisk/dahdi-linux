@@ -200,16 +200,9 @@ static void __dahdi_dynamic_run(void)
 {
 	struct dahdi_dynamic *d;
 	struct dahdi_dynamic_driver *drv;
-	int y;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(d, &dspan_list, list) {
-		for (y = 0; y < d->span.channels; y++) {
-			struct dahdi_chan *const c = d->span.chans[y];
-			/* Echo cancel double buffered data */
-			dahdi_ec_chunk(c, c->readchunk, c->writechunk);
-		}
-		dahdi_receive(&d->span);
 		dahdi_transmit(&d->span);
 		/* Handle all transmissions now */
 		dahdi_dynamic_sendmessage(d);
@@ -369,6 +362,9 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	/* note if we had a missing packet */
 	if (unlikely(rxpos != rxcnt))
 		printk(KERN_NOTICE "Span %s: Expected seq no %d, but received %d instead\n", span->name, rxcnt, rxpos);
+
+	dahdi_ec_span(span);
+	dahdi_receive(span);
 
 	/* If this is our master span, then run everything */
 	if (master)
