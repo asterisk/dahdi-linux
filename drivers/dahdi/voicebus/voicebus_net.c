@@ -35,22 +35,16 @@
 
 #ifdef VOICEBUS_NET_DEBUG
 
-#ifdef HAVE_NETDEV_PRIV
 struct voicebus_netdev_priv {
 	struct voicebus *vb;
 };
-#endif
 
 static inline struct voicebus *
 voicebus_from_netdev(struct net_device *netdev)
 {
-#ifdef HAVE_NETDEV_PRIV
 	struct voicebus_netdev_priv *priv;
 	priv = netdev_priv(netdev);
 	return priv->vb;
-#else
-	return netdev->priv;
-#endif
 }
 
 static void *
@@ -206,23 +200,14 @@ int vb_net_register(struct voicebus *vb, const char *board_name)
 {
 	int res;
 	struct net_device *netdev;
-#	ifdef HAVE_NETDEV_PRIV
 	struct voicebus_netdev_priv *priv;
-#	endif
 	const char our_mac[] = { 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
 
-#	ifdef HAVE_NETDEV_PRIV
 	netdev = alloc_netdev(sizeof(*priv), board_name, ether_setup);
 	if (!netdev)
 		return -ENOMEM;
 	priv = netdev_priv(netdev);
 	priv->vb = vb;
-#	else
-	netdev = alloc_netdev(0, vb->board_name, ether_setup);
-	if (!netdev)
-		return -ENOMEM;
-	netdev->priv = vb;
-#	endif
 	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
 #	ifdef HAVE_NET_DEVICE_OPS
 	netdev->netdev_ops = &vb_netdev_ops;
