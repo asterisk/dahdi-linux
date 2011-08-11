@@ -222,16 +222,10 @@ static void __ztdynamic_run(void)
 {
 	struct dahdi_dynamic *z;
 	struct dahdi_dynamic_driver *drv;
-	int y;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(z, &dspan_list, list) {
 		if (!z->dead) {
-			for (y=0;y<z->span.channels;y++) {
-				/* Echo cancel double buffered data */
-				dahdi_ec_chunk(z->span.chans[y], z->span.chans[y]->readchunk, z->span.chans[y]->writechunk);
-			}
-			dahdi_receive(&z->span);
 			dahdi_transmit(&z->span);
 			/* Handle all transmissions now */
 			ztd_sendmessage(z);
@@ -396,6 +390,9 @@ void dahdi_dynamic_receive(struct dahdi_span *span, unsigned char *msg, int msgl
 	/* note if we had a missing packet */
 	if (unlikely(rxpos != rxcnt))
 		printk(KERN_NOTICE "Span %s: Expected seq no %d, but received %d instead\n", span->name, rxcnt, rxpos);
+
+	dahdi_ec_span(span);
+	dahdi_receive(span);
 
 	/* If this is our master span, then run everything */
 	if (master)
