@@ -48,10 +48,10 @@ typedef struct _OCT6100_API_CHANNEL_TDM_
 	UINT8	byRoutPcmLaw : 1;
 	UINT8	bySoutPcmLaw : 1;
 
-	UINT8	byRinNumTssts : 1;
-	UINT8	bySinNumTssts : 1;
-	UINT8	byRoutNumTssts : 1;
-	UINT8	bySoutNumTssts : 1;
+	UINT8	byRinNumTssts : 2;
+	UINT8	bySinNumTssts : 2;
+	UINT8	byRoutNumTssts : 2;
+	UINT8	bySoutNumTssts : 2;
 
 	/* RIN port. */
 	UINT16	usRinTimeslot;
@@ -93,19 +93,20 @@ typedef struct _OCT6100_API_CHANNEL_VQE_
 	UINT8	fSoutAdaptiveNoiseReduction : 1;
 	UINT8	fDtmfToneRemoval : 1;
 	UINT8	fAcousticEcho : 1;
-	UINT8	byComfortNoiseMode : 1;
+	UINT8	byComfortNoiseMode : 2;
 	UINT8	fSoutNaturalListenerEnhancement : 1;
 	UINT8	fRoutNoiseReduction : 1;
 	UINT8	fEnableMusicProtection : 1;
 	UINT8	fIdleCodeDetection : 1;
-	UINT8	byAnrVoiceNoiseSegregation : 1;
+	UINT8	byAnrVoiceNoiseSegregation : 4;
 	UINT8	byDoubleTalkBehavior : 1;
 	UINT8	fSoutNoiseBleaching : 1;
 	UINT8	fSoutConferencingNoiseReduction : 1;
-	UINT8	bySoutAutomaticListenerEnhancementGainDb : 1;
-	UINT8	byNonLinearityBehaviorA : 1;
-	UINT8	byNonLinearityBehaviorB : 1;
-	UINT8	bySoutNaturalListenerEnhancementGainDb : 1;
+	UINT8	byNonLinearityBehaviorA : 4;
+	UINT8	byNonLinearityBehaviorB : 4;
+	
+	UINT8	bySoutAutomaticListenerEnhancementGainDb;
+	UINT8	bySoutNaturalListenerEnhancementGainDb;
 
 	OCT_INT8	chRinAutomaticLevelControlTargetDb;
 	OCT_INT8	chSoutAutomaticLevelControlTargetDb;
@@ -134,15 +135,15 @@ typedef struct _OCT6100_API_CHANNEL_CODEC_
 	UINT8	byAdpcmNibblePosition : 1;
 	UINT8	fEnableSilenceSuppression : 1;
 
-	UINT8	byEncoderPort : 1;
-	UINT8	byEncodingRate : 1;
+	UINT8	byEncoderPort : 4;
+	UINT8	byDecoderPort : 4;
 
-	UINT8	byDecoderPort : 1;
-	UINT8	byDecodingRate : 1;
+	UINT8	byPhasingType : 2;
+
+	UINT8	byEncodingRate;
+	UINT8	byDecodingRate;
 	
-	UINT8	byPhase : 1;
-	UINT8	byPhasingType : 1;
-
+	UINT16	byPhase;
 } tOCT6100_API_CHANNEL_CODEC, *tPOCT6100_API_CHANNEL_CODEC;
 
 typedef struct _OCT6100_API_CHANNEL_
@@ -163,7 +164,7 @@ typedef struct _OCT6100_API_CHANNEL_
 	UINT8	fEnableToneDisabler : 1;
 
 	/* Current echo operation mode. */
-	UINT8	byEchoOperationMode : 1;
+	UINT8	byEchoOperationMode : 3;
 
 	UINT8	byToneDisablerStatus : 1;
 
@@ -359,7 +360,7 @@ typedef struct _OCT6100_API_BIDIR_CHANNEL_
 	/* Flag specifying whether the entry is used or not. */
 	UINT8	fReserved : 1;
 	/* Count used to manage entry handles allocated to user. */
-	UINT8	byEntryOpenCnt : 1;
+	UINT8	byEntryOpenCnt;
 
 } tOCT6100_API_BIDIR_CHANNEL, *tPOCT6100_API_BIDIR_CHANNEL;
 
