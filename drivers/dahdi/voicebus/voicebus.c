@@ -1683,6 +1683,7 @@ vb_isr(int irq, void *dev_id)
 #endif
 {
 	struct voicebus *vb = dev_id;
+	unsigned long flags;
 	u32 int_status;
 
 	int_status = __vb_getctl(vb, SR_CSR5);
@@ -1692,6 +1693,8 @@ vb_isr(int irq, void *dev_id)
 
 	if (!int_status)
 		return IRQ_NONE;
+
+	local_irq_save(flags);
 
 	if (unlikely((int_status &
 	    (TX_UNAVAILABLE_INTERRUPT|RX_UNAVAILABLE_INTERRUPT)) &&
@@ -1733,6 +1736,7 @@ vb_isr(int irq, void *dev_id)
 		/* Clear the interrupt(s) */
 		__vb_setctl(vb, SR_CSR5, int_status);
 	}
+	local_irq_restore(flags);
 
 	return IRQ_HANDLED;
 }
@@ -1881,7 +1885,7 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 		goto cleanup;
 
 #if !defined(CONFIG_VOICEBUS_TIMER)
-	retval = request_irq(vb->pdev->irq, vb_isr, DAHDI_IRQ_SHARED_DISABLED,
+	retval = request_irq(vb->pdev->irq, vb_isr, DAHDI_IRQ_SHARED,
 			     board_name, vb);
 	if (retval) {
 		dev_warn(&vb->pdev->dev, "Failed to request interrupt line.\n");
