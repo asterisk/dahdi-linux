@@ -2384,7 +2384,7 @@ static int __t4_findsync(struct t4 *wc)
 		while (p < 8) {
 			nonzero = 0;
 			for (x=0;cards[x];x++) {
-				for (i = 0; i < wc->numspans; i++) {
+				for (i = 0; i < cards[x]->numspans; i++) {
 					if (cards[x]->tspans[i]->syncpos) {
 						nonzero = 1;
 						if ((cards[x]->tspans[i]->syncpos == p) &&
