@@ -72,7 +72,7 @@ static int _vpmoct_read(struct vpmoct *vpm, u8 address,
 		list_del(&cmd->node);
 		spin_unlock_irqrestore(&vpm->list_lock, flags);
 		kfree(cmd);
-		dev_err(vpm->dev, "vpmoct_read_byte cmd timed out :O(\n");
+		dev_err(vpm->dev, "vpmoct_read_byte cmd timed out\n");
 		return 0;
 	}
 
