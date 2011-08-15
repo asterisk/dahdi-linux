@@ -3321,6 +3321,7 @@ wctc4xxp_watchdog(unsigned long data)
 					  "Board malfunctioning.  " \
 					  "Halting operation.\n");
 					reschedule_timer = 0;
+					spin_lock(&wc->cmd_list_lock);
 					break;
 				}
 				/* ERROR:  We've retried the command and
