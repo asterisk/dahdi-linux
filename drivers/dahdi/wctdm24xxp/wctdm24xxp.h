@@ -255,6 +255,7 @@ struct wctdm {
 
 	spinlock_t reglock;			/* held when accessing anything affecting the module array */
 	wait_queue_head_t regq;
+	struct list_head free_isr_commands;
 
 	struct wctdm_module mods[NUM_MODULES];
 
