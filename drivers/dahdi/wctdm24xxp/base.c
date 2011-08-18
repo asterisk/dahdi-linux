@@ -867,6 +867,8 @@ static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 		return;
 	}
 
+	list_add(&cmd->node, &wc->free_isr_commands);
+
 	switch (mod->type) {
 	case FXS:
 		mod->isrshadow[(68 == address) ? 0 : 1] = value;
@@ -884,8 +886,6 @@ static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 	default:
 		break;
 	}
-
-	kfree(cmd);
 }
 
 /* Call with wc.reglock held and local interrupts disabled. */
@@ -894,9 +894,15 @@ wctdm_isr_getreg(struct wctdm *wc, struct wctdm_module *const mod, u8 address)
 {
 	struct wctdm_cmd *cmd;
 
-	cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
-	if (unlikely(!cmd))
-		return;
+	if (!list_empty(&wc->free_isr_commands)) {
+		cmd = list_entry(wc->free_isr_commands.next,
+				 struct wctdm_cmd, node);
+		list_del(&cmd->node);
+	} else {
+		cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
+		if (unlikely(!cmd))
+			return;
+	}
 
 	cmd->cmd = CMD_RD(address);
 	cmd->complete = NULL;
@@ -4633,6 +4639,7 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 		list_splice_init(&mod->pending_cmds, &local_list);
 		list_splice_init(&mod->active_cmds, &local_list);
 	}
+	list_splice_init(&wc->free_isr_commands, &local_list);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	while (!list_empty(&local_list)) {
@@ -5221,6 +5228,39 @@ static void wctdm_set_tdm410_leds(struct wctdm *wc)
 	}
 }
 
+/**
+ * wctdm_allocate_irq_commands - Preallocate some commands for use in interrupt context.
+ * @wc:	The board which we're allocating for.
+ * @count:	The number of IRQ commands to allocate.
+ *
+ * We need a minimum of 4 * the current latency worth of commands for each
+ * analog module. When the latency grows, new commands will be allocated, but
+ * this just represents are best guess as to the number of commands we'll need
+ * after probing for modules, and reduces the chance that we'll allocate
+ * memory in interrupt context when the driver first loads.
+ *
+ */
+static void wctdm_allocate_irq_commands(struct wctdm *wc, unsigned int count)
+{
+	unsigned long flags;
+	LIST_HEAD(local_list);
+
+	if (!count)
+		return;
+
+	while (count--) {
+		struct wctdm_cmd *cmd;
+		cmd = kzalloc(sizeof(*cmd), GFP_KERNEL);
+		if (!cmd)
+			break;
+		list_add(&cmd->node, &local_list);
+	}
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	list_splice(&local_list, &wc->free_isr_commands);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+}
+
 #ifdef USE_ASYNC_INIT
 struct async_data {
 	struct pci_dev *pdev;
@@ -5266,6 +5306,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	spin_lock_init(&wc->frame_list_lock);
 	init_waitqueue_head(&wc->regq);
 	spin_lock_init(&wc->reglock);
+	INIT_LIST_HEAD(&wc->free_isr_commands);
 	wc->oldsync = -1;
 
 	wc->board_name = kasprintf(GFP_KERNEL, "%s%d", wctdm_driver.name, pos);
@@ -5492,6 +5533,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 	}
 
+	wctdm_allocate_irq_commands(wc, anamods * latency * 4);
 	wc->not_ready--;
 
 	dev_info(&wc->vb.pdev->dev,
