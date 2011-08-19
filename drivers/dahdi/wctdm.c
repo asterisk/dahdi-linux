@@ -1710,7 +1710,7 @@ static int wctdm_init_voicedaa(struct wctdm *wc, int card, int fast, int manual,
 
 	/* Misc. DAA parameters */
 	if (fastpickup)
-		reg31 = 0xb3;
+		reg31 = 0xe3;
 	else
 		reg31 = 0xa3;
 
