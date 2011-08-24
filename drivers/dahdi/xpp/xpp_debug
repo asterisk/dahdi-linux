@@ -43,11 +43,10 @@ show_debug() {
 			list=''
 			for n in $dbg_names
 			do
-				if (( val & (1 << j) ))
-				then
+				if [ $(( val & (1 << j) )) -ne 0 ]; then
 					list="$list $n"
 				fi
-				let j++
+				j=$((j+1))
 			done
 			if [ "$list" = "" ]; then
 				list=' NONE'
@@ -67,19 +66,19 @@ calc_debug() {
 		for n in $dbg_names
 		do
 			if [ "$wanted" = "$n" ]; then
-				(( val |= (1 << j) ))
+				: $(( val |= (1 << j) ))
 				found=1
 			elif [ "$wanted" = -"$n" ]; then
-				(( val &= ~(1 << j) ))
+				: $(( val &= ~(1 << j) ))
 				found=1
 			elif [ "$wanted" = "ANY" ]; then
-				(( val = ~0 ))
+				: $(( val = ~0 ))
 				found=1
 			elif [ "$wanted" = -"ANY" -o "$wanted" = "NONE" ]; then
-				(( val = 0 ))
+				val=0
 				found=1
 			fi
-			let j++
+			j=$((j+1))
 		done
 		if [ "$found" -eq 0 ]; then
 			echo >&2 "$0: Unknown debug flag '$wanted'"
