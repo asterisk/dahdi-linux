@@ -293,6 +293,10 @@ load)
 	# TODO: A local copy of Asterisk, configured with dahdi_gnconf. 
 	# doable, but trickier.
 	run_asterisk
+	if [ "$LIVE_DAHDI_FREEPBXDB" = 'yes' ]; then
+		GENCONF_PARAMETERS=$DESTDIR/etc/dahdi/genconf_parameters \
+			dahdi_genconf freepbxdb
+	fi
 	;;
 genconf)
 	genconf
