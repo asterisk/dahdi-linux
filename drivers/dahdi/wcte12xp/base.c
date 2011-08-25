@@ -1856,7 +1856,7 @@ static inline unsigned char t1_vpm_out(struct t1 *wc, int unit, const unsigned i
 static int t1_hardware_post_init(struct t1 *wc)
 {
 	int res;
-	unsigned int reg;
+	int reg;
 	int x;
 
 	/* T1 or E1 */
@@ -1878,14 +1878,25 @@ static int t1_hardware_post_init(struct t1 *wc)
 	/* what version of the FALC are we using? */
 	reg = t1_setreg(wc, 0x4a, 0xaa);
 	reg = t1_getreg(wc, 0x4a);
+	if (reg < 0) {
+		t1_info(wc, "Failed to read FALC version (%d)\n", reg);
+		return -EIO;
+	}
 	debug_printk(wc, 1, "FALC version: %08x\n", reg);
 
 	/* make sure reads and writes work */
 	for (x = 0; x < 256; x++) {
 		t1_setreg(wc, 0x14, x);
 		reg = t1_getreg(wc, 0x14);
-		if (reg != x)
-			t1_info(wc, "Wrote '%x' but read '%x'\n", x, reg);
+		if (reg < 0) {
+			t1_info(wc, "Failed register read (%d)\n", reg);
+			return -EIO;
+		}
+		if (reg != x) {
+			t1_info(wc, "Register test failed. "
+				"Wrote '%x' but read '%x'\n", x, reg);
+			return -EIO;
+		}
 	}
 
 	t1_setleds(wc, wc->ledstate);
