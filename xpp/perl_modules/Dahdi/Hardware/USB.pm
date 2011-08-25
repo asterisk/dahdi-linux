@@ -183,6 +183,7 @@ sub scan_devices($) {
 		my @lines = split(/\n/);
 		my ($tline) = grep(/^T/, @lines);
 		my ($pline) = grep(/^P/, @lines);
+		my ($dline) = grep(/^I/, @lines);
 		my ($sline) = grep(/^S:.*SerialNumber=/, @lines);
 		my ($busnum,$devnum) = ($tline =~ /Bus=(\w+)\W.*Dev#=\s*(\w+)\W/);
 		my $devname = sprintf("%03d/%03d", $busnum, $devnum);
@@ -192,6 +193,10 @@ sub scan_devices($) {
 			$sline =~ /SerialNumber=(.*)/;
 			$serial = $1;
 			#$serial =~ s/[[:^print:]]/_/g;
+		}
+		my $loaded;
+		if ($dline =~ /Driver=(\w+)/) {
+			$loaded = $1;
 		}
 		my $model = $usb_ids{"$vendor:$product"};
 		next unless defined $model;
@@ -203,6 +208,7 @@ sub scan_devices($) {
 			SERIAL			=> $serial,
 			DESCRIPTION		=> $model->{DESCRIPTION},
 			DRIVER			=> $model->{DRIVER},
+			LOADED			=> $loaded,
 			);
 		push(@devices, $d);
 	}
