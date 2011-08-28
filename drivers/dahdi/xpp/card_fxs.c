@@ -398,7 +398,7 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	else
 		regular_channels = min(8, subunit_ports);
 	channels = regular_channels;
-	if(unit == 0)
+	if(unit == 0 && subtype != 4)
 		channels += 6;	/* 2 DIGITAL OUTPUTS, 4 DIGITAL INPUTS */
 	xpd = xpd_alloc(xbus, unit, subunit, subtype, subunits, sizeof(struct FXS_priv_data), proto_table, channels);
 	if(!xpd)
