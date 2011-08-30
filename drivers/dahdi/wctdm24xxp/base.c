@@ -1160,7 +1160,6 @@ static void insert_tdm_data(const struct wctdm *wc, u8 *sframe)
 
 static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 {
-	unsigned long flags;
 	int x, y;
 	struct dahdi_span *s;
 	unsigned char *eframe = sframe;
@@ -1170,7 +1169,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		for (x = 0; x < MAX_SPANS; x++) {
 			if (wc->spans[x]) {
 				s = &wc->spans[x]->span;
-				dahdi_transmit(s);
+				_dahdi_transmit(s);
 			}
 		}
 		insert_tdm_data(wc, sframe);
@@ -1183,7 +1182,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 #endif
 	}
 
-	spin_lock_irqsave(&wc->reglock, flags);
+	spin_lock(&wc->reglock);
 	for (x = 0; x < DAHDI_CHUNKSIZE; x++) {
 		/* Send a sample, as a 32-bit word */
 
@@ -1209,7 +1208,7 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		}
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
-	spin_unlock_irqrestore(&wc->reglock, flags);
+	spin_unlock(&wc->reglock);
 }
 
 /* Must be called with wc.reglock held and local interrupts disabled */
@@ -1433,7 +1432,6 @@ static void extract_tdm_data(struct wctdm *wc, const u8 *sframe)
 
 static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 {
-	unsigned long flags;
 	int x, y;
 	bool irqmiss = false;
 	unsigned char expected;
@@ -1442,7 +1440,7 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 	if (unlikely(!is_good_frame(sframe)))
 		return;
 
-	spin_lock_irqsave(&wc->reglock, flags);
+	spin_lock(&wc->reglock);
 
 	if (likely(is_initialized(wc)))
 		extract_tdm_data(wc, sframe);
@@ -1467,7 +1465,7 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
-	spin_unlock_irqrestore(&wc->reglock, flags);
+	spin_unlock(&wc->reglock);
 
 	/* XXX We're wasting 8 taps.  We should get closer :( */
 	if (likely(is_initialized(wc))) {
@@ -1478,7 +1476,7 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 			unsigned char buffer[DAHDI_CHUNKSIZE];
 			__dahdi_fifo_get(wc->ec_reference[x], buffer,
 				    ARRAY_SIZE(buffer));
-			dahdi_ec_chunk(c, c->readchunk, buffer);
+			_dahdi_ec_chunk(c, c->readchunk, buffer);
 #else
 			if ((wc->vpmoct) &&
 			    (wchan->timeslot == wc->vpmoct->preecho_timeslot) &&
@@ -1505,7 +1503,7 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 
 				}
 #endif
-				dahdi_receive(s);
+				_dahdi_receive(s);
 				if (unlikely(irqmiss))
 					++s->irqmisses;
 			}
