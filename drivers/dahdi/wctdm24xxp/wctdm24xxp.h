@@ -161,6 +161,7 @@ struct fxo {
 	int neonmwi_last_voltage;
 	unsigned int neonmwi_debounce;
 	unsigned int neonmwi_offcounter;
+	unsigned long display_fxovoltage;
 };
 
 struct fxs {
@@ -187,6 +188,8 @@ struct fxs {
 	int vmwi_linereverse;
 	int reversepolarity;	/* polarity reversal */
 	struct calregs calregs;
+	unsigned long check_alarm;
+	unsigned long check_proslic;
 };
 
 struct qrv {
@@ -242,7 +245,7 @@ struct wctdm {
 	spinlock_t frame_list_lock;
 	struct list_head frame_list;
 
-	unsigned int intcount;
+	unsigned long framecount;
 	unsigned char txident;
 	unsigned char rxident;
 

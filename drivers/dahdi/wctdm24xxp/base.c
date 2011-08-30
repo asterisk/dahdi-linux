@@ -698,7 +698,7 @@ static inline void cmd_dequeue_vpmadt032(struct wctdm *wc, u8 *eframe)
 	struct vpmadt032_cmd *curcmd = NULL;
 	struct vpmadt032 *vpmadt032 = wc->vpmadt032;
 	int x;
-	unsigned char leds = ~((wc->intcount / 1000) % 8) & 0x7;
+	unsigned char leds = ~((wc->framecount / 1000) % 8) & 0x7;
 
 	/* Skip audio */
 	eframe += 24;
@@ -1669,16 +1669,16 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF OK: card=%d shadow=%02x "
-				 "lasttxhook=%02x intcount=%d\n", mod->card,
-				 res, fxs->lasttxhook, wc->intcount);
+				 "lasttxhook=%02x framecount=%ld\n", mod->card,
+				 res, fxs->lasttxhook, wc->framecount);
 		}
 	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
 		wctdm_setreg_intr(wc, mod, LINE_STATE, fxs->lasttxhook);
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF RETRY: card=%d shadow=%02x "
-				 "lasttxhook=%02x intcount=%d\n", mod->card,
-				 res, fxs->lasttxhook, wc->intcount);
+				 "lasttxhook=%02x framecount=%ld\n", mod->card,
+				 res, fxs->lasttxhook, wc->framecount);
 		}
 	} else { /* Start 100ms Timeout */
 		fxs->oppending_ms = 100;
@@ -1711,28 +1711,6 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 #else
 	spin_lock(&wc->reglock);
 	res = mod->isrshadow[1];
-
-#if 0
-	/* This makes sure the lasthook was put in reg 64 the linefeed reg */
-	if (fxs->lasttxhook & SLIC_LF_OPPENDING) {
-		if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
-			fxs->lasttxhook &= SLIC_LF_SETMASK;
-			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev, "SLIC_LF OK: intcount=%d channel=%d shadow=%02x lasttxhook=%02x\n", wc->intcount, card, res, fxs->lasttxhook);
-			}
-		} else if (!(wc->intcount & 0x03)) {
-			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
-			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev, "SLIC_LF RETRY: intcount=%d channel=%d shadow=%02x lasttxhook=%02x\n", wc->intcount, card, res, fxs->lasttxhook);
-			}
-		}
-	}
-	if (debug & DEBUG_CARD) {
-		if (!(wc->intcount % 100)) {
-			dev_info(&wc->vb.pdev->dev, "SLIC_LF DEBUG: intcount=%d channel=%d shadow=%02x lasttxhook=%02x\n", wc->intcount, card, res, fxs->lasttxhook);
-		}
-	}
-#endif
 
 	res = !res &&    /* reg 64 has to be zero at last isr read */
 		!(fxs->lasttxhook & SLIC_LF_OPPENDING) && /* not a transition */
@@ -1934,10 +1912,12 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	b = mod->isrshadow[1]; /* Voltage */
 	abs_voltage = abs(b);
 
-	if (fxovoltage) {
-		if (!(wc->intcount % 100)) {
-			dev_info(&wc->vb.pdev->dev, "Port %d: Voltage: %d  Debounce %d\n", mod->card + 1, b, fxo->battdebounce);
-		}
+	if (fxovoltage && time_after(wc->framecount, fxo->display_fxovoltage)) {
+		/* Every 100 ms */
+		fxo->display_fxovoltage = wc->framecount + 100;
+		dev_info(&wc->vb.pdev->dev,
+			 "Port %d: Voltage: %d  Debounce %d\n",
+			 mod->card + 1, b, fxo->battdebounce);
 	}
 
 	if (unlikely(DAHDI_RXSIG_INITIAL == get_dahdi_chan(wc, mod)->rxhooksig)) {
@@ -2190,8 +2170,8 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev, "Setting FXS hook state "
-				 "to %d (%02x) intcount=%d\n", txsig, x,
-				 wc->intcount);
+				 "to %d (%02x) framecount=%ld\n", txsig, x,
+				 wc->framecount);
 		}
 	} else {
 		spin_unlock_irqrestore(&wc->reglock, flags);
@@ -2366,8 +2346,9 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
 
-	if (!(wc->intcount % 10000)) {
+	if (time_after(wc->framecount, fxs->check_alarm)) {
 		/* Accept an alarm once per 10 seconds */
+		fxs->check_alarm = wc->framecount + (1000*10);
 		if (fxs->palarms)
 			fxs->palarms--;
 	}
@@ -2375,8 +2356,11 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 
 	wctdm_proslic_check_oppending(wc, mod);
 
-	if (!(wc->intcount & 0xfc))	/* every 256ms */
+	if (time_after(wc->framecount, fxs->check_proslic)) {
+		fxs->check_proslic = wc->framecount + 250; /* every 250ms */
 		wctdm_proslic_recheck_sanity(wc, mod);
+	}
+
 	if (SLIC_LF_RINGING == fxs->lasttxhook) {
 		/* RINGing, prepare for OHT */
 		fxs->ohttimer = OHT_TIMER << 3;
@@ -2478,7 +2462,7 @@ static void handle_transmit(struct voicebus *vb, struct list_head *buffers)
 		memset(vbb->data, 0, sizeof(vbb->data));
 		wctdm_transmitprep(wc, vbb->data);
 		wctdm_isr_misc(wc);
-		wc->intcount++;
+		wc->framecount++;
 	}
 }
 
