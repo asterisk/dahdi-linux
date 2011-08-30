@@ -1965,6 +1965,9 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		   battery present or unknown, debounce timer (going to battery lost)
 		*/
 
+		fxo->lastpol = fxo->polarity;
+		fxo->polaritydebounce = 0;
+
 		if (fxo->battery == BATTERY_LOST) {
 			if (fxo->battdebounce) {
 				/* we were going to BATTERY_PRESENT, but battery was lost again,
