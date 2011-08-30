@@ -122,6 +122,14 @@ enum ring_detector_state {
 	DEBOUNCING_RINGOFF,
 };
 
+enum polarity_state {
+	UNKNOWN_POLARITY = 0,
+	POLARITY_DEBOUNCE_POSITIVE,
+	POLARITY_POSITIVE,
+	POLARITY_DEBOUNCE_NEGATIVE,
+	POLARITY_NEGATIVE,
+};
+
 struct wctdm_cmd {
 	struct list_head node;
 	struct completion *complete;
@@ -159,13 +167,11 @@ struct wctdm_chan {
 struct fxo {
 	enum ring_detector_state ring_state:4;
 	enum battery_state battery_state:4;
+	enum polarity_state polarity_state:4;
 	u8 ring_polarity_change_count:4;
 	u8 hook_ring_shadow;
 	s8 line_voltage_status;
 	int offhook;
-	int lastpol;
-	int polarity;
-	int polaritydebounce;
 	int neonmwi_state;
 	int neonmwi_last_voltage;
 	unsigned int neonmwi_debounce;
@@ -173,6 +179,7 @@ struct fxo {
 	unsigned long display_fxovoltage;
 	unsigned long ringdebounce_timer;
 	unsigned long battdebounce_timer;
+	unsigned long poldebounce_timer;
 };
 
 struct fxs {

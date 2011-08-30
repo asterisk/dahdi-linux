@@ -2071,6 +2071,83 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 }
 
 static void
+wctdm_fxo_stop_debouncing_polarity(struct wctdm *wc,
+				   struct wctdm_module *const mod)
+{
+	struct fxo *const fxo = &mod->mod.fxo;
+	switch (fxo->polarity_state) {
+	case UNKNOWN_POLARITY:
+		break;
+	case POLARITY_DEBOUNCE_POSITIVE:
+		fxo->polarity_state = POLARITY_NEGATIVE;
+		break;
+	case POLARITY_POSITIVE:
+		break;
+	case POLARITY_DEBOUNCE_NEGATIVE:
+		fxo->polarity_state = POLARITY_POSITIVE;
+		break;
+	case POLARITY_NEGATIVE:
+		break;
+	};
+}
+
+static void
+wctdm_fxo_check_polarity(struct wctdm *wc, struct wctdm_module *const mod,
+			 const bool positive_polarity)
+{
+	struct fxo *const fxo = &mod->mod.fxo;
+
+	switch (fxo->polarity_state) {
+	case UNKNOWN_POLARITY:
+		fxo->polarity_state = (positive_polarity) ? POLARITY_POSITIVE :
+							    POLARITY_NEGATIVE;
+		break;
+	case POLARITY_DEBOUNCE_POSITIVE:
+		if (!positive_polarity) {
+			fxo->polarity_state = POLARITY_NEGATIVE;
+		} else if (time_after(wc->framecount, fxo->poldebounce_timer)) {
+			fxo->polarity_state = POLARITY_POSITIVE;
+			dahdi_qevent_lock(get_dahdi_chan(wc, mod),
+					  DAHDI_EVENT_POLARITY);
+			if (debug & DEBUG_CARD) {
+				dev_info(&wc->vb.pdev->dev,
+					 "%s: Polarity NEGATIVE -> POSITIVE\n",
+					 get_dahdi_chan(wc, mod)->name);
+			}
+		}
+		break;
+	case POLARITY_POSITIVE:
+		if (!positive_polarity) {
+			fxo->polarity_state = POLARITY_DEBOUNCE_NEGATIVE;
+			fxo->poldebounce_timer = wc->framecount +
+							POLARITY_DEBOUNCE;
+		}
+		break;
+	case POLARITY_DEBOUNCE_NEGATIVE:
+		if (positive_polarity) {
+			fxo->polarity_state = POLARITY_POSITIVE;
+		} else if (time_after(wc->framecount, fxo->poldebounce_timer)) {
+			dahdi_qevent_lock(get_dahdi_chan(wc, mod),
+					  DAHDI_EVENT_POLARITY);
+			if (debug & DEBUG_CARD) {
+				dev_info(&wc->vb.pdev->dev,
+					 "%s: Polarity POSITIVE -> NEGATIVE\n",
+					 get_dahdi_chan(wc, mod)->name);
+			}
+			fxo->polarity_state = POLARITY_NEGATIVE;
+		}
+		break;
+	case POLARITY_NEGATIVE:
+		if (positive_polarity) {
+			fxo->polarity_state = POLARITY_DEBOUNCE_POSITIVE;
+			fxo->poldebounce_timer = wc->framecount +
+							POLARITY_DEBOUNCE;
+		}
+		break;
+	};
+}
+
+static void
 wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	signed char b;
@@ -2116,41 +2193,14 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	}
 
 	if (abs_voltage < battthresh) {
-		fxo->lastpol = fxo->polarity;
-		fxo->polaritydebounce = 0;
-
+		wctdm_fxo_stop_debouncing_polarity(wc, mod);
 		wctdm_check_battery_lost(wc, mod);
 	} else {
 		wctdm_check_battery_present(wc, mod);
-
-		if (fxo->lastpol >= 0) {
-			if (fxo->line_voltage_status < 0) {
-				fxo->lastpol = -1;
-				fxo->polaritydebounce = POLARITY_DEBOUNCE / MS_PER_CHECK_HOOK;
-			}
-		} 
-		if (fxo->lastpol <= 0) {
-			if (fxo->line_voltage_status > 0) {
-				fxo->lastpol = 1;
-				fxo->polaritydebounce = POLARITY_DEBOUNCE / MS_PER_CHECK_HOOK;
-			}
-		}
+		wctdm_fxo_check_polarity(wc, mod,
+					 (fxo->line_voltage_status > 0));
 	}
 
-	if (fxo->polaritydebounce) {
-	        fxo->polaritydebounce--;
-		if (fxo->polaritydebounce < 1) {
-		    if (fxo->lastpol != fxo->polarity) {
-			if (debug & DEBUG_CARD)
-				dev_info(&wc->vb.pdev->dev, "%lu Polarity reversed (%d -> %d)\n", jiffies, 
-				       fxo->polarity, 
-				       fxo->lastpol);
-			if (fxo->polarity)
-				dahdi_qevent_lock(get_dahdi_chan(wc, mod), DAHDI_EVENT_POLARITY);
-			fxo->polarity = fxo->lastpol;
-		    }
-		}
-	}
 	/* Look for neon mwi pulse */
 	if (neonmwi_monitor && !fxo->offhook) {
 		/* Look for 4 consecutive voltage readings
