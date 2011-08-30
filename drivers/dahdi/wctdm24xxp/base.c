@@ -1025,11 +1025,16 @@ static void _cmd_decipher(struct wctdm *wc, const u8 *eframe, int card)
 
 	switch (mod->type) {
 	case FXS:
-		mod->isrshadow[(68 == address) ? 0 : 1] = value;
+		if (68 == address)
+			mod->mod.fxs.hook_state_shadow = value;
+		else
+			mod->mod.fxs.linefeed_control_shadow = value;
 		break;
 	case FXO:
-		/* 5 = Hook/Ring  29 = Battery */
-		mod->isrshadow[(5 == address) ? 0 : 1] = value;
+		if (5 == address)
+			mod->mod.fxo.hook_ring_shadow = value;
+		else
+			mod->mod.fxo.line_voltage_status = value;
 		break;
 	case QRV:
 		/* wctdm_isr_getreg(wc, mod, 3); */ /* COR/CTCSS state */
@@ -1649,7 +1654,6 @@ static void
 wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 {
 	struct fxs *const fxs = &mod->mod.fxs;
-	int res;
 
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING))
 		return;
@@ -1657,20 +1661,22 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 	/* Monitor the Pending LF state change, for the next 100ms */
 	spin_lock(&wc->reglock);
 
+
 	if (!(fxs->lasttxhook & SLIC_LF_OPPENDING)) {
 		spin_unlock(&wc->reglock);
 		return;
 	}
 
-	res = mod->isrshadow[1];
-	if ((res & SLIC_LF_SETMASK) == (fxs->lasttxhook & SLIC_LF_SETMASK)) {
+	if ((fxs->linefeed_control_shadow & SLIC_LF_SETMASK) ==
+	    (fxs->lasttxhook & SLIC_LF_SETMASK)) {
 		fxs->lasttxhook &= SLIC_LF_SETMASK;
 		fxs->oppending_ms = 0;
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF OK: card=%d shadow=%02x "
 				 "lasttxhook=%02x framecount=%ld\n", mod->card,
-				 res, fxs->lasttxhook, wc->framecount);
+				 fxs->linefeed_control_shadow,
+				 fxs->lasttxhook, wc->framecount);
 		}
 	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
 		wctdm_setreg_intr(wc, mod, LINE_STATE, fxs->lasttxhook);
@@ -1678,7 +1684,8 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF RETRY: card=%d shadow=%02x "
 				 "lasttxhook=%02x framecount=%ld\n", mod->card,
-				 res, fxs->lasttxhook, wc->framecount);
+				 fxs->linefeed_control_shadow,
+				 fxs->lasttxhook, wc->framecount);
 		}
 	} else { /* Start 100ms Timeout */
 		fxs->oppending_ms = 100;
@@ -1710,9 +1717,9 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 	}
 #else
 	spin_lock(&wc->reglock);
-	res = mod->isrshadow[1];
 
-	res = !res &&    /* reg 64 has to be zero at last isr read */
+	/* reg 64 has to be zero at last isr read */
+	res = !fxs->linefeed_control_shadow &&
 		!(fxs->lasttxhook & SLIC_LF_OPPENDING) && /* not a transition */
 		fxs->lasttxhook; /* not an intended zero */
 	
@@ -1730,8 +1737,9 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			fxs->lasttxhook |= SLIC_LF_OPPENDING;
 			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
 
-			/* Update shadow register to avoid extra power alarms until next read */
-			mod->isrshadow[1] = fxs->lasttxhook;
+			/* Update shadow register to avoid extra power alarms
+			 * until next read */
+			fxs->linefeed_control_shadow = fxs->lasttxhook;
 		} else {
 			if (fxs->palarms == MAX_ALARMS) {
 				dev_notice(&wc->vb.pdev->dev,
@@ -1751,7 +1759,7 @@ static void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 
 	if (wc->mods[card].mod.qrv.debtime >= 2)
 		wc->mods[card].mod.qrv.debtime--;
-	b = wc->mods[qrvcard].isrshadow[0]; /* Hook/Ring state */
+	b = wc->mods[qrvcard].mod.qrv.isrshadow[0]; /* Hook/Ring state */
 	b &= 0xcc; /* use bits 3-4 and 6-7 only */
 
 	if (wc->mods[qrvcard].mod.qrv.radmode & RADMODE_IGNORECOR)
@@ -1823,7 +1831,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
-	b = mod->isrshadow[0];	/* Hook/Ring state */
+	b = fxo->hook_ring_shadow;
 	b &= 0x9b;
 	if (fxo->offhook) {
 		if (b != 0x9)
@@ -1843,7 +1851,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 			* but not to have transitions between the two bits (i.e. no negative
 			* to positive or positive to negative transversals )
 			*/
-			res =  mod->isrshadow[0] & 0x60;
+			res = fxo->hook_ring_shadow & 0x60;
 			if (0 == fxo->wasringing) {
 				if (res) {
 					/* Look for positive/negative crossings in ring status reg */
@@ -1881,7 +1889,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 				}
 			}
 		} else {
-			res =  mod->isrshadow[0];
+			res = fxo->hook_ring_shadow;
 			if ((res & 0x60) && (fxo->battery == BATTERY_PRESENT)) {
 				fxo->ringdebounce += (DAHDI_CHUNKSIZE * 16);
 				if (fxo->ringdebounce >= DAHDI_CHUNKSIZE * ringdebounce) {
@@ -1909,7 +1917,7 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		}
 	}
 
-	b = mod->isrshadow[1]; /* Voltage */
+	b = fxo->line_voltage_status;
 	abs_voltage = abs(b);
 
 	if (fxovoltage && time_after(wc->framecount, fxo->display_fxovoltage)) {
@@ -2240,7 +2248,7 @@ wctdm_proslic_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	/* For some reason we have to debounce the
 	   hook detector.  */
 
-	res = mod->isrshadow[0];	/* Hook state */
+	res = fxs->hook_state_shadow;
 	hook = (res & 1);
 	
 	if (hook != fxs->lastrxhook) {
@@ -3387,10 +3395,10 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	fxs->lasttxhook = fxs->idletxhookstate;
 	wctdm_setreg(wc, mod, LINE_STATE, fxs->lasttxhook);
 
-	/* Preset the isrshadow register so that we won't get a power alarm
-	 * when we finish initialization, otherwise the line state register
-	 * may not have been read yet. */
-	mod->isrshadow[1] = fxs->lasttxhook;
+	/* Preset the shadow register so that we won't get a power alarm when
+	 * we finish initialization, otherwise the line state register may not
+	 * have been read yet. */
+	fxs->linefeed_control_shadow = fxs->lasttxhook;
 	return 0;
 }
 

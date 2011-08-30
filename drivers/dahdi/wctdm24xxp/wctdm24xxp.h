@@ -85,7 +85,6 @@
 
 #define NUM_CAL_REGS		12
 
-#define ISR_COMMANDS		2
 #define QRV_DEBOUNCETIME	20
 
 #define VPM150M_HPI_CONTROL	0x00
@@ -162,6 +161,8 @@ struct fxo {
 	unsigned int neonmwi_debounce;
 	unsigned int neonmwi_offcounter;
 	unsigned long display_fxovoltage;
+	u8 hook_ring_shadow;
+	s8 line_voltage_status;
 };
 
 struct fxs {
@@ -182,6 +183,8 @@ struct fxs {
 */
 	int lasttxhook;
 	int oppending_ms;
+	u8 linefeed_control_shadow;
+	u8 hook_state_shadow;
 	int palarms;
 	struct dahdi_vmwi_info vmwisetting;
 	int vmwi_active_messages;
@@ -206,6 +209,7 @@ struct qrv {
 	int radmode;
 	signed short rxgain;
 	signed short txgain;
+	u8 isrshadow[3];
 };
 
 enum module_type {
@@ -230,7 +234,6 @@ struct wctdm_module {
 	struct list_head active_cmds;
 	u8 offsets[3];
 	u8 subaddr;
-	u8 isrshadow[ISR_COMMANDS];
 	u8 card;
 
 	enum module_type type;
