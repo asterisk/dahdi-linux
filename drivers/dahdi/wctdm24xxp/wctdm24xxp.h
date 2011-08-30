@@ -105,7 +105,11 @@ struct calregs {
 
 enum battery_state {
 	BATTERY_UNKNOWN = 0,
+	BATTERY_DEBOUNCING_PRESENT,
+	BATTERY_DEBOUNCING_PRESENT_ALARM,
 	BATTERY_PRESENT,
+	BATTERY_DEBOUNCING_LOST,
+	BATTERY_DEBOUNCING_LOST_ALARM,
 	BATTERY_LOST,
 };
 
@@ -159,9 +163,6 @@ struct fxo {
 	u8 hook_ring_shadow;
 	s8 line_voltage_status;
 	int offhook;
-	int battdebounce;
-	int battalarm;
-	enum battery_state battery;
 	int lastpol;
 	int polarity;
 	int polaritydebounce;
@@ -171,6 +172,7 @@ struct fxo {
 	unsigned int neonmwi_offcounter;
 	unsigned long display_fxovoltage;
 	unsigned long ringdebounce_timer;
+	unsigned long battdebounce_timer;
 };
 
 struct fxs {

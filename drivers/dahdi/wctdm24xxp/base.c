@@ -1940,13 +1940,141 @@ static void wctdm_fxo_ring_detect(struct wctdm *wc, struct wctdm_module *mod)
 	}
 }
 
+#define MS_PER_CHECK_HOOK 1
+
+static void
+wctdm_check_battery_lost(struct wctdm *wc, struct wctdm_module *const mod)
+{
+	struct fxo *const fxo = &mod->mod.fxo;
+
+	/* possible existing states:
+	   battery lost, no debounce timer
+	   battery lost, debounce timer (going to battery present)
+	   battery present or unknown, no debounce timer
+	   battery present or unknown, debounce timer (going to battery lost)
+	*/
+	switch (fxo->battery_state) {
+	case BATTERY_DEBOUNCING_PRESENT:
+		/* we were going to BATTERY_PRESENT, but
+		 * battery was lost again. */
+		fxo->battery_state = BATTERY_LOST;
+		break;
+	case BATTERY_UNKNOWN:
+		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
+	case BATTERY_DEBOUNCING_PRESENT_ALARM: /* intentional drop through */
+	case BATTERY_PRESENT:
+		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
+		fxo->battdebounce_timer = wc->framecount + battdebounce;
+		break;
+	case BATTERY_DEBOUNCING_LOST:
+		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
+			if (debug) {
+				dev_info(&wc->vb.pdev->dev,
+					 "NO BATTERY on %d/%d!\n",
+					 wc->aspan->span.spanno,
+					 mod->card + 1);
+			}
+#ifdef	JAPAN
+			if (!wc->ohdebounce && wc->offhook) {
+				dahdi_hooksig(wc->aspan->chans[card],
+					      DAHDI_RXSIG_ONHOOK);
+				if (debug) {
+					dev_info(&wc->vb.pdev->dev,
+						 "Signalled On Hook\n");
+				}
+#ifdef	ZERO_BATT_RING
+				wc->onhook++;
+#endif
+			}
+#else
+			mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
+#endif
+			/* set the alarm timer, taking into account that part
+			 * of its time period has already passed while
+			 * debouncing occurred */
+			fxo->battery_state = BATTERY_DEBOUNCING_LOST_ALARM;
+			fxo->battdebounce_timer = wc->framecount +
+						   battalarm - battdebounce;
+		}
+		break;
+	case BATTERY_DEBOUNCING_LOST_ALARM:
+		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
+			fxo->battery_state = BATTERY_LOST;
+			dahdi_alarm_channel(get_dahdi_chan(wc, mod),
+					    DAHDI_ALARM_RED);
+		}
+		break;
+	case BATTERY_LOST:
+		break;
+	}
+}
+
+static void
+wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
+{
+	struct fxo *const fxo = &mod->mod.fxo;
+
+	switch (fxo->battery_state) {
+	case BATTERY_DEBOUNCING_PRESENT:
+		if (time_after(jiffies, fxo->battdebounce_timer)) {
+			if (debug) {
+				dev_info(&wc->vb.pdev->dev,
+					 "BATTERY on %d/%d (%s)!\n",
+					 wc->aspan->span.spanno, mod->card + 1,
+					 (fxo->line_voltage_status < 0) ?
+						"-" : "+");
+			}
+#ifdef	ZERO_BATT_RING
+			if (wc->onhook) {
+				wc->onhook = 0;
+				dahdi_hooksig(wc->aspan->chans[card],
+					      DAHDI_RXSIG_OFFHOOK);
+				if (debug) {
+					dev_info(&wc->vb.pdev->dev,
+						 "Signalled Off Hook\n");
+				}
+			}
+#else
+			mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
+#endif
+			/* set the alarm timer, taking into account that part
+			 * of its time period has already passed while
+			 * debouncing occurred */
+			fxo->battery_state = BATTERY_DEBOUNCING_PRESENT_ALARM;
+			fxo->battdebounce_timer = jiffies +
+				msecs_to_jiffies(battalarm - battdebounce);
+		}
+		break;
+	case BATTERY_DEBOUNCING_PRESENT_ALARM:
+		if (time_after(jiffies, fxo->battdebounce_timer)) {
+			fxo->battery_state = BATTERY_PRESENT;
+			dahdi_alarm_channel(get_dahdi_chan(wc, mod),
+					    DAHDI_ALARM_NONE);
+		}
+		break;
+	case BATTERY_PRESENT:
+		break;
+	case BATTERY_DEBOUNCING_LOST:
+		/* we were going to BATTERY_LOST, but battery appeared again,
+		 * so clear the debounce timer */
+		fxo->battery_state = BATTERY_PRESENT;
+		break;
+	case BATTERY_UNKNOWN:
+		mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
+	case BATTERY_LOST: /* intentional drop through */
+	case BATTERY_DEBOUNCING_LOST_ALARM:
+		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
+		fxo->battdebounce_timer = jiffies +
+						msecs_to_jiffies(battdebounce);
+		break;
+	}
+}
+
 static void
 wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
-#define MS_PER_CHECK_HOOK 1
-
 	signed char b;
-	unsigned int abs_voltage;
+	u8 abs_voltage;
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
@@ -1962,15 +2090,14 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		wctdm_fxo_ring_detect(wc, mod);
 	}
 
-	b = fxo->line_voltage_status;
-	abs_voltage = abs(b);
+	abs_voltage = abs(fxo->line_voltage_status);
 
 	if (fxovoltage && time_after(wc->framecount, fxo->display_fxovoltage)) {
 		/* Every 100 ms */
 		fxo->display_fxovoltage = wc->framecount + 100;
 		dev_info(&wc->vb.pdev->dev,
-			 "Port %d: Voltage: %d  Debounce %d\n",
-			 mod->card + 1, b, fxo->battdebounce);
+			 "Port %d: Voltage: %d\n",
+			 mod->card + 1, fxo->line_voltage_status);
 	}
 
 	if (unlikely(DAHDI_RXSIG_INITIAL == get_dahdi_chan(wc, mod)->rxhooksig)) {
@@ -1985,122 +2112,28 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		 * to force us to report it again via dahdi_hooksig.
 		 *
 		 */
-		fxo->battery = BATTERY_UNKNOWN;
+		fxo->battery_state = BATTERY_UNKNOWN;
 	}
 
 	if (abs_voltage < battthresh) {
-		/* possible existing states:
-		   battery lost, no debounce timer
-		   battery lost, debounce timer (going to battery present)
-		   battery present or unknown, no debounce timer
-		   battery present or unknown, debounce timer (going to battery lost)
-		*/
-
 		fxo->lastpol = fxo->polarity;
 		fxo->polaritydebounce = 0;
 
-		if (fxo->battery == BATTERY_LOST) {
-			if (fxo->battdebounce) {
-				/* we were going to BATTERY_PRESENT, but battery was lost again,
-				   so clear the debounce timer */
-				fxo->battdebounce = 0;
-			}
-		} else {
-			if (fxo->battdebounce) {
-				/* going to BATTERY_LOST, see if we are there yet */
-				if (--fxo->battdebounce == 0) {
-					fxo->battery = BATTERY_LOST;
-					if (debug)
-						dev_info(&wc->vb.pdev->dev, "NO BATTERY on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
-#ifdef	JAPAN
-					if (!wc->ohdebounce && wc->offhook) {
-						dahdi_hooksig(wc->aspan->chans[card], DAHDI_RXSIG_ONHOOK);
-						if (debug)
-							dev_info(&wc->vb.pdev->dev, "Signalled On Hook\n");
-#ifdef	ZERO_BATT_RING
-						wc->onhook++;
-#endif
-					}
-#else
-					mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
-					/* set the alarm timer, taking into account that part of its time
-					   period has already passed while debouncing occurred */
-					fxo->battalarm = (battalarm - battdebounce) / MS_PER_CHECK_HOOK;
-#endif
-				}
-			} else {
-				/* start the debounce timer to verify that battery has been lost */
-				fxo->battdebounce = battdebounce / MS_PER_CHECK_HOOK;
-			}
-		}
+		wctdm_check_battery_lost(wc, mod);
 	} else {
-		/* possible existing states:
-		   battery lost or unknown, no debounce timer
-		   battery lost or unknown, debounce timer (going to battery present)
-		   battery present, no debounce timer
-		   battery present, debounce timer (going to battery lost)
-		*/
-
-		if (fxo->battery == BATTERY_PRESENT) {
-			if (fxo->battdebounce) {
-				/* we were going to BATTERY_LOST, but battery appeared again,
-				   so clear the debounce timer */
-				fxo->battdebounce = 0;
-			}
-		} else {
-			if (fxo->battdebounce) {
-				/* going to BATTERY_PRESENT, see if we are there yet */
-				if (--fxo->battdebounce == 0) {
-					fxo->battery = BATTERY_PRESENT;
-					if (debug) {
-						dev_info(&wc->vb.pdev->dev,
-							 "BATTERY on %d/%d (%s)!\n",
-							 wc->aspan->span.spanno,
-							 mod->card + 1,
-							 (b < 0) ? "-" : "+");
-					}
-#ifdef	ZERO_BATT_RING
-					if (wc->onhook) {
-						wc->onhook = 0;
-						mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-						if (debug)
-							dev_info(&wc->vb.pdev->dev, "Signalled Off Hook\n");
-					}
-#else
-					mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-#endif
-					/* set the alarm timer, taking into account that part of its time
-					   period has already passed while debouncing occurred */
-					fxo->battalarm = (battalarm - battdebounce) / MS_PER_CHECK_HOOK;
-				}
-			} else {
-				/* start the debounce timer to verify that battery has appeared */
-				fxo->battdebounce = battdebounce / MS_PER_CHECK_HOOK;
-			}
-		}
+		wctdm_check_battery_present(wc, mod);
 
 		if (fxo->lastpol >= 0) {
-			if (b < 0) {
+			if (fxo->line_voltage_status < 0) {
 				fxo->lastpol = -1;
 				fxo->polaritydebounce = POLARITY_DEBOUNCE / MS_PER_CHECK_HOOK;
 			}
 		} 
 		if (fxo->lastpol <= 0) {
-			if (b > 0) {
+			if (fxo->line_voltage_status > 0) {
 				fxo->lastpol = 1;
 				fxo->polaritydebounce = POLARITY_DEBOUNCE / MS_PER_CHECK_HOOK;
 			}
-		}
-	}
-
-	if (fxo->battalarm) {
-		if (--fxo->battalarm == 0) {
-			/* the alarm timer has expired, so update the battery alarm state
-			   for this channel */
-			dahdi_alarm_channel(get_dahdi_chan(wc, mod),
-					    (fxo->battery == BATTERY_LOST) ?
-						DAHDI_ALARM_RED :
-						DAHDI_ALARM_NONE);
 		}
 	}
 
@@ -2124,12 +2157,12 @@ wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 		* where the voltage is over the neon limit but
 		* does not vary greatly from the last reading
 		*/
-		if (fxo->battery == 1 &&
+		if (fxo->battery_state == BATTERY_PRESENT &&
 				  abs_voltage > neonmwi_level &&
 				  (0 == fxo->neonmwi_last_voltage ||
-				  (b >= fxo->neonmwi_last_voltage - neonmwi_envelope &&
-				  b <= fxo->neonmwi_last_voltage + neonmwi_envelope ))) {
-			fxo->neonmwi_last_voltage = b;
+				  (fxo->line_voltage_status >= fxo->neonmwi_last_voltage - neonmwi_envelope &&
+				  fxo->line_voltage_status <= fxo->neonmwi_last_voltage + neonmwi_envelope))) {
+			fxo->neonmwi_last_voltage = fxo->line_voltage_status;
 			if (NEONMWI_ON_DEBOUNCE == fxo->neonmwi_debounce) {
 				fxo->neonmwi_offcounter = neonmwi_offlimit_cycles;
 				if (0 == fxo->neonmwi_state) {
