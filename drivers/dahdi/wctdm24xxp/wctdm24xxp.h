@@ -182,7 +182,6 @@ struct fxs {
 * voicebus ISR.
 */
 	int lasttxhook;
-	int oppending_ms;
 	u8 linefeed_control_shadow;
 	u8 hook_state_shadow;
 	int palarms;
@@ -193,6 +192,7 @@ struct fxs {
 	struct calregs calregs;
 	unsigned long check_alarm;
 	unsigned long check_proslic;
+	unsigned long oppending_timeout;
 };
 
 struct qrv {

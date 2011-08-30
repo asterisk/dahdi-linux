@@ -1649,7 +1649,14 @@ wctdm_proslic_verify_indirect_regs(struct wctdm *wc, struct wctdm_module *mod)
 	return 0;
 }
 
-/* 1ms interrupt */
+/**
+ * wctdm_proslic_check_oppending -
+ *
+ * Ensures that a write to the line feed register on the SLIC has been
+ * processed. If it hasn't after the timeout value, then it will resend the
+ * command and wait for another timeout period.
+ *
+ */
 static void
 wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 {
@@ -1670,7 +1677,6 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 	if ((fxs->linefeed_control_shadow & SLIC_LF_SETMASK) ==
 	    (fxs->lasttxhook & SLIC_LF_SETMASK)) {
 		fxs->lasttxhook &= SLIC_LF_SETMASK;
-		fxs->oppending_ms = 0;
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
 				 "SLIC_LF OK: card=%d shadow=%02x "
@@ -1678,7 +1684,10 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 				 fxs->linefeed_control_shadow,
 				 fxs->lasttxhook, wc->framecount);
 		}
-	} else if (fxs->oppending_ms && (--fxs->oppending_ms == 0)) {
+	} else if (time_after(wc->framecount, fxs->oppending_timeout)) {
+		/* Check again in 100 ms */
+		fxs->oppending_timeout = wc->framecount + 100;
+
 		wctdm_setreg_intr(wc, mod, LINE_STATE, fxs->lasttxhook);
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->vb.pdev->dev,
@@ -1687,9 +1696,8 @@ wctdm_proslic_check_oppending(struct wctdm *wc, struct wctdm_module *const mod)
 				 fxs->linefeed_control_shadow,
 				 fxs->lasttxhook, wc->framecount);
 		}
-	} else { /* Start 100ms Timeout */
-		fxs->oppending_ms = 100;
 	}
+
 	spin_unlock(&wc->reglock);
 }
 
@@ -1736,6 +1744,7 @@ wctdm_proslic_recheck_sanity(struct wctdm *wc, struct wctdm_module *const mod)
 			}
 			fxs->lasttxhook |= SLIC_LF_OPPENDING;
 			mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+			fxs->oppending_timeout = wc->framecount + 100;
 
 			/* Update shadow register to avoid extra power alarms
 			 * until next read */
@@ -2174,6 +2183,7 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 	if (x != fxs->lasttxhook) {
 		fxs->lasttxhook = x | SLIC_LF_OPPENDING;
 		mod->sethook = CMD_WR(LINE_STATE, fxs->lasttxhook);
+		fxs->oppending_timeout = wc->framecount + 100;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		if (debug & DEBUG_CARD) {
