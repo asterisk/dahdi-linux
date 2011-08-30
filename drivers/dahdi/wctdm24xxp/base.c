@@ -4518,6 +4518,8 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 {
 	int res;
 	struct vpmadt032_options options;
+	struct vpmadt032 *vpm;
+	unsigned long flags;
 
 	options.debug = debug;
 	options.vpmnlptype = vpmnlptype;
@@ -4537,8 +4539,11 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	if (!res)
 		res = vpmadt032_init(wc->vpmadt032);
 	if (res) {
-		vpmadt032_free(wc->vpmadt032);
+		vpm = wc->vpmadt032;
+		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpm);
 		return res;
 	}
 
@@ -4546,8 +4551,11 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	 * particular board. */
 	res = config_vpmadt032(wc->vpmadt032, wc);
 	if (res) {
-		vpmadt032_free(wc->vpmadt032);
+		vpm = wc->vpmadt032;
+		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpm);
 		return res;
 	}
 
@@ -5866,8 +5874,10 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 	voicebus_stop(&wc->vb);
 
 	if (vpmadt032) {
-		vpmadt032_free(vpmadt032);
+		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpmadt032);
 	} else if (vpmoct) {
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->vpmoct = NULL;
