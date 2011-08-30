@@ -448,15 +448,37 @@ setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 		sizeof(chanconfig->EcanParametersB));
 }
 
-static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
+struct vpmadt032_channel_setup {
+	struct work_struct	work;
+	struct wctdm		*wc;
+};
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void vpm_setup_work_func(void *data)
 {
-	int res, i;
-	GpakPortConfig_t portconfig = {0};
-	gpakConfigPortStatus_t configportstatus;
-	GPAK_PortConfigStat_t pstatus;
+	struct vpmadt032_channel_setup *setup = data;
+#else
+static void vpm_setup_work_func(struct work_struct *work)
+{
+	struct vpmadt032_channel_setup *setup =
+		container_of(work, struct vpmadt032_channel_setup, work);
+#endif
+	int i;
+	int res;
 	GpakChannelConfig_t chanconfig;
 	GPAK_ChannelConfigStat_t cstatus;
 	GPAK_AlgControlStat_t algstatus;
+	GpakPortConfig_t portconfig = {0};
+	gpakConfigPortStatus_t configportstatus;
+	GPAK_PortConfigStat_t pstatus;
+	struct vpmadt032 *vpm;
+	struct wctdm *const wc = setup->wc;
+
+	WARN_ON(!wc);
+	WARN_ON(!wc->vpmadt032);
+	if (unlikely(!wc || !wc->vpmadt032))
+		return;
+	vpm = wc->vpmadt032;
 
 	/* First Serial Port config */
 	portconfig.SlotsSelect1 = SlotCfgNone;
@@ -526,7 +548,7 @@ static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
 
 	if ((configportstatus = gpakConfigurePorts(vpm->dspid, &portconfig, &pstatus))) {
 		dev_notice(&wc->vb.pdev->dev, "Configuration of ports failed (%d)!\n", configportstatus);
-		return -1;
+		return;
 	} else {
 		if (vpm->options.debug & DEBUG_ECHOCAN)
 			dev_info(&wc->vb.pdev->dev, "Configured McBSP ports successfully\n");
@@ -535,44 +557,81 @@ static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
 	res = gpakPingDsp(vpm->dspid, &vpm->version);
 	if (res) {
 		dev_notice(&wc->vb.pdev->dev, "Error pinging DSP (%d)\n", res);
-		return -1;
+		return;
 	}
 
 	for (i = 0; i < vpm->options.channels; ++i) {
-		struct dahdi_chan *const chan = &wc->chans[i]->chan;
 		vpm->curecstate[i].tap_length = 0;
 		vpm->curecstate[i].nlp_type = vpm->options.vpmnlptype;
 		vpm->curecstate[i].nlp_threshold = vpm->options.vpmnlpthresh;
-		vpm->curecstate[i].nlp_max_suppress = vpm->options.vpmnlpmaxsupp;
-		vpm->curecstate[i].companding = (chan->span->deflaw == DAHDI_LAW_ALAW) ? ADT_COMP_ALAW : ADT_COMP_ULAW;
-		/* set_vpmadt032_chanconfig_from_state(&vpm->curecstate[i], &vpm->options, i, &chanconfig); !!! */
+		vpm->curecstate[i].nlp_max_suppress =
+						vpm->options.vpmnlpmaxsupp;
+		vpm->curecstate[i].companding = ADT_COMP_ULAW;
 		vpm->setchanconfig_from_state(vpm, i, &chanconfig);
-		if ((res = gpakConfigureChannel(vpm->dspid, i, tdmToTdm, &chanconfig, &cstatus))) {
-			dev_notice(&wc->vb.pdev->dev, "Unable to configure channel #%d (%d)", i, res);
-			if (res == 1) {
+
+		res = gpakConfigureChannel(vpm->dspid, i, tdmToTdm,
+					   &chanconfig, &cstatus);
+		if (res) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "Unable to configure channel #%d (%d)",
+				   i, res);
+			if (res == 1)
 				printk(KERN_CONT ", reason %d", cstatus);
-			}
 			printk(KERN_CONT "\n");
-			return -1;
+			goto exit;
 		}
 
-		if ((res = gpakAlgControl(vpm->dspid, i, BypassEcanA, &algstatus))) {
-			dev_notice(&wc->vb.pdev->dev, "Unable to disable echo can on channel %d (reason %d:%d)\n", i + 1, res, algstatus);
-			return -1;
+		res = gpakAlgControl(vpm->dspid, i, BypassEcanA, &algstatus);
+		if (res) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "Unable to disable echo can on channel %d "
+				   "(reason %d:%d)\n", i + 1, res, algstatus);
+			goto exit;
 		}
 
-		if ((res = gpakAlgControl(vpm->dspid, i, BypassSwCompanding, &algstatus))) {
-			dev_notice(&wc->vb.pdev->dev, "Unable to disable echo can on channel %d (reason %d:%d)\n", i + 1, res, algstatus);
-			return -1;
+		res = gpakAlgControl(vpm->dspid, i,
+				     BypassSwCompanding, &algstatus);
+		if (res) {
+			dev_notice(&wc->vb.pdev->dev,
+				   "Unable to disable echo can on channel %d "
+				   "(reason %d:%d)\n", i + 1, res, algstatus);
+			goto exit;
 		}
 	}
 
-	if ((res = gpakPingDsp(vpm->dspid, &vpm->version))) {
+	res = gpakPingDsp(vpm->dspid, &vpm->version);
+	if (res) {
 		dev_notice(&wc->vb.pdev->dev, "Error pinging DSP (%d)\n", res);
-		return -1;
+		goto exit;
 	}
 
 	set_bit(VPM150M_ACTIVE, &vpm->control);
+
+exit:
+	kfree(setup);
+}
+
+static int config_vpmadt032(struct vpmadt032 *vpm, struct wctdm *wc)
+{
+	struct vpmadt032_channel_setup *setup;
+
+	/* Because the channel configuration can take such a long time, let's
+	 * move this out onto the VPM workqueue so the system can proceeded
+	 * with startup. */
+
+	setup = kzalloc(sizeof(*setup), GFP_KERNEL);
+	if (!setup)
+		return -ENOMEM;
+
+	setup->wc = wc;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&setup->work, vpm_setup_work_func, setup);
+#else
+	INIT_WORK(&setup->work, vpm_setup_work_func);
+#endif
+
+	queue_work(vpm->wq, &setup->work);
 
 	return 0;
 }
@@ -4461,14 +4520,14 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	options.vpmnlptype = vpmnlptype;
 	options.vpmnlpthresh = vpmnlpthresh;
 	options.vpmnlpmaxsupp = vpmnlpmaxsupp;
-	options.channels = wc->avchannels;
+	options.channels = wc->desc->ports;
 
 	wc->vpmadt032 = vpmadt032_alloc(&options);
 	if (!wc->vpmadt032)
 		return -ENOMEM;
 
 	wc->vpmadt032->setchanconfig_from_state = setchanconfig_from_state;
-	/* wc->vpmadt032->context = wc; */
+
 	/* Pull the configuration information from the span holding
 	 * the analog channels. */
 	res = vpmadt032_test(wc->vpmadt032, &wc->vb);
@@ -4517,17 +4576,19 @@ static void wctdm_vpm_load_complete(struct device *dev, bool operational)
 		vpmoct_free(vpm);
 }
 
-static void wctdm_initialize_vpm(struct wctdm *wc)
+static int wctdm_initialize_vpm(struct wctdm *wc, unsigned long unused)
 {
 	int res = 0;
 
-	if (!vpmsupport)
-		return;
+	if (!vpmsupport) {
+		dev_notice(&wc->vb.pdev->dev, "VPM: Support Disabled\n");
+		return 0;
+	}
 
 	res = wctdm_initialize_vpmadt032(wc);
 	if (!res) {
 		wc->ctlreg |= 0x10;
-		return;
+		return 0;
 	} else {
 		struct vpmoct *vpm;
 		unsigned long flags;
@@ -4536,7 +4597,7 @@ static void wctdm_initialize_vpm(struct wctdm *wc)
 		if (!vpm) {
 			dev_info(&wc->vb.pdev->dev,
 			    "Unable to allocate memory for struct vpmoct\n");
-			return;
+			return -ENOMEM;
 		}
 
 		vpm->dev = &wc->vb.pdev->dev;
@@ -4555,13 +4616,151 @@ static void wctdm_initialize_vpm(struct wctdm *wc)
 			vpmoct_free(vpm);
 		}
 	}
-	return;
+	return 0;
+}
+
+static int __wctdm_identify_module_group(struct wctdm *wc, unsigned long base)
+{
+	int x;
+	unsigned long flags;
+
+	for (x = base; x < base + 4; ++x) {
+		struct wctdm_module *const mod = &wc->mods[x];
+		enum {SANE = 1, UNKNOWN = 0};
+		int ret = 0, readi = 0;
+		bool altcs = false;
+
+		if (fatal_signal_pending(current))
+			break;
+retry:
+		ret = wctdm_init_proslic(wc, mod, 0, 0, UNKNOWN);
+		if (!ret) {
+			if (debug & DEBUG_CARD) {
+				readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
+				dev_info(&wc->vb.pdev->dev,
+					 "Proslic module %d loop current "
+					 "is %dmA\n", x, ((readi*3) + 20));
+			}
+			continue;
+		}
+
+		if (ret != -2) {
+			/* Init with Manual Calibration */
+			if (!wctdm_init_proslic(wc, mod, 0, 1, SANE)) {
+
+				if (debug & DEBUG_CARD) {
+					readi = wctdm_getreg(wc, mod,
+							     LOOP_I_LIMIT);
+					dev_info(&wc->vb.pdev->dev,
+						 "Proslic module %d loop "
+						 "current is %dmA\n", x,
+						 ((readi*3)+20));
+				}
+			} else {
+				dev_notice(&wc->vb.pdev->dev,
+					   "Port %d: FAILED FXS (%s)\n",
+					   x + 1, fxshonormode ?
+					   fxo_modes[_opermode].name : "FCC");
+			}
+			continue;
+		}
+
+		ret = wctdm_init_voicedaa(wc, mod, 0, 0, UNKNOWN);
+		if (!ret)
+			continue;
+
+		if (!wctdm_init_qrvdri(wc, x))
+			continue;
+
+		if (is_hx8(wc) && !wctdm_init_b400m(wc, x))
+			continue;
+
+		if ((wc->desc->ports != 24) && ((x&0x3) == 1) && !altcs) {
+
+			spin_lock_irqsave(&wc->reglock, flags);
+			set_offsets(mod, 2);
+			altcs = true;
+
+			if (wc->desc->ports == 4) {
+				set_offsets(&wc->mods[x+1], 3);
+				set_offsets(&wc->mods[x+2], 3);
+			}
+
+			mod->type = FXSINIT;
+			spin_unlock_irqrestore(&wc->reglock, flags);
+
+			udelay(1000);
+			udelay(1000);
+
+			spin_lock_irqsave(&wc->reglock, flags);
+			mod->type = FXS;
+			spin_unlock_irqrestore(&wc->reglock, flags);
+
+			if (debug & DEBUG_CARD) {
+				dev_info(&wc->vb.pdev->dev,
+					 "Trying port %d with alternate chip "
+					 "select\n", x + 1);
+			}
+			goto retry;
+		}
+
+		mod->type = NONE;
+	}
+	return 0;
+}
+
+/**
+ * wctdm_print_moule_configuration - Print the configuration to the kernel log
+ * @wc:		The card we're interested in.
+ *
+ * This is to ensure that the module configuration from each card shows up
+ * sequentially in the kernel log, as opposed to interleaved with one another.
+ *
+ */
+static void wctdm_print_module_configuration(const struct wctdm *const wc)
+{
+	int i;
+	static DEFINE_MUTEX(print);
+
+	mutex_lock(&print);
+	for (i = 0; i < wc->mods_per_board; ++i) {
+		const struct wctdm_module *const mod = &wc->mods[i];
+
+		switch (mod->type) {
+		case FXO:
+			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- "
+				 "AUTO FXO (%s mode)\n", i + 1,
+				 fxo_modes[_opermode].name);
+			break;
+		case FXS:
+			dev_info(&wc->vb.pdev->dev,
+				 "Port %d: Installed -- AUTO FXS/DPO\n", i + 1);
+			break;
+		case BRI:
+			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- BRI "
+				 "quad-span module\n", i + 1);
+			break;
+		case QRV:
+			dev_info(&wc->vb.pdev->dev,
+				 "Port %d: Installed -- QRV DRI card\n", i + 1);
+			break;
+		case NONE:
+			dev_info(&wc->vb.pdev->dev,
+				 "Port %d: Not installed\n", i + 1);
+			break;
+		case FXSINIT:
+			break;
+		}
+	}
+	mutex_unlock(&print);
 }
 
 static void wctdm_identify_modules(struct wctdm *wc)
 {
 	int x;
 	unsigned long flags;
+	struct bg *bg_work[ARRAY_SIZE(wc->mods)/4 + 1] = {NULL, };
+
 	wc->ctlreg = 0x00;
 
 	/*
@@ -4599,7 +4798,7 @@ static void wctdm_identify_modules(struct wctdm *wc)
 
 	/* Wait just a bit; this makes sure that cmd_dequeue is emitting SPI
 	 * commands in the appropriate mode(s). */
-	udelay(2000);
+	msleep(20);
 
 	/* Now that all the cards have been reset, we can stop checking them
 	 * all if there aren't as many */
@@ -4607,106 +4806,18 @@ static void wctdm_identify_modules(struct wctdm *wc)
 	wc->mods_per_board = wc->desc->ports;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	/* Reset modules */
-	for (x = 0; x < wc->mods_per_board; x++) {
-		struct wctdm_module *const mod = &wc->mods[x];
-		enum {SANE = 1, UNKNOWN = 0};
-		int ret = 0, readi = 0;
-		bool altcs = false;
+	BUG_ON(wc->desc->ports % 4);
 
-		if (fatal_signal_pending(current))
-			break;
-retry:
-		ret = wctdm_init_proslic(wc, mod, 0, 0, UNKNOWN);
-		if (!ret) {
-			if (debug & DEBUG_CARD) {
-				readi = wctdm_getreg(wc, mod, LOOP_I_LIMIT);
-				dev_info(&wc->vb.pdev->dev,
-					 "Proslic module %d loop current "
-					 "is %dmA\n", x, ((readi*3) + 20));
-			}
-			dev_info(&wc->vb.pdev->dev,
-				 "Port %d: Installed -- AUTO FXS/DPO\n", x + 1);
-			continue;
-		}
+	/* Detecting and configuring the modules over voicebus takes a
+	 * significant amount of time. We can speed things up by performing
+	 * this in parallel for each group of four modules. */
+	for (x = 0; x < wc->desc->ports/4; x++)
+		bg_work[x] = bg_create(wc, __wctdm_identify_module_group, x*4);
 
-		if (ret != -2) {
-			/* Init with Manual Calibration */
-			if (!wctdm_init_proslic(wc, mod, 0, 1, SANE)) {
+	for (x = 0; bg_work[x]; ++x)
+		bg_join(bg_work[x]);
 
-				if (debug & DEBUG_CARD) {
-					readi = wctdm_getreg(wc, mod,
-							     LOOP_I_LIMIT);
-					dev_info(&wc->vb.pdev->dev,
-						 "Proslic module %d loop "
-						 "current is %dmA\n", x,
-						 ((readi*3)+20));
-				}
-
-				dev_info(&wc->vb.pdev->dev,
-					 "Port %d: Installed -- MANUAL FXS\n",
-					 x + 1);
-			} else {
-				dev_notice(&wc->vb.pdev->dev,
-					   "Port %d: FAILED FXS (%s)\n",
-					   x + 1, fxshonormode ?
-					   fxo_modes[_opermode].name : "FCC");
-			}
-			continue;
-		}
-
-		ret = wctdm_init_voicedaa(wc, mod, 0, 0, UNKNOWN);
-		if (!ret) {
-			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- "
-				 "AUTO FXO (%s mode)\n", x + 1,
-				 fxo_modes[_opermode].name);
-			continue;
-		}
-
-		if (!wctdm_init_qrvdri(wc, x)) {
-			dev_info(&wc->vb.pdev->dev,
-				 "Port %d: Installed -- QRV DRI card\n", x + 1);
-			continue;
-		}
-
-		if (is_hx8(wc) && !wctdm_init_b400m(wc, x)) {
-			dev_info(&wc->vb.pdev->dev, "Port %d: Installed -- BRI "
-				 "quad-span module\n", x + 1);
-			continue;
-		}
-
-		if ((wc->desc->ports != 24) && ((x&0x3) == 1) && !altcs) {
-
-			spin_lock_irqsave(&wc->reglock, flags);
-			set_offsets(mod, 2);
-			altcs = true;
-
-			if (wc->desc->ports == 4) {
-				set_offsets(&wc->mods[x+1], 3);
-				set_offsets(&wc->mods[x+2], 3);
-			}
-
-			mod->type = FXSINIT;
-			spin_unlock_irqrestore(&wc->reglock, flags);
-
-			udelay(1000);
-			udelay(1000);
-
-			spin_lock_irqsave(&wc->reglock, flags);
-			mod->type = FXS;
-			spin_unlock_irqrestore(&wc->reglock, flags);
-
-			if (debug & DEBUG_CARD) {
-				dev_info(&wc->vb.pdev->dev,
-					 "Trying port %d with alternate chip "
-					 "select\n", x + 1);
-			}
-			goto retry;
-		}
-
-		mod->type = NONE;
-		dev_info(&wc->vb.pdev->dev, "Port %d: Not installed\n", x + 1);
-	} /* for (x...) */
+	wctdm_print_module_configuration(wc);
 }
 
 static struct pci_driver wctdm_driver;
@@ -5379,7 +5490,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	struct wctdm *wc;
 	unsigned int pos;
 	int i, ret;
-
+	struct bg *vpm_work;
 	int anamods, digimods, curchan, curspan;
 	
 	neonmwi_offlimit_cycles = neonmwi_offlimit / MS_PER_HOOKCHECK;
@@ -5511,6 +5622,12 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 /* first we have to make sure that we process all module data, we'll fine-tune it later in this routine. */
 	wc->avchannels = NUM_MODULES;
 
+	vpm_work = bg_create(wc, wctdm_initialize_vpm, 0);
+	if (!vpm_work) {
+		wctdm_back_out_gracefully(wc);
+		return -ENOMEM;
+	}
+
 	/* Now track down what modules are installed */
 	wctdm_identify_modules(wc);
 
@@ -5518,8 +5635,14 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	if (fatal_signal_pending(current)) {
 		wctdm_back_out_gracefully(wc);
+		bg_join(vpm_work);
 		return -EINTR;
 	}
+
+	/* We need to wait for the vpm thread to finish before we setup the
+	 * spans in order to ensure they are named properly. */
+	bg_join(vpm_work);
+
 /*
  * Walk the module list and create a 3-channel span for every BRI module found.
  * Empty and analog modules get a common span which is allocated outside of this loop.
@@ -5540,6 +5663,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 					"detected on a non-hybrid card. "
 					"This is unsupported.\n");
 				wctdm_back_out_gracefully(wc);
+				bg_join(vpm_work);
 				return -EIO;
 			}
 			wc->spans[curspan] = wctdm_init_span(wc, curspan,
@@ -5547,6 +5671,7 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 							     pos);
 			if (!wc->spans[curspan]) {
 				wctdm_back_out_gracefully(wc);
+				bg_join(vpm_work);
 				return -EIO;
 			}
 			b4 = mod->mod.bri;
@@ -5616,7 +5741,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	wc->avchannels = curchan;
 
-	wctdm_initialize_vpm(wc);
 
 #ifdef USE_ASYNC_INIT
 		async_synchronize_cookie(cookie);
@@ -5722,8 +5846,9 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 	remove_sysfs_files(wc);
 
 	if (vpmadt032) {
+		flush_workqueue(vpmadt032->wq);
 		clear_bit(VPM150M_ACTIVE, &vpmadt032->control);
-		flush_scheduled_work();
+		flush_workqueue(vpmadt032->wq);
 	} else if (vpmoct) {
 		while (wctdm_wait_for_ready(wc))
 			schedule();
