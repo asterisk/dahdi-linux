@@ -310,6 +310,101 @@ static inline __attribute_const__ int VPM_CMD_BYTE(int timeslot, int bit)
 	return ((((timeslot) & 0x3) * 3 + (bit)) * 7) + ((timeslot) >> 2);
 }
 
+typedef int (*bg_work_func_t)(struct wctdm *wc, unsigned long data);
+
+struct bg {
+	struct workqueue_struct *wq;
+	struct work_struct	work;
+	struct completion	complete;
+	struct wctdm		*wc;
+	bg_work_func_t		fn;
+	unsigned long		param;
+	int			ret;
+};
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void bg_work_func(void *data)
+{
+	struct bg *bg = data;
+#else
+static void bg_work_func(struct work_struct *work)
+{
+	struct bg *bg = container_of(work, struct bg, work);
+#endif
+	bg->ret = bg->fn(bg->wc, bg->param);
+	complete(&bg->complete);
+}
+
+/**
+ * bg_create - Call a function running in a background thread.
+ * @wc:		The board structure passed to fn
+ * @fn:		The function to run in it's own thread.
+ * @parma:	An extra parameter to pass to the fn.
+ *
+ * Returns NULL if the thread could not be created, otherwise a pointer to be
+ * passed to bg_join in order to get the return value.
+ *
+ * The function 'fn' will be run in a new thread. The return value is the
+ * return from the bg_join function.
+ *
+ * This would probably be best served by concurrency managed workqueues before
+ * merging, but this will at least work on the older kernels tht DAHDI
+ * supports.
+ */
+static struct bg *
+bg_create(struct wctdm *wc, bg_work_func_t fn, unsigned long param)
+{
+	struct bg *bg;
+
+	bg = kzalloc(sizeof(*bg), GFP_KERNEL);
+	if (!bg)
+		return NULL;
+
+	bg->wq = create_singlethread_workqueue("wctdm_bg");
+	if (!bg->wq) {
+		kfree(bg);
+		return NULL;
+	}
+
+	init_completion(&bg->complete);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&bg->work, bg_work_func, bg);
+#else
+	INIT_WORK(&bg->work, bg_work_func);
+#endif
+
+	bg->wc = wc;
+	bg->fn = fn;
+	bg->param = param;
+
+	queue_work(bg->wq, &bg->work);
+
+	return bg;
+}
+
+/**
+ * bg_join - Wait for a background function to complete and get the result.
+ * @bg:		Pointer returned from the bg_create call.
+ *
+ * Returns the result of the function passed to bg_create.
+ */
+static int bg_join(struct bg *bg)
+{
+	int ret = -ERESTARTSYS;
+
+	if (unlikely(!bg))
+		return -EINVAL;
+
+	while (ret)
+		ret = wait_for_completion_interruptible(&bg->complete);
+
+	ret = bg->ret;
+	destroy_workqueue(bg->wq);
+	kfree(bg);
+
+	return ret;
+}
+
 static void
 setchanconfig_from_state(struct vpmadt032 *vpm, int channel,
 			 GpakChannelConfig_t *chanconfig)
