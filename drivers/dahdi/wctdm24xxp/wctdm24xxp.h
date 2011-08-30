@@ -109,6 +109,15 @@ enum battery_state {
 	BATTERY_LOST,
 };
 
+enum ring_detector_state {
+	RINGOFF = 0,
+	DEBOUNCING_RINGING_POSITIVE,
+	DEBOUNCING_RINGING_NEGATIVE,
+	DEBOUNCING_RINGING_OFF,
+	RINGING,
+	DEBOUNCING_RINGOFF,
+};
+
 struct wctdm_cmd {
 	struct list_head node;
 	struct completion *complete;
@@ -144,10 +153,11 @@ struct wctdm_chan {
 };
 
 struct fxo {
-	int wasringing;
-	int lastrdtx;
-	int lastrdtx_count;
-	int ringdebounce;
+	enum ring_detector_state ring_state:4;
+	enum battery_state battery_state:4;
+	u8 ring_polarity_change_count:4;
+	u8 hook_ring_shadow;
+	s8 line_voltage_status;
 	int offhook;
 	int battdebounce;
 	int battalarm;
@@ -160,8 +170,7 @@ struct fxo {
 	unsigned int neonmwi_debounce;
 	unsigned int neonmwi_offcounter;
 	unsigned long display_fxovoltage;
-	u8 hook_ring_shadow;
-	s8 line_voltage_status;
+	unsigned long ringdebounce_timer;
 };
 
 struct fxs {
@@ -219,7 +228,7 @@ enum module_type {
 };
 
 struct wctdm_module {
-	union {
+	union modtypes {
 		struct fxo fxo;
 		struct fxs fxs;
 		struct qrv qrv;

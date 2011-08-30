@@ -1829,101 +1829,137 @@ static void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 	return;
 }
 
+static inline bool is_fxo_ringing(const struct fxo *const fxo)
+{
+	return ((fxo->hook_ring_shadow & 0x60) &&
+		(fxo->battery_state == BATTERY_PRESENT));
+}
+
+static inline bool is_fxo_ringing_positive(const struct fxo *const fxo)
+{
+	return (((fxo->hook_ring_shadow & 0x60) == 0x20) &&
+		(fxo->battery_state == BATTERY_PRESENT));
+}
+
+static inline bool is_fxo_ringing_negative(const struct fxo *const fxo)
+{
+	return (((fxo->hook_ring_shadow & 0x60) == 0x40) &&
+		(fxo->battery_state == BATTERY_PRESENT));
+}
+
+static inline void set_ring(struct fxo *fxo, enum ring_detector_state new)
+{
+	fxo->ring_state = new;
+}
+
+static void wctdm_fxo_ring_detect(struct wctdm *wc, struct wctdm_module *mod)
+{
+	struct fxo *const fxo = &mod->mod.fxo;
+
+	/* Look for ring status bits (Ring Detect Signal Negative and Ring
+	 * Detect Signal Positive) to transition back and forth some number of
+	 * times to indicate that a ring is occurring.  Provide some number of
+	 * samples to allow for the transitions to occur before giving up.
+	 * NOTE: neon mwi voltages will trigger one of these bits to go active
+	 * but not to have transitions between the two bits (i.e. no negative
+	 * to positive or positive to negative traversals) */
+
+	switch (fxo->ring_state) {
+	case DEBOUNCING_RINGING_POSITIVE:
+		if (is_fxo_ringing_negative(fxo)) {
+			if (++fxo->ring_polarity_change_count > 4) {
+				mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
+				set_ring(fxo, RINGING);
+				if (debug) {
+					dev_info(&wc->vb.pdev->dev,
+						 "RING on %s!\n",
+						 get_dahdi_chan(wc, mod)->name);
+				}
+			} else {
+				set_ring(fxo, DEBOUNCING_RINGING_NEGATIVE);
+			}
+		} else if (time_after(wc->framecount,
+				      fxo->ringdebounce_timer)) {
+			set_ring(fxo, RINGOFF);
+		}
+		break;
+	case DEBOUNCING_RINGING_NEGATIVE:
+		if (is_fxo_ringing_positive(fxo)) {
+			if (++fxo->ring_polarity_change_count > 4) {
+				mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
+				set_ring(fxo, RINGING);
+				if (debug) {
+					dev_info(&wc->vb.pdev->dev,
+						 "RING on %s!\n",
+						 get_dahdi_chan(wc, mod)->name);
+				}
+			} else {
+				set_ring(fxo, DEBOUNCING_RINGING_POSITIVE);
+			}
+		} else if (time_after(wc->framecount,
+				      fxo->ringdebounce_timer)) {
+			set_ring(fxo, RINGOFF);
+		}
+		break;
+	case RINGING:
+		if (!is_fxo_ringing(fxo)) {
+			set_ring(fxo, DEBOUNCING_RINGOFF);
+			fxo->ringdebounce_timer =
+					wc->framecount + ringdebounce / 2;
+		}
+		break;
+	case DEBOUNCING_RINGOFF:
+		if (!is_fxo_ringing(fxo)) {
+			if (time_after(wc->framecount,
+				       fxo->ringdebounce_timer)) {
+				if (debug) {
+					dev_info(&wc->vb.pdev->dev,
+						 "NO RING on %s!\n",
+						 get_dahdi_chan(wc, mod)->name);
+				}
+				mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
+				set_ring(fxo, RINGOFF);
+			}
+		} else {
+			set_ring(fxo, RINGING);
+		}
+		break;
+	case RINGOFF:
+		if (is_fxo_ringing(fxo)) {
+			/* Look for positive/negative crossings in ring status
+			 * reg */
+			if (is_fxo_ringing_positive(fxo))
+				set_ring(fxo, DEBOUNCING_RINGING_POSITIVE);
+			else
+				set_ring(fxo, DEBOUNCING_RINGING_NEGATIVE);
+			fxo->ringdebounce_timer =
+					wc->framecount + ringdebounce / 8;
+			fxo->ring_polarity_change_count = 0;
+		}
+		break;
+	}
+}
+
 static void
 wctdm_voicedaa_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
 #define MS_PER_CHECK_HOOK 1
 
-	unsigned char res;
 	signed char b;
 	unsigned int abs_voltage;
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	/* Try to track issues that plague slot one FXO's */
-	b = fxo->hook_ring_shadow;
-	b &= 0x9b;
+	b = fxo->hook_ring_shadow & 0x9b;
+
 	if (fxo->offhook) {
 		if (b != 0x9)
 			wctdm_setreg_intr(wc, mod, 5, 0x9);
 	} else {
 		if (b != 0x8)
 			wctdm_setreg_intr(wc, mod, 5, 0x8);
-	}
-	if (!fxo->offhook) {
-		if (fwringdetect || neonmwi_monitor) {
-			/* Look for ring status bits (Ring Detect Signal Negative and
-			* Ring Detect Signal Positive) to transition back and forth
-			* some number of times to indicate that a ring is occurring.
-			* Provide some number of samples to allow for the transitions
-			* to occur before ginving up.
-			* NOTE: neon mwi voltages will trigger one of these bits to go active
-			* but not to have transitions between the two bits (i.e. no negative
-			* to positive or positive to negative transversals )
-			*/
-			res = fxo->hook_ring_shadow & 0x60;
-			if (0 == fxo->wasringing) {
-				if (res) {
-					/* Look for positive/negative crossings in ring status reg */
-					fxo->wasringing = 2;
-					fxo->ringdebounce = ringdebounce /16;
-					fxo->lastrdtx = res;
-					fxo->lastrdtx_count = 0;
-				}
-			} else if (2 == fxo->wasringing) {
-				/* If ring detect signal has transversed */
-				if (res && res != fxo->lastrdtx) {
-					/* if there are at least 3 ring polarity transversals */
-					if (++fxo->lastrdtx_count >= 2) {
-						fxo->wasringing = 1;
-						if (debug)
-							dev_info(&wc->vb.pdev->dev, "FW RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
-						mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
-						fxo->ringdebounce = ringdebounce / 16;
-					} else {
-						fxo->lastrdtx = res;
-						fxo->ringdebounce = ringdebounce / 16;
-					}
-					/* ring indicator (positve or negative) has not transitioned, check debounce count */
-				} else if (--fxo->ringdebounce == 0) {
-					fxo->wasringing = 0;
-				}
-			} else {  /* I am in ring state */
-				if (res) { /* If any ringdetect bits are still active */
-					fxo->ringdebounce = ringdebounce / 16;
-				} else if (--fxo->ringdebounce == 0) {
-					fxo->wasringing = 0;
-					if (debug)
-						dev_info(&wc->vb.pdev->dev, "FW NO RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
-					mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-				}
-			}
-		} else {
-			res = fxo->hook_ring_shadow;
-			if ((res & 0x60) && (fxo->battery == BATTERY_PRESENT)) {
-				fxo->ringdebounce += (DAHDI_CHUNKSIZE * 16);
-				if (fxo->ringdebounce >= DAHDI_CHUNKSIZE * ringdebounce) {
-					if (!fxo->wasringing) {
-						fxo->wasringing = 1;
-						mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
-						if (debug)
-							dev_info(&wc->vb.pdev->dev, "RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
-					}
-					fxo->ringdebounce = DAHDI_CHUNKSIZE * ringdebounce;
-				}
-			} else {
-				fxo->ringdebounce -= DAHDI_CHUNKSIZE * 4;
-				if (fxo->ringdebounce <= 0) {
-					if (fxo->wasringing) {
-						fxo->wasringing = 0;
-						mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-						if (debug)
-							dev_info(&wc->vb.pdev->dev, "NO RING on %d/%d!\n", wc->aspan->span.spanno, mod->card + 1);
-					}
-					fxo->ringdebounce = 0;
-				}
-					
-			}
-		}
+
+		wctdm_fxo_ring_detect(wc, mod);
 	}
 
 	b = fxo->line_voltage_status;
