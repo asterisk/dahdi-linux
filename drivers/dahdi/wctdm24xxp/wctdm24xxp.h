@@ -45,7 +45,6 @@
  * \brief Default ringer debounce (in ms)
  */
 #define DEFAULT_RING_DEBOUNCE	1024
-
 #define POLARITY_DEBOUNCE	64		/* Polarity debounce (in ms) */
 
 #define OHT_TIMER		6000	/* How long after RING to retain OHT */
@@ -166,11 +165,8 @@ struct fxo {
 };
 
 struct fxs {
-	int oldrxhook;
-	int debouncehook;
-	int lastrxhook;
-	int debounce;
-	int ohttimer;
+	u8 oht_active:1;
+	u8 off_hook:1;
 	int idletxhookstate;	/* IDLE changing hook state */
 /* lasttxhook reflects the last value written to the proslic's reg
 * 64 (LINEFEED_CONTROL) in bits 0-2.  Bit 4 indicates if the last
@@ -193,6 +189,7 @@ struct fxs {
 	unsigned long check_alarm;
 	unsigned long check_proslic;
 	unsigned long oppending_timeout;
+	unsigned long ohttimer;
 };
 
 struct qrv {

@@ -2221,7 +2221,6 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, struct wctdm_module *const mod)
 	if (robust)
 		wctdm_init_proslic(wc, mod, 1, 0, 1);
 #endif
-	fxs->oldrxhook = 1;
 }
 
 /**
@@ -2237,58 +2236,14 @@ static void wctdm_fxs_off_hook(struct wctdm *wc, struct wctdm_module *const mod)
  */
 static void wctdm_fxs_on_hook(struct wctdm *wc, struct wctdm_module *const mod)
 {
-	struct fxs *const fxs = &mod->mod.fxs;
 	if (debug & DEBUG_CARD) {
 		dev_info(&wc->vb.pdev->dev,
 			"fxs_on_hook: Card %d Going on hook\n", mod->card);
 	}
-	if ((fxs->lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
+
+	if ((mod->mod.fxs.lasttxhook & SLIC_LF_SETMASK) != SLIC_LF_OPEN)
 		wctdm_fxs_hooksig(wc, mod, DAHDI_TXSIG_ONHOOK);
 	dahdi_hooksig(get_dahdi_chan(wc, mod), DAHDI_RXSIG_ONHOOK);
-	fxs->oldrxhook = 0;
-}
-
-static void
-wctdm_proslic_check_hook(struct wctdm *wc, struct wctdm_module *const mod)
-{
-	struct fxs *const fxs = &mod->mod.fxs;
-	char res;
-	int hook;
-
-	/* For some reason we have to debounce the
-	   hook detector.  */
-
-	res = fxs->hook_state_shadow;
-	hook = (res & 1);
-	
-	if (hook != fxs->lastrxhook) {
-		/* Reset the debounce (must be multiple of 4ms) */
-		fxs->debounce = 8 * (4 * 8);
-#if 0
-		dev_info(&wc->vb.pdev->dev, "Resetting debounce card %d hook %d, %d\n",
-		       card, hook, fxs->debounce);
-#endif
-	} else {
-		if (fxs->debounce > 0) {
-			fxs->debounce -= 4 * DAHDI_CHUNKSIZE;
-#if 0
-			dev_info(&wc->vb.pdev->dev, "Sustaining hook %d, %d\n",
-			       hook, fxs->debounce);
-#endif
-			if (!fxs->debounce) {
-#if 0
-				dev_info(&wc->vb.pdev->dev, "Counted down debounce, newhook: %d...\n", hook);
-#endif
-				fxs->debouncehook = hook;
-			}
-
-			if (!fxs->oldrxhook && fxs->debouncehook)
-				wctdm_fxs_off_hook(wc, mod);
-			else if (fxs->oldrxhook && !fxs->debouncehook)
-				wctdm_fxs_on_hook(wc, mod);
-		}
-	}
-	fxs->lastrxhook = hook;
 }
 
 static const char *wctdm_echocan_name(const struct dahdi_chan *chan)
@@ -2370,7 +2325,14 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 		if (fxs->palarms)
 			fxs->palarms--;
 	}
-	wctdm_proslic_check_hook(wc, mod);
+
+	if (fxs->off_hook && !(fxs->hook_state_shadow & 1)) {
+		wctdm_fxs_on_hook(wc, mod);
+		fxs->off_hook = 0;
+	} else if (!fxs->off_hook && (fxs->hook_state_shadow & 1)) {
+		wctdm_fxs_off_hook(wc, mod);
+		fxs->off_hook = 1;
+	}
 
 	wctdm_proslic_check_oppending(wc, mod);
 
@@ -2381,15 +2343,14 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 
 	if (SLIC_LF_RINGING == fxs->lasttxhook) {
 		/* RINGing, prepare for OHT */
-		fxs->ohttimer = OHT_TIMER << 3;
+		fxs->ohttimer = wc->framecount + OHT_TIMER;
 		/* OHT mode when idle */
 		fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_OHTRAN_REV :
 							    SLIC_LF_OHTRAN_FWD;
-	} else if (fxs->ohttimer) {
-		 /* check if still OnHook */
-		if (!fxs->oldrxhook) {
-			fxs->ohttimer -= DAHDI_CHUNKSIZE;
-			if (fxs->ohttimer)
+	} else if (fxs->oht_active) {
+		/* check if still OnHook */
+		if (!fxs->off_hook) {
+			if (time_before(wc->framecount, fxs->ohttimer))
 				return;
 
 			/* Switch to active */
@@ -2419,7 +2380,7 @@ static void wctdm_isr_misc_fxs(struct wctdm *wc, struct wctdm_module *const mod)
 			}
 			spin_unlock(&wc->reglock);
 		} else {
-			fxs->ohttimer = 0;
+			fxs->oht_active = 0;
 			/* Switch to active */
 			fxs->idletxhookstate = POLARITY_XOR(fxs) ? SLIC_LF_ACTIVE_REV : SLIC_LF_ACTIVE_FWD;
 			if (debug & DEBUG_CARD) {
@@ -3291,6 +3252,8 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 	wctdm_setreg(wc, mod, 22, 0xff);
 	wctdm_setreg(wc, mod, 73, 0x04);
 
+	wctdm_setreg(wc, mod, 69, 0x4);
+
 	if (fxshonormode) {
 		static const int ACIM2TISS[16] = { 0x0, 0x1, 0x4, 0x5, 0x7,
 						   0x0, 0x0, 0x6, 0x0, 0x0,
@@ -3642,7 +3605,6 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			return -EINVAL;
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
-		fxs->ohttimer = x << 3;
 
 		/* Active mode when idle */
 		fxs->idletxhookstate = POLARITY_XOR(fxs) ?
@@ -3671,6 +3633,10 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 			}
 
 		}
+
+		fxs->ohttimer = wc->framecount + x;
+		fxs->oht_active = 1;
+
 		break;
 	case DAHDI_VMWI_CONFIG:
 		if (mod->type != FXS)
