@@ -29,6 +29,7 @@ set -e
 # For lab testing
 mydir=`dirname $0`
 PATH="${mydir}:${PATH}"
+XPP_WAIT_AB_TIMEOUT=80
 
 [ -r /etc/dahdi/init.conf ] && . /etc/dahdi/init.conf
 
@@ -56,7 +57,7 @@ fi
 
 # Wait for driver and first device
 echo -n 1>&2 "Astribanks detection "
-tries=40
+tries="$XPP_WAIT_AB_TIMEOUT"
 while [ ! -e "/sys/bus/astribanks/devices/xbus-00" ]
 do
 	if [ "$tries" -le 0 ]; then
