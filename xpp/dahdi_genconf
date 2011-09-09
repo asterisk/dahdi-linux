@@ -111,7 +111,7 @@ __END__
 
 =head1 NAME
 
-dahdi_genconf - Generate configuration for dahdi channels.
+dahdi_genconf - Generate configuration for Dahdi channels.
 
 =head1 SYNOPSIS
 
@@ -126,7 +126,7 @@ It uses two information sources:
 
 =item Hardware
 
- The actual dahdi hardware is automatically detected on the host.
+ The actual Dahdi hardware is automatically detected on the host.
 
 =item /etc/dahdi/genconf_parameters
 
@@ -137,7 +137,7 @@ variable.
 =back
 
 The dahdi_genconf script can generate various kinds of configuration files
-as specificed by the generator arguments.  Each generator is a perl classes
+as specified by the generator arguments.  Each generator is a perl class
 in Dahdi::Config::Gen namespace.  The generator names on the command line
 are the class names in lowercase.
 
@@ -177,14 +177,14 @@ Currently, chandahdi is affected.
 =item *
 
 F<genconf_parameters> parsing is done via C<Dahdi::Config::Params>.
-An object representing the parsed data is instanciated by:
+An object representing the parsed data is instantiated by:
 C<Dahdi::Config::Params-E<gt>new()>.
 The C<item()> method of this object contains all the hard coded
 defaults of the configuration directives.
 
 =item *
 
-A configuration object is instanciated by C<Dahdi::Config::Gen-E<gt>new($params)>.
+A configuration object is instantiated by C<Dahdi::Config::Gen-E<gt>new($params)>.
 The mapping of configuration directives into semantic configuration is
 done in the constructor.
 

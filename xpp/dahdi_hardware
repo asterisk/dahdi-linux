@@ -72,7 +72,7 @@ sub show_disconnected(%) {
 
 # FIXME: For verbose display we also need to see the XPP devices.
 # If no spans are registered, this won't happen. A brute-force
-# methood for making it happe:
+# method for making it happen:
 Dahdi::Xpp::xbuses if ($opts{'v'});
 
 my @devices = Dahdi::Hardware->device_list;
@@ -139,7 +139,7 @@ dahdi_hardware [-v][-x]
 
 =item -v
 
-Verbose ouput - show spans used by each device etc. Currently only 
+Verbose output - show spans used by each device etc. Currently only
 implemented for the Xorcom Astribank.
 
 =item -x
@@ -150,7 +150,7 @@ Show disconnected Astribank unit, if any.
 
 =head1 DESCRIPTION
 
-Show all dahdi hardware devices. Devices are recognized according to
+Show all Dahdi hardware devices. Devices are recognized according to
 lists of PCI and USB IDs in Dahdi::Hardware::PCI.pm and 
 Dahdi::Hardware::USB.pm . For PCI it is possible to detect by
 sub-vendor and sub-product ID as well.
