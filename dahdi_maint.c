@@ -53,12 +53,14 @@ void display_help(char *argv0, int exitcode)
 	fprintf(stderr, "        -h, --help		display help\n");
 	fprintf(stderr, "        -s, --span <span num>	specify the span\n");
 	fprintf(stderr, "        -l, --loopback <localhost|networkline|"\
-						"networkpayload|off>\n"\
+						"networkpayload|loopup|"\
+						"loopdown|off>\n"\
 			"\t\tlocalhost - loop back towards host\n"\
 			"\t\tnetworkline - network line loopback\n"\
 			"\t\tnetworkpayload - network payload loopback\n"\
 			"\t\tloopup - transmit loopup signal\n"\
-			"\t\tloopdown - transmit loopdown signal\n");
+			"\t\tloopdown - transmit loopdown signal\n"\
+			"\t\toff - end loopback mode\n");
 	fprintf(stderr, "        -i, --insert <fas|multi|crc|cas|prbs|bipolar>"\
 			"\n\t\tinsert an error of a specific type\n");
 	fprintf(stderr, "        -r, --reset		"\
@@ -107,10 +109,10 @@ int main(int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, "hj:l:p:s:i:g:r",
 				long_options, &option_index)) != -1) {
 			switch (c) {
-			case 'h': /* local host loopback */
+			case 'h':
 				display_help(argv[0], 0);
 				break;
-			case 'l': /* network line loopback */
+			case 'l': /* loopback */
 				larg = optarg;
 				doloopback = 1;
 				break;

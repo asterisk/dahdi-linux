@@ -1,0 +1,62 @@
+.TH "DAHDI_MAINT" "8" "9 Sep 2011" "" ""
+
+.SH NAME
+dahdi_maint \- Sets Dahdi spans into maintenance mode, e.g.: loopback
+.SH SYNOPSIS
+
+.B dahdi_maint \-s \fInum\fB [options]
+.B dahdi_maint <\-h|\-\-help> 
+
+.SH DESCRIPTION
+
+dahdi_maint uses the DAHDI_MAINT interface to set a Dahdi span (port
+of a Dahdi adapter card) into loopback mode or similar maintenance mode.
+
+.SH OPTIONS
+.B \-s \-\-span \fInum\fR
+.RS
+The span number. Required.
+.RE
+
+.B \-l \-\-loopback <localhost|networkline|networkpayload|loopup|loopdown|off>
+.RS
+Loopback type. One of:
+.IP localhost 4
+loop back towards host
+.IP networkline 4
+network line loopback
+.IP networkpayload 4
+network payload loopback
+.IP loopup 4
+transmit loopup signal
+.IP loopdown 4
+transmit loopdown signal
+.IP off 4
+end loopback mode
+.RE
+
+.B \-i \-\-insert <fas|multi|crc|cas|prbs|bipolar>
+.RS
+Insert an error of a specific type
+.RE
+
+.SH EXAMPLES
+Enable network line loopback on span 1:
+
+  dahdi_maint -s 1 --loopback networkline
+
+Disable network line loopback on span 1:
+
+  dahdi_maint -s 1 --loopback off
+
+
+.SH SEE ALSO
+.PP
+dahdi_tool(8), dahdi_cfg(8), asterisk(8).
+
+.SH AUTHOR
+.PP
+This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com>.
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU General Public License, Version 2 any later
+version published by the Free Software Foundation.
