@@ -9227,12 +9227,12 @@ static void coretimer_init(void)
 	init_timer(&core_timer.timer);
 	core_timer.timer.function = coretimer_func;
 	core_timer.start_interval = current_kernel_time();
-	core_timer.timer.expires = jiffies + HZ;
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
 	core_timer.interval = max(msecs_to_jiffies(DAHDI_MSECS_PER_CHUNK), 1UL);
 	if (core_timer.interval < (HZ/250))
 		core_timer.interval = (HZ/250);
+	core_timer.timer.expires = jiffies + core_timer.interval;
 	add_timer(&core_timer.timer);
 }
 
