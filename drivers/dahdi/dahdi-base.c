@@ -4797,6 +4797,10 @@ static int dahdi_ioctl_startup(struct file *file, unsigned long data)
 			 */
 			s->chans[x]->rxhooksig = DAHDI_RXSIG_INITIAL;
 		}
+
+		/* Now that this span is running, it might be selected as the
+		 * master span */
+		__dahdi_find_master_span();
 	}
 	put_span(s);
 	return 0;
