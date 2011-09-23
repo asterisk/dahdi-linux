@@ -289,9 +289,7 @@ struct t4_span {
 	u32 *readchunk;		/* Double-word aligned read memory */
 	int spantype;		/* card type, T1 or E1 or J1 */
 	int sync;
-	int psync;
 	int alarmtimer;
-	int redalarms;
 	int notclear;
 	int alarmcount;
 	int losalarmcount;
@@ -1923,17 +1921,14 @@ t4_spanconfig(struct file *file, struct dahdi_span *span,
 	
 	/* remove this span number from the current sync sources, if there */
 	for(i = 0; i < wc->numspans; i++) {
-		if (wc->tspans[i]->sync == span->spanno) {
+		if (wc->tspans[i]->sync == span->spanno)
 			wc->tspans[i]->sync = 0;
-			wc->tspans[i]->psync = 0;
-		}
 	}
 	wc->tspans[span->offset]->syncpos = lc->sync;
 	/* if a sync src, put it in proper place */
-	if (lc->sync) {
+	if (lc->sync)
 		wc->tspans[lc->sync - 1]->sync = span->spanno;
-		wc->tspans[lc->sync - 1]->psync = span->offset + 1;
-	}
+
 	set_bit(T4_CHECK_TIMING, &wc->checkflag);
 
 	/* Make sure this is clear in case of multiple startup and shutdown
