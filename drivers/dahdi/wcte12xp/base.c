@@ -1022,9 +1022,13 @@ static void set_span_devicetype(struct t1 *wc)
 		sizeof(wc->span.devicetype) - 1);
 
 #if defined(VPM_SUPPORT)
-	if (wc->vpmadt032)
+	if (wc->vpmadt032) {
 		strncat(wc->span.devicetype, " (VPMADT032)",
 			sizeof(wc->span.devicetype) - 1);
+	} else if (wc->vpmoct) {
+		strncat(wc->span.devicetype, " (VPMOCT032)",
+			sizeof(wc->span.devicetype) - 1);
+	}
 #endif
 }
 
@@ -1660,6 +1664,8 @@ static void check_and_load_vpm(struct t1 *wc)
 
 		vpmoct_init(vpmoct, t1_vpm_load_complete);
 	}
+
+	set_span_devicetype(wc);
 }
 #else
 static inline void check_and_load_vpm(const struct t1 *wc)

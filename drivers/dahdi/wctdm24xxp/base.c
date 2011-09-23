@@ -4354,6 +4354,8 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 			continue;
 		if (wc->vpmadt032)
 			strncat(wc->spans[x]->span.devicetype, " (VPMADT032)", sizeof(wc->spans[x]->span.devicetype) - 1);
+		else if (wc->vpmoct)
+			strncat(wc->spans[x]->span.devicetype, " (VPMOCT032)", sizeof(wc->spans[x]->span.devicetype) - 1);
 	}
 }
 
