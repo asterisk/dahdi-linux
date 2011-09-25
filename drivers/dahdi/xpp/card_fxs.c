@@ -386,6 +386,8 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	int			regular_channels;
 	struct FXS_priv_data	*priv;
 	int			i;
+	int			d_inputs = 0;
+	int			d_outputs = 0;
 
 	if(!to_phone) {
 		XBUS_NOTICE(xbus,
@@ -398,16 +400,30 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	else
 		regular_channels = min(8, subunit_ports);
 	channels = regular_channels;
-	if(unit == 0 && subtype != 4)
+	/* Calculate digital inputs/outputs */
+	if(unit == 0 && subtype != 4) {
 		channels += 6;	/* 2 DIGITAL OUTPUTS, 4 DIGITAL INPUTS */
+		d_inputs = LINES_DIGI_INP;
+		d_outputs = LINES_DIGI_OUT;
+	}
 	xpd = xpd_alloc(xbus, unit, subunit, subtype, subunits, sizeof(struct FXS_priv_data), proto_table, channels);
 	if(!xpd)
 		return NULL;
-	if(unit == 0) {
-		XBUS_DBG(GENERAL, xbus, "First XPD detected. Initialize digital outputs/inputs\n");
-		PHONEDEV(xpd).digital_outputs = BITMASK(LINES_DIGI_OUT) << regular_channels;
-		PHONEDEV(xpd).digital_inputs = BITMASK(LINES_DIGI_INP) << (regular_channels + LINES_DIGI_OUT);
-	}
+	/* Initialize digital inputs/outputs */
+	if (d_inputs) {
+		XBUS_DBG(GENERAL, xbus, "Initialize %d digital inputs\n",
+			d_inputs);
+		PHONEDEV(xpd).digital_inputs =
+			BITMASK(d_inputs) << (regular_channels + d_outputs);
+	} else
+		XBUS_DBG(GENERAL, xbus, "No digital inputs\n");
+	if (d_outputs) {
+		XBUS_DBG(GENERAL, xbus, "Initialize %d digital outputs\n",
+			d_outputs);
+		PHONEDEV(xpd).digital_outputs =
+			BITMASK(d_outputs) << regular_channels;
+	} else
+		XBUS_DBG(GENERAL, xbus, "No digital outputs\n");
 	PHONEDEV(xpd).direction = TO_PHONE;
 	xpd->type_name = "FXS";
 	if(fxs_proc_create(xbus, xpd) < 0)
@@ -1142,7 +1158,7 @@ static int FXS_card_tick(xbus_t *xbus, xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 #ifdef	POLL_DIGITAL_INPUTS
-	if(poll_digital_inputs && xpd->xbus_idx == 0) {
+	if (poll_digital_inputs && PHONEDEV(xpd).digital_inputs) {
 		if((xpd->timer_count % poll_digital_inputs) == 0)
 			poll_inputs(xpd);
 	}
@@ -1254,6 +1270,13 @@ static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 	bool		offhook = (REG_FIELD(info, data_low) & 0x1) == 0;
 	xpp_line_t	lines = BIT(info->portnum);
 
+	/* Sanity check */
+	if (!PHONEDEV(xpd).digital_inputs) {
+		XPD_NOTICE(xpd,
+			"%s called without digital inputs. Ignored\n",
+			__func__);
+		return;
+	}
 	/* Map SLIC number into line number */
 	for(i = 0; i < ARRAY_SIZE(input_channels); i++) {
 		int		channo = input_channels[i];
@@ -1366,7 +1389,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/*
 	 * Process digital inputs polling results
 	 */
-	else if(xpd->xbus_idx == 0 && !indirect && regnum == REG_DIGITAL_IOCTRL) {
+	else if (!indirect && regnum == REG_DIGITAL_IOCTRL) {
 		process_digital_inputs(xpd, info);
 	}
 #endif
