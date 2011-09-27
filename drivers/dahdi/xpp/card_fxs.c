@@ -1300,7 +1300,8 @@ static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 #endif
 
 static const char dtmf_digits[] = {
-	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', '#', 'A', 'B', 'C', 'D'
+	'D', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '*', '#',
+	'A', 'B', 'C'
 };
 
 /*
@@ -1322,12 +1323,6 @@ static void process_dtmf(xpd_t *xpd, uint portnum, byte val)
 		return;
 	priv = xpd->priv;
 	val &= 0xF;
-	if(val <= 0) {
-		if(key_down)
-			XPD_NOTICE(xpd, "Bad DTMF value %d. Ignored\n", val);
-		return;
-	}
-	val--;
 	digit = dtmf_digits[val];
 	want_mute = IS_SET(priv->want_dtmf_mute, portnum);
 	want_event = IS_SET(priv->want_dtmf_events, portnum);
