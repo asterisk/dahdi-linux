@@ -4242,7 +4242,6 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 		 (wc->desc->flags & FLAG_EXPRESS) ? " Express" : "",
 		 pdev->bus->number, PCI_SLOT(pdev->devfn) + 1);
 	s->span.manufacturer = "Digium";
-	strncpy(s->span.devicetype, wc->desc->name, sizeof(s->span.devicetype) - 1);
 
 	if (wc->companding == DAHDI_LAW_DEFAULT) {
 		if (wc->digi_mods || digital_span)
@@ -4347,15 +4346,6 @@ static void wctdm_fixup_analog_span(struct wctdm *wc, int spanno)
 		} else {
 			s->chans[y++]->sigcap = 0;
 		}
-	}
-
-	for (x = 0; x < MAX_SPANS; x++) {
-		if (!wc->spans[x])
-			continue;
-		if (wc->vpmadt032)
-			strncat(wc->spans[x]->span.devicetype, " (VPMADT032)", sizeof(wc->spans[x]->span.devicetype) - 1);
-		else if (wc->vpmoct)
-			strncat(wc->spans[x]->span.devicetype, " (VPMOCT032)", sizeof(wc->spans[x]->span.devicetype) - 1);
 	}
 }
 
@@ -5270,6 +5260,27 @@ static void wctdm_allocate_irq_commands(struct wctdm *wc, unsigned int count)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
+static void set_span_devicetype_string(struct wctdm *wc)
+{
+	unsigned int x;
+
+	for (x = 0; x < ARRAY_SIZE(wc->spans); x++) {
+		struct dahdi_span *const s = &wc->spans[x]->span;
+		if (!s)
+			continue;
+
+		strlcpy(s->devicetype, wc->desc->name, sizeof(s->devicetype));
+
+		if (wc->vpmadt032) {
+			strlcat(s->devicetype, " (VPMADT032)",
+				sizeof(s->devicetype));
+		} else if (wc->vpmoct) {
+			strlcat(s->devicetype, " (VPMOCT032)",
+				sizeof(s->devicetype));
+		}
+	}
+}
+
 #ifdef USE_ASYNC_INIT
 struct async_data {
 	struct pci_dev *pdev;
@@ -5524,6 +5535,8 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	wc->avchannels = curchan;
 
 	wctdm_initialize_vpm(wc);
+
+	set_span_devicetype_string(wc);
 
 #ifdef USE_ASYNC_INIT
 		async_synchronize_cookie(cookie);
