@@ -131,7 +131,7 @@ my @bri_strings = (
 		'(?:quad|octo)BRI PCI ISDN Card.* \[(NT|TE)\]',
 		'octoBRI \[(NT|TE)\] ',
 		'HFC-S PCI A ISDN.* \[(NT|TE)\] ',
-		'(B4XXP) \(PCI\) Card', # Does not expose NT/TE type
+		'(B4XXP) \(PCI\) Card', # Use dahdi_scan to determine TE/NT mode
 		'(WCBRI)', # has selectable NT/TE modes via dahdi_cfg
 		);
 
@@ -177,6 +177,28 @@ sub init_proto($$) {
 	$self->{TYPE} = "${proto}_$self->{TERMTYPE}";
 }
 
+sub get_digital_spantype {
+	my $span_no = shift;
+	my @lines = split /\n/, `dahdi_scan`;
+	my $found_span = 0;
+	foreach my $line (@lines) {
+		if (! $found_span) {
+			if ($line =~ m/\[$span_no\]/) {
+				$found_span = 1;
+			}
+		} else {
+			if ($line !~ m/^\[/) {
+				if ($line =~ m/digital-(TE|NT)/ ){
+					return $1;
+				}
+			} else {
+				$found_span = 0;
+			}
+		}
+	}
+	die "Cannot determine digital spantype";
+}
+
 sub new($$) {
 	my $pack = shift or die "Wasn't called as a class method\n";
 	my $proc_file = shift or die "Missing a proc file parameter\n";
@@ -195,7 +217,12 @@ sub new($$) {
 	foreach my $cardtype (@bri_strings) {
 		if($head =~ m/$cardtype/) {
 			my $termtype = $1;
-			$termtype = 'TE' if ( $1 eq 'B4XXP' or $1 eq 'WCBRI' );
+			if ($1 eq 'B4XXP') {
+				$termtype = get_digital_spantype($num);
+			}
+			if ($1 eq 'WCBRI') {
+				$termtype = 'TE';
+			}
 			$self->{IS_DIGITAL} = 1;
 			$self->{IS_BRI} = 1;
 			$self->{TERMTYPE} = $termtype;
