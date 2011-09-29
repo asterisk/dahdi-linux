@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 	if (!(doloopback || iflag || gflag || rflag)) {
 		s.spanno = span;
 		res = ioctl(ctl, DAHDI_SPANSTAT, &s);
-		if (res)
+		if (res || ((__u32)-1 == s.fecount))
 			printf("Error counters not supported by the driver"\
 					" for this span\n");
 		printf("Span %d:\n", span);
