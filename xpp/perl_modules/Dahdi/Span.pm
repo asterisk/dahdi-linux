@@ -191,6 +191,7 @@ sub new($$) {
 	$self->{IS_DIGITAL} = 0;
 	$self->{IS_BRI} = 0;
 	$self->{IS_PRI} = 0;
+	$self->{TERMTYPE} = "UNKNOWN";
 	foreach my $cardtype (@bri_strings) {
 		if($head =~ m/$cardtype/) {
 			my $termtype = $1;
@@ -230,6 +231,11 @@ sub new($$) {
 			last;
 		}
 	}
+
+	if (($self->is_soft_term_type == 0) and ($self->termtype eq "UNKNOWN")) {
+		$self->{IS_SOFT_TERM_TYPE} = 1;
+	}
+
 	($self->{NAME}, $self->{DESCRIPTION}) = (split(/\s+/, $head, 4))[2, 3];
 	$self->{IS_DAHDI_SYNC_MASTER} =
 		($self->{DESCRIPTION} =~ /\(MASTER\)/) ? 1 : 0;
