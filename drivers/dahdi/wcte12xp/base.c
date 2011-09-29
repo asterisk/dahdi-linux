@@ -2565,6 +2565,10 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	if (!wc)
 		return -ENOMEM;
 
+	/* Set the performance counters to -1 since this card currently does
+	 * not support collecting them. */
+	memset(&wc->span.count, -1, sizeof(wc->span.count));
+
 	wc->not_ready = 1;
 
 	ifaces[index] = wc;
