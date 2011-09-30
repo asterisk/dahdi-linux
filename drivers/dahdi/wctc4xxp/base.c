@@ -2158,12 +2158,13 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 	}
 
 	if (DAHDI_FORMAT_G723_1 == dtc->srcfmt) {
-		if ((G723_5K_BYTES != count) && (G723_6K_BYTES != count)) {
+		if ((G723_5K_BYTES != count) && (G723_6K_BYTES != count) &&
+		    (G723_SID_BYTES != count)) {
 			DTE_DEBUG(DTE_DEBUG_GENERAL,
 			   "Trying to transcode packet into G723 format " \
 			   "that is %Zu bytes instead of the expected " \
-			   "%d/%d bytes.\n", count, G723_5K_BYTES,
-			   G723_6K_BYTES);
+			   "%d/%d/%d bytes.\n", count, G723_5K_BYTES,
+			   G723_6K_BYTES, G723_SID_BYTES);
 			return -EINVAL;
 		}
 		cpvt->timestamp += G723_SAMPLES;
