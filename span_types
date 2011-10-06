@@ -1,0 +1,160 @@
+#! /bin/sh
+#
+# /usr/share/dahdi/span_types:
+#
+# this script can be used both from udev and
+# from the command line for spantype management.
+#
+# It use a configuration file /etc/dahdi/spantype.conf
+# (the format is documented inside this file)
+#
+# The first argument is an action:
+#   "list" to show existing E1/T1/J1 types
+#   "dump" the same, but in a format (almost) suitable for
+#          the configuration file
+#          FIXME: we currently don't have the base channo in sysfs.
+#   "set"  actually write the setting to the driver
+#
+# Examples:
+#    span_types list
+#    span_types dump
+#    span_types set	# all
+#    span_types set /sys/bus/dahdi_devices/devices/astribanks:xbus-00
+#
+
+
+devbase='/sys/bus/dahdi_devices/devices'
+DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
+spantype_conf="$DAHDICONFDIR/spantype.conf"
+
+usage() {
+	echo >&2 "Usage: $0 {list|dump|set} [devpath ...]"
+	exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+	usage
+fi
+action="$1"
+shift
+
+# Use given devices or otherwise, all existing devices
+if [ "$#" -gt 0 ]; then
+	DEVICES="$@"
+else
+	DEVICES=`echo $devbase/*`
+fi
+
+show_spantypes() {
+	for device in $DEVICES
+	do
+		hw_id=`cat "$device/hardware_id"`
+		location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+		cat "$device/spantype" | while read st; do
+			printf "%-10s %-20s %s\n" "$st" "[$hw_id]" "$location"
+		done | sort -n
+	done
+}
+
+dump_config() {
+	fmt="%-65s %s\n"
+	echo "# Map of dahdi_devices to span types for E1/T1/J1"
+	printf "$fmt" '# @location/hardware_id' 'span_type'
+	for device in $DEVICES
+	do
+		hw_id=`cat "$device/hardware_id"`
+		location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+		if [ -n "$hw_id" ]; then
+			id="$hw_id"
+		else
+			id="$location"
+		fi
+		cat "$device/spantype" | while read st; do
+			case "$st" in
+			*:[ETJ]1)
+				printf "$fmt" "$id" "$st"
+				;;
+			esac
+		done | sort -n
+	done
+}
+
+# Allow comments and empty lines in config file
+filter_conf() {
+	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$spantype_conf"
+}
+
+conf_spans() {
+	hw_id="$1"
+	location="$2"
+	filter_conf | (
+		# Collect device spans
+		# in a subshell, so $SPANS is not lost
+		SPANS=''
+		while read id spans; do
+			# GLOBBING
+			case "$location" in
+			$id)
+				#echo >&2 "match($id): $spans"
+				SPANS="$SPANS $spans"
+				;;
+			esac
+			case "$hw_id" in
+			$id)
+				#echo >&2 "match([$id]): $spans"
+				SPANS="$SPANS $spans"
+				;;
+			esac
+		done
+		echo "$SPANS"
+	)
+}
+
+# Beware of special characters in attributes
+attr_clean() {
+	cat "$1" | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
+}
+
+device_set_spantype() {
+	device="$1"
+	attr_file="$device/spantype"
+	hw_id=`attr_clean "$device/hardware_id"`
+	location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+	spanspecs=`conf_spans "$hw_id" "$location"`
+	echo >&2 "MATCHED($device): $spanspecs"
+	cut -d: -f1 "$attr_file" | while read spanno; do
+			for sp in $spanspecs
+			do
+				s=`echo "$sp" | cut -d: -f1`
+				v=`echo "$sp" | cut -d: -f2`
+				case "$spanno" in
+				$s)
+					#echo >&2 "conf($attr_file): $spanno:$v"
+					echo "$spanno:$v" > "$attr_file"
+					;;
+				esac
+			done
+		done
+}
+
+set_spantypes() {
+	for device in $DEVICES
+	do
+		device_set_spantype "$device"
+	done
+}
+
+case "$action" in
+list)
+	show_spantypes
+	;;
+dump)
+	dump_config
+	;;
+set)
+	set_spantypes
+	;;
+*)
+	usage
+	;;
+esac

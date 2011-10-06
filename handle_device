@@ -1,0 +1,41 @@
+#! /bin/sh
+#
+# /usr/share/dahdi/handle_device
+#
+# Called by UDEV when a span goes online/offline to assign spans
+
+me=`basename $0`
+dir=`dirname $0`
+LOGGER="logger -i -t '$me'"
+NAME=`basename "$DEVPATH" | tr -c 'A-Za-z0-9-' '_'`
+
+# Always redirect stderr somewhere, otherwise the shell script will die
+# when it tries to do I/O related stuff on closed file descriptor.
+# Our default is to throw it down the bit-bucket.
+exec 2> /dev/null
+# If you wish to trace this script:
+#exec 2> "/tmp/${me}.$NAME" 1>&2
+#exec 2> /dev/console
+
+# Our directory in the beginning, so we can use local lab setup
+PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
+
+set -e
+
+echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
+
+case "$ACTION" in
+add)
+	echo "$ACTION: $DEVPATH" | $LOGGER
+	# FIXME: need a way to add custom environment here:
+	#export DAHDICONFDIR="/tmp/xortel/dahdi"
+	span_types set "/sys/$DEVPATH" 2>&1 | $LOGGER
+	span_assignments add "/sys/$DEVPATH" 2>&1 | $LOGGER
+	;;
+remove)
+	echo "$ACTION: $DEVPATH" | $LOGGER
+	;;
+*)
+	echo "UNHANDLED: $ACTION: $DEVPATH" | $LOGGER
+	;;
+esac

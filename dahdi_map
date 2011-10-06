@@ -1,0 +1,39 @@
+#! /bin/sh
+#
+# Show a map of dahdi devices with the following fields:
+#  - spanno (or '-' if not assigned yet)
+#  - (vendor assigned) name
+#  - local spanno
+#  - hardware_id (or empty if none)
+#  - location (prefixed by '@')
+
+devbase="/sys/bus/dahdi_devices/devices"
+
+[ -d "$devbase" ] || {
+	echo >&2 "$0: Missing '$devbase' (Old driver?)"
+	exit 1
+}
+
+fmt="%-4s %-17s %-3s     %-12s %s\n"
+
+printf "$fmt" 'SPAN' 'NAME' '#' 'HARDWARE_ID' 'LOCATION'
+
+DEVICES=`echo $devbase/*`
+
+for device in $DEVICES
+do
+	hw_id=`cat "$device/hardware_id"`
+	location=`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+	for local_spanno in `cut -d: -f1 "$device/spantype"`
+	do
+		span=`grep 2>/dev/null -Hw "$local_spanno" "$device/span-"*"/local_spanno" | \
+			sed -e 's,/local_spanno:.*,,' -e 's,.*/,,'`
+		if [ "$span" != '' ]; then
+			spanno=`echo $span | sed 's/^.*-//'`
+			name=`cat 2>/dev/null "$device/$span/name"`
+		else
+			spanno='-'
+		fi
+		printf "$fmt" "$spanno" "$name" "($local_spanno)" "[$hw_id]" "@$location"
+	done | sort -n
+done

@@ -1,0 +1,193 @@
+#! /bin/sh
+#
+# /usr/share/dahdi/span_assignments:
+#
+# this script can be used both from udev and
+# from the command line to assign/unassign and list
+# current assignments.
+#
+# The first argument is an action:
+#   "add" to assign (spans which are not already assigned)
+#   "remove" to unassign (spans which are not already unassigned)
+#   "list" to show all spans (with/without assignments)
+#
+# Without further arguments, it operates on all existing spans
+# With one or more sysfs dahdi_devices it is limited to those.
+#
+# Examples:
+#    span_assignments list
+#    span_assignments add	# all
+#    span_assignments add /sys/bus/dahdi_devices/devices/astribanks:xbus-00
+#    span_assignments remove	# all
+#
+
+devbase='/sys/bus/dahdi_devices/devices'
+DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
+pinned_spans_conf="$DAHDICONFDIR/pinned-spans.conf"
+
+usage() {
+	echo >&2 "Usage: $0 {add|remove|list} [devpath ...]"
+	exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+	usage
+fi
+action="$1"
+shift
+
+if [ ! -d "$devbase" ]; then
+	echo >&2 "$0: Missing '$devbase' (DAHDI driver unloaded?)"
+	exit 1
+fi
+
+# Use given devices or otherwise, all existing devices
+if [ "$#" -gt 0 ]; then
+	DEVICES="$@"
+else
+	DEVICES=`echo $devbase/*`
+fi
+
+show_devices() {
+
+	for device in $DEVICES
+	do
+		hw_id=`cat "$device/hardware_id"`
+		location=`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+		for local_spanno in `cut -d: -f1 "$device/spantype"`
+		do
+			span=`grep 2>/dev/null -Hw "$local_spanno" "$device/span-"*"/local_spanno" | \
+				sed -e 's,/local_spanno:.*,,' -e 's,.*/,,'`
+			if [ "$span" != '' ]; then
+				spanno=`echo $span | sed 's/^.*-//'`
+				name=`cat 2>/dev/null "$device/$span/name"`
+				basechan=`cat 2>/dev/null "$device/$span/basechan"`
+			else
+				spanno='-'
+				basechan='-'
+			fi
+			printf "%-4s %-12s %s\n" "$local_spanno:$spanno:$basechan" "[$hw_id]" "@$location"
+		done | sort -n
+	done
+}
+
+dump_config() {
+
+	for device in $DEVICES
+	do
+		hw_id=`cat "$device/hardware_id"`
+		location=`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+		if [ "$hw_id" != '' ]; then
+			id="$hw_id"
+		else
+			id="@$location"
+		fi
+		for local_spanno in `cut -d: -f1 "$device/spantype"`
+		do
+			span=`grep 2>/dev/null -Hw "$local_spanno" "$device/span-"*"/local_spanno" | \
+				sed -e 's,/local_spanno:.*,,' -e 's,.*/,,'`
+			if [ "$span" != '' ]; then
+				spanno=`echo $span | sed 's/^.*-//'`
+				name=`cat 2>/dev/null "$device/$span/name"`
+				basechan=`cat 2>/dev/null "$device/$span/basechan"`
+			else
+				spanno='-'
+			fi
+			printf "%-30s %s\n" "$id" "$local_spanno:$spanno:$basechan"
+		done | sort -n
+	done
+}
+
+unassign_all_spans() {
+	for device in $DEVICES
+	do
+		find "$device" -follow -maxdepth 1 -name 'span-*' -type d | \
+			sort | while read spandir; do
+			local_spanno=`cat "$spandir/local_spanno"`
+			echo "unassign $device $local_spanno"
+			if ! echo "$local_spanno" > "$device/unassign_span"; then
+				echo >&2 "$0: failed unassigning '$local_spanno' in '$device'"
+			fi
+		done
+	done
+}
+
+# Allow comments and empty lines in config file
+filter_conf() {
+	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$pinned_spans_conf"
+}
+
+# Beware of special characters in attributes
+attr_clean() {
+	cat "$1" | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
+}
+
+assign_device_spans() {
+	device="$1"
+	for s in $spanspecs
+	do
+		local_spanno=`echo "$s" | cut -d: -f1`
+		spanno=`echo "$s" | cut -d: -f2`
+		span="$device/span-$spanno"
+		if [ -d "$span" ]; then
+			span_local_spanno=`cat "$span/local_spanno"`
+			if [ "$span_local_spanno" != "$local_spanno" ]; then
+				echo "WARNING: $span_local_spanno != $local_spanno"
+			fi
+			echo "$device [$local_spanno] already assigned to $spanno. Skipping..."
+			continue
+		fi
+		echo "assign $device: $s"
+		if ! echo "$s" > "$device/assign_span"; then
+			echo >&2 "$0: failed assigning '$s' to '$device'"
+		fi
+	done
+}
+
+match_device() {
+	device="$1"
+	location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+	hardware_id=`attr_clean "$device/hardware_id"`
+	filter_conf | while read id spanspecs
+	do
+		# We use case to enable shell-style globbing in configuration
+		case "$location" in
+		$id)
+			#echo "match location($id ~ $location): $spanspecs"
+			assign_device_spans "$device"
+			;;
+		esac
+		# We use case to enable shell-style globbing in configuration
+		case "$hardware_id" in
+		$id)
+			#echo "match hardware_id([$id] ~ $hardware_id): $spanspecs"
+			assign_device_spans "$device"
+			;;
+		esac
+	done
+}
+
+assign_devices() {
+	for device in $DEVICES
+	do
+		match_device "$device"
+	done
+}
+
+case "$action" in
+list)
+	show_devices
+	;;
+dump)
+	dump_config
+	;;
+add)
+	assign_devices
+	;;
+remove)
+	unassign_all_spans
+	;;
+*)
+	usage
+	;;
+esac
