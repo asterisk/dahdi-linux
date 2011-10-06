@@ -22,6 +22,12 @@ PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
 
 set -e
 
+run_dahdi_cfg() {
+	args="-c $DAHDICONFDIR/system.conf $@"
+	echo "Running dahdi_cfg $args"
+	dahdi_cfg $args
+}
+
 echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
 
 case "$ACTION" in
@@ -31,6 +37,9 @@ add)
 	#export DAHDICONFDIR="/tmp/xortel/dahdi"
 	span_types set "/sys/$DEVPATH" 2>&1 | $LOGGER
 	span_assignments add "/sys/$DEVPATH" 2>&1 | $LOGGER
+	dahdi_cfg_device_args | while read args; do
+			run_dahdi_cfg $args 2>&1 | $LOGGER
+		done
 	;;
 remove)
 	echo "$ACTION: $DEVPATH" | $LOGGER
