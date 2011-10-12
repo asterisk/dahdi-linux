@@ -766,11 +766,9 @@ static inline unsigned int __t4_raw_oct_in(struct t4 *wc, const unsigned int add
 	__t4_pci_out(wc, WC_LADDR, (WC_LWRITE | WC_LALE));
 	if (!pedanticpci)
 		__t4_pci_in(wc, WC_VERSION);
-#ifdef PEDANTIC_OCTASIC_CHECKING 
 	__t4_pci_out(wc, WC_LADDR, (WC_LALE));
 	if (!pedanticpci)
 		__t4_pci_in(wc, WC_VERSION);
-#endif
 	if (!octopt) {
 		__t4_gpio_setdir(wc, 0xff, 0x00);
 		__t4_gpio_set(wc, 0xff, 0x00);
