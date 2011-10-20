@@ -3081,7 +3081,7 @@ static inline void __handle_leds(struct t4 *wc)
 	if (wc->blinktimer == 0xf) {
 		wc->blinktimer = -1;
 		wc->alarmpos++;
-		if (wc->alarmpos >= (sizeof(altab) / sizeof(altab[0])))
+		if (wc->alarmpos >= ARRAY_SIZE(altab))
 			wc->alarmpos = 0;
 	}
 #else
@@ -4044,17 +4044,12 @@ static void free_wc(struct t4 *wc)
 {
 	unsigned int x, y;
 
-	for (x = 0; x < sizeof(wc->tspans)/sizeof(wc->tspans[0]); x++) {
-		if (!wc->tspans[x]) {
+	for (x = 0; x < ARRAY_SIZE(wc->tspans); x++) {
+		if (!wc->tspans[x])
 			continue;
-		}
-
-		for (y = 0; y < sizeof(wc->tspans[x]->chans)/sizeof(wc->tspans[x]->chans[0]); y++) {
-			if (wc->tspans[x]->chans[y]) {
-				kfree(wc->tspans[x]->chans[y]);
-			}
-			if (wc->tspans[x]->ec[y])
-				kfree(wc->tspans[x]->ec[y]);
+		for (y = 0; y < ARRAY_SIZE(wc->tspans[x]->chans); y++) {
+			kfree(wc->tspans[x]->chans[y]);
+			kfree(wc->tspans[x]->ec[y]);
 		}
 		kfree(wc->tspans[x]);
 	}
