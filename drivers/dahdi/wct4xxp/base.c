@@ -61,7 +61,7 @@
 
 /* Define to get more attention-grabbing but slightly more I/O using
    alarm status */
-#define FANCY_ALARM
+#undef FANCY_ALARM
 
 /* Define to support Digium Voice Processing Module expansion card */
 #define VPM_SUPPORT
