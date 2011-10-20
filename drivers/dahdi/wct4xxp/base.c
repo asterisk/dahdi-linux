@@ -2853,7 +2853,7 @@ static void t4_receiveprep(struct t4 *wc, int irq)
 					wc->tspans[x]->span.chans[y]->writechunk,
 						DAHDI_CHUNKSIZE);
 			}
-			dahdi_receive(&wc->tspans[x]->span);
+			_dahdi_receive(&wc->tspans[x]->span);
 		}
 	}
 }
@@ -2863,7 +2863,7 @@ static void t4_receiveprep(struct t4 *wc, int irq)
 #error Sorry, nextgen does not support chunksize != 8
 #endif
 
-static inline void __receive_span(struct t4_span *ts)
+static void __receive_span(struct t4_span *ts)
 {
 #ifdef VPM_SUPPORT
 	int y;
@@ -2898,13 +2898,13 @@ static inline void __receive_span(struct t4_span *ts)
 	prefetch((void *)(ts->writechunk + 56));
 #endif
 
-	dahdi_ec_span(&ts->span);
-	dahdi_receive(&ts->span);
+	_dahdi_ec_span(&ts->span);
+	_dahdi_receive(&ts->span);
 }
 
 static inline void __transmit_span(struct t4_span *ts)
 {
-	dahdi_transmit(&ts->span);
+	_dahdi_transmit(&ts->span);
 }
 
 #ifdef ENABLE_WORKQUEUES
@@ -2949,7 +2949,7 @@ static void t4_transmitprep(struct t4 *wc, int irq)
 	}
 	for (y=0;y<wc->numspans;y++) {
 		if (wc->tspans[y]->span.flags & DAHDI_FLAG_RUNNING) 
-			dahdi_transmit(&wc->tspans[y]->span);
+			_dahdi_transmit(&wc->tspans[y]->span);
 	}
 
 	for (x=0;x<DAHDI_CHUNKSIZE;x++) {
