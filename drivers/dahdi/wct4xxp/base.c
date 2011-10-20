@@ -182,7 +182,6 @@ static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct 
 		"CONFIG_NOEXTENDED_RESET."
 #endif
 
-static int pedanticpci = 1;
 static int debug=0;
 static int timingcable = 0;
 static int t1e1override = -1;  /* 0xff for E1, 0x00 for T1 */
@@ -544,19 +543,10 @@ static inline void __t4_pci_out(struct t4 *wc, const unsigned int addr, const un
 {
 	unsigned int tmp;
 	writel(value, wc->membase + (addr * sizeof(u32)));
-	if (pedanticpci) {
-		tmp = __t4_pci_in(wc, WC_VERSION);
-		if ((tmp & 0xffff0000) != 0xc01a0000)
-			dev_notice(&wc->dev->dev,
-					"Version Synchronization Error!\n");
-	}
-#if 0
-	tmp = __t4_pci_in(wc, addr);
-	if ((value != tmp) && (addr != WC_LEDS) && (addr != WC_LDATA) &&
-		(addr != WC_GPIO) && (addr != WC_INTR))
-		dev_info(&wc->dev->dev, "Tried to load %08x into %08x, "
-				"but got %08x instead\n", value, addr, tmp);
-#endif		
+	tmp = __t4_pci_in(wc, WC_VERSION);
+	if ((tmp & 0xffff0000) != 0xc01a0000)
+		dev_notice(&wc->dev->dev,
+				"Version Synchronization Error!\n");
 }
 
 static inline void __t4_gpio_set(struct t4 *wc, unsigned bits, unsigned int val)
@@ -637,23 +627,14 @@ static unsigned int __t4_framer_in(struct t4 *wc, int unit,
 	unsigned int ret;
 	unit &= 0x3;
 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff) | WC_LFRMR_CS | WC_LREAD);
-	if (!pedanticpci) {
-		__t4_pci_in(wc, WC_VERSION);
-	} else {
-		__t4_pci_out(wc, WC_VERSION, 0);
-	}
+	__t4_pci_out(wc, WC_VERSION, 0);
 	ret = __t4_pci_in(wc, WC_LDATA);
  	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
 
 	if (unlikely(debug & DEBUG_REGS))
 		dev_info(&wc->dev->dev, "Reading unit %d address %02x is "
 				"%02x\n", unit, addr, ret & 0xff);
-
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 
 	return ret & 0xff;
 }
@@ -679,26 +660,10 @@ static void __t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
 				"unit %d\n", value, addr, unit);
 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
 	__t4_pci_out(wc, WC_LDATA, value);
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff) | WC_LFRMR_CS | WC_LWRITE);
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));	
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	if (unlikely(debug & DEBUG_REGS))
 		dev_info(&wc->dev->dev, "Write complete\n");
-#if 0
-	if ((addr != FRMR_TXFIFO) && (addr != FRMR_CMDR) && (addr != 0xbc))
-	{ unsigned int tmp;
-	tmp = __t4_framer_in(wc, unit, addr);
-	if (tmp != value) {
-		dev_notice(&wc->dev->dev, "Expected %d from unit %d "
-				"register %d but got %d instead\n",
-				value, unit, addr, tmp);
-	} }
-#endif	
 }
 
 static void t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
@@ -738,17 +703,11 @@ static inline void __t4_raw_oct_out(struct t4 *wc, const unsigned int addr, cons
 	if (!octopt)
 		__t4_pci_out(wc, WC_LADDR, (WC_LWRITE));
 	__t4_pci_out(wc, WC_LADDR, (WC_LWRITE | WC_LALE));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	if (!octopt)
 		__t4_gpio_set(wc, 0xff, (value >> 8));
 	__t4_pci_out(wc, WC_LDATA, (value & 0xffff));
 	__t4_pci_out(wc, WC_LADDR, (WC_LWRITE | WC_LALE | WC_LCS));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (0));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 }
 
 static inline unsigned int __t4_raw_oct_in(struct t4 *wc, const unsigned int addr)
@@ -760,21 +719,13 @@ static inline unsigned int __t4_raw_oct_in(struct t4 *wc, const unsigned int add
 	__t4_pci_out(wc, WC_LDATA, 0x10000 | (addr & 0xffff));
 	if (!octopt)
 		__t4_pci_out(wc, WC_LADDR, (WC_LWRITE));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (WC_LWRITE | WC_LALE));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	__t4_pci_out(wc, WC_LADDR, (WC_LALE));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	if (!octopt) {
 		__t4_gpio_setdir(wc, 0xff, 0x00);
 		__t4_gpio_set(wc, 0xff, 0x00);
 	}
 	__t4_pci_out(wc, WC_LADDR, (WC_LREAD | WC_LALE | WC_LCS));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	if (octopt) {
 		ret = __t4_pci_in(wc, WC_LDATA) & 0xffff;
 	} else {
@@ -782,8 +733,6 @@ static inline unsigned int __t4_raw_oct_in(struct t4 *wc, const unsigned int add
 		ret |= (__t4_pci_in(wc, WC_GPIO) & 0xff) << 8;
 	}
 	__t4_pci_out(wc, WC_LADDR, (0));
-	if (!pedanticpci)
-		__t4_pci_in(wc, WC_VERSION);
 	if (!octopt)
 		__t4_gpio_setdir(wc, 0xff, 0xff);
 	return ret & 0xffff;
@@ -5090,7 +5039,6 @@ MODULE_DESCRIPTION("Wildcard Dual-/Quad-port Digital Card Driver");
 MODULE_ALIAS("wct2xxp");
 MODULE_LICENSE("GPL v2");
 
-module_param(pedanticpci, int, 0600);
 module_param(debug, int, 0600);
 module_param(noburst, int, 0600);
 module_param(timingcable, int, 0600);
