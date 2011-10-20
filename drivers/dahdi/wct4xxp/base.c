@@ -291,10 +291,11 @@ struct t4_span {
 	int sync;
 	int alarmtimer;
 	int notclear;
-	int alarmcount;
-	int losalarmcount;
-	int aisalarmcount;
-	int yelalarmcount;
+	unsigned long alarm_time;
+	unsigned long losalarm_time;
+	unsigned long aisalarm_time;
+	unsigned long yelalarm_time;
+	unsigned long alarmcheck_time;
 	int spanflags;
 	int syncpos;
 #ifdef SUPPORT_GEN1
@@ -2112,6 +2113,7 @@ static void init_spans(struct t4 *wc)
 	gen2 = (wc->tspans[0]->spanflags & FLAG_2NDGEN);
 	for (x = 0; x < wc->numspans; x++) {
 		ts = wc->tspans[x];
+
 		sprintf(ts->span.name, "TE%d/%d/%d", wc->numspans, wc->num, x + 1);
 		snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
 			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
@@ -2174,6 +2176,9 @@ static void init_spans(struct t4 *wc)
 			mychans->pvt = wc;
 			mychans->chanpos = y + 1;
 		}
+
+		/* Start checking for alarms in 250 ms */
+		ts->alarmcheck_time = jiffies + msecs_to_jiffies(250);
 
 		/* Enable 1sec timer interrupt */
 		reg = t4_framer_in(wc, x, FMR1_T);
@@ -2758,8 +2763,10 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
+	local_irq_save(flags);
 	t4_check_alarms(wc, span->offset);
 	t4_check_sigbits(wc, span->offset);
+	local_irq_restore(flags);
 
 	if (wc->tspans[0]->sync == span->spanno)
 		dev_info(&wc->dev->dev, "SPAN %d: Primary Sync Source\n",
@@ -3106,18 +3113,21 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 	}
 }
 
+/* Must be called from within hardirq context. */
 static void t4_check_alarms(struct t4 *wc, int span)
 {
 	unsigned char c, d, e;
 	int alarms;
 	int x,j;
 	struct t4_span *ts = wc->tspans[span];
-	unsigned long flags;
+
+	if (time_before(jiffies, ts->alarmcheck_time))
+		return;
 
 	if (!(ts->span.flags & DAHDI_FLAG_RUNNING))
 		return;
 
-	spin_lock_irqsave(&wc->reglock, flags);
+	spin_lock(&wc->reglock);
 
 	c = __t4_framer_in(wc, span, 0x4c);
 	d = __t4_framer_in(wc, span, 0x4d);
@@ -3192,63 +3202,68 @@ static void t4_check_alarms(struct t4 *wc, int span)
 
 	/* Loss of Frame Alignment */
 	if (c & 0x20) {
-		if (ts->alarmcount >= alarmdebounce) {
-
-			/* Disable Slip Interrupts */
-			e = __t4_framer_in(wc, span, 0x17);
-			__t4_framer_out(wc, span, 0x17, (e|0x03));
-
-			alarms |= DAHDI_ALARM_RED;
-		} else {
-			if (unlikely(debug && !ts->alarmcount)) {
+		if (!ts->alarm_time) {
+			if (unlikely(debug)) {
 				/* starting to debounce LOF/LFA */
 				dev_info(&wc->dev->dev, "wct%dxxp: LOF/LFA "
 					"detected on span %d but debouncing "
 					"for %d ms\n", wc->numspans, span + 1,
 					alarmdebounce);
 			}
-			ts->alarmcount++;
-		}
-	} else
-		ts->alarmcount = 0;
-
-	/* Loss of Signal */
-	if (c & 0x80) {
-		if (ts->losalarmcount >= losalarmdebounce) {
+			ts->alarm_time = jiffies +
+					  msecs_to_jiffies(alarmdebounce);
+		} else if (time_after(jiffies, ts->alarm_time)) {
 			/* Disable Slip Interrupts */
 			e = __t4_framer_in(wc, span, 0x17);
 			__t4_framer_out(wc, span, 0x17, (e|0x03));
 
 			alarms |= DAHDI_ALARM_RED;
-		} else {
-			if (unlikely(debug && !ts->losalarmcount)) {
+		}
+	} else {
+		ts->alarm_time = 0;
+	}
+
+	/* Loss of Signal */
+	if (c & 0x80) {
+		if (!ts->losalarm_time) {
+			if (unlikely(debug)) {
 				/* starting to debounce LOS */
 				dev_info(&wc->dev->dev, "wct%dxxp: LOS "
 					"detected on span %d but debouncing "
 					"for %d ms\n", wc->numspans,
 					span + 1, losalarmdebounce);
 			}
-			ts->losalarmcount++;
+			ts->losalarm_time = jiffies +
+					     msecs_to_jiffies(losalarmdebounce);
+		} else if (time_after(jiffies, ts->losalarm_time)) {
+			/* Disable Slip Interrupts */
+			e = __t4_framer_in(wc, span, 0x17);
+			__t4_framer_out(wc, span, 0x17, (e|0x03));
+
+			alarms |= DAHDI_ALARM_RED;
 		}
-	} else
-		ts->losalarmcount = 0;
+	} else {
+		ts->losalarm_time = 0;
+	}
 
 	/* Alarm Indication Signal */
 	if (c & 0x40) {
-		if (ts->aisalarmcount >= aisalarmdebounce)
-			alarms |= DAHDI_ALARM_BLUE;
-		else {
-			if (unlikely(debug && !ts->aisalarmcount)) {
+		if (!ts->aisalarm_time) {
+			if (unlikely(debug)) {
 				/* starting to debounce AIS */
 				dev_info(&wc->dev->dev, "wct%dxxp: AIS "
 					"detected on span %d but debouncing "
 					"for %d ms\n", wc->numspans,
 					span + 1, aisalarmdebounce);
 			}
-			ts->aisalarmcount++;
+			ts->aisalarm_time = jiffies +
+					     msecs_to_jiffies(aisalarmdebounce);
+		} else if (time_after(jiffies, ts->aisalarm_time)) {
+			alarms |= DAHDI_ALARM_BLUE;
 		}
-	} else
-		ts->aisalarmcount = 0;
+	} else {
+		ts->aisalarm_time = 0;
+	}
 
 	/* Add detailed alarm status information to a red alarm state */
 	if (alarms & DAHDI_ALARM_RED) {
@@ -3307,10 +3322,8 @@ static void t4_check_alarms(struct t4 *wc, int span)
 	/* Re-check the timing source when we enter/leave alarm, not withstanding
 	   yellow alarm */
 	if (c & 0x10) { /* receiving yellow (RAI) */
-		if (ts->yelalarmcount >= yelalarmdebounce)
-			alarms |= DAHDI_ALARM_YELLOW;
-		else {
-			if (unlikely(debug && !ts->yelalarmcount)) {
+		if (!ts->yelalarm_time) {
+			if (unlikely(debug)) {
 				/* starting to debounce AIS */
 				dev_info(&wc->dev->dev, "wct%dxxp: yellow "
 					"(RAI) detected on span %d but "
@@ -3318,42 +3331,40 @@ static void t4_check_alarms(struct t4 *wc, int span)
 					wc->numspans, span + 1,
 					yelalarmdebounce);
 			}
-			ts->yelalarmcount++;
+			ts->yelalarm_time = jiffies +
+					     msecs_to_jiffies(yelalarmdebounce);
+		} else if (time_after(jiffies, ts->yelalarm_time)) {
+			alarms |= DAHDI_ALARM_YELLOW;
 		}
-	} else
-		ts->yelalarmcount = 0;
+	} else {
+		ts->yelalarm_time = 0;
+	}
+
+	if (alarms)
+		ts->alarmcheck_time = jiffies + msecs_to_jiffies(100);
+	else
+		ts->alarmcheck_time = jiffies + msecs_to_jiffies(50);
 
 	if (ts->span.mainttimer || ts->span.maintstat) 
 		alarms |= DAHDI_ALARM_LOOPBACK;
 	ts->span.alarms = alarms;
-	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	spin_unlock(&wc->reglock);
 	dahdi_alarm_notify(&ts->span);
 }
 
 static void t4_do_counters(struct t4 *wc)
 {
 	int span;
-	for (span=0;span<wc->numspans;span++) {
+	for (span = 0; span < wc->numspans; span++) {
 		struct t4_span *ts = wc->tspans[span];
-		int docheck=0;
 
 		spin_lock(&wc->reglock);
-		if (ts->loopupcnt || ts->loopdowncnt || ts->alarmcount
-			|| ts->losalarmcount || ts->aisalarmcount
-			|| ts->yelalarmcount)
-			docheck++;
-
-		if (ts->alarmtimer) {
-			if (!--ts->alarmtimer) {
-				docheck++;
-				ts->span.alarms &= ~(DAHDI_ALARM_RECOVER);
-			}
-		}
+		if (ts->alarmtimer && (0 == (--ts->alarmtimer)))
+			ts->span.alarms &= ~(DAHDI_ALARM_RECOVER);
 		spin_unlock(&wc->reglock);
-		if (docheck) {
-			t4_check_alarms(wc, span);
-			dahdi_alarm_notify(&ts->span);
-		}
+
+		t4_check_alarms(wc, span);
 	}
 }
 
@@ -3365,7 +3376,9 @@ static inline void __handle_leds(struct t4 *wc)
 	for (x=0;x<wc->numspans;x++) {
 		struct t4_span *ts = wc->tspans[x];
 		if (ts->span.flags & DAHDI_FLAG_RUNNING) {
-			if ((ts->span.alarms & (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE)) || ts->losalarmcount) {
+			if ((ts->span.alarms & (DAHDI_ALARM_RED |
+						DAHDI_ALARM_BLUE)) ||
+			     ts->losalarm_time) {
 #ifdef FANCY_ALARM
 				if (wc->blinktimer == (altab[wc->alarmpos] >> 1)) {
 					__t4_set_led(wc, x, WC_RED);
