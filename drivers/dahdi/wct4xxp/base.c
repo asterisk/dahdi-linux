@@ -193,11 +193,8 @@ static int max_latency = GEN5_MAX_LATENCY;  /* Used to set a maximum latency (if
 static int vpmsupport = 1;
 /* If set to auto, vpmdtmfsupport is enabled for VPM400M and disabled for VPM450M */
 static int vpmdtmfsupport = -1; /* -1=auto, 0=disabled, 1=enabled*/
-static int vpmspans = 4;
-#define VPM_DEFAULT_DTMFTHRESHOLD 1000
-static int dtmfthreshold = VPM_DEFAULT_DTMFTHRESHOLD;
-static int lastdtmfthreshold = VPM_DEFAULT_DTMFTHRESHOLD;
-#endif
+#endif /* VPM_SUPPORT */
+
 /* Enabling bursting can more efficiently utilize PCI bus bandwidth, but
    can also cause PCI bus starvation, especially in combination with other
    aggressive cards.  Please note that burst mode has no effect on CPU
@@ -241,7 +238,6 @@ static int altab[] = {
 
 /* names of available HWEC modules */
 #ifdef VPM_SUPPORT
-static const char *vpm400_name = "VPM400M";
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
 #endif
@@ -316,8 +312,6 @@ struct t4_span {
 	unsigned long dtmfactive;
 	unsigned long dtmfmask;
 	unsigned long dtmfmutemask;
-	short dtmfenergy[31];
-	short dtmfdigit[31];
 #endif
 #ifdef ENABLE_WORKQUEUES
 	struct work_struct swork;
@@ -367,7 +361,6 @@ struct t4 {
 	/* Flags for our bottom half */
 	unsigned long checkflag;
 	struct tasklet_struct t4_tlet;
-	unsigned int vpm400checkstatus;
 	/* Latency related additions */
 	unsigned char rxident;
 	unsigned char lastindex;
@@ -384,9 +377,7 @@ struct t4 {
 #define T4_VPM_PRESENT (1 << 28)
 
 #ifdef VPM_SUPPORT
-static void t4_vpm400_init(struct t4 *wc);
 static void t4_vpm450_init(struct t4 *wc);
-static void t4_vpm_set_dtmf_threshold(struct t4 *wc, unsigned int threshold);
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 
@@ -669,23 +660,6 @@ static void t4_framer_out(struct t4 *wc, int unit,
 
 #ifdef VPM_SUPPORT
 
-static inline void wait_a_little(void)
-{
-	unsigned long newjiffies=jiffies+2;
-	while(jiffies < newjiffies);
-}
-
-static inline unsigned int __t4_vpm_in(struct t4 *wc, int unit, const unsigned int addr)
-{
-	unsigned int ret;
-	unit &= 0x7;
-	__t4_pci_out(wc, WC_LADDR, (addr & 0x1ff) | ( unit << 12));
-	__t4_pci_out(wc, WC_LADDR, (addr & 0x1ff) | ( unit << 12) | (1 << 11) | WC_LREAD);
-	ret = __t4_pci_in(wc, WC_LDATA);
-	__t4_pci_out(wc, WC_LADDR, 0);
-	return ret & 0xff;
-}
-
 static inline void __t4_raw_oct_out(struct t4 *wc, const unsigned int addr, const unsigned int value)
 {
 	int octopt = wc->tspans[0]->spanflags & FLAG_OCTOPT;
@@ -759,33 +733,6 @@ static inline unsigned int t4_oct_in(struct t4 *wc, const unsigned int addr)
 	return ret;
 }
 
-static inline unsigned int t4_vpm_in(struct t4 *wc, int unit, const unsigned int addr)
-{
-	unsigned long flags;
-	unsigned int ret;
-	spin_lock_irqsave(&wc->reglock, flags);
-	ret = __t4_vpm_in(wc, unit, addr);
-	spin_unlock_irqrestore(&wc->reglock, flags);
-	return ret;
-}
-
-static inline void __t4_vpm_out(struct t4 *wc, int unit, const unsigned int addr, const unsigned int value)
-{
-	unit &= 0x7;
-	if (debug & DEBUG_REGS)
-		dev_notice(&wc->dev->dev, "Writing %02x to address %02x of "
-				"ec unit %d\n", value, addr, unit);
-	__t4_pci_out(wc, WC_LADDR, (addr & 0xff));
-	__t4_pci_out(wc, WC_LDATA, value);
-	__t4_pci_out(wc, WC_LADDR, (unit << 12) | (addr & 0x1ff) | (1 << 11));
-	__t4_pci_out(wc, WC_LADDR, (unit << 12) | (addr & 0x1ff) | (1 << 11) | WC_LWRITE);
-	__t4_pci_out(wc, WC_LADDR, (unit << 12) | (addr & 0x1ff) | (1 << 11));
-	__t4_pci_out(wc, WC_LADDR, (unit << 12) | (addr & 0x1ff));	
-	__t4_pci_out(wc, WC_LADDR, 0);
-	if (debug & DEBUG_REGS)
-		dev_notice(&wc->dev->dev, "Write complete\n");
-}
-
 static inline void __t4_oct_out(struct t4 *wc, unsigned int addr, unsigned int value)
 {
 #ifdef PEDANTIC_OCTASIC_CHECKING
@@ -812,16 +759,6 @@ static inline void t4_oct_out(struct t4 *wc, const unsigned int addr, const unsi
 	__t4_oct_out(wc, addr, value);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
-
-static inline void t4_vpm_out(struct t4 *wc, int unit, const unsigned int addr, const unsigned int value)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&wc->reglock, flags);
-	__t4_vpm_out(wc, unit, addr, value);
-	spin_unlock_irqrestore(&wc->reglock, flags);
-}
-
-static const char vpm_digits[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', '*', '#'};
 
 static void t4_check_vpm450(struct t4 *wc)
 {
@@ -865,117 +802,7 @@ static void t4_check_vpm450(struct t4 *wc)
 		}
 	}
 }
-
-static void t4_check_vpm400(struct t4 *wc, unsigned int newio)
-{
-	unsigned int digit, regval = 0;
-	unsigned int regbyte;
-	int x, i;
-	short energy=0;
-	static unsigned int lastio = 0;
-	struct t4_span *ts;
-
-	if (debug && (newio != lastio)) 
-		dev_notice(&wc->dev->dev, "Last was %08x, new is %08x\n",
-				lastio, newio);
-
-	lastio = newio;
- 
-	for(x = 0; x < 8; x++) {
-		if (newio & (1 << (7 - x)))
-			continue;
-		ts = wc->tspans[x%4];
-		/* Start of DTMF detection process */	
-		regbyte = t4_vpm_in(wc, x, 0xb8);
-		t4_vpm_out(wc, x, 0xb8, regbyte); /* Write 1 to clear */
-		regval = regbyte << 8;
-		regbyte = t4_vpm_in(wc, x, 0xb9);
-		t4_vpm_out(wc, x, 0xb9, regbyte);
-		regval |= regbyte;
-
-		for(i = 0; (i < MAX_DTMF_DET) && regval; i++) {
-			if(regval & 0x0001) {
-				int channel = (i << 1) + (x >> 2);
-				int base = channel - 1;
-
-				if (!wc->t1e1)
-					base -= 4;
-				regbyte = t4_vpm_in(wc, x, 0xa8 + i);
-				digit = vpm_digits[regbyte];
-				if (!(wc->tspans[0]->spanflags & FLAG_VPM2GEN)) {
-					energy = t4_vpm_in(wc, x, 0x58 + channel);
-					energy = DAHDI_XLAW(energy, ts->chans[0]);
-					ts->dtmfenergy[base] = energy;
-				}
-				set_bit(base, &ts->dtmfactive);
-				if (ts->dtmfdigit[base]) {
-					if (ts->dtmfmask & (1 << base))
-						dahdi_qevent_lock(ts->span.chans[base], (DAHDI_EVENT_DTMFUP | ts->dtmfdigit[base]));
-				}
-				ts->dtmfdigit[base] = digit;
-				if (test_bit(base, &ts->dtmfmask))
-					dahdi_qevent_lock(ts->span.chans[base], (DAHDI_EVENT_DTMFDOWN | digit));
-				if (test_bit(base, &ts->dtmfmutemask)) {
-					/* Mute active receive buffer*/
-					unsigned long flags;
-					struct dahdi_chan *chan = ts->span.chans[base];
-					int y;
-					spin_lock_irqsave(&chan->lock, flags);
-					for (y=0;y<chan->numbufs;y++) {
-						if ((chan->inreadbuf > -1) && (chan->readidx[y]))
-							memset(chan->readbuf[chan->inreadbuf], DAHDI_XLAW(0, chan), chan->readidx[y]);
-					}
-					spin_unlock_irqrestore(&chan->lock, flags);
-				}
-				if (debug)
-					dev_notice(&wc->dev->dev, "Digit "
-						"Seen: %d, Span: %d, channel:"
-						" %d, energy: %02x, 'channel "
-						"%d' chip %d\n", digit, x % 4,
-						base + 1, energy, channel, x);
-				
-			}
-			regval = regval >> 1;
-		}
-		if (!(wc->tspans[0]->spanflags & FLAG_VPM2GEN))
-			continue;
-
-		/* Start of DTMF off detection process */	
-		regbyte = t4_vpm_in(wc, x, 0xbc);
-		t4_vpm_out(wc, x, 0xbc, regbyte); /* Write 1 to clear */
-		regval = regbyte << 8;
-		regbyte = t4_vpm_in(wc, x, 0xbd);
-		t4_vpm_out(wc, x, 0xbd, regbyte);
-		regval |= regbyte;
-
-		for(i = 0; (i < MAX_DTMF_DET) && regval; i++) {
-			if(regval & 0x0001) {
-				int channel = (i << 1) + (x >> 2);
-				int base = channel - 1;
-
-				if (!wc->t1e1)
-					base -= 4;
-				clear_bit(base, &ts->dtmfactive);
-				if (ts->dtmfdigit[base]) {
-					if (test_bit(base, &ts->dtmfmask))
-						dahdi_qevent_lock(ts->span.chans[base], (DAHDI_EVENT_DTMFUP | ts->dtmfdigit[base]));
-				}
-				digit = ts->dtmfdigit[base];
-				ts->dtmfdigit[base] = 0;
-				if (debug)
-					dev_notice(&wc->dev->dev, "Digit "
-						"Gone: %d, Span: %d, channel:"
-						" %d, energy: %02x, 'channel "
-						"%d' chip %d\n", digit, x % 4,
-						base + 1, energy, channel, x);
-				
-			}
-			regval = regval >> 1;
-		}
-
-	}
-}
-#endif
+#endif /* VPM_SUPPORT */
 
 static void hdlc_stop(struct t4 *wc, unsigned int span)
 {
@@ -1184,36 +1011,14 @@ unsigned int oct_get_reg(void *data, unsigned int reg)
 	return ret;
 }
 
-static int t4_vpm_unit(int span, int channel)
-{
-	int unit = 0;
-	switch(vpmspans) {
-	case 4:
-		unit = span;
-		unit += (channel & 1) << 2;
-		break;
-	case 2:
-		unit = span;
-		unit += (channel & 0x3) << 1;
-		break;
-	case 1:
-		unit = span;
-		unit += (channel & 0x7);
-	}
-	return unit;
-}
-
 static const char *t4_echocan_name(const struct dahdi_chan *chan)
 {
 	struct t4 *wc = chan->pvt;
 	if (wc->vpm == T4_VPM_PRESENT) {
-		if (!wc->vpm450m)
-			return vpm400_name;
-		else
-			if (wc->numspans == 2)
-				return vpmoct064_name;
-			else if (wc->numspans == 4)
-				return vpmoct128_name;
+		if (wc->numspans == 2)
+			return vpmoct064_name;
+		else if (wc->numspans == 4)
+			return vpmoct128_name;
 	}
 	return NULL;
 }
@@ -1230,9 +1035,6 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	const struct dahdi_echocan_features *features;
 
 	if (!vpmsupport || !wc->vpm)
-		return -ENODEV;
-
-	if (chan->span->offset >= vpmspans)
 		return -ENODEV;
 
 	ops = &vpm_ec_ops;
@@ -1260,18 +1062,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 				"length %d\n", wc->num, chan->chanpos,
 				chan->span->offset, channel, ecp->tap_length);
 		vpm450m_setec(wc->vpm450m, channel, ecp->tap_length);
-	} else {
-		int unit = t4_vpm_unit(chan->span->offset, channel);
-
-		if (debug & DEBUG_ECHOCAN)
-			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
-				"Channel is %d, Span is %d, unit is %d, "
-				"unit offset is %d length %d\n", wc->num,
-				chan->chanpos, chan->span->offset, unit,
-				channel, ecp->tap_length);
-		t4_vpm_out(wc, unit, channel, 0x3e);
 	}
-
 	return 0;
 }
 
@@ -1293,16 +1084,6 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 				"length 0\n", wc->num, chan->chanpos,
 				chan->span->offset, channel);
 		vpm450m_setec(wc->vpm450m, channel, 0);
-	} else {
-		int unit = t4_vpm_unit(chan->span->offset, channel);
-
-		if (debug & DEBUG_ECHOCAN)
-			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
-				"Channel is %d, Span is %d, unit is %d, "
-				"unit offset is %d length 0\n", wc->num,
-				chan->chanpos, chan->span->offset, unit,
-				channel);
-		t4_vpm_out(wc, unit, channel, 0x01);
 	}
 }
 #endif
@@ -1316,15 +1097,6 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 	int j;
 	int channel;
 	struct t4_span *ts = wc->tspans[chan->span->offset];
-#endif
-
-#ifdef VPM_SUPPORT
-	if (dtmfthreshold == 0)
-		dtmfthreshold = VPM_DEFAULT_DTMFTHRESHOLD;
-	if (lastdtmfthreshold != dtmfthreshold) {
-		lastdtmfthreshold = dtmfthreshold;
-		t4_vpm_set_dtmf_threshold(wc, dtmfthreshold);
-	}
 #endif
 
 	switch(cmd) {
@@ -3678,8 +3450,7 @@ static void t4_isr_bh(unsigned long data)
 				   interrupt when there's a tone, in spite of what their
 				   documentation says? */
 				t4_check_vpm450(wc);
-			} else
-				t4_check_vpm400(wc, wc->vpm400checkstatus);
+			}
 		}
 	}
 #endif
@@ -3853,9 +3624,6 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			if (!(wc->intcount & 0xf)) {
 				set_bit(T4_CHECK_VPM, &wc->checkflag);
 			}
-		} else if ((status & 0xff00) != 0xff00) {
-			wc->vpm400checkstatus = (status & 0xff00) >> 8;
-			set_bit(T4_CHECK_VPM, &wc->checkflag);
 		}
 	}
 #endif
@@ -3907,64 +3675,6 @@ static int t4_reset_dma(struct t4 *wc)
 #endif
 
 #ifdef VPM_SUPPORT
-static void t4_vpm_set_dtmf_threshold(struct t4 *wc, unsigned int threshold)
-{
-	unsigned int x;
-
-	for (x = 0; x < 8; x++) {
-		t4_vpm_out(wc, x, 0xC4, (threshold >> 8) & 0xFF);
-		t4_vpm_out(wc, x, 0xC5, (threshold & 0xFF));
-	}
-	dev_info(&wc->dev->dev, "VPM: DTMF threshold set to %d\n", threshold);
-}
-
-static unsigned int t4_vpm_mask(int chip)
-{
-	unsigned int mask=0;
-	switch(vpmspans) {
-	case 4:
-		mask = 0x55555555 << (chip >> 2);
-		break;
-	case 2:
-		mask = 0x11111111 << (chip >> 1);
-		break;
-	case 1:
-		mask = 0x01010101 << chip;
-		break;
-	}
-	return mask;
-}
-
-static int t4_vpm_spanno(int chip)
-{
-	int spanno = 0;
-	switch(vpmspans) {
-	case 4:
-		spanno = chip & 0x3;
-		break;
-	case 2:
-		spanno = chip & 0x1;
-		break;
-	/* Case 1 is implicit */
-	}
-	return spanno;
-}
-
-static int t4_vpm_echotail(void)
-{
-	int echotail = 0x01ff;
-	switch(vpmspans) {
-	case 4:
-		echotail = 0x007f;
-		break;
-	case 2:
-		echotail = 0x00ff;
-		break;
-	/* Case 1 is implicit */
-	}
-	return echotail;
-}
-
 static void t4_vpm450_init(struct t4 *wc)
 {
 	int laws[4] = { 0, };
@@ -4073,156 +3783,7 @@ static void t4_vpm450_init(struct t4 *wc)
 			"span(s)\n", wc->numspans);
 		
 }
-
-static void t4_vpm400_init(struct t4 *wc)
-{
-	unsigned char reg;
-	unsigned int mask;
-	unsigned int ver;
-	unsigned int i, x, y, gen2vpm=0;
-
-	if (!vpmsupport) {
-		dev_info(&wc->dev->dev, "VPM400: Support Disabled\n");
-		return;
-	}
-
-	switch(vpmspans) {
-	case 4:
-	case 2:
-	case 1:
-		break;
-	default:
-		dev_notice(&wc->dev->dev, "VPM400: %d is not a valid vpmspans "
-				"value, using 4\n", vpmspans);
-		vpmspans = 4;
-	}
-
-	for (x=0;x<8;x++) {
-		int spanno = t4_vpm_spanno(x);
-		struct t4_span *ts = wc->tspans[spanno];
-		int echotail = t4_vpm_echotail();
-
-		ver = t4_vpm_in(wc, x, 0x1a0); /* revision */
-		if ((ver != 0x26) && (ver != 0x33)) {
-			if (x)
-				dev_notice(&wc->dev->dev,
-					"VPM400: Inoperable\n");
-			return;
-		}
-		if (ver == 0x33) {
-			if (x && !gen2vpm) {
-				dev_notice(&wc->dev->dev,
-					"VPM400: Inconsistent\n");
-				return;
-			}
-			ts->spanflags |= FLAG_VPM2GEN;
-			gen2vpm++;
-		} else if (gen2vpm) {
-			dev_notice(&wc->dev->dev,
-				"VPM400: Inconsistent\n");
-			return;
-		}
-
-
-		/* Setup GPIO's */
-		for (y=0;y<4;y++) {
-			t4_vpm_out(wc, x, 0x1a8 + y, 0x00); /* GPIO out */
-			t4_vpm_out(wc, x, 0x1ac + y, 0x00); /* GPIO dir */
-			t4_vpm_out(wc, x, 0x1b0 + y, 0x00); /* GPIO sel */
-		}
-
-		/* Setup TDM path - sets fsync and tdm_clk as inputs */
-		reg = t4_vpm_in(wc, x, 0x1a3); /* misc_con */
-		t4_vpm_out(wc, x, 0x1a3, reg & ~2);
-
-		/* Setup timeslots */
-		t4_vpm_out(wc, x, 0x02f, 0x20 | (spanno << 3)); 
-
-		/* Setup Echo length (128 taps) */
-		t4_vpm_out(wc, x, 0x022, (echotail >> 8));
-		t4_vpm_out(wc, x, 0x023, (echotail & 0xff));
-		
-		/* Setup the tdm channel masks for all chips*/
-		mask = t4_vpm_mask(x);
-		for (i = 0; i < 4; i++)
-			t4_vpm_out(wc, x, 0x30 + i, (mask >> (i << 3)) & 0xff);
-
-		/* Setup convergence rate */
-		reg = t4_vpm_in(wc,x,0x20);
-		reg &= 0xE0;
-		if (ts->spantype == TYPE_E1) {
-			if (x < vpmspans)
-				dev_info(&wc->dev->dev, "VPM400: Span %d "
-						"A-law mode\n", spanno);
-			reg |= 0x01;
-		} else {
-			if (x < vpmspans)
-				dev_info(&wc->dev->dev, "VPM400: Span %d "
-						"U-law mode\n", spanno);
-			reg &= ~0x01;
-		}
-		t4_vpm_out(wc,x,0x20,(reg | 0x20));
-		
-		/* Initialize echo cans */
-		for (i = 0 ; i < MAX_TDM_CHAN; i++) {
-			if (mask & (0x00000001 << i))
-				t4_vpm_out(wc,x,i,0x00);
-		}
-
-		wait_a_little();
-
-		/* Put in bypass mode */
-		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
-			if (mask & (0x00000001 << i)) {
-				t4_vpm_out(wc,x,i,0x01);
-			}
-		}
-
-		/* Enable bypass */
-		for (i = 0 ; i < MAX_TDM_CHAN ; i++) {
-			if (mask & (0x00000001 << i))
-				t4_vpm_out(wc,x,0x78 + i,0x01);
-		}
-      
-		/* set DTMF detection threshold */
-		t4_vpm_set_dtmf_threshold(wc, dtmfthreshold);
-
-		/* Enable DTMF detectors (always DTMF detect all spans) */
-		for (i = 0; i < MAX_DTMF_DET; i++) {
-			t4_vpm_out(wc, x, 0x98 + i, 0x40 | (i * 2) | ((x < 4) ? 0 : 1));
-		}
-		for (i = 0x34; i < 0x38; i++)
-			t4_vpm_out(wc, x, i, 0x00);
-		for (i = 0x3C; i < 0x40; i++)
-			t4_vpm_out(wc, x, i, 0x00);
-
-		for (i = 0x48; i < 0x4B; i++)
-			t4_vpm_out(wc, x, i, 0x00);
-		for (i = 0x50; i < 0x53; i++)
-			t4_vpm_out(wc, x, i, 0x00);
-		for (i = 0xB8; i < 0xBE; i++)
-			t4_vpm_out(wc, x, i, 0xFF);
-		if (gen2vpm) {
-			for (i = 0xBE; i < 0xC0; i++)
-				t4_vpm_out(wc, x, i, 0xFF);
-		} else {
-			for (i = 0xBE; i < 0xC0; i++)
-				t4_vpm_out(wc, x, i, 0x00);
-		}
-		for (i = 0xC0; i < 0xC4; i++)
-			t4_vpm_out(wc, x, i, (x < 4) ? 0x55 : 0xAA);
-
-	} 
-	if (vpmdtmfsupport == -1) {
-		dev_info(&wc->dev->dev, "VPM400: hardware DTMF enabled.\n");
-		vpmdtmfsupport = 0;
-	}
-	dev_info(&wc->dev->dev, "VPM400%s: Present and operational servicing "
-		"%d span(s)\n", (gen2vpm ? " (2nd Gen)" : ""), wc->numspans);
-	wc->vpm = T4_VPM_PRESENT;
-}
-
-#endif
+#endif /* VPM_SUPPORT */
 
 static void t4_tsi_reset(struct t4 *wc) 
 {
@@ -4677,10 +4238,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 
 #ifdef VPM_SUPPORT
 	if (!wc->vpm) {
-		wait_a_little();
-		t4_vpm400_init(wc);
-		if (!wc->vpm)
-			t4_vpm450_init(wc);
+		t4_vpm450_init(wc);
 		wc->dmactrl |= wc->vpm;
 		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 		if (wc->vpm)
@@ -4908,8 +4466,6 @@ MODULE_PARM_DESC(ignore_rotary, "Set to > 0 to ignore the rotary switch when " \
 #ifdef VPM_SUPPORT
 module_param(vpmsupport, int, 0600);
 module_param(vpmdtmfsupport, int, 0600);
-module_param(vpmspans, int, 0600);
-module_param(dtmfthreshold, int, 0600);
 #endif
 
 MODULE_DEVICE_TABLE(pci, t4_pci_tbl);
