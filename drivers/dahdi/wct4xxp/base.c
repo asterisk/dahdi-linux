@@ -3933,9 +3933,10 @@ static int t4_hardware_init_2(struct t4 *wc)
 	t4_pci_out(wc, WC_LEDS, 0x000000ff);
 	t4_activate(wc);
 
-	/* 
-	 * In order to find out the QFALC framer version, we have to temporarily term off compat
-	 * mode and take a peak at VSTR.  We turn compat back on when we are done.
+	/* In order to find out the QFALC framer version, we have to
+	 * temporarily turn off compat mode and take a peak at VSTR.  We turn
+	 * compat back on when we are done.
+	 *
 	 */
 	if (t4_framer_in(wc, 0, 0x4a) != 0x05)
 		dev_info(&wc->dev->dev, "WARNING: FALC framer not intialized "
