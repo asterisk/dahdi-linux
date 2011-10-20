@@ -238,6 +238,7 @@ static int altab[] = {
 
 /* names of available HWEC modules */
 #ifdef VPM_SUPPORT
+#define T4_VPM_PRESENT (1 << 28)
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
 #endif
@@ -369,12 +370,9 @@ struct t4 {
 	
 #ifdef VPM_SUPPORT
 	struct vpm450m *vpm450m;
-	int vpm;
 #endif	
 
 };
-
-#define T4_VPM_PRESENT (1 << 28)
 
 #ifdef VPM_SUPPORT
 static void t4_vpm450_init(struct t4 *wc);
@@ -1014,7 +1012,7 @@ unsigned int oct_get_reg(void *data, unsigned int reg)
 static const char *t4_echocan_name(const struct dahdi_chan *chan)
 {
 	struct t4 *wc = chan->pvt;
-	if (wc->vpm == T4_VPM_PRESENT) {
+	if (wc->vpm450m) {
 		if (wc->numspans == 2)
 			return vpmoct064_name;
 		else if (wc->numspans == 4)
@@ -1034,7 +1032,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	const struct dahdi_echocan_ops *ops;
 	const struct dahdi_echocan_features *features;
 
-	if (!vpmsupport || !wc->vpm)
+	if (!vpmsupport || !wc->vpm450m)
 		return -ENODEV;
 
 	ops = &vpm_ec_ops;
@@ -1112,7 +1110,7 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 	case DAHDI_TONEDETECT:
 		if (get_user(j, (__user int *) data))
 			return -EFAULT;
-		if (!wc->vpm)
+		if (!wc->vpm450m)
 			return -ENOSYS;
 		if (j && (vpmdtmfsupport == 0))
 			return -ENOSYS;
@@ -1124,13 +1122,13 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 			set_bit(chan->chanpos - 1, &ts->dtmfmutemask);
 		else
 			clear_bit(chan->chanpos - 1, &ts->dtmfmutemask);
-		if (wc->vpm450m) {
-			channel = (chan->chanpos) << 2;
-			if (!wc->t1e1)
-				channel += (4 << 2);
-			channel |= chan->span->offset;
-			vpm450m_setdtmf(wc->vpm450m, channel, j & DAHDI_TONEDETECT_ON, j & DAHDI_TONEDETECT_MUTE);
-		}
+
+		channel = (chan->chanpos) << 2;
+		if (!wc->t1e1)
+			channel += (4 << 2);
+		channel |= chan->span->offset;
+		vpm450m_setdtmf(wc->vpm450m, channel, j & DAHDI_TONEDETECT_ON,
+				j & DAHDI_TONEDETECT_MUTE);
 		return 0;
 #endif
 	default:
@@ -1691,26 +1689,33 @@ static int t4_close(struct dahdi_chan *chan)
 	return 0;
 }
 
+#ifdef VPM_SUPPORT
 static void set_span_devicetype(struct t4 *wc)
 {
 	int x;
-	struct t4_span *ts;
 
 	for (x = 0; x < wc->numspans; x++) {
-		ts = wc->tspans[x];
+		struct t4_span *const ts = wc->tspans[x];
 		strlcpy(ts->span.devicetype, wc->devtype->desc,
 			sizeof(ts->span.devicetype));
-#ifdef VPM_SUPPORT
-		if (wc->vpm == T4_VPM_PRESENT) {
-			if (!wc->vpm450m)
-				strncat(ts->span.devicetype, " (VPM400M)", sizeof(ts->span.devicetype) - 1);
-			else
-				strncat(ts->span.devicetype, (wc->numspans > 2) ? " (VPMOCT128)" : " (VPMOCT064)",
-					sizeof(ts->span.devicetype) - 1);
+
+		if (wc->vpm450m) {
+			strncat(ts->span.devicetype, (wc->numspans > 2) ? " (VPMOCT128)" : " (VPMOCT064)",
+				sizeof(ts->span.devicetype) - 1);
 		}
-#endif
 	}
 }
+#else
+static void set_span_devicetype(struct t4 *wc)
+{
+	int x;
+	for (x = 0; x < wc->numspans; x++) {
+		struct t4_span *const ts = wc->tspans[x];
+		strlcpy(ts->span.devicetype, wc->devtype->desc,
+			sizeof(ts->span.devicetype));
+	}
+}
+#endif
 
 /* The number of cards we have seen with each
    possible 'order' switch setting.
@@ -2404,7 +2409,7 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		/* Start DMA, enabling DMA interrupts on read only */
 		wc->dmactrl |= (ts->spanflags & FLAG_2NDGEN) ? 0xc0000000 : 0xc0000003;
 #ifdef VPM_SUPPORT
-		wc->dmactrl |= wc->vpm;
+		wc->dmactrl |= (wc->vpm450m) ? T4_VPM_PRESENT : 0;
 #endif
 		/* Seed interrupt register */
 		__t4_pci_out(wc, WC_INTR, 0x0c);
@@ -3443,14 +3448,12 @@ static void t4_isr_bh(unsigned long data)
 		}
 	}
 #ifdef VPM_SUPPORT
-	if (wc->vpm) {
+	if (wc->vpm450m) {
 		if (test_and_clear_bit(T4_CHECK_VPM, &wc->checkflag)) {
-			if (wc->vpm450m) {
-				/* How stupid is it that the octasic can't generate an
-				   interrupt when there's a tone, in spite of what their
-				   documentation says? */
-				t4_check_vpm450(wc);
-			}
+			/* How stupid is it that the octasic can't generate an
+			 * interrupt when there's a tone, in spite of what
+			 * their documentation says? */
+			t4_check_vpm450(wc);
 		}
 	}
 #endif
@@ -3616,15 +3619,12 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 	}
 
 #ifdef VPM_SUPPORT
-	if (wc->vpm && vpmdtmfsupport) {
-		if (wc->vpm450m) {
-			/* How stupid is it that the octasic can't generate an
-			   interrupt when there's a tone, in spite of what their
-			   documentation says? */
-			if (!(wc->intcount & 0xf)) {
-				set_bit(T4_CHECK_VPM, &wc->checkflag);
-			}
-		}
+	if (wc->vpm450m && vpmdtmfsupport) {
+		/* How stupid is it that the octasic can't generate an
+		 * interrupt when there's a tone, in spite of what their
+		 * documentation says? */
+		if (!(wc->intcount & 0xf))
+			set_bit(T4_CHECK_VPM, &wc->checkflag);
 	}
 #endif
 
@@ -3663,7 +3663,8 @@ static int t4_reset_dma(struct t4 *wc)
 	t4_pci_out(wc, WC_COUNT, ((DAHDI_MAX_CHUNKSIZE * 2 * 32 - 1) << 18) | ((DAHDI_MAX_CHUNKSIZE * 2 * 32 - 1) << 2));
 	t4_pci_out(wc, WC_INTR, 0);
 #ifdef VPM_SUPPORT
-	wc->dmactrl = 0xc0000000 | (1 << 29) | wc->vpm;
+	wc->dmactrl = 0xc0000000 | (1 << 29) |
+		      ((wc->vpm450m) ? T4_VPM_PRESENT : 0);
 #else	
 	wc->dmactrl = 0xc0000000 | (1 << 29);
 #endif
@@ -3778,7 +3779,6 @@ static void t4_vpm450_init(struct t4 *wc)
 		vpmdtmfsupport = 0;
 	}
 
-	wc->vpm = T4_VPM_PRESENT;
 	dev_info(&wc->dev->dev, "VPM450: Present and operational servicing %d "
 			"span(s)\n", wc->numspans);
 		
@@ -4237,11 +4237,11 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	t4_gpio_setdir(wc, (0xff), (0xff));
 
 #ifdef VPM_SUPPORT
-	if (!wc->vpm) {
+	if (!wc->vpm450m) {
 		t4_vpm450_init(wc);
-		wc->dmactrl |= wc->vpm;
+		wc->dmactrl |= (wc->vpm450m) ? T4_VPM_PRESENT : 0;
 		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
-		if (wc->vpm)
+		if (wc->vpm450m)
 			set_span_devicetype(wc);
 	}
 #endif
