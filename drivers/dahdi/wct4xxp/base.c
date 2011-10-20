@@ -541,12 +541,18 @@ static inline unsigned int __t4_pci_in(struct t4 *wc, const unsigned int addr)
 
 static inline void __t4_pci_out(struct t4 *wc, const unsigned int addr, const unsigned int value)
 {
+#ifdef DEBUG
 	unsigned int tmp;
+#endif
 	writel(value, wc->membase + (addr * sizeof(u32)));
+#ifdef DEBUG
 	tmp = __t4_pci_in(wc, WC_VERSION);
 	if ((tmp & 0xffff0000) != 0xc01a0000)
 		dev_notice(&wc->dev->dev,
 				"Version Synchronization Error!\n");
+#else
+	__t4_pci_in(wc, WC_VERSION);
+#endif
 }
 
 static inline void __t4_gpio_set(struct t4 *wc, unsigned bits, unsigned int val)
@@ -621,22 +627,24 @@ static inline unsigned int t4_pci_in(struct t4 *wc, const unsigned int addr)
 	return ret;
 }
 
-static unsigned int __t4_framer_in(struct t4 *wc, int unit,
+static unsigned int __t4_framer_in(const struct t4 *wc, int unit,
 				   const unsigned int addr)
 {
 	unsigned int ret;
+	register u32 val;
+	void __iomem *const wc_laddr = wc->membase + (WC_LADDR*sizeof(u32));
+	void __iomem *const wc_version = wc->membase + (WC_VERSION*sizeof(u32));
+	void __iomem *const wc_ldata = wc->membase + (WC_LDATA*sizeof(u32));
 	unit &= 0x3;
-	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
-	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff) | WC_LFRMR_CS | WC_LREAD);
-	__t4_pci_out(wc, WC_VERSION, 0);
-	ret = __t4_pci_in(wc, WC_LDATA);
- 	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
 
-	if (unlikely(debug & DEBUG_REGS))
-		dev_info(&wc->dev->dev, "Reading unit %d address %02x is "
-				"%02x\n", unit, addr, ret & 0xff);
-
-	return ret & 0xff;
+	val = ((unit & 0x3) << 8) | (addr & 0xff);
+	writel(val, wc_laddr);
+	/* readl(wc_version); */
+	writel(val | WC_LFRMR_CS | WC_LREAD, wc_laddr);
+	readl(wc_version);
+	ret = readb(wc_ldata);
+	writel(val, wc_laddr);
+	return ret;
 }
 
 static unsigned int
@@ -648,25 +656,27 @@ t4_framer_in(struct t4 *wc, int unit, const unsigned int addr)
 	ret = __t4_framer_in(wc, unit, addr);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	return ret;
-
 }
 
-static void __t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
+static void __t4_framer_out(const struct t4 *wc, int unit, const u8 addr,
 			    const unsigned int value)
 {
-	unit &= 0x3;
-	if (unlikely(debug & DEBUG_REGS))
-		dev_info(&wc->dev->dev, "Writing %02x to address %02x of "
-				"unit %d\n", value, addr, unit);
-	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));
-	__t4_pci_out(wc, WC_LDATA, value);
-	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff) | WC_LFRMR_CS | WC_LWRITE);
-	__t4_pci_out(wc, WC_LADDR, (unit << 8) | (addr & 0xff));	
-	if (unlikely(debug & DEBUG_REGS))
-		dev_info(&wc->dev->dev, "Write complete\n");
+	register u32 val;
+	void __iomem *const wc_laddr = wc->membase + (WC_LADDR*sizeof(u32));
+	void __iomem *const wc_version = wc->membase + (WC_VERSION*sizeof(u32));
+	void __iomem *const wc_ldata = wc->membase + (WC_LDATA*sizeof(u32));
+
+	val = ((unit & 0x3) << 8) | (addr & 0xff);
+	writel(val, wc_laddr);
+	writel(value, wc_ldata);
+	readl(wc_version);
+	writel(val | WC_LFRMR_CS | WC_LWRITE, wc_laddr);
+	/* readl(wc_version); */
+	writel(val, wc_laddr);
 }
 
-static void t4_framer_out(struct t4 *wc, int unit, const unsigned int addr,
+static void t4_framer_out(struct t4 *wc, int unit,
+			  const unsigned int addr,
 			  const unsigned int value)
 {
 	unsigned long flags;
