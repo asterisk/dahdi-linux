@@ -1461,6 +1461,26 @@ struct mutex {
 #define	chan_err(chan, fmt, ...)	chan_printk(ERR, "", chan, fmt, \
 						## __VA_ARGS__)
 
+#ifndef pr_err
+#define pr_err(fmt, ...) \
+	printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+#ifndef pr_warning
+#define pr_warning(fmt, ...) \
+	printk(KERN_WARNING pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+#ifndef pr_warn
+#define pr_warn pr_warning
+#endif
+#ifndef pr_notice
+#define pr_notice(fmt, ...) \
+	printk(KERN_NOTICE pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+#ifndef pr_info
+#define pr_info(fmt, ...) \
+	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+#endif
+
 /* The dbg_* ones use a magical variable 'debug' and the user should be
  * aware of that.
 */
