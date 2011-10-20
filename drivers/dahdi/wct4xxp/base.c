@@ -41,6 +41,7 @@
 #include <linux/delay.h>
 #include <linux/moduleparam.h>
 
+#include <stdbool.h>
 #include <dahdi/kernel.h>
 
 #include "wct4xxp.h"
@@ -373,6 +374,11 @@ struct t4 {
 #endif	
 
 };
+
+static inline bool has_e1_span(const struct t4 *wc)
+{
+	return (wc->t1e1) != 0;
+}
 
 #ifdef VPM_SUPPORT
 static void t4_vpm450_init(struct t4 *wc);
@@ -766,7 +772,7 @@ static void t4_check_vpm450(struct t4 *wc)
 		while(vpm450m_getdtmf(wc->vpm450m, &channel, &tone, &start)) {
 			span = channel & 0x3;
 			channel >>= 2;
-			if (!wc->t1e1)
+			if (!has_e1_span(wc))
 				channel -= 5;
 			else
 				channel -= 1;
@@ -800,6 +806,7 @@ static void t4_check_vpm450(struct t4 *wc)
 		}
 	}
 }
+
 #endif /* VPM_SUPPORT */
 
 static void hdlc_stop(struct t4 *wc, unsigned int span)
@@ -1049,7 +1056,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	(*ec)->ops = ops;
 	(*ec)->features = *features;
 
-	channel = wc->t1e1 ? chan->chanpos : chan->chanpos + 4;
+	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
 	if (wc->vpm450m) {
 		channel = channel << 2;
@@ -1071,7 +1078,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 
 	memset(ec, 0, sizeof(*ec));
 
-	channel = wc->t1e1 ? chan->chanpos : chan->chanpos + 4;
+	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
 	if (wc->vpm450m) {
 		channel = channel << 2;
@@ -1124,7 +1131,7 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 			clear_bit(chan->chanpos - 1, &ts->dtmfmutemask);
 
 		channel = (chan->chanpos) << 2;
-		if (!wc->t1e1)
+		if (!has_e1_span(wc))
 			channel += (4 << 2);
 		channel |= chan->span->offset;
 		vpm450m_setdtmf(wc->vpm450m, channel, j & DAHDI_TONEDETECT_ON,
@@ -1729,7 +1736,7 @@ static void setup_chunks(struct t4 *wc, int which)
 	int x, y;
 	int gen2;
 
-	if (!wc->t1e1)
+	if (!has_e1_span(wc))
 		offset += 4;
 
 	gen2 = (wc->tspans[0]->spanflags & FLAG_2NDGEN);
@@ -1903,7 +1910,7 @@ static void t4_serial_setup(struct t4 *wc, int unit)
 	t4_framer_out(wc, unit, FRMR_SIC2, 0x20 | (unit << 1)); /* SIC2: No FFS, no center receive eliastic buffer, phase */
 	t4_framer_out(wc, unit, FRMR_SIC3, 0x04);	/* SIC3: Edges for capture */
 	t4_framer_out(wc, unit, FRMR_CMR2, 0x00);	/* CMR2: We provide sync and clock for tx and rx. */
-	if (!wc->t1e1) { /* T1 mode */
+	if (!has_e1_span(wc)) { /* T1 mode */
 		t4_framer_out(wc, unit, FRMR_XC0, 0x03);	/* XC0: Normal operation of Sa-bits */
 		t4_framer_out(wc, unit, FRMR_XC1, 0x84);	/* XC1: 0 offset */
 		if (wc->tspans[unit]->spantype == TYPE_J1)
@@ -2492,7 +2499,7 @@ static void t4_receiveprep(struct t4 *wc, int irq)
 	int x,y,z;
 	unsigned int tmp;
 	int offset=0;
-	if (!wc->t1e1)
+	if (!has_e1_span(wc))
 		offset = 4;
 	if (irq & 1) {
 		/* First part */
@@ -2520,7 +2527,7 @@ static void t4_receiveprep(struct t4 *wc, int irq)
 			wc->tspans[1]->span.chans[z]->readchunk[x] = (tmp & 0xff0000) >> 16;
 			wc->tspans[0]->span.chans[z]->readchunk[x] = tmp >> 24;
 		}
-		if (wc->t1e1) {
+		if (has_e1_span(wc)) {
 			if (wc->e1recover > 0)
 				wc->e1recover--;
 			tmp = readchunk[0];
@@ -2624,10 +2631,10 @@ static void t4_prep_gen2(struct t4 *wc)
 static void t4_transmitprep(struct t4 *wc, int irq)
 {
 	u32 *writechunk;
-	int x,y,z;
+	int x, y, z;
 	unsigned int tmp;
-	int offset=0;
-	if (!wc->t1e1)
+	int offset = 0;
+	if (!has_e1_span(wc))
 		offset = 4;
 	if (irq & 1) {
 		/* First part */
@@ -2650,7 +2657,7 @@ static void t4_transmitprep(struct t4 *wc, int irq)
 				  (wc->tspans[0]->span.chans[z]->writechunk[x] << 24);
 			writechunk[z+offset] = tmp;
 		}
-		if (wc->t1e1) {
+		if (has_e1_span(wc)) {
 			for (z=24;z<31;z++) {
 				/* Only E1 channels now */
 				tmp = 0;
@@ -3806,7 +3813,7 @@ static void t4_tsi_assign(struct t4 *wc, int fromspan, int fromchan, int tospan,
 	fromts = (fromspan << 5) |(fromchan);
 	tots = (tospan << 5) | (tochan);
 
-	if (!wc->t1e1) {
+	if (!has_e1_span(wc)) {
 		fromts += 4;
 		tots += 4;
 	}
@@ -3826,7 +3833,7 @@ static void t4_tsi_unassign(struct t4 *wc, int tospan, int tochan)
 
 	tots = (tospan << 5) | (tochan);
 
-	if (!wc->t1e1) 
+	if (!has_e1_span(wc))
 		tots += 4;
 	spin_lock_irqsave(&wc->reglock, flags);
 	wc->dmactrl &= ~0x00007fff;
