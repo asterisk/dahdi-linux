@@ -513,11 +513,7 @@ static struct t4 *cards[MAX_T4_CARDS];
 #define MAX_DTMF_DET 16
 
 #define HDLC_IMR0_MASK (FRMR_IMR0_RME | FRMR_IMR0_RPF)
-#if 0
-#define HDLC_IMR1_MASK (FRMR_IMR1_ALLS | FRMR_IMR1_XDU | FRMR_IMR1_XPR)
-#else
 #define HDLC_IMR1_MASK	(FRMR_IMR1_XDU | FRMR_IMR1_XPR)
-#endif
 
 static inline unsigned int __t4_pci_in(struct t4 *wc, const unsigned int addr)
 {
@@ -788,17 +784,6 @@ static inline void __t4_vpm_out(struct t4 *wc, int unit, const unsigned int addr
 	__t4_pci_out(wc, WC_LADDR, 0);
 	if (debug & DEBUG_REGS)
 		dev_notice(&wc->dev->dev, "Write complete\n");
-
-      
-#if 0
-	{ unsigned int tmp;
-	tmp = t4_vpm_in(wc, unit, addr);
-	if (tmp != value) {
-		dev_notice(&wc->dev->dev, "Expected %d from unit %d echo "
-				"register %d but got %d instead\n",
-				value, unit, addr, tmp);
-	} }
-#endif
 }
 
 static inline void __t4_oct_out(struct t4 *wc, unsigned int addr, unsigned int value)
@@ -1147,16 +1132,6 @@ static void __set_clear(struct t4 *wc, int span)
 	}
 }
 
-#if 0
-static void set_clear(struct t4 *wc, int span)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&wc->reglock, flags);
-	__set_clear(wc, span);
-	spin_unlock_irqrestore(&wc->reglock, flags);
-}
-#endif
-
 static int t4_dacs(struct dahdi_chan *dst, struct dahdi_chan *src)
 {
 	struct t4 *wc;
@@ -1421,9 +1396,6 @@ static void inline t4_hdlc_xmit_fifo(struct t4 *wc, unsigned int span, struct t4
 				dev_notice(&wc->dev->dev,
 					"transmiting XHF|XME\n");
 			t4_framer_cmd_wait(wc, span, FRMR_CMDR_XHF | FRMR_CMDR_XME);
-#if 0
-			ts->sigactive = (__t4_framer_in(wc, span, FRMR_SIS) & FRMR_SIS_XFW) ? 0 : 1;
-#endif
 			++ts->frames_out;
 			if ((debug & DEBUG_FRAMER) && !(ts->frames_out & 0x0f))
 				dev_notice(&wc->dev->dev, "Transmitted %d "
@@ -1600,22 +1572,6 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 			break;
 		case DAHDI_MAINT_PRBS:
 			dev_info(&wc->dev->dev, "PRBS not supported\n");
-#if 0
-			dev_notice(&wc->dev->dev, "Enabling PRBS!\n");
-			span->mainttimer = 1;
-			/* Enable PRBS monitor */
-			reg = t4_framer_in(wc, span->offset, LCR1_T);
-			reg |= EPRM;
-
-			/* Setup PRBS xmit */
-			t4_framer_out(wc, span->offset, TPC0_T, 0);
-
-			/* Enable PRBS transmit */
-			reg |= XPRBS;
-			reg &= ~LLBP;
-			reg &= ~FLLB;
-			t4_framer_out(wc, span->offset, LCR1_T, reg);
-#endif
 			return -ENOSYS;
 		case DAHDI_RESET_COUNTERS:
 			t4_reset_counters(span);
@@ -2318,7 +2274,6 @@ static int __t4_findsync(struct t4 *wc)
 	int newsyncnum = 0;			/* wct4xxp card number */
 	int newsyncspan = 0;		/* span on given wct4xxp card */
 	spin_lock_irqsave(&synclock, flags);
-#if 1
 	if (!wc->num) {
 		/* If we're the first card, go through all the motions, up to 8 levels
 		   of sync source */
@@ -2364,7 +2319,6 @@ found:
 		}
 	}
 	__t4_update_timing(wc);
-#endif	
 	spin_unlock_irqrestore(&synclock, flags);
 	return 0;
 }
@@ -2676,10 +2630,6 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 			__t4_pci_out(wc, 5, (ms_per_irq << 16) | wc->numbufs);
 		/* enable interrupts */
 		/* Start DMA, enabling DMA interrupts on read only */
-#if 0
-		/* Enable framer only interrupts */
-		wc->dmactrl |= 1 << 27;
-#endif
 		wc->dmactrl |= (ts->spanflags & FLAG_2NDGEN) ? 0xc0000000 : 0xc0000003;
 #ifdef VPM_SUPPORT
 		wc->dmactrl |= wc->vpm;
@@ -3478,15 +3428,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 		if (isr0 & FRMR_ISR0_RME) {
 			/* Do checks for HDLC problems */
 			unsigned char rsis = readbuf[readsize-1];
-#if 0
-			unsigned int olddebug = debug;
-#endif
 			unsigned char rsis_reg = t4_framer_in(wc, span, FRMR_RSIS);
-
-#if 0
-			if ((rsis != 0xA2) || (rsis != rsis_reg))
-				debug |= DEBUG_FRAMER;
-#endif
 
 			++ts->frames_in;
 			if ((debug & DEBUG_FRAMER) && !(ts->frames_in & 0x0f))
@@ -3527,9 +3469,6 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 						"valid HDLC frame on span %d"
 						"\n", span);
 			}
-#if 0
-			debug = olddebug;
-#endif
 		} else if (isr0 & FRMR_ISR0_RPF)
 			dahdi_hdlc_putbuf(sigchan, readbuf, readsize);
 	}
@@ -3567,11 +3506,6 @@ DAHDI_IRQ_HANDLER(t4_interrupt)
 	unsigned int status;
 	unsigned int status2;
 
-#if 0
-	if (wc->intcount < 20)
-		dev_notice(&wc->dev->dev, "Pre-interrupt\n");
-#endif
-	
 	/* Make sure it's really for us */
 	status = __t4_pci_in(wc, WC_INTR);
 
@@ -3596,28 +3530,12 @@ DAHDI_IRQ_HANDLER(t4_interrupt)
 	}
 
 	wc->intcount++;
-#if 0
-	if (wc->intcount < 20)
-		dev_notice(&wc->dev->dev, "Got interrupt, status = %08x\n",
-				status);
-#endif		
 
 	if (status & 0x3) {
 		t4_receiveprep(wc, status);
 		t4_transmitprep(wc, status);
 	}
 	
-#if 0
-	if ((wc->intcount < 10) || !(wc->intcount % 1000)) {
-		status2 = t4_framer_in(wc, 0, FRMR_CIS);
-		dev_notice(&wc->dev->dev, "Status2: %04x\n", status2);
-		for (x = 0;x<wc->numspans;x++) {
-			status2 = t4_framer_in(wc, x, FRMR_FRS0);
-			dev_notice(&wc->dev->dev, "FRS0/%d: %04x\n", x,
-					status2);
-		}
-	}
-#endif
 	t4_do_counters(wc);
 
 	x = wc->intcount & 15 /* 63 */;
@@ -3773,12 +3691,6 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 	unsigned int status;
 	unsigned char rxident, expected;
 	
-#if 0
-	if (unlikely(test_bit(T4_CHANGE_LATENCY, &wc->checkflag))) {
-		goto out;
-	}
-#endif
-
 	/* Check this first in case we get a spurious interrupt */
 	if (unlikely(test_bit(T4_STOP_DMA, &wc->checkflag))) {
 		/* Stop DMA cleanly if requested */
@@ -3900,24 +3812,12 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 
 		if (wc->devtype->flags & FLAG_5THGEN) {
 			unsigned int current_index = (reg5 >> 8) & 0x7f;
-#if 0
-			int catchup = 0;
-#endif
 
 			while (((wc->lastindex + 1) % wc->numbufs) != current_index) {
-#if 0
-				catchup++;
-#endif
 				wc->lastindex = (wc->lastindex + 1) % wc->numbufs;
 				setup_chunks(wc, wc->lastindex);
 				t4_prep_gen2(wc);
 			}
-#if 0
-			if (catchup > 1) {
-				dev_info(&wc->dev->dev, "Caught up %d "
-						"chunks\n", catchup);
-			}
-#endif
 		} else {
 			t4_prep_gen2(wc);
 		}
@@ -4635,11 +4535,6 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	wc->membase = pci_iomap(pdev, 0, 0);
 	/* This rids of the Double missed interrupt message after loading */
 	wc->last0 = 1;
-#if 0
-	if (!request_mem_region(wc->memaddr, wc->memlen, wc->variety))
-		dev_info(&wc->dev->dev, "wct4: Unable to request memory "
-				"region :(, using anyway...\n");
-#endif
 	if (pci_request_regions(pdev, wc->devtype->desc))
 		dev_info(&pdev->dev, "wct%dxxp: Unable to request regions\n",
 				wc->numspans);
@@ -4795,19 +4690,6 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 
 	create_sysfs_files(wc);
 	
-#if 0
-	for (x=0;x<0x10000;x++) {
-		__t4_raw_oct_out(wc, 0x0004, x);
-		__t4_raw_oct_out(wc, 0x000a, x ^ 0xffff);
-		if (__t4_raw_oct_in(wc, 0x0004) != x) 
-			dev_notice(&wc->dev->dev, "Register 4 failed %04x\n",
-					x);
-		if (__t4_raw_oct_in(wc, 0x000a) != (x ^ 0xffff))
-			dev_notice(&wc->dev->dev, "Register 10 failed %04x\n",
-					x);
-	}
-#endif
-
 	res = 0;
 	if (ignore_rotary)
 		res = t4_launch(wc);
