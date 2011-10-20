@@ -808,6 +808,7 @@ static void hdlc_stop(struct t4 *wc, unsigned int span)
 {
 	struct t4_span *t = wc->tspans[span];
 	unsigned char imr0, imr1, mode;
+	unsigned long flags;
 	int i = 0;
 
 	if (debug & DEBUG_FRAMER)
@@ -820,19 +821,21 @@ static void hdlc_stop(struct t4 *wc, unsigned int span)
 		t4_framer_out(wc, span, FRMR_TTR_BASE + i, 0x00);
 	}
 
-	imr0 = t4_framer_in(wc, span, FRMR_IMR0);
-	imr1 = t4_framer_in(wc, span, FRMR_IMR1);
+	spin_lock_irqsave(&wc->reglock, flags);
+	imr0 = __t4_framer_in(wc, span, FRMR_IMR0);
+	imr1 = __t4_framer_in(wc, span, FRMR_IMR1);
 
 	/* Disable HDLC interrupts */
 	imr0 |= HDLC_IMR0_MASK;
-	t4_framer_out(wc, span, FRMR_IMR0, imr0);
+	__t4_framer_out(wc, span, FRMR_IMR0, imr0);
 
 	imr1 |= HDLC_IMR1_MASK;
-	t4_framer_out(wc, span, FRMR_IMR1, imr1);
+	__t4_framer_out(wc, span, FRMR_IMR1, imr1);
 
-	mode = t4_framer_in(wc, span, FRMR_MODE);
+	mode = __t4_framer_in(wc, span, FRMR_MODE);
 	mode &= ~FRMR_MODE_HRAC;
-	t4_framer_out(wc, span, FRMR_MODE, mode);
+	__t4_framer_out(wc, span, FRMR_MODE, mode);
+	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	t->sigactive = 0;
 }
@@ -879,29 +882,33 @@ static int hdlc_start(struct t4 *wc, unsigned int span, struct dahdi_chan *chan,
 
 	mode |= FRMR_MODE_HRAC;
 
+	spin_lock_irqsave(&wc->reglock, flags);
+
 	/* Make sure we're in the right mode */
-	t4_framer_out(wc, span, FRMR_MODE, mode);
-	t4_framer_out(wc, span, FRMR_TSEO, 0x00);
-	t4_framer_out(wc, span, FRMR_TSBS1, hardhdlcmode);
+	__t4_framer_out(wc, span, FRMR_MODE, mode);
+	__t4_framer_out(wc, span, FRMR_TSEO, 0x00);
+	__t4_framer_out(wc, span, FRMR_TSBS1, hardhdlcmode);
 
 	/* Set the interframe gaps, etc */
-	t4_framer_out(wc, span, FRMR_CCR1, FRMR_CCR1_ITF|FRMR_CCR1_EITS);
+	__t4_framer_out(wc, span, FRMR_CCR1, FRMR_CCR1_ITF|FRMR_CCR1_EITS);
 
-	t4_framer_out(wc, span, FRMR_CCR2, FRMR_CCR2_RCRC);
+	__t4_framer_out(wc, span, FRMR_CCR2, FRMR_CCR2_RCRC);
 	
 	/* Set up the time slot that we want to tx/rx on */
-	t4_framer_out(wc, span, FRMR_TTR_BASE + (offset / 8), (0x80 >> (offset % 8)));
-	t4_framer_out(wc, span, FRMR_RTR_BASE + (offset / 8), (0x80 >> (offset % 8)));
+	__t4_framer_out(wc, span, FRMR_TTR_BASE + (offset / 8), (0x80 >> (offset % 8)));
+	__t4_framer_out(wc, span, FRMR_RTR_BASE + (offset / 8), (0x80 >> (offset % 8)));
 
-	imr0 = t4_framer_in(wc, span, FRMR_IMR0);
-	imr1 = t4_framer_in(wc, span, FRMR_IMR1);
+	imr0 = __t4_framer_in(wc, span, FRMR_IMR0);
+	imr1 = __t4_framer_in(wc, span, FRMR_IMR1);
 
 	/* Enable our interrupts again */
 	imr0 &= ~HDLC_IMR0_MASK;
-	t4_framer_out(wc, span, FRMR_IMR0, imr0);
+	__t4_framer_out(wc, span, FRMR_IMR0, imr0);
 
 	imr1 &= ~HDLC_IMR1_MASK;
-	t4_framer_out(wc, span, FRMR_IMR1, imr1);
+	__t4_framer_out(wc, span, FRMR_IMR1, imr1);
+
+	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	/* Reset the signaling controller */
 	t4_framer_cmd_wait(wc, span, FRMR_CMDR_SRES);
@@ -1789,6 +1796,7 @@ static void init_spans(struct t4 *wc)
 	int gen2;
 	struct t4_span *ts;
 	unsigned int reg;
+	unsigned long flags;
 	
 	gen2 = (wc->tspans[0]->spanflags & FLAG_2NDGEN);
 	for (x = 0; x < wc->numspans; x++) {
@@ -1861,11 +1869,13 @@ static void init_spans(struct t4 *wc)
 		ts->alarmcheck_time = jiffies + msecs_to_jiffies(250);
 
 		/* Enable 1sec timer interrupt */
-		reg = t4_framer_in(wc, x, FMR1_T);
-		t4_framer_out(wc, x, FMR1_T, (reg | FMR1_ECM));
+		spin_lock_irqsave(&wc->reglock, flags);
+		reg = __t4_framer_in(wc, x, FMR1_T);
+		__t4_framer_out(wc, x, FMR1_T, (reg | FMR1_ECM));
 
 		/* Enable Errored Second interrupt */
-		t4_framer_out(wc, x, ESM, 0);
+		__t4_framer_out(wc, x, ESM, 0);
+		spin_unlock_irqrestore(&wc->reglock, flags);
 
 		t4_reset_counters(&ts->span);
 
@@ -3924,6 +3934,7 @@ static int t4_hardware_init_2(struct t4 *wc)
 {
 	int x;
 	unsigned int regval;
+	unsigned long flags;
 
 	if (t4_pci_in(wc, WC_VERSION) >= 0xc01a0165) {
 		wc->tspans[0]->spanflags |= FLAG_OCTOPT;
@@ -3941,10 +3952,13 @@ static int t4_hardware_init_2(struct t4 *wc)
 	if (t4_framer_in(wc, 0, 0x4a) != 0x05)
 		dev_info(&wc->dev->dev, "WARNING: FALC framer not intialized "
 				"in compatibility mode.\n");
-	regval = t4_framer_in(wc, 0 ,0xd6);
+	spin_lock_irqsave(&wc->reglock, flags);
+	regval = __t4_framer_in(wc, 0, 0xd6);
 	regval |= (1 << 5); /* set COMP_DIS*/
-	t4_framer_out(wc, 0, 0xd6, regval);
-	regval = t4_framer_in(wc, 0, 0x4a);
+	__t4_framer_out(wc, 0, 0xd6, regval);
+	regval = __t4_framer_in(wc, 0, 0x4a);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
 	if (regval == 0x05)
 		dev_info(&wc->dev->dev, "FALC Framer Version: 2.1 or "
 				"earlier\n");
@@ -3954,11 +3968,14 @@ static int t4_hardware_init_2(struct t4 *wc)
 	} else
 		dev_info(&wc->dev->dev, "FALC Framer Version: Unknown "
 				"(VSTR = 0x%02x)\n", regval);
-	regval = t4_framer_in(wc, 0 ,0xd6);
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	regval = __t4_framer_in(wc, 0, 0xd6);
 	regval &= ~(1 << 5); /* clear COMP_DIS*/
-	t4_framer_out(wc, 0, 0xd6, regval);
-	
-	t4_framer_out(wc, 0, 0x4a, 0xaa);
+	__t4_framer_out(wc, 0, 0xd6, regval);
+	__t4_framer_out(wc, 0, 0x4a, 0xaa);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
 	if (debug) {
 		dev_info(&wc->dev->dev, "Board ID: %02x\n", wc->order);
 		for (x = 0; x < 11; x++) {
