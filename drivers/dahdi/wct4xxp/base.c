@@ -4231,7 +4231,7 @@ static void t4_vpm450_init(struct t4 *wc)
 		release_firmware(firmware);
 
 	if (vpmdtmfsupport == -1) {
-		dev_notice(&wc->dev->dev, "VPM450: hardware DTMF disabled.\n");
+		dev_info(&wc->dev->dev, "VPM450: hardware DTMF disabled.\n");
 		vpmdtmfsupport = 0;
 	}
 
