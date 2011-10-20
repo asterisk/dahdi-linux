@@ -342,7 +342,7 @@ struct t4 {
 #endif
 	int irq;			/* IRQ used by device */
 	int order;			/* Order */
-	int flags;                      /* Device flags */
+	const struct devtype *devtype;
 	unsigned int falc31 : 1;	/* are we falc v3.1 (atomic not necessary) */
 	int ledreg;				/* LED Register */
 	unsigned int gpio;
@@ -356,7 +356,6 @@ struct t4 {
 	atomic_t worklist;
 	struct workqueue_struct *workq;
 #endif
-	char *variety;
 	int last0;		/* for detecting double-missed IRQ */
 
 	/* DMA related fields */
@@ -1971,7 +1970,7 @@ static void set_span_devicetype(struct t4 *wc)
 
 	for (x = 0; x < wc->numspans; x++) {
 		ts = wc->tspans[x];
-		strlcpy(ts->span.devicetype, wc->variety,
+		strlcpy(ts->span.devicetype, wc->devtype->desc,
 			sizeof(ts->span.devicetype));
 #ifdef VPM_SUPPORT
 		if (wc->vpm == T4_VPM_PRESENT) {
@@ -2189,13 +2188,13 @@ static void t4_serial_setup(struct t4 *wc, int unit)
 	/* Configure ports */
 	t4_framer_out(wc, unit, 0x80, 0x00);	/* PC1: SPYR/SPYX input on RPA/XPA */
 	if (wc->falc31) {
-			  t4_framer_out(wc, unit, 0x81, 0xBB);	/* PC2: RMFB/XSIG output/input on RPB/XPB */
-			  t4_framer_out(wc, unit, 0x82, 0xBB);	/* PC3: Some unused stuff */
-			  t4_framer_out(wc, unit, 0x83, 0xBB);	/* PC4: Some more unused stuff */
+		t4_framer_out(wc, unit, 0x81, 0xBB);
+		t4_framer_out(wc, unit, 0x82, 0xBB);
+		t4_framer_out(wc, unit, 0x83, 0xBB);
 	} else {
-			  t4_framer_out(wc, unit, 0x81, 0x22);	/* PC2: RMFB/XSIG output/input on RPB/XPB */
-			  t4_framer_out(wc, unit, 0x82, 0x65);	/* PC3: Some unused stuff */
-			  t4_framer_out(wc, unit, 0x83, 0x35);	/* PC4: Some more unused stuff */
+		t4_framer_out(wc, unit, 0x81, 0x22);
+		t4_framer_out(wc, unit, 0x82, 0x65);
+		t4_framer_out(wc, unit, 0x83, 0x35);
 	}
 	t4_framer_out(wc, unit, 0x84, 0x01);	/* PC5: XMFS active low, SCLKR is input, RCLK is output */
 	if (debug & DEBUG_MAIN)
@@ -2212,7 +2211,6 @@ static void __t4_set_rclk_src(struct t4 *wc, int span)
 {
 	int cmr1 = 0x38;	/* Clock Mode: RCLK sourced by DCO-R1
 				   by default, Disable Clock-Switching */
-
 	cmr1 |= (span << 6);
 	__t4_framer_out(wc, 0, 0x44, cmr1);
 
@@ -2674,7 +2672,7 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		span->flags |= DAHDI_FLAG_RUNNING;
 		wc->spansstarted++;
 
-		if (wc->flags & FLAG_5THGEN)
+		if (wc->devtype->flags & FLAG_5THGEN)
 			__t4_pci_out(wc, 5, (ms_per_irq << 16) | wc->numbufs);
 		/* enable interrupts */
 		/* Start DMA, enabling DMA interrupts on read only */
@@ -3812,7 +3810,7 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 	}
 
 	wc->intcount++;
-	if ((wc->flags & FLAG_5THGEN) && (status & 0x2)) {
+	if ((wc->devtype->flags & FLAG_5THGEN) && (status & 0x2)) {
 		rxident = (status >> 16) & 0x7f;
 		expected = (wc->rxident + ms_per_irq) % 128;
 	
@@ -3900,7 +3898,7 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			dev_info(&wc->dev->dev, "Reg 5 is %08x\n", reg5);
 #endif
 
-		if (wc->flags & FLAG_5THGEN) {
+		if (wc->devtype->flags & FLAG_5THGEN) {
 			unsigned int current_index = (reg5 >> 8) & 0x7f;
 #if 0
 			int catchup = 0;
@@ -4426,7 +4424,7 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 #if defined(CONFIG_FORCE_EXTENDED_RESET)
 	t4_extended_reset(wc);
 #elif !defined(CONFIG_NOEXTENDED_RESET)
-	if (wc->flags & FLAG_EXPRESS)
+	if (wc->devtype->flags & FLAG_EXPRESS)
 		t4_extended_reset(wc);
 #endif
 
@@ -4614,7 +4612,6 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 {
 	int res;
 	struct t4 *wc;
-	struct devtype *dt;
 	unsigned int x, f;
 	int init_latency;
 	
@@ -4628,16 +4625,12 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 
 	memset(wc, 0x0, sizeof(*wc));
 	spin_lock_init(&wc->reglock);
-	dt = (struct devtype *) (ent->driver_data);
+	wc->devtype = (const struct devtype *)(ent->driver_data);
 
-	wc->flags = dt->flags;
-
-	if (wc->flags & FLAG_2PORT) 
+	if (wc->devtype->flags & FLAG_2PORT)
 		wc->numspans = 2;
 	else
 		wc->numspans = 4;
-	
-	wc->variety = dt->desc;
 	
 	wc->membase = pci_iomap(pdev, 0, 0);
 	/* This rids of the Double missed interrupt message after loading */
@@ -4647,7 +4640,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		dev_info(&wc->dev->dev, "wct4: Unable to request memory "
 				"region :(, using anyway...\n");
 #endif
-	if (pci_request_regions(pdev, wc->variety))
+	if (pci_request_regions(pdev, wc->devtype->desc))
 		dev_info(&pdev->dev, "wct%dxxp: Unable to request regions\n",
 				wc->numspans);
 	
@@ -4662,7 +4655,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	/* Keep track of which device we are */
 	pci_set_drvdata(pdev, wc);
 
-	if (wc->flags & FLAG_5THGEN) {
+	if (wc->devtype->flags & FLAG_5THGEN) {
 		if ((ms_per_irq > 1) && (latency <= ((ms_per_irq) << 1))) {
 			init_latency = ms_per_irq << 1;
 		} else {
@@ -4674,7 +4667,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		dev_info(&wc->dev->dev, "5th gen card with initial latency of "
 			"%d and %d ms per IRQ\n", init_latency, ms_per_irq);
 	} else {
-		if (wc->flags & FLAG_2NDGEN)
+		if (wc->devtype->flags & FLAG_2NDGEN)
 			init_latency = 1;
 		else
 			init_latency = 2;
@@ -4690,7 +4683,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	}
 
 	/* Initialize hardware */
-	t4_hardware_init_1(wc, wc->flags);
+	t4_hardware_init_1(wc, wc->devtype->flags);
 	
 	for(x = 0; x < MAX_T4_CARDS; x++) {
 		if (!cards[x])
@@ -4707,7 +4700,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	cards[x] = wc;
 	
 #ifdef ENABLE_WORKQUEUES
-	if (wc->flags & FLAG_2NDGEN) {
+	if (wc->devtype->flags & FLAG_2NDGEN) {
 		char tmp[20];
 
 		sprintf(tmp, "te%dxxp[%d]", wc->numspans, wc->num);
@@ -4749,14 +4742,17 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 #ifdef ENABLE_WORKQUEUES
 		INIT_WORK(&wc->tspans[x]->swork, workq_handlespan, wc->tspans[x]);
 #endif				
-		wc->tspans[x]->spanflags |= wc->flags;
+		wc->tspans[x]->spanflags |= wc->devtype->flags;
 	}
 	
 	/* Continue hardware intiialization */
 	t4_hardware_init_2(wc);
 	
 #ifdef SUPPORT_GEN1
-	if (request_irq(pdev->irq, (wc->flags & FLAG_2NDGEN) ? t4_interrupt_gen2 : t4_interrupt, DAHDI_IRQ_SHARED_DISABLED, (wc->numspans == 2) ? "wct2xxp" : "wct4xxp", wc)) 
+	if (request_irq(pdev->irq, (wc->devtype->flags & FLAG_2NDGEN) ?
+					t4_interrupt_gen2 : t4_interrupt,
+			DAHDI_IRQ_SHARED_DISABLED,
+			(wc->numspans == 2) ? "wct2xxp" : "wct4xxp", wc))
 #else
 		if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN)) {
 			dev_notice(&wc->dev->dev, "This driver does not "
@@ -4778,7 +4774,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	if (!ignore_rotary)
 		wct4xxp_sort_cards();
 	
-	dev_info(&wc->dev->dev, "Found a Wildcard: %s\n", wc->variety);
+	dev_info(&wc->dev->dev, "Found a Wildcard: %s\n", wc->devtype->desc);
 	wc->gpio = 0x00000000;
 	t4_pci_out(wc, WC_GPIO, wc->gpio);
 	t4_gpio_setdir(wc, (1 << 17), (1 << 17));
