@@ -323,7 +323,6 @@ struct t4 {
 	unsigned int intcount;
 	int num;			/* Which card we are */
 	int t1e1;			/* T1/E1 select pins */
-	int globalconfig;	/* Whether global setup has been done */
 	int syncsrc;			/* active sync source */
 	struct t4_span *tspans[4];	/* Individual spans */
 	int numspans;			/* Number of spans on the card */
@@ -1886,65 +1885,102 @@ static void init_spans(struct t4 *wc)
 	wc->lastindex = 0;
 }
 
-static void t4_serial_setup(struct t4 *wc, int unit)
+/**
+ * t4_serial_setup - Setup serial parameters and system interface.
+ * @wc:		The card to configure.
+ *
+ */
+static void t4_serial_setup(struct t4 *wc)
 {
-	if (!wc->globalconfig) {
-		wc->globalconfig = 1;
-		if (debug)
-			dev_info(&wc->dev->dev, "TE%dXXP: Setting up global "
-					"serial parameters\n", wc->numspans);
-		t4_framer_out(wc, 0, 0x85, 0xe0);	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from channel 0 */
-		t4_framer_out(wc, 0, 0x08, 0x01);	/* IPC: Interrupt push/pull active low */
-	
-		/* Global clocks (8.192 Mhz CLK) */
-		t4_framer_out(wc, 0, 0x92, 0x00);	
-		t4_framer_out(wc, 0, 0x93, 0x18);
-		t4_framer_out(wc, 0, 0x94, 0xfb);
-		t4_framer_out(wc, 0, 0x95, 0x0b);
-		t4_framer_out(wc, 0, 0x96, 0x00);
-		t4_framer_out(wc, 0, 0x97, 0x0b);
-		t4_framer_out(wc, 0, 0x98, 0xdb);
-		t4_framer_out(wc, 0, 0x99, 0xdf);
+	unsigned long flags;
+	unsigned int unit;
+
+	if (debug) {
+		dev_info(&wc->dev->dev,
+			 "TE%dXXP: Setting up global serial parameters\n",
+			 wc->numspans);
 	}
 
-	/* Configure interrupts */	
-	t4_framer_out(wc, unit, FRMR_GCR, 0x00);	/* GCR: Interrupt on Activation/Deactivation of each */
+	spin_lock_irqsave(&wc->reglock, flags);
+	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from
+	 * channel 0 */
+	__t4_framer_out(wc, 0, 0x85, 0xe0);	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from channel 0 */
+	/* IPC: Interrupt push/pull active low */
+	__t4_framer_out(wc, 0, 0x08, 0x01);
 
-	/* Configure system interface */
-	t4_framer_out(wc, unit, FRMR_SIC1, 0xc2);	/* SIC1: 8.192 Mhz clock/bus, double buffer receive / transmit, byte interleaved */
-	t4_framer_out(wc, unit, FRMR_SIC2, 0x20 | (unit << 1)); /* SIC2: No FFS, no center receive eliastic buffer, phase */
-	t4_framer_out(wc, unit, FRMR_SIC3, 0x04);	/* SIC3: Edges for capture */
-	t4_framer_out(wc, unit, FRMR_CMR2, 0x00);	/* CMR2: We provide sync and clock for tx and rx. */
-	if (!has_e1_span(wc)) { /* T1 mode */
-		t4_framer_out(wc, unit, FRMR_XC0, 0x03);	/* XC0: Normal operation of Sa-bits */
-		t4_framer_out(wc, unit, FRMR_XC1, 0x84);	/* XC1: 0 offset */
-		if (wc->tspans[unit]->linemode == J1)
-			t4_framer_out(wc, unit, FRMR_RC0, 0x83);	/* RC0: Just shy of 1023 */
-		else
-			t4_framer_out(wc, unit, FRMR_RC0, 0x03);	/* RC0: Just shy of 1023 */
-		t4_framer_out(wc, unit, FRMR_RC1, 0x84);	/* RC1: The rest of RC0 */
-	} else { /* E1 mode */
-		t4_framer_out(wc, unit, FRMR_XC0, 0x00);	/* XC0: Normal operation of Sa-bits */
-		t4_framer_out(wc, unit, FRMR_XC1, 0x04);	/* XC1: 0 offset */
-		t4_framer_out(wc, unit, FRMR_RC0, 0x04);	/* RC0: Just shy of 1023 */
-		t4_framer_out(wc, unit, FRMR_RC1, 0x04);	/* RC1: The rest of RC0 */
+	/* Global clocks (8.192 Mhz CLK) */
+	__t4_framer_out(wc, 0, 0x92, 0x00);
+	__t4_framer_out(wc, 0, 0x93, 0x18);
+	__t4_framer_out(wc, 0, 0x94, 0xfb);
+	__t4_framer_out(wc, 0, 0x95, 0x0b);
+	__t4_framer_out(wc, 0, 0x96, 0x00);
+	__t4_framer_out(wc, 0, 0x97, 0x0b);
+	__t4_framer_out(wc, 0, 0x98, 0xdb);
+	__t4_framer_out(wc, 0, 0x99, 0xdf);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	for (unit = 0; unit < PORTS_PER_FRAMER; ++unit) {
+		spin_lock_irqsave(&wc->reglock, flags);
+
+		/* Configure interrupts */
+		/* GCR: Interrupt on Activation/Deactivation of each */
+		__t4_framer_out(wc, unit, FRMR_GCR, 0x00);
+
+		/* Configure system interface */
+		/* SIC1: 8.192 Mhz clock/bus, double buffer receive /
+		 * transmit, byte interleaved */
+		__t4_framer_out(wc, unit, FRMR_SIC1, 0xc2);
+		/* SIC2: No FFS, no center receive eliastic buffer, phase */
+		__t4_framer_out(wc, unit, FRMR_SIC2, 0x20 | (unit << 1));
+		/* SIC3: Edges for capture */
+		__t4_framer_out(wc, unit, FRMR_SIC3, 0x04);
+		/* CMR2: We provide sync and clock for tx and rx. */
+		__t4_framer_out(wc, unit, FRMR_CMR2, 0x00);
+
+		if (!has_e1_span(wc)) {	/* T1/J1 mode */
+			__t4_framer_out(wc, unit, FRMR_XC0, 0x03);
+			__t4_framer_out(wc, unit, FRMR_XC1, 0x84);
+			if (J1 == wc->tspans[unit]->linemode)
+				__t4_framer_out(wc, unit, FRMR_RC0, 0x83);
+			else
+				__t4_framer_out(wc, unit, FRMR_RC0, 0x03);
+			__t4_framer_out(wc, unit, FRMR_RC1, 0x84);
+		} else { /* E1 mode */
+			__t4_framer_out(wc, unit, FRMR_XC0, 0x00);
+			__t4_framer_out(wc, unit, FRMR_XC1, 0x04);
+			__t4_framer_out(wc, unit, FRMR_RC0, 0x04);
+			__t4_framer_out(wc, unit, FRMR_RC1, 0x04);
+		}
+
+		/* Configure ports */
+
+		/* PC1: SPYR/SPYX input on RPA/XPA */
+		__t4_framer_out(wc, unit, 0x80, 0x00);
+
+		/* PC2: RMFB/XSIG output/input on RPB/XPB */
+		/* PC3: Some unused stuff */
+		/* PC4: Some more unused stuff */
+		if (wc->falc31) {
+			__t4_framer_out(wc, unit, 0x81, 0xBB);
+			__t4_framer_out(wc, unit, 0x82, 0xBB);
+			__t4_framer_out(wc, unit, 0x83, 0xBB);
+		} else {
+			__t4_framer_out(wc, unit, 0x81, 0x22);
+			__t4_framer_out(wc, unit, 0x82, 0x65);
+			__t4_framer_out(wc, unit, 0x83, 0x35);
+		}
+
+		/* PC5: XMFS active low, SCLKR is input, RCLK is output */
+		__t4_framer_out(wc, unit, 0x84, 0x01);
+
+		if (debug & DEBUG_MAIN) {
+			dev_notice(&wc->dev->dev,
+				   "Successfully initialized serial bus "
+				   "for unit %d\n", unit);
+		}
+
+		spin_unlock_irqrestore(&wc->reglock, flags);
 	}
-	
-	/* Configure ports */
-	t4_framer_out(wc, unit, 0x80, 0x00);	/* PC1: SPYR/SPYX input on RPA/XPA */
-	if (wc->falc31) {
-		t4_framer_out(wc, unit, 0x81, 0xBB);
-		t4_framer_out(wc, unit, 0x82, 0xBB);
-		t4_framer_out(wc, unit, 0x83, 0xBB);
-	} else {
-		t4_framer_out(wc, unit, 0x81, 0x22);
-		t4_framer_out(wc, unit, 0x82, 0x65);
-		t4_framer_out(wc, unit, 0x83, 0x35);
-	}
-	t4_framer_out(wc, unit, 0x84, 0x01);	/* PC5: XMFS active low, SCLKR is input, RCLK is output */
-	if (debug & DEBUG_MAIN)
-		dev_notice(&wc->dev->dev, "Successfully initialized serial "
-				"bus for unit %d\n", unit);
 }
 
 static int syncsrc = 0;
@@ -3988,7 +4024,6 @@ static int t4_hardware_init_2(struct t4 *wc)
 
 static int __devinit t4_launch(struct t4 *wc)
 {
-	int x;
 	unsigned long flags;
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &wc->tspans[0]->span.flags))
 		return 0;
@@ -3999,9 +4034,7 @@ static int __devinit t4_launch(struct t4 *wc)
 			 wc->order);
 	}
 
-	/* Setup serial parameters and system interface */
-	for (x=0;x<PORTS_PER_FRAMER;x++)
-		t4_serial_setup(wc, x);
+	t4_serial_setup(wc);
 
 	if (dahdi_register(&wc->tspans[0]->span, 0)) {
 		dev_err(&wc->dev->dev, "Unable to register span %s\n",
