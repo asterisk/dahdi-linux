@@ -221,11 +221,6 @@ static int altab[] = {
 #define FLAG_NMF (1 << 1)
 #define FLAG_SENDINGYELLOW (1 << 2)
 
-
-#define	TYPE_T1	1		/* is a T1 card */
-#define	TYPE_E1	2		/* is an E1 card */
-#define TYPE_J1 3		/* is a running J1 */
-
 #define FLAG_2NDGEN  (1 << 3)
 #define FLAG_2PORT   (1 << 4)
 #define FLAG_VPM2GEN (1 << 5)
@@ -281,7 +276,7 @@ struct t4_span {
 	struct t4 *owner;
 	u32 *writechunk;	/* Double-word aligned write memory */
 	u32 *readchunk;		/* Double-word aligned read memory */
-	int spantype;		/* card type, T1 or E1 or J1 */
+	enum {T1, E1, J1} linemode;
 	int sync;
 	int alarmtimer;
 	int notclear;
@@ -928,7 +923,7 @@ static void __set_clear(struct t4 *wc, int span)
 	struct t4_span *ts = wc->tspans[span];
 
 	oldnotclear = ts->notclear;
-	if ((ts->spantype == TYPE_T1) || (ts->spantype == TYPE_J1)) {
+	if (E1 != ts->linemode) {
 		for (i=0;i<24;i++) {
 			j = (i/8);
 			if (ts->span.chans[i]->flags & DAHDI_FLAG_CLEAR) {
@@ -1235,7 +1230,7 @@ static int t4_maint(struct dahdi_span *span, int cmd)
 	unsigned int reg;
 	unsigned long flags;
 
-	if (ts->spantype == TYPE_E1) {
+	if (E1 == ts->linemode) {
 		switch(cmd) {
 		case DAHDI_MAINT_NONE:
 			dev_info(&wc->dev->dev, "Clearing all maint modes\n");
@@ -1440,7 +1435,7 @@ static int t4_rbsbits(struct dahdi_chan *chan, int bits)
 				bits, chan->name);
 	spin_lock_irqsave(&wc->reglock, flags);	
 	k = chan->span->offset;
-	if (ts->spantype == TYPE_E1) { /* do it E1 way */
+	if (E1 == ts->linemode) {
 		if (chan->chanpos == 16) {
 			spin_unlock_irqrestore(&wc->reglock, flags);
 			return 0;
@@ -1546,7 +1541,7 @@ static void t4_chan_set_sigcap(struct dahdi_span *span, int x)
 	struct dahdi_chan *chan = wc->chans[x];
 	chan->sigcap = DAHDI_SIG_CLEAR;
 	/* E&M variant supported depends on span type */
-	if (wc->spantype == TYPE_E1) {
+	if (E1 == wc->linemode) {
 		/* E1 sigcap setup */
 		if (span->lineconfig & DAHDI_CONFIG_CCS) {
 			/* CCS setup */
@@ -1809,14 +1804,14 @@ static void init_spans(struct t4 *wc)
 			snprintf(ts->span.location, sizeof(ts->span.location) - 1,
 				 "PCI%s Bus %02d Slot %02d", (ts->spanflags & FLAG_EXPRESS) ? " Express" : " ",
 				 wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
-		switch (ts->spantype) {
-		case TYPE_T1:
+		switch (ts->linemode) {
+		case T1:
 			ts->span.spantype = "T1";
 			break;
-		case TYPE_E1:
+		case E1:
 			ts->span.spantype = "E1";
 			break;
-		case TYPE_J1:
+		case J1:
 			ts->span.spantype = "J1";
 			break;
 		}
@@ -1827,7 +1822,7 @@ static void init_spans(struct t4 *wc)
 		ts->sigmode = sigmode;
 		ts->sigactive = 0;
 		
-		if (ts->spantype == TYPE_T1 || ts->spantype == TYPE_J1) {
+		if (E1 != ts->linemode) {
 			ts->span.channels = 24;
 			ts->span.deflaw = DAHDI_LAW_MULAW;
 			ts->span.linecompat = DAHDI_CONFIG_AMI |
@@ -1913,7 +1908,7 @@ static void t4_serial_setup(struct t4 *wc, int unit)
 	if (!has_e1_span(wc)) { /* T1 mode */
 		t4_framer_out(wc, unit, FRMR_XC0, 0x03);	/* XC0: Normal operation of Sa-bits */
 		t4_framer_out(wc, unit, FRMR_XC1, 0x84);	/* XC1: 0 offset */
-		if (wc->tspans[unit]->spantype == TYPE_J1)
+		if (wc->tspans[unit]->linemode == J1)
 			t4_framer_out(wc, unit, FRMR_RC0, 0x83);	/* RC0: Just shy of 1023 */
 		else
 			t4_framer_out(wc, unit, FRMR_RC0, 0x03);	/* RC0: Just shy of 1023 */
@@ -2396,11 +2391,10 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 	wc->syncsrc = -1;
 	set_bit(T4_CHECK_TIMING, &wc->checkflag);
 
-	if (ts->spantype == TYPE_E1) { /* if this is an E1 card */
+	if (E1 == ts->linemode)
 		__t4_configure_e1(wc, span->offset, span->lineconfig);
-	} else { /* is a T1 card */
+	else
 		__t4_configure_t1(wc, span->offset, span->lineconfig, span->txlevel);
-	}
 
 	/* Note clear channel status */
 	wc->tspans[span->offset]->notclear = 0;
@@ -2705,7 +2699,7 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 
 	if (!(ts->span.flags & DAHDI_FLAG_RUNNING))
 		return;
-	if (ts->spantype == TYPE_E1) {
+	if (E1 == ts->linemode) {
 		for (i = 0; i < 15; i++) {
 			a = t4_framer_in(wc, span, 0x71 + i);
 			/* Get high channel in low bits */
@@ -2792,7 +2786,7 @@ static void t4_check_alarms(struct t4 *wc, int span)
 	/* And consider only carrier alarms */
 	ts->span.alarms &= (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE | DAHDI_ALARM_NOTOPEN);
 
-	if (ts->spantype == TYPE_E1) {
+	if (E1 == ts->linemode) {
 		if (c & 0x04) {
 			/* No multiframe found, force RAI high after 400ms only if
 			   we haven't found a multiframe since last loss
@@ -3130,7 +3124,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 	if (isr0)
 		t4_check_sigbits(wc, span);
 
-	if (ts->spantype == TYPE_E1) {
+	if (E1 == ts->linemode) {
 		/* E1 checks */
 		if ((isr3 & 0x38) || isr2 || isr1)
 			t4_check_alarms(wc, span);
@@ -4183,11 +4177,11 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		wc->tspans[x] = ts;
 
 		if (wc->t1e1 & (1 << x))
-			ts->spantype = TYPE_E1;
+			ts->linemode = E1;
 		else
-			ts->spantype = (j1mode) ? TYPE_J1 : TYPE_T1;
+			ts->linemode = (j1mode) ? J1 : T1;
 
-		for (f = 0; f < (ts->spantype == TYPE_E1 ? 31 : 24); f++) {
+		for (f = 0; f < ((E1 == ts->linemode) ? 31 : 24); f++) {
 			struct dahdi_chan *chan;
 			struct dahdi_echocan_state *ec;
 
