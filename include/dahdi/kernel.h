@@ -1101,6 +1101,22 @@ static inline int dahdi_transmit(struct dahdi_span *span)
 	return ret;
 }
 
+static inline int dahdi_is_digital_span(const struct dahdi_span *s)
+{
+	return (s->linecompat > 0);
+}
+
+static inline int dahdi_is_t1_span(const struct dahdi_span *s)
+{
+	return (s->linecompat & (DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF |
+				 DAHDI_CONFIG_B8ZS)) > 0;
+}
+
+static inline int dahdi_is_e1_span(const struct dahdi_span *s)
+{
+	return dahdi_is_digital_span(s) && !dahdi_is_t1_span(s);
+}
+
 /*! Abort the buffer currently being receive with event "event" */
 void dahdi_hdlc_abort(struct dahdi_chan *ss, int event);
 

@@ -4401,11 +4401,6 @@ static const struct dahdi_span_ops wctdm24xxp_digital_span_ops = {
 #endif
 };
 
-static inline bool dahdi_is_digital_span(const struct dahdi_span *s)
-{
-	return (s->linecompat > 0);
-}
-
 static struct wctdm_chan *
 wctdm_init_chan(struct wctdm *wc, struct wctdm_span *s, int chanoffset,
 		int channo, unsigned int card_position)
