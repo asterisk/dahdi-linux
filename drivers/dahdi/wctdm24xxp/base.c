@@ -4596,7 +4596,15 @@ static int wctdm_initialize_vpmadt032(struct wctdm *wc)
 	options.vpmnlptype = vpmnlptype;
 	options.vpmnlpthresh = vpmnlpthresh;
 	options.vpmnlpmaxsupp = vpmnlpmaxsupp;
-	options.channels = wc->desc->ports;
+	if (is_hx8(wc)) {
+		/* Hybrid cards potentially have 3 channels of EC on their
+		 * ports since they may be BRI spans. */
+		options.channels = 3 * wc->desc->ports;
+	} else {
+		options.channels = wc->desc->ports;
+	}
+
+	BUG_ON(options.channels > 24);
 
 	wc->vpmadt032 = vpmadt032_alloc(&options);
 	if (!wc->vpmadt032)
