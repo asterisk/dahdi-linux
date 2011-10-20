@@ -4173,39 +4173,43 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 
 	/* Allocate pieces we need here */
 	for (x = 0; x < PORTS_PER_FRAMER; x++) {
-		if (!(wc->tspans[x] = kmalloc(sizeof(*wc->tspans[x]), GFP_KERNEL))) {
+		struct t4_span *ts;
+
+		ts = kzalloc(sizeof(*ts), GFP_KERNEL);
+		if (!ts) {
 			free_wc(wc);
 			return -ENOMEM;
 		}
+		wc->tspans[x] = ts;
 
-		memset(wc->tspans[x], 0, sizeof(*wc->tspans[x]));
+		if (wc->t1e1 & (1 << x))
+			ts->spantype = TYPE_E1;
+		else
+			ts->spantype = (j1mode) ? TYPE_J1 : TYPE_T1;
 
-		if (wc->t1e1 & (1 << x)) {
-			wc->tspans[x]->spantype = TYPE_E1;
-		} else {
-			if (j1mode)
-				wc->tspans[x]->spantype = TYPE_J1;
-			else
-				wc->tspans[x]->spantype = TYPE_T1;
-		}
+		for (f = 0; f < (ts->spantype == TYPE_E1 ? 31 : 24); f++) {
+			struct dahdi_chan *chan;
+			struct dahdi_echocan_state *ec;
 
-		for (f = 0; f < (wc->tspans[x]->spantype == TYPE_E1 ? 31 : 24); f++) {
-			if (!(wc->tspans[x]->chans[f] = kmalloc(sizeof(*wc->tspans[x]->chans[f]), GFP_KERNEL))) {
+			chan = kzalloc(sizeof(*chan), GFP_KERNEL);
+			if (!chan) {
 				free_wc(wc);
 				return -ENOMEM;
 			}
-			memset(wc->tspans[x]->chans[f], 0, sizeof(*wc->tspans[x]->chans[f]));
-			if (!(wc->tspans[x]->ec[f] = kmalloc(sizeof(*wc->tspans[x]->ec[f]), GFP_KERNEL))) {
+			ts->chans[f] = chan;
+
+			ec = kzalloc(sizeof(*ec), GFP_KERNEL);
+			if (!ec) {
 				free_wc(wc);
 				return -ENOMEM;
 			}
-			memset(wc->tspans[x]->ec[f], 0, sizeof(*wc->tspans[x]->ec[f]));
+			ts->ec[f] = ec;
 		}
 
 #ifdef ENABLE_WORKQUEUES
-		INIT_WORK(&wc->tspans[x]->swork, workq_handlespan, wc->tspans[x]);
+		INIT_WORK(&ts->swork, workq_handlespan, ts);
 #endif				
-		wc->tspans[x]->spanflags |= wc->devtype->flags;
+		ts->spanflags |= wc->devtype->flags;
 	}
 	
 	/* Continue hardware intiialization */
