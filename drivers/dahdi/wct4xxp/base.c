@@ -305,8 +305,6 @@ struct t4_span {
 	unsigned char ec_chunk1[31][DAHDI_CHUNKSIZE]; /* first EC chunk buffer */
 	unsigned char ec_chunk2[31][DAHDI_CHUNKSIZE]; /* second EC chunk buffer */
 #endif
-	int irqmisses;
-	
 	/* HDLC controller fields */
 	struct dahdi_chan *sigchan;
 	unsigned char sigmode;
@@ -346,7 +344,6 @@ struct t4 {
 	int order;			/* Order */
 	int flags;                      /* Device flags */
 	unsigned int falc31 : 1;	/* are we falc v3.1 (atomic not necessary) */
-	int master;				/* Are we master */
 	int ledreg;				/* LED Register */
 	unsigned int gpio;
 	unsigned int gpioctl;
@@ -355,12 +352,10 @@ struct t4 {
 	int spansstarted;		/* number of spans started */
 	u32 *writechunk;		/* Double-word aligned write memory */
 	u32 *readchunk;			/* Double-word aligned read memory */
-	unsigned short canary;
 #ifdef ENABLE_WORKQUEUES
 	atomic_t worklist;
 	struct workqueue_struct *workq;
 #endif
-	unsigned int passno;	/* number of interrupt passes */
 	char *variety;
 	int last0;		/* for detecting double-missed IRQ */
 
@@ -368,12 +363,7 @@ struct t4 {
 	unsigned int dmactrl;
 	dma_addr_t 	readdma;
 	dma_addr_t	writedma;
-	unsigned long memaddr;		/* Base address of card */
-	unsigned long memlen;
 	void __iomem	*membase;	/* Base address of card */
-
-	/* Add this for our softlockup protector */
-	unsigned int oct_rw_count;
 
 	/* Flags for our bottom half */
 	unsigned long checkflag;
@@ -2791,13 +2781,9 @@ static void t4_receiveprep(struct t4 *wc, int irq)
 			dbl = 1;
 		wc->last0 = 1;
 	}
-	if (dbl) {
-		for (x=0;x<wc->numspans;x++)
-			wc->tspans[x]->irqmisses++;
-		if (debug & DEBUG_MAIN)
-			dev_notice(&wc->dev->dev, "TE%dXXP: Double/missed "
-				"interrupt detected\n", wc->numspans);
-	}
+	if (unlikely(dbl && (debug & DEBUG_MAIN)))
+		dev_notice(&wc->dev->dev, "Double/missed interrupt detected\n");
+
 	for (x=0;x<DAHDI_CHUNKSIZE;x++) {
 		for (z=0;z<24;z++) {
 			/* All T1/E1 channels */
@@ -4653,9 +4639,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	
 	wc->variety = dt->desc;
 	
-	wc->memaddr = pci_resource_start(pdev, 0);
-	wc->memlen = pci_resource_len(pdev, 0);
-	wc->membase = ioremap(wc->memaddr, wc->memlen);
+	wc->membase = pci_iomap(pdev, 0, 0);
 	/* This rids of the Double missed interrupt message after loading */
 	wc->last0 = 1;
 #if 0
@@ -4901,7 +4885,7 @@ static void _t4_remove_one(struct t4 *wc)
 	free_irq(wc->dev->irq, wc);
 	
 	if (wc->membase)
-		iounmap(wc->membase);
+		pci_iounmap(wc->dev, wc->membase);
 	
 	pci_release_regions(wc->dev);
 	
