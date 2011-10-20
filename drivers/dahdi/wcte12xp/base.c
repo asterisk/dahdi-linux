@@ -55,13 +55,18 @@
 #error VOICEBUS_SFRAME_SIZE != SFRAME_SIZE
 #endif
 
+#ifndef pr_fmt
+#define pr_fmt(fmt)             KBUILD_MODNAME ": " fmt
+#endif
+
 static int debug;
 static int j1mode = 0;
 static int alarmdebounce = 2500; /* LOF/LFA def to 2.5s AT&T TR54016*/
 static int losalarmdebounce = 2500; /* LOS def to 2.5s AT&T TR54016*/
 static int aisalarmdebounce = 2500; /* AIS(blue) def to 2.5s AT&T TR54016*/
 static int yelalarmdebounce = 500; /* RAI(yellow) def to 0.5s AT&T devguide */
-static int t1e1override = -1;
+static int t1e1override = -1; /* deprecated */
+static char *default_linemode = "auto"; /* 'auto', 'e1', or 't1' */
 static int latency = VOICEBUS_DEFAULT_LATENCY;
 static unsigned int max_latency = VOICEBUS_DEFAULT_MAXLATENCY;
 static int vpmsupport = 1;
@@ -1866,20 +1871,23 @@ static int t1_hardware_post_init(struct t1 *wc)
 	int x;
 
 	/* T1 or E1 */
-	if (t1e1override > -1) {
-		if (t1e1override)
-			wc->spantype = TYPE_E1;
-		else
-			wc->spantype = TYPE_T1;
+	if (-1 != t1e1override) {
+		pr_info("t1e1override is deprecated. Please use 'spantype'.\n");
+		wc->spantype = (t1e1override) ? TYPE_E1 : TYPE_T1;
 	} else {
-		u8 pins;
-		res = t1_getpins(wc, &pins);
-		if (res)
-			return res;
-
-		wc->spantype = (pins & 0x01) ? TYPE_T1 : TYPE_E1;
+		if (!strcasecmp(default_linemode, "e1")) {
+			wc->spantype = TYPE_E1;
+		} else if (!strcasecmp(default_linemode, "t1")) {
+			wc->spantype = TYPE_T1;
+		} else {
+			u8 pins;
+			res = t1_getpins(wc, &pins);
+			if (res)
+				return res;
+			wc->spantype = (pins & 0x01) ? TYPE_T1 : TYPE_E1;
+		}
 	}
-	debug_printk(wc, 1, "spantype: %s\n", 1 == wc->spantype ? "T1" : "E1");
+	debug_printk(wc, 1, "linemode: %s\n", 1 == wc->spantype ? "T1" : "E1");
 	
 	/* what version of the FALC are we using? */
 	reg = t1_setreg(wc, 0x4a, 0xaa);
@@ -2793,6 +2801,16 @@ static int __init te12xp_init(void)
 	if (!cmd_cache)
 		return -ENOMEM;
 
+	if (-1 != t1e1override) {
+		pr_info("'t1e1override' is deprecated. "
+			"Please use 'default_linemode' instead\n");
+	} else if (strcasecmp(default_linemode, "auto") &&
+		   strcasecmp(default_linemode, "t1") &&
+		   strcasecmp(default_linemode, "e1")) {
+		pr_err("'%s' is an unknown span type.", default_linemode);
+		default_linemode = "auto";
+		return -EINVAL;
+	}
 	res = dahdi_pci_module(&te12xp_driver);
 	if (res) {
 		kmem_cache_destroy(cmd_cache);
@@ -2811,6 +2829,9 @@ static void __exit te12xp_cleanup(void)
 
 module_param(debug, int, S_IRUGO | S_IWUSR);
 module_param(t1e1override, int, S_IRUGO | S_IWUSR);
+module_param(default_linemode, charp, S_IRUGO);
+MODULE_PARM_DESC(default_linemode, "\"auto\"(default), \"e1\", or \"t1\". "
+		 "\"auto\" will use the value from the hardware jumpers.");
 module_param(j1mode, int, S_IRUGO | S_IWUSR);
 module_param(alarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(losalarmdebounce, int, S_IRUGO | S_IWUSR);
