@@ -3942,10 +3942,11 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 		wc->rxident = rxident;
 	}
 
+#ifdef DEBUG
 	if (unlikely((wc->intcount < 20)))
-
-		dev_info(&wc->dev->dev, "2G: Got interrupt, status = %08x, "
+		dev_dbg(&wc->dev->dev, "2G: Got interrupt, status = %08x, "
 			"CIS = %04x\n", status, t4_framer_in(wc, 0, FRMR_CIS));
+#endif
 
 	if (likely(status & 0x2)) {
 #ifdef ENABLE_WORKQUEUES
@@ -3970,12 +3971,11 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 				atomic_dec(&wc->worklist);
 		}
 #else
-#if 1
 		unsigned int reg5 = __t4_pci_in(wc, 5);
-		if (wc->intcount < 20) {
 
+#ifdef DEBUG
+		if (wc->intcount < 20)
 			dev_info(&wc->dev->dev, "Reg 5 is %08x\n", reg5);
-		}
 #endif
 
 		if (wc->flags & FLAG_5THGEN) {
@@ -4493,11 +4493,13 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 
 	version = t4_pci_in(wc, WC_VERSION);
 	dev_info(&wc->dev->dev, "Firmware Version: %08x\n", version);
-	dev_info(&wc->dev->dev, "Burst Mode: %s\n",
-		(!(cardflags & FLAG_BURST) && noburst) ? "Off" : "On");
+	if (debug) {
+		dev_info(&wc->dev->dev, "Burst Mode: %s\n",
+			(!(cardflags & FLAG_BURST) && noburst) ? "Off" : "On");
 #ifdef ENABLE_WORKQUEUES
-	dev_info(&wc->dev->dev, "Work Queues: Enabled\n");
+		dev_info(&wc->dev->dev, "Work Queues: Enabled\n");
 #endif
+	}
 
 #if defined(CONFIG_FORCE_EXTENDED_RESET)
 	t4_extended_reset(wc);
@@ -4574,11 +4576,13 @@ static int t4_hardware_init_2(struct t4 *wc)
 	t4_framer_out(wc, 0, 0xd6, regval);
 	
 	t4_framer_out(wc, 0, 0x4a, 0xaa);
-	dev_info(&wc->dev->dev, "Board ID: %02x\n", wc->order);
-
-	for (x=0;x< 11;x++)
-		dev_info(&wc->dev->dev, "Reg %d: 0x%08x\n", x,
-				t4_pci_in(wc, x));
+	if (debug) {
+		dev_info(&wc->dev->dev, "Board ID: %02x\n", wc->order);
+		for (x = 0; x < 11; x++) {
+			dev_info(&wc->dev->dev, "Reg %d: 0x%08x\n", x,
+					t4_pci_in(wc, x));
+		}
+	}
 	return 0;
 }
 
@@ -4588,8 +4592,12 @@ static int __devinit t4_launch(struct t4 *wc)
 	unsigned long flags;
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &wc->tspans[0]->span.flags))
 		return 0;
-	dev_info(&wc->dev->dev, "TE%dXXP: Launching card: %d\n", wc->numspans,
-			wc->order);
+
+	if (debug) {
+		dev_info(&wc->dev->dev,
+			 "TE%dXXP: Launching card: %d\n", wc->numspans,
+			 wc->order);
+	}
 
 	/* Setup serial parameters and system interface */
 	for (x=0;x<PORTS_PER_FRAMER;x++)
@@ -4723,8 +4731,8 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		dev_info(&pdev->dev, "wct%dxxp: Unable to request regions\n",
 				wc->numspans);
 	
-	dev_info(&pdev->dev, "Found TE%dXXP at base address %08lx, remapped "
-			"to %p\n", wc->numspans, wc->memaddr, wc->membase);
+	if (debug)
+		dev_info(&pdev->dev, "Found TE%dXXP\n", wc->numspans);
 	
 	wc->dev = pdev;
 	
