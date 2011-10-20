@@ -56,9 +56,6 @@
 /* #define ENABLE_WORKQUEUES */
 #endif
 
-/* Enable prefetching may help performance */
-#define ENABLE_PREFETCH
-
 /* Support first generation cards? */
 #define SUPPORT_GEN1 
 
@@ -2878,26 +2875,6 @@ static void __receive_span(struct t4_span *ts)
 		}
 	}
 #endif	
-
-#ifdef ENABLE_PREFETCH
-	prefetch((void *)(ts->readchunk));
-	prefetch((void *)(ts->writechunk));
-	prefetch((void *)(ts->readchunk + 8));
-	prefetch((void *)(ts->writechunk + 8));
-	prefetch((void *)(ts->readchunk + 16));
-	prefetch((void *)(ts->writechunk + 16));
-	prefetch((void *)(ts->readchunk + 24));
-	prefetch((void *)(ts->writechunk + 24));
-	prefetch((void *)(ts->readchunk + 32));
-	prefetch((void *)(ts->writechunk + 32));
-	prefetch((void *)(ts->readchunk + 40));
-	prefetch((void *)(ts->writechunk + 40));
-	prefetch((void *)(ts->readchunk + 48));
-	prefetch((void *)(ts->writechunk + 48));
-	prefetch((void *)(ts->readchunk + 56));
-	prefetch((void *)(ts->writechunk + 56));
-#endif
-
 	_dahdi_ec_span(&ts->span);
 	_dahdi_receive(&ts->span);
 }
