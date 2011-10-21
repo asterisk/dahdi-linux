@@ -2205,7 +2205,7 @@ static const char *b4xxp_echocan_name(const struct dahdi_chan *chan)
 {
 	struct b4xxp_span *bspan = container_of(chan->span, struct b4xxp_span,
 						span);
-	if (bspan->parent->card_type == B410P)
+	if (vpmsupport && (B410P == bspan->parent->card_type))
 		return "LASVEGAS2";
 	return NULL;
 }
