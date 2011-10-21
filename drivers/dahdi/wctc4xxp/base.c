@@ -73,20 +73,6 @@
 		dev_info(&(wc)->pdev->dev, _fmt, ## _args);		\
 	}								\
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-#ifndef WARN_ON_ONCE
-#define WARN_ON_ONCE(__condition) do {         \
-	static int __once = 1;                 \
-	if (unlikely(__condition)) {           \
-		if (__once) {                  \
-			__once = 0;            \
-			WARN_ON(0);            \
-		}                              \
-	}                                      \
-} while (0)
-#endif
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 /* also added in RHEL kernels with the OpenInfiniband backport: */
 #if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9) || !defined(DEFINE_SPINLOCK)

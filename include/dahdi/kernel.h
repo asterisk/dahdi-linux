@@ -1380,6 +1380,19 @@ static inline void list_replace(struct list_head *old, struct list_head *new)
         new->prev = old->prev;
         new->prev->next = new;
 }
+
+#ifndef WARN_ON_ONCE
+#define WARN_ON_ONCE(__condition) do {         \
+	static int __once = 1;                 \
+	if (unlikely(__condition)) {           \
+		if (__once) {                  \
+			__once = 0;            \
+			WARN_ON(0);            \
+		}                              \
+	}                                      \
+} while (0)
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 #define kzalloc(a, b) kcalloc(1, a, b)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
