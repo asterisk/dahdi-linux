@@ -203,7 +203,7 @@ sub scan_devices($) {
 		$pci_devs{$name}{DRIVER} = '';
 	}
 
-	while(</sys/bus/pci/drivers/*/[0-9]*>) {
+	while(<$Dahdi::sys_base/bus/pci/drivers/*/[0-9]*>) {
 		m,^(.*?)/([^/]+)/([^/]+)$,;
 		my $prefix = $1;
 		my $drvname = $2;
