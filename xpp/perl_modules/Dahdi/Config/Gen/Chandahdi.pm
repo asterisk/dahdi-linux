@@ -168,7 +168,7 @@ sub gen_channel($$) {
 	die "missing context for chan #$num type $type" unless $context;
 	$callerid = ($type eq 'FXO')
 			? 'asreceived'
-			: sprintf "\"Channel %d\" <%04d>", $num, $exten;
+			: sprintf "\"Channel %d\" <%d>", $num, $exten;
 	if($type eq 'IN') {
 		$immediate = 'yes';
 	}
@@ -182,7 +182,7 @@ sub gen_channel($$) {
 	printf ";;; line=\"%d %s%s%s\"\n", $num, $chan->fqn, $signalling, $info;
 	printf "signalling=$sig\n";
 	printf "callerid=$callerid\n";
-	printf "mailbox=%04d\n", $exten unless $type eq 'FXO';
+	printf "mailbox=%d\n", $exten unless $type eq 'FXO';
 	if(defined $group) {
 		printf "group=$group\n";
 	}
