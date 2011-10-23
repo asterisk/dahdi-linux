@@ -30,7 +30,7 @@ sub get_sorted_xbuses(@) {
 	my @sorted_xbuses;
 	foreach my $xbus (@xbuses) {
 		my $last_spanno;
-		foreach my $xpd ($xbus->xpds) {
+		foreach my $xpd (Dahdi::Xpp::Xpd::telephony_devs($xbus->xpds())) {
 			my $spanno = $xpd->spanno;
 			if(!$spanno) {
 				printf STDERR "%s: Is not registered. Skipping.\n", $xpd->fqn;
