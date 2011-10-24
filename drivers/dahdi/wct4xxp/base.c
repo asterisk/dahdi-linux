@@ -182,7 +182,8 @@ static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct 
 
 static int debug=0;
 static int timingcable = 0;
-static int t1e1override = -1;  /* 0xff for E1, 0x00 for T1 */
+static int t1e1override = -1;  /* deprecated */
+static char *default_linemode = "auto";
 static int j1mode = 0;
 static int sigmode = FRMR_MODE_NO_ADDR_CMP;
 static int alarmdebounce = 2500; /* LOF/LFA def to 2.5s AT&T TR54016*/
@@ -3957,10 +3958,28 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 	t4_pci_out(wc, WC_INTR, 0x00000000);
 
 	/* Read T1/E1 status */
-	if (t1e1override > -1)
-		wc->t1e1 = t1e1override;
-	else
-		wc->t1e1 = ((t4_pci_in(wc, WC_LEDS)) & 0x0f00) >> 8;
+	if (!strcasecmp("auto", default_linemode)) {
+		if (-1 == t1e1override) {
+			wc->t1e1 = (((t4_pci_in(wc, WC_LEDS)) & 0x0f00) >> 8);
+			wc->t1e1 &= 0xf;
+		} else {
+			dev_warn(&wc->dev->dev, "'t1e1override' is deprecated. "
+				 "Please use 'default_linemode'.\n");
+			wc->t1e1 = t1e1override & 0xf;
+		}
+	} else if (!strcasecmp("t1", default_linemode)) {
+		wc->t1e1 = 0;
+	} else if (!strcasecmp("e1", default_linemode)) {
+		wc->t1e1 = 0xff;
+	} else if (!strcasecmp("j1", default_linemode)) {
+		wc->t1e1 = 0;
+		j1mode = 1;
+	} else {
+		dev_err(&wc->dev->dev, "'%s' is an unknown linemode.\n",
+			default_linemode);
+		wc->t1e1 = 0;
+	}
+
 	wc->order = ((t4_pci_in(wc, WC_LEDS)) & 0xf0000000) >> 28;
 	order_index[wc->order]++;
 	return 0;
@@ -4500,7 +4519,11 @@ MODULE_LICENSE("GPL v2");
 module_param(debug, int, 0600);
 module_param(noburst, int, 0600);
 module_param(timingcable, int, 0600);
-module_param(t1e1override, int, 0600);
+module_param(t1e1override, int, 0400);
+module_param(default_linemode, charp, S_IRUGO);
+MODULE_PARM_DESC(default_linemode, "\"auto\"(default), \"e1\", \"t1\", "
+		 "or \"j1\". \"auto\" will use the value from any hardware "
+		 "jumpers.");
 module_param(alarmdebounce, int, 0600);
 module_param(losalarmdebounce, int, 0600);
 module_param(aisalarmdebounce, int, 0600);
