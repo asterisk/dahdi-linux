@@ -2151,9 +2151,8 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 	 * file handles to this channel are disassociated with the actual
 	 * dahdi_chan. */
 	if (chan->file) {
+		module_printk(KERN_NOTICE, "%s: surprise removal\n", __func__);
 		chan->file->private_data = NULL;
-		if (chan->span)
-			module_put(chan->span->ops->owner);
 	}
 
 	release_echocan(chan->ec_factory);
@@ -2178,6 +2177,40 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 	spin_unlock_irqrestore(&chan_lock, flags);
 
 	chan->channo = -1;
+
+	/* Let processeses out of their poll_wait() */
+	wake_up_interruptible(&chan->waitq);
+
+	/* release tone_zone */
+	close_channel(chan);
+
+	if (chan->file) {
+		if (test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags)) {
+			clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
+			if (chan->span) {
+				if (chan->span->ops->close) {
+					int res;
+
+					res = chan->span->ops->close(chan);
+					if (res)
+						module_printk(KERN_NOTICE,
+							"%s: close() failed: %d\n",
+							__func__, res);
+				}
+			}
+		}
+		msleep(20);
+		/*
+		 * FIXME: THE BIG SLEEP above, is hiding a terrible
+		 * race condition:
+		 *  - the module_put() ahead, would allow the low-level driver
+		 *    to free the channel.
+		 *  - We should make sure no-one reference this channel
+		 *    from now on.
+		 */
+		if (chan->span)
+			put_span(chan->span);
+	}
 }
 
 static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
@@ -2221,10 +2254,15 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 			break;
 		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
+
+		/* Wake up when data is available or when the board driver
+		 * unregistered the channel. */
 		rv = wait_event_interruptible(chan->waitq,
-				(chan->outreadbuf > -1));
+			(!chan->file->private_data || chan->outreadbuf > -1));
 		if (rv)
 			return rv;
+		if (unlikely(!chan->file->private_data))
+			return -ENODEV;
 	}
 	amnt = count;
 	if (chan->flags & DAHDI_FLAG_LINEAR) {
@@ -2348,11 +2386,15 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 #endif
 			return -EAGAIN;
 		}
-		/* Wait for something to be available */
+
+		/* Wake up when room in the write queue is available or when
+		 * the board driver unregistered the channel. */
 		rv = wait_event_interruptible(chan->waitq,
-					      (chan->inwritebuf >= 0));
+			(!chan->file->private_data || chan->inwritebuf > -1));
 		if (rv)
 			return rv;
+		if (unlikely(!chan->file->private_data))
+			return -ENODEV;
 	}
 
 	amnt = count;
@@ -5411,6 +5453,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 	struct dahdi_chan *const chan = chan_from_file(file);
 	unsigned long flags;
 	unsigned int iomask;
+	int ret = 0;
 	DEFINE_WAIT(wait);
 
 	if (get_user(iomask, (int __user *)data))
@@ -5424,6 +5467,15 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 
 		wait_result = 0;
 		prepare_to_wait(&chan->waitq, &wait, TASK_INTERRUPTIBLE);
+		if (unlikely(!chan->file->private_data)) {
+			static int rate_limit;
+
+			if ((rate_limit % 1000) == 0)
+				module_printk(KERN_NOTICE, "%s: surprise removal\n", __func__);
+			msleep(5);
+			ret = -ENODEV;
+			break;
+		}
 
 		spin_lock_irqsave(&chan->lock, flags);
 		chan->iomask = iomask;
@@ -5465,7 +5517,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 	spin_lock_irqsave(&chan->lock, flags);
 	chan->iomask = 0;
 	spin_unlock_irqrestore(&chan->lock, flags);
-	return 0;
+	return ret;
 }
 
 #ifdef CONFIG_DAHDI_MIRROR
@@ -5680,9 +5732,11 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 			if (!i)
 				break; /* skip if none */
 			rv = wait_event_interruptible(chan->waitq,
-						      (chan->outwritebuf > -1));
+						      (!chan->file->private_data || chan->outwritebuf > -1));
 			if (rv)
 				return rv;
+			if (unlikely(!chan->file->private_data))
+				return -ENODEV;
 		   }
 		break;
 	case DAHDI_IOMUX: /* wait for something to happen */
@@ -6355,7 +6409,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
 				wait_event_interruptible(chan->waitq,
-					is_txstate(chan, DAHDI_TXSIG_ONHOOK));
+					!chan->file->private_data || is_txstate(chan, DAHDI_TXSIG_ONHOOK));
+				if (unlikely(!chan->file->private_data))
+					return -ENODEV;
 				if (signal_pending(current))
 					return -ERESTARTSYS;
 				break;
@@ -6370,7 +6426,9 @@ static int dahdi_chan_ioctl(struct file *file, unsigned int cmd, unsigned long d
 				if (file->f_flags & O_NONBLOCK)
 					return -EINPROGRESS;
 				wait_event_interruptible(chan->waitq,
-					is_txstate(chan, DAHDI_TXSIG_OFFHOOK));
+					!chan->file->private_data || is_txstate(chan, DAHDI_TXSIG_OFFHOOK));
+				if (unlikely(!chan->file->private_data))
+					return -ENODEV;
 				if (signal_pending(current))
 					return -ERESTARTSYS;
 				break;
@@ -8743,8 +8801,14 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 		if (timer->tripped || timer->ping)
 			ret |= POLLPRI;
 		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-	} else
-		ret = -EINVAL;
+	} else {
+		static int rate_limit;
+
+		if ((rate_limit % 1000) == 0)
+			module_printk(KERN_NOTICE, "%s: nodev\n", __func__);
+		msleep(5);
+		return POLLERR | POLLHUP;
+	}
 	return ret;
 }
 
@@ -8756,8 +8820,14 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 	int ret = 0;
 	unsigned long flags;
 
-	if (unlikely(!c))
-		return -EINVAL;
+	if (unlikely(!c)) {
+		static int rate_limit;
+
+		if ((rate_limit % 1000) == 0)
+			module_printk(KERN_NOTICE, "%s: nodev\n", __func__);
+		msleep(5);
+		return POLLERR | POLLHUP;
+	}
 
 	poll_wait(file, &c->waitq, wait_table);
 

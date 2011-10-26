@@ -734,7 +734,6 @@ int xpp_open(struct dahdi_chan *chan)
 		return -EINVAL;
 	}
 	xpd = chan->pvt;
-	xpd = get_xpd(__FUNCTION__, xpd);	/* Returned in xpp_close() */
 	if (!xpd) {
 		NOTICE("open called on a chan with no pvt (xpd)\n");
 		BUG();
@@ -776,7 +775,6 @@ int xpp_close(struct dahdi_chan *chan)
 		current->comm, current->pid,
 		atomic_read(&PHONEDEV(xpd).open_counter));
 	atomic_dec(&PHONEDEV(xpd).open_counter);		/* from xpp_open() */
-	put_xpd(__FUNCTION__, xpd);					/* from xpp_open() */
 	return 0;
 }
 
@@ -1024,12 +1022,6 @@ int dahdi_unregister_xpd(xpd_t *xpd)
 		return -EIDRM;
 	}
 	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
-	/* We should now have only a ref from the xbus (from create_xpd()) */
-	if(atomic_read(&PHONEDEV(xpd).open_counter)) {
-		XPD_NOTICE(xpd, "Busy (open_counter=%d). Skipping.\n", atomic_read(&PHONEDEV(xpd).open_counter));
-		spin_unlock_irqrestore(&xpd->lock, flags);
-		return -EBUSY;
-	}
 	mdelay(2);	// FIXME: This is to give chance for transmit/receiveprep to finish.
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	if(xpd->card_present)
