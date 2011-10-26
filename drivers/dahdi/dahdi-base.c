@@ -4466,19 +4466,28 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 		return -EFAULT;
 
 	chan = chan_from_num(ch.chan);
-	if (!chan)
+	if (!chan) {
+		printk(KERN_NOTICE "%s: No channel for number %d\n",
+				__func__, ch.chan);
 		return -EINVAL;
+	}
 
 	if (ch.sigtype == DAHDI_SIG_SLAVE) {
 		newmaster = chan_from_num(ch.master);
-		if (!newmaster)
+		if (!newmaster) {
+			chan_notice(chan, "%s: slave channel without master.\n",
+					__func__);
 			return -EINVAL;
+		}
 		ch.sigtype = newmaster->sig;
 	} else if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
 		newmaster = chan;
 		dacs_chan = chan_from_num(ch.idlebits);
-		if (!dacs_chan)
+		if (!dacs_chan) {
+			chan_notice(chan, "%s: dacs channel not found: %d.\n",
+					__func__, ch.idlebits);
 			return -EINVAL;
+		}
 	} else {
 		newmaster = chan;
 	}
@@ -4511,8 +4520,13 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 	if (sigcap & DAHDI_SIG_CLEAR)
 		sigcap |= (DAHDI_SIG_HDLCRAW | DAHDI_SIG_HDLCFCS | DAHDI_SIG_HDLCNET | DAHDI_SIG_DACS);
 
-	if ((sigcap & ch.sigtype) != ch.sigtype)
+	if ((sigcap & ch.sigtype) != ch.sigtype) {
+		if (debug) {
+			chan_notice(chan, "%s: bad sigtype. sigcap: %x, sigtype: %x.\n",
+					__func__, sigcap, ch.sigtype);
+		}
 		res = -EINVAL;
+	}
 
 	if (chan->master != chan) {
 		struct dahdi_chan *oldmaster = chan->master;
@@ -4556,6 +4570,8 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 		if ((ch.sigtype & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS) {
 			if (unlikely(!dacs_chan)) {
 				spin_unlock_irqrestore(&chan->lock, flags);
+				chan_notice(chan, "%s: dacs but no dacs_chan\n",
+						__func__);
 				return -EINVAL;
 			}
 			/* Setup conference properly */
