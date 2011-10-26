@@ -977,8 +977,14 @@ void xpd_set_spanname(xpd_t *xpd)
 	struct dahdi_span *span = &PHONEDEV(xpd).span;
 
 	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname, xpd->xpdname);
-	snprintf(span->desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
-			xpd->xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
+	/*
+	 * The "Xorcom XPD" is a prefix in one of the regexes we
+	 * use in our dahdi_genconf to match for PRI cards.
+	 * FIXME: After moving completely to sysfs, we can remove
+	 * this horseshit.
+	 */
+	snprintf(span->desc, MAX_SPANDESC, "Xorcom XPD [%s].%d: %s",
+			xpd->xbus->label, span->offset + 1, xpd->type_name);
 }
 EXPORT_SYMBOL(xpd_set_spanname);
 
