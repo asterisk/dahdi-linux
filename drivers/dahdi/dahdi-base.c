@@ -2160,7 +2160,9 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 	 * file handles to this channel are disassociated with the actual
 	 * dahdi_chan. */
 	if (chan->file) {
-		module_printk(KERN_NOTICE, "%s: surprise removal\n", __func__);
+		module_printk(KERN_NOTICE,
+			"%s: surprise removal: chan %d\n",
+			__func__, chan->channo);
 		chan->file->private_data = NULL;
 	}
 
@@ -5499,8 +5501,10 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		if (unlikely(!chan->file->private_data)) {
 			static int rate_limit;
 
-			if ((rate_limit % 1000) == 0)
-				module_printk(KERN_NOTICE, "%s: surprise removal\n", __func__);
+			if ((rate_limit++ % 1000) == 0)
+				module_printk(KERN_NOTICE,
+					"%s: (%d) nodev\n",
+					__func__, rate_limit);
 			msleep(5);
 			ret = -ENODEV;
 			break;
@@ -7022,6 +7026,25 @@ int dahdi_register_device(struct dahdi_device *ddev, struct device *parent)
 }
 EXPORT_SYMBOL(dahdi_register_device);
 
+static void disable_span(struct dahdi_span *span)
+{
+	int		x;
+	unsigned long	flags;
+
+	spin_lock_irqsave(&span->lock, flags);
+	span->alarms = DAHDI_ALARM_NOTOPEN;
+	for (x = 0; x < span->channels; x++) {
+		/*
+		 * This event may not make it to user space before the channel
+		 * is gone, but let's try.
+		 */
+		dahdi_qevent_lock(span->chans[x], DAHDI_EVENT_REMOVED);
+	}
+	dahdi_alarm_notify(span);
+	spin_unlock_irqrestore(&span->lock, flags);
+	module_printk(KERN_INFO, "%s: span %d\n", __func__, span->spanno);
+}
+
 /**
  * _dahdi_unassign_span() - unassign a DAHDI span
  * @span:	the DAHDI span
@@ -7088,11 +7111,28 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 	return 0;
 }
 
+static int open_channel_count(const struct dahdi_span *span)
+{
+	int i;
+	int open_channels = 0;
+	struct dahdi_chan *chan;
+
+	for (i = 0; i < span->channels; ++i) {
+		chan = span->chans[i];
+		if (test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags))
+			++open_channels;
+	}
+	return open_channels;
+}
+
 int dahdi_unassign_span(struct dahdi_span *span)
 {
 	int ret;
 
 	module_printk(KERN_NOTICE, "%s: %s\n", __func__, span->name);
+	disable_span(span);
+	if (open_channel_count(span) > 0)
+		msleep(1000);	/* Give user space a chance to read this */
 	mutex_lock(&registration_mutex);
 	ret = _dahdi_unassign_span(span);
 	mutex_unlock(&registration_mutex);
@@ -7111,10 +7151,21 @@ void dahdi_unregister_device(struct dahdi_device *ddev)
 {
 	struct dahdi_span *s;
 	struct dahdi_span *next;
+	unsigned int spans_with_open_channels = 0;
+
 	WARN_ON(!ddev);
 	might_sleep();
 	if (unlikely(!ddev))
 		return;
+
+	list_for_each_entry_safe(s, next, &ddev->spans, device_node) {
+		disable_span(s);
+		if (open_channel_count(s) > 0)
+			++spans_with_open_channels;
+	}
+
+	if (spans_with_open_channels > 0)
+		msleep(1000); /* give user space a chance to read this */
 
 	mutex_lock(&registration_mutex);
 	list_for_each_entry_safe(s, next, &ddev->spans, device_node) {
@@ -9095,10 +9146,11 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 	} else {
 		static int rate_limit;
 
-		if ((rate_limit % 1000) == 0)
-			module_printk(KERN_NOTICE, "%s: nodev\n", __func__);
+		if ((rate_limit++ % 1000) == 0)
+			module_printk(KERN_NOTICE, "%s: (%d) nodev\n",
+				__func__, rate_limit);
 		msleep(5);
-		return POLLERR | POLLHUP;
+		return POLLERR | POLLHUP | POLLRDHUP | POLLNVAL | POLLPRI;
 	}
 	return ret;
 }
@@ -9114,10 +9166,11 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 	if (unlikely(!c)) {
 		static int rate_limit;
 
-		if ((rate_limit % 1000) == 0)
-			module_printk(KERN_NOTICE, "%s: nodev\n", __func__);
-		msleep(5);
-		return POLLERR | POLLHUP;
+		if ((rate_limit++ % 1000) == 0)
+			module_printk(KERN_NOTICE, "%s: (%d) nodev\n",
+				__func__, rate_limit);
+		msleep(20);
+		return POLLERR | POLLHUP | POLLRDHUP | POLLNVAL | POLLPRI;
 	}
 
 	poll_wait(file, &c->waitq, wait_table);
