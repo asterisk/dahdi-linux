@@ -939,14 +939,16 @@ static void xbus_unregister_dahdi_device(xbus_t *xbus)
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_preunregister(xpd);
 	}
-	dahdi_unregister_device(xbus->ddev);
-	XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n", __func__);
-	kfree(xbus->ddev->devicetype);
-	xbus->ddev->devicetype = NULL;
-	xbus->ddev->location = NULL;
-	xbus->ddev->hardware_id = NULL;
-	dahdi_free_device(xbus->ddev);
-	xbus->ddev = NULL;
+	if (xbus->ddev) {
+		dahdi_unregister_device(xbus->ddev);
+		XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n", __func__);
+		kfree(xbus->ddev->devicetype);
+		xbus->ddev->devicetype = NULL;
+		xbus->ddev->location = NULL;
+		xbus->ddev->hardware_id = NULL;
+		dahdi_free_device(xbus->ddev);
+		xbus->ddev = NULL;
+	}
 	for(i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_postunregister(xpd);
