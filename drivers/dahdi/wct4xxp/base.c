@@ -27,7 +27,6 @@
  * Free Software Foundation. See the LICENSE file included with
  * this program for more details.
  */
-
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/module.h>
@@ -273,11 +272,13 @@ static struct devtype wct210 = { "Wildcard TE210P ", FLAG_2NDGEN | FLAG_2PORT };
 
 struct t4;
 
+enum linemode {T1, E1, J1};
+
 struct t4_span {
 	struct t4 *owner;
 	u32 *writechunk;	/* Double-word aligned write memory */
 	u32 *readchunk;		/* Double-word aligned read memory */
-	enum {T1, E1, J1} linemode;
+	enum linemode linemode;
 	int sync;
 	int alarmtimer;
 	int notclear;
@@ -323,7 +324,6 @@ struct t4 {
 	struct pci_dev *dev;		/* Pointer to PCI device */
 	unsigned int intcount;
 	int num;			/* Which card we are */
-	int t1e1;			/* T1/E1 select pins */
 	int syncsrc;			/* active sync source */
 	struct dahdi_device *ddev;
 	struct t4_span *tspans[4];	/* Individual spans */
@@ -335,7 +335,8 @@ struct t4 {
 	int irq;			/* IRQ used by device */
 	int order;			/* Order */
 	const struct devtype *devtype;
-	unsigned int falc31 : 1;	/* are we falc v3.1 (atomic not necessary) */
+	unsigned int falc31:1;	/* are we falc v3.1 (atomic not necessary) */
+	unsigned int t1e1:4;	/* T1 / E1 select pins */
 	int ledreg;				/* LED Register */
 	unsigned int gpio;
 	unsigned int gpioctl;
@@ -1754,127 +1755,6 @@ static void setup_chunks(struct t4 *wc, int which)
 	}
 }
 
-static const struct dahdi_span_ops t4_gen1_span_ops = {
-	.owner = THIS_MODULE,
-	.spanconfig = t4_spanconfig,
-	.chanconfig = t4_chanconfig,
-	.startup = t4_startup,
-	.shutdown = t4_shutdown,
-	.rbsbits = t4_rbsbits,
-	.maint = t4_maint,
-	.open = t4_open,
-	.close  = t4_close,
-	.ioctl = t4_ioctl,
-	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
-};
-
-static const struct dahdi_span_ops t4_gen2_span_ops = {
-	.owner = THIS_MODULE,
-	.spanconfig = t4_spanconfig,
-	.chanconfig = t4_chanconfig,
-	.startup = t4_startup,
-	.shutdown = t4_shutdown,
-	.rbsbits = t4_rbsbits,
-	.maint = t4_maint,
-	.open = t4_open,
-	.close  = t4_close,
-	.ioctl = t4_ioctl,
-	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
-	.dacs = t4_dacs,
-#ifdef VPM_SUPPORT
-	.echocan_create = t4_echocan_create,
-	.echocan_name = t4_echocan_name,
-#endif
-};
-
-static void init_spans(struct t4 *wc)
-{
-	int x,y;
-	int gen2;
-	struct t4_span *ts;
-	unsigned int reg;
-	unsigned long flags;
-	
-	gen2 = (wc->tspans[0]->spanflags & FLAG_2NDGEN);
-	for (x = 0; x < wc->numspans; x++) {
-		ts = wc->tspans[x];
-
-		sprintf(ts->span.name, "TE%d/%d/%d", wc->numspans, wc->num, x + 1);
-		snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
-			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
-		switch (ts->linemode) {
-		case T1:
-			ts->span.spantype = "T1";
-			break;
-		case E1:
-			ts->span.spantype = "E1";
-			break;
-		case J1:
-			ts->span.spantype = "J1";
-			break;
-		}
-
-		/* HDLC Specific init */
-		ts->sigchan = NULL;
-		ts->sigmode = sigmode;
-		ts->sigactive = 0;
-		
-		if (E1 != ts->linemode) {
-			ts->span.channels = 24;
-			ts->span.deflaw = DAHDI_LAW_MULAW;
-			ts->span.linecompat = DAHDI_CONFIG_AMI |
-				DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 |
-				DAHDI_CONFIG_ESF;
-		} else {
-			ts->span.channels = 31;
-			ts->span.deflaw = DAHDI_LAW_ALAW;
-			ts->span.linecompat = DAHDI_CONFIG_AMI |
-				DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS |
-				DAHDI_CONFIG_CRC4;
-		}
-		ts->span.chans = ts->chans;
-		ts->span.flags = DAHDI_FLAG_RBS;
-
-		ts->owner = wc;
-		ts->span.offset = x;
-		ts->writechunk = (void *)(wc->writechunk + x * 32 * 2);
-		ts->readchunk = (void *)(wc->readchunk + x * 32 * 2);
-
-		if (gen2) {
-			ts->span.ops = &t4_gen2_span_ops;
-		} else {
-			ts->span.ops = &t4_gen1_span_ops;
-		}
-
-		for (y=0;y<wc->tspans[x]->span.channels;y++) {
-			struct dahdi_chan *mychans = ts->chans[y];
-			sprintf(mychans->name, "TE%d/%d/%d/%d", wc->numspans, wc->num, x + 1, y + 1);
-			t4_chan_set_sigcap(&ts->span, x);
-			mychans->pvt = wc;
-			mychans->chanpos = y + 1;
-		}
-
-		/* Start checking for alarms in 250 ms */
-		ts->alarmcheck_time = jiffies + msecs_to_jiffies(250);
-
-		/* Enable 1sec timer interrupt */
-		spin_lock_irqsave(&wc->reglock, flags);
-		reg = __t4_framer_in(wc, x, FMR1_T);
-		__t4_framer_out(wc, x, FMR1_T, (reg | FMR1_ECM));
-
-		/* Enable Errored Second interrupt */
-		__t4_framer_out(wc, x, ESM, 0);
-		spin_unlock_irqrestore(&wc->reglock, flags);
-
-		t4_reset_counters(&ts->span);
-
-	}
-
-	set_span_devicetype(wc);
-	setup_chunks(wc, 0);
-	wc->lastindex = 0;
-}
-
 /**
  * t4_serial_setup - Setup serial parameters and system interface.
  * @wc:		The card to configure.
@@ -1894,7 +1774,9 @@ static void t4_serial_setup(struct t4 *wc)
 	spin_lock_irqsave(&wc->reglock, flags);
 	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from
 	 * channel 0 */
-	__t4_framer_out(wc, 0, 0x85, 0xe0);	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from channel 0 */
+	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from
+	 * channel 0 */
+	__t4_framer_out(wc, 0, 0x85, 0xe0);
 	/* IPC: Interrupt push/pull active low */
 	__t4_framer_out(wc, 0, 0x08, 0x01);
 
@@ -1971,6 +1853,358 @@ static void t4_serial_setup(struct t4 *wc)
 
 		spin_unlock_irqrestore(&wc->reglock, flags);
 	}
+}
+
+/**
+ * t4_span_assigned - Called when the span is assigned by DAHDI.
+ * @span:	Span that has been assigned.
+ *
+ * When this function is called, the span has a valid spanno and all the
+ * channels on the span have valid channel numbers assigned.
+ *
+ * This function is necessary because a device may be registered, and
+ * then user space may then later decide to assign span numbers and the
+ * channel numbers.
+ *
+ */
+static void t4_span_assigned(struct dahdi_span *span)
+{
+	struct t4_span *tspan = container_of(span, struct t4_span, span);
+	struct t4 *wc = tspan->owner;
+	struct dahdi_span *pos;
+	unsigned int unassigned_spans = 0;
+
+	/* We use this to make sure all the spans are assigned before
+	 * running the serial setup. */
+	list_for_each_entry(pos, &wc->ddev->spans, device_node) {
+		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags))
+			++unassigned_spans;
+	}
+
+	if (0 == unassigned_spans)
+		t4_serial_setup(wc);
+}
+
+static void free_wc(struct t4 *wc)
+{
+	unsigned int x, y;
+
+	for (x = 0; x < ARRAY_SIZE(wc->tspans); x++) {
+		if (!wc->tspans[x])
+			continue;
+		for (y = 0; y < ARRAY_SIZE(wc->tspans[x]->chans); y++) {
+			kfree(wc->tspans[x]->chans[y]);
+			kfree(wc->tspans[x]->ec[y]);
+		}
+		kfree(wc->tspans[x]);
+	}
+
+	kfree(wc->ddev->devicetype);
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
+	kfree(wc);
+}
+
+/**
+ * t4_alloc_channels - Allocate the channels on a span.
+ * @wc:		The board we're allocating for.
+ * @ts:		The span we're allocating for.
+ * @linemode:	Which mode (T1/E1/J1) to use for this span.
+ *
+ * This function must only be called before the span is assigned it's
+ * possible for user processes to have an open reference to the
+ * channels.
+ *
+ */
+static int t4_alloc_channels(struct t4 *wc, struct t4_span *ts,
+			     enum linemode linemode)
+{
+	int i;
+
+	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &ts->span.flags)) {
+		dev_dbg(&wc->dev->dev,
+			"Cannot allocate channels on a span that is already "
+			"assigned.\n");
+		return -EINVAL;
+	}
+
+	/* Cleanup any previously allocated channels. */
+	for (i = 0; i < ARRAY_SIZE(ts->chans); ++i) {
+		kfree(ts->chans[i]);
+		kfree(ts->ec[i]);
+	}
+
+	ts->linemode = linemode;
+	for (i = 0; i < ((E1 == ts->linemode) ? 31 : 24); i++) {
+		struct dahdi_chan *chan;
+		struct dahdi_echocan_state *ec;
+
+		chan = kzalloc(sizeof(*chan), GFP_KERNEL);
+		if (!chan) {
+			free_wc(wc);
+			return -ENOMEM;
+		}
+		ts->chans[i] = chan;
+
+		ec = kzalloc(sizeof(*ec), GFP_KERNEL);
+		if (!ec) {
+			free_wc(wc);
+			return -ENOMEM;
+		}
+		ts->ec[i] = ec;
+	}
+
+	return 0;
+}
+
+static void t4_init_one_span(struct t4 *wc, struct t4_span *ts)
+{
+	unsigned long flags;
+	unsigned int reg;
+	int i;
+
+	snprintf(ts->span.name, sizeof(ts->span.name) - 1,
+		 "TE%d/%d/%d", wc->numspans, wc->num, ts->span.offset + 1);
+	snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
+		 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num,
+		 ts->span.offset + 1);
+
+	switch (ts->linemode) {
+	case T1:
+		ts->span.spantype = "T1";
+		break;
+	case E1:
+		ts->span.spantype = "E1";
+		break;
+	case J1:
+		ts->span.spantype = "J1";
+		break;
+	}
+
+	/* HDLC Specific init */
+	ts->sigchan = NULL;
+	ts->sigmode = sigmode;
+	ts->sigactive = 0;
+
+	if (E1 != ts->linemode) {
+		ts->span.channels = 24;
+		ts->span.deflaw = DAHDI_LAW_MULAW;
+		ts->span.linecompat = DAHDI_CONFIG_AMI |
+			DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 |
+			DAHDI_CONFIG_ESF;
+	} else {
+		ts->span.channels = 31;
+		ts->span.deflaw = DAHDI_LAW_ALAW;
+		ts->span.linecompat = DAHDI_CONFIG_AMI |
+			DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS |
+			DAHDI_CONFIG_CRC4;
+	}
+	ts->span.chans = ts->chans;
+	ts->span.flags = DAHDI_FLAG_RBS;
+
+	for (i = 0; i < ts->span.channels; i++) {
+		struct dahdi_chan *const chan = ts->chans[i];
+		chan->pvt = wc;
+		snprintf(chan->name, sizeof(chan->name) - 1,
+			 "%s/%d", ts->span.name, i + 1);
+		t4_chan_set_sigcap(&ts->span, i);
+		chan->chanpos = i + 1;
+	}
+
+	/* Enable 1sec timer interrupt */
+	spin_lock_irqsave(&wc->reglock, flags);
+	reg = __t4_framer_in(wc, ts->span.offset, FMR1_T);
+	__t4_framer_out(wc, ts->span.offset, FMR1_T, (reg | FMR1_ECM));
+
+	/* Enable Errored Second interrupt */
+	__t4_framer_out(wc, ts->span.offset, ESM, 0);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	t4_reset_counters(&ts->span);
+}
+
+/**
+ * t4_set_linemode - Allows user space to change the linemode before spans are assigned.
+ * @span:	span on which to change the linemode.
+ * @linemode:	Textual description of the new linemode.
+ *
+ * This callback is used to override the E1/T1 mode jumper settings and set
+ * the linemode on for each span. Called when the "spantype" attribute
+ * is written in sysfs under the dahdi_device.
+ *
+ */
+static int t4_set_linemode(struct dahdi_span *span, const char *linemode)
+{
+	struct t4_span *ts = container_of(span, struct t4_span, span);
+	struct t4 *wc = ts->owner;
+	int res = 0;
+	enum linemode mode;
+
+	dev_dbg(&wc->dev->dev, "Setting '%s' to '%s'\n", span->name, linemode);
+
+	if (!strcasecmp(span->spantype, linemode))
+		return 0;
+
+	if (!strcasecmp(linemode, "t1")) {
+		dev_info(&wc->dev->dev,
+			 "Changing from %s to T1 line mode.\n", span->spantype);
+		mode = T1;
+	} else if (!strcasecmp(linemode, "e1")) {
+		dev_info(&wc->dev->dev,
+			 "Changing from %s to E1 line mode.\n", span->spantype);
+		mode = E1;
+	} else if (!strcasecmp(linemode, "j1")) {
+		dev_info(&wc->dev->dev,
+			 "Changing from %s to J1 line mode.\n", span->spantype);
+		mode = J1;
+	} else {
+		dev_err(&wc->dev->dev,
+			"'%s' is an unknown linemode.\n", linemode);
+		res = -EINVAL;
+	}
+
+	if (!res) {
+		t4_alloc_channels(wc, ts, mode);
+		t4_init_one_span(wc, ts);
+		dahdi_init_span(span);
+	}
+
+	return res;
+}
+
+static const struct dahdi_span_ops t4_gen1_span_ops = {
+	.owner = THIS_MODULE,
+	.spanconfig = t4_spanconfig,
+	.chanconfig = t4_chanconfig,
+	.startup = t4_startup,
+	.shutdown = t4_shutdown,
+	.rbsbits = t4_rbsbits,
+	.maint = t4_maint,
+	.open = t4_open,
+	.close  = t4_close,
+	.ioctl = t4_ioctl,
+	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
+	.assigned = t4_span_assigned,
+	.set_spantype = t4_set_linemode,
+};
+
+static const struct dahdi_span_ops t4_gen2_span_ops = {
+	.owner = THIS_MODULE,
+	.spanconfig = t4_spanconfig,
+	.chanconfig = t4_chanconfig,
+	.startup = t4_startup,
+	.shutdown = t4_shutdown,
+	.rbsbits = t4_rbsbits,
+	.maint = t4_maint,
+	.open = t4_open,
+	.close  = t4_close,
+	.ioctl = t4_ioctl,
+	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
+	.dacs = t4_dacs,
+	.assigned = t4_span_assigned,
+	.set_spantype = t4_set_linemode,
+#ifdef VPM_SUPPORT
+	.echocan_create = t4_echocan_create,
+	.echocan_name = t4_echocan_name,
+#endif
+};
+
+/**
+ * init_spans - Do first initialization on all the spans
+ * @wc:		Card to initialize the spans on.
+ *
+ * This function is called *before* the dahdi_device is first registered
+ * with the system. What happens in t4_init_one_span can happen between
+ * when the device is registered and when the spans are assigned via
+ * sysfs (or automatically).
+ *
+ */
+static void init_spans(struct t4 *wc)
+{
+	int x, y;
+	int gen2;
+	struct t4_span *ts;
+	unsigned int reg;
+	unsigned long flags;
+
+	gen2 = (wc->tspans[0]->spanflags & FLAG_2NDGEN);
+	for (x = 0; x < wc->numspans; x++) {
+		ts = wc->tspans[x];
+
+		sprintf(ts->span.name, "TE%d/%d/%d", wc->numspans, wc->num, x + 1);
+		snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
+			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
+		switch (ts->linemode) {
+		case T1:
+			ts->span.spantype = "T1";
+			break;
+		case E1:
+			ts->span.spantype = "E1";
+			break;
+		case J1:
+			ts->span.spantype = "J1";
+			break;
+		}
+
+		/* HDLC Specific init */
+		ts->sigchan = NULL;
+		ts->sigmode = sigmode;
+		ts->sigactive = 0;
+
+		if (E1 != ts->linemode) {
+			ts->span.channels = 24;
+			ts->span.deflaw = DAHDI_LAW_MULAW;
+			ts->span.linecompat = DAHDI_CONFIG_AMI |
+				DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 |
+				DAHDI_CONFIG_ESF;
+		} else {
+			ts->span.channels = 31;
+			ts->span.deflaw = DAHDI_LAW_ALAW;
+			ts->span.linecompat = DAHDI_CONFIG_AMI |
+				DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS |
+				DAHDI_CONFIG_CRC4;
+		}
+		ts->span.chans = ts->chans;
+		ts->span.flags = DAHDI_FLAG_RBS;
+
+		ts->owner = wc;
+		ts->span.offset = x;
+		ts->writechunk = (void *)(wc->writechunk + x * 32 * 2);
+		ts->readchunk = (void *)(wc->readchunk + x * 32 * 2);
+
+		if (gen2) {
+			ts->span.ops = &t4_gen2_span_ops;
+		} else {
+			ts->span.ops = &t4_gen1_span_ops;
+		}
+
+		for (y=0;y<wc->tspans[x]->span.channels;y++) {
+			struct dahdi_chan *mychans = ts->chans[y];
+			sprintf(mychans->name, "TE%d/%d/%d/%d", wc->numspans, wc->num, x + 1, y + 1);
+			t4_chan_set_sigcap(&ts->span, x);
+			mychans->pvt = wc;
+			mychans->chanpos = y + 1;
+		}
+
+		/* Start checking for alarms in 250 ms */
+		ts->alarmcheck_time = jiffies + msecs_to_jiffies(250);
+
+		/* Enable 1sec timer interrupt */
+		spin_lock_irqsave(&wc->reglock, flags);
+		reg = __t4_framer_in(wc, x, FMR1_T);
+		__t4_framer_out(wc, x, FMR1_T, (reg | FMR1_ECM));
+
+		/* Enable Errored Second interrupt */
+		__t4_framer_out(wc, x, ESM, 0);
+		spin_unlock_irqrestore(&wc->reglock, flags);
+
+		t4_reset_counters(&ts->span);
+
+	}
+
+	set_span_devicetype(wc);
+	setup_chunks(wc, 0);
+	wc->lastindex = 0;
 }
 
 static int syncsrc = 0;
@@ -4042,8 +4276,6 @@ static int __devinit t4_launch(struct t4 *wc)
 			 wc->order);
 	}
 
-	t4_serial_setup(wc);
-
 	wc->ddev->manufacturer = "Digium";
 	if (!ignore_rotary && (1 == order_index[wc->order])) {
 		wc->ddev->location = kasprintf(GFP_KERNEL,
@@ -4079,26 +4311,6 @@ static int __devinit t4_launch(struct t4 *wc)
 	return 0;
 }
 
-static void free_wc(struct t4 *wc)
-{
-	unsigned int x, y;
-
-	for (x = 0; x < ARRAY_SIZE(wc->tspans); x++) {
-		if (!wc->tspans[x])
-			continue;
-		for (y = 0; y < ARRAY_SIZE(wc->tspans[x]->chans); y++) {
-			kfree(wc->tspans[x]->chans[y]);
-			kfree(wc->tspans[x]->ec[y]);
-		}
-		kfree(wc->tspans[x]);
-	}
-
-	kfree(wc->ddev->devicetype);
-	kfree(wc->ddev->location);
-	dahdi_free_device(wc->ddev);
-	kfree(wc);
-}
-
 /**
  * wct4xxp_sort_cards - Sort the cards in card array by rotary switch settings.
  *
@@ -4130,7 +4342,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 {
 	int res;
 	struct t4 *wc;
-	unsigned int x, f;
+	unsigned int x;
 	int init_latency;
 	
 	if (pci_enable_device(pdev)) {
@@ -4229,6 +4441,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	/* Allocate pieces we need here */
 	for (x = 0; x < PORTS_PER_FRAMER; x++) {
 		struct t4_span *ts;
+		enum linemode linemode;
 
 		ts = kzalloc(sizeof(*ts), GFP_KERNEL);
 		if (!ts) {
@@ -4237,34 +4450,12 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		}
 		wc->tspans[x] = ts;
 
-		if (wc->t1e1 & (1 << x))
-			ts->linemode = E1;
-		else
-			ts->linemode = (j1mode) ? J1 : T1;
-
-		for (f = 0; f < ((E1 == ts->linemode) ? 31 : 24); f++) {
-			struct dahdi_chan *chan;
-			struct dahdi_echocan_state *ec;
-
-			chan = kzalloc(sizeof(*chan), GFP_KERNEL);
-			if (!chan) {
-				free_wc(wc);
-				return -ENOMEM;
-			}
-			ts->chans[f] = chan;
-
-			ec = kzalloc(sizeof(*ec), GFP_KERNEL);
-			if (!ec) {
-				free_wc(wc);
-				return -ENOMEM;
-			}
-			ts->ec[f] = ec;
-		}
-
 #ifdef ENABLE_WORKQUEUES
 		INIT_WORK(&ts->swork, workq_handlespan, ts);
 #endif				
 		ts->spanflags |= wc->devtype->flags;
+		linemode = (wc->t1e1 & (1 << x)) ? E1 : ((j1mode) ? J1 : T1);
+		t4_alloc_channels(wc, wc->tspans[x], linemode);
 	}
 	
 	/* Continue hardware intiialization */
@@ -4466,19 +4657,28 @@ static int __init t4_init(void)
 {
 	int i;
 	int res;
+
+	if (-1 != t1e1override) {
+		pr_info("'t1e1override' module parameter is deprecated. "
+			"Please use 'default_linemode' instead.\n");
+	}
+
 	res = dahdi_pci_module(&t4_driver);
 	if (res)
 		return -ENODEV;
-	/* initialize cards since we have all of them */
-	/* warn for missing zero and duplicate numbers */
-	if (cards[0] && cards[0]->order != 0) {
-		printk(KERN_NOTICE "wct4xxp: Ident of first card is not zero (%d)\n",
-			cards[0]->order);
-	}
 
 	/* If we're ignoring the rotary switch settings, then we've already
 	 * registered in the context of .probe */
 	if (!ignore_rotary) {
+
+		/* Initialize cards since we have all of them. Warn for
+		 * missing zero and duplicate numbers. */
+
+		if (cards[0] && cards[0]->order != 0) {
+			printk(KERN_NOTICE "wct4xxp: Ident of first card is not zero (%d)\n",
+				cards[0]->order);
+		}
+
 		for (i = 0; cards[i]; i++) {
 			/* warn the user of duplicate ident values it is
 			 * probably unintended */
@@ -4503,7 +4703,6 @@ static void __exit t4_cleanup(void)
 {
 	pci_unregister_driver(&t4_driver);
 }
-
 
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
 MODULE_DESCRIPTION("Wildcard Dual-/Quad-port Digital Card Driver");
