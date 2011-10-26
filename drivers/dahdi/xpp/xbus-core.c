@@ -875,7 +875,7 @@ static int xbus_register_dahdi_device(xbus_t *xbus)
 	int	i;
 	int	offset = 0;
 
-	XBUS_NOTICE(xbus, "Entering %s\n", __func__);
+	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __func__);
 	xbus->ddev = dahdi_create_device();
 	/*
 	 * This actually describe the dahdi_spaninfo version 3

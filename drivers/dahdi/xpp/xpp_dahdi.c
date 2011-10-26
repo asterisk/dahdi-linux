@@ -985,7 +985,6 @@ static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 	struct dahdi_span	*span;
 	int			i;
 
-	XPD_NOTICE(xpd, "Initializing span(offset=%d): %d channels.\n", offset, cn);
 	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
 	for (i = 0; i < cn; i++)
 		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
@@ -1029,7 +1028,8 @@ int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset)
 
 	cn = PHONEDEV(xpd).channels;
 	xpd_init_span(xpd, offset, cn);
-	XPD_DBG(GENERAL, xpd, "Registering span '%s'\n", PHONEDEV(xpd).span.desc);
+	XPD_DBG(DEVICES, xpd, "Preregister local span %d: %d channels.\n",
+		offset + 1, cn);
 	CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 1);
 	return 0;
 }
