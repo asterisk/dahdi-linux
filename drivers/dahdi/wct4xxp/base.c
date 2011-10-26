@@ -1813,7 +1813,6 @@ static void init_spans(struct t4 *wc)
 			ts->span.spantype = "J1";
 			break;
 		}
-		ts->span.irq = wc->dev->irq;
 
 		/* HDLC Specific init */
 		ts->sigchan = NULL;
@@ -3569,13 +3568,10 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			}
 
 			if (needed_latency > wc->numbufs) {
-				int x;
-
 				dev_info(&wc->dev->dev, "Need to increase "
 					"latency.  Estimated latency should "
 					"be %d\n", needed_latency);
-				for (x = 0; x < wc->numspans; x++)
-					wc->tspans[x]->span.irqmisses++;
+				wc->ddev->irqmisses++;
 				wc->needed_latency = needed_latency;
 				__t4_pci_out(wc, WC_DMACTRL, 0x00000000);
 				set_bit(T4_CHANGE_LATENCY, &wc->checkflag);

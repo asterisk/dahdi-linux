@@ -1835,8 +1835,6 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 	if (!wc->ddev->location)
 		return -ENOMEM;
 
-	wc->span.irq = pdev->irq;
-
 	if (type == E1) {
 		wc->span.channels = 31;
 		wc->span.spantype = "E1";
@@ -2293,7 +2291,7 @@ static inline void t1_receiveprep(struct t1 *wc, const u8* sframe)
 			wc->rxident = eframe[EFRAME_SIZE + 1];
 			wc->statreg = eframe[EFRAME_SIZE + 2];
 			if (wc->rxident != expected) {
-				wc->span.irqmisses++;
+				wc->ddev->irqmisses++;
 				_resend_cmds(wc);
 				if (unlikely(debug)) {
 					t1_info(wc, "oops: rxident=%d "

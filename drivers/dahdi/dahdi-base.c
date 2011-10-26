@@ -845,8 +845,8 @@ static int dahdi_seq_show(struct seq_file *sfile, void *v)
 		seq_printf(sfile, "\tE-bit error count: %d\n", s->count.ebit);
 	if (s->count.fas)
 		seq_printf(sfile, "\tFAS error count: %d\n", s->count.fas);
-	if (s->irqmisses)
-		seq_printf(sfile, "\tIRQ misses: %d\n", s->irqmisses);
+	if (s->parent->irqmisses)
+		seq_printf(sfile, "\tIRQ misses: %d\n", s->parent->irqmisses);
 	if (s->timingslips)
 		seq_printf(sfile, "\tTiming slips: %d\n", s->timingslips);
 	seq_printf(sfile, "\n");
@@ -4246,7 +4246,7 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 	spaninfo.prbs = s->count.prbs;
 	spaninfo.errsec = s->count.errsec;
 
-	spaninfo.irqmisses = s->irqmisses;	/* get IRQ miss count */
+	spaninfo.irqmisses = s->parent->irqmisses;	/* get IRQ miss count */
 	spaninfo.syncsrc = s->syncsrc;	/* get active sync source */
 	spaninfo.totalchans = s->channels;
 	spaninfo.numchans = 0;
@@ -4256,7 +4256,7 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 	}
 	spaninfo.lbo = s->lbo;
 	spaninfo.lineconfig = s->lineconfig;
-	spaninfo.irq = s->irq;
+	spaninfo.irq = 0;
 	spaninfo.linecompat = s->linecompat;
 	strlcpy(spaninfo.lboname, dahdi_lboname(s->lbo),
 			  sizeof(spaninfo.lboname));
@@ -4333,7 +4333,7 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	spaninfo_v1.crc4count = s->count.crc4;
 	spaninfo_v1.ebitcount = s->count.ebit;
 	spaninfo_v1.fascount = s->count.fas;
-	spaninfo_v1.irqmisses = s->irqmisses;
+	spaninfo_v1.irqmisses = s->parent->irqmisses;
 	spaninfo_v1.syncsrc = s->syncsrc;
 	spaninfo_v1.totalchans = s->channels;
 	spaninfo_v1.numchans = 0;
@@ -4343,7 +4343,7 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	}
 	spaninfo_v1.lbo = s->lbo;
 	spaninfo_v1.lineconfig = s->lineconfig;
-	spaninfo_v1.irq = s->irq;
+	spaninfo_v1.irq = 0;
 	spaninfo_v1.linecompat = s->linecompat;
 	strlcpy(spaninfo_v1.lboname,
 			  dahdi_lboname(s->lbo),

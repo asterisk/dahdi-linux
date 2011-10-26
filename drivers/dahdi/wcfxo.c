@@ -666,7 +666,6 @@ static int wcfxo_initialize(struct wcfxo *wc)
 	wc->chan->chanpos = 1;
 	wc->span.chans = &wc->chan;
 	wc->span.channels = 1;
-	wc->span.irq = wc->dev->irq;
 	wc->span.flags = DAHDI_FLAG_RBS;
 	wc->span.deflaw = DAHDI_LAW_MULAW;
 #ifdef ENABLE_TASKLETS

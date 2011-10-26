@@ -1509,7 +1509,7 @@ static inline void wctdm_receiveprep(struct wctdm *wc, const u8 *sframe)
 #endif
 				_dahdi_receive(s);
 				if (unlikely(irqmiss))
-					++s->irqmisses;
+					wc->ddev->irqmisses++;
 			}
 		}
 	}
@@ -4479,7 +4479,6 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 		int digital_span, unsigned int card_position)
 {
 	int x;
-	struct pci_dev *pdev = wc->vb.pdev;
 	struct wctdm_chan *c;
 	struct wctdm_span *s;
 	static int spancount;
@@ -4543,7 +4542,6 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 	}
 
 	s->span.channels = chancount;
-	s->span.irq = pdev->irq;
 
 	if (digital_span) {
 		wc->chans[chanoffset + 0]->chan.sigcap = DAHDI_SIG_CLEAR;

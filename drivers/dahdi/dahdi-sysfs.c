@@ -219,8 +219,6 @@ span_attr(name, "%s\n");
 span_attr(desc, "%s\n");
 span_attr(spantype, "%s\n");
 span_attr(alarms, "0x%x\n");
-span_attr(irq, "%d\n");
-span_attr(irqmisses, "%d\n");
 span_attr(lbo, "%d\n");
 span_attr(syncsrc, "%d\n");
 
@@ -254,8 +252,6 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(spantype),
 	__ATTR_RO(local_spanno),
 	__ATTR_RO(alarms),
-	__ATTR_RO(irq),
-	__ATTR_RO(irqmisses),
 	__ATTR_RO(lbo),
 	__ATTR_RO(syncsrc),
 	__ATTR_RO(is_digital),

@@ -2398,7 +2398,6 @@ static int wctdm_initialize(struct wctdm *wc)
 	}
 	wc->span.chans = wc->chans;
 	wc->span.channels = NUM_CARDS;
-	wc->span.irq = wc->dev->irq;
 	wc->span.flags = DAHDI_FLAG_RBS;
 	wc->span.ops = &wctdm_span_ops;
 

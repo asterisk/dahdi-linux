@@ -904,6 +904,7 @@ struct dahdi_span_ops {
  *                a hardware_id). This should not change if the device is
  *                relocated to a different location (e.g: different PCI slot)
  * @devicetype:   What type of device this is.
+ * @irqmisses:    Count of "interrupt misses" for this device.
  *
  */
 struct dahdi_device {
@@ -913,6 +914,7 @@ struct dahdi_device {
 	const char *hardware_id;
 	const char *devicetype;
 	struct device dev;
+	unsigned int irqmisses;
 };
 
 struct dahdi_span {
@@ -924,7 +926,6 @@ struct dahdi_span {
 	int alarms;			/*!< Pending alarms on span */
 	unsigned long flags;
 	u8 cannot_provide_timing:1;
-	int irq;			/*!< IRQ for this span's hardware */
 	int lbo;			/*!< Span Line-Buildout */
 	int lineconfig;			/*!< Span line configuration */
 	int linecompat;			/*!< Span line compatibility (0 for
@@ -938,7 +939,6 @@ struct dahdi_span {
 	int maintstat;			/*!< Maintenance state */
 	int mainttimer;			/*!< Maintenance timer */
 
-	int irqmisses;			/*!< Interrupt misses */
 	int timingslips;		/*!< Clock slips */
 
 	struct dahdi_chan **chans;	/*!< Member channel structures */

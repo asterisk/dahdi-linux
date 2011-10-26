@@ -994,7 +994,6 @@ static int t1xxp_software_init(struct t1 *wc)
 	if (!wc->ddev->location)
 		return -ENOMEM;
 
-	wc->span.irq = wc->dev->irq;
 	if (wc->spantype == TYPE_E1) {
 		if (unchannelized)
 			wc->span.channels = 32;
@@ -1129,10 +1128,10 @@ static void t1xxp_receiveprep(struct t1 *wc, int ints)
 	if (((oldcan & 0xffff0000) >> 16) != CANARY) {
 		/* Check top part */
 		if (debug) printk(KERN_DEBUG "Expecting top %04x, got %04x\n", CANARY, (oldcan & 0xffff0000) >> 16);
-		wc->span.irqmisses++;
+		wc->ddev->irqmisses++;
 	} else if ((oldcan & 0xffff) != ((wc->canary - 1) & 0xffff)) {
 		if (debug) printk(KERN_DEBUG "Expecting bottom %d, got %d\n", wc->canary - 1, oldcan & 0xffff);
-		wc->span.irqmisses++;
+		wc->ddev->irqmisses++;
 	}
 	for (y=0;y<DAHDI_CHUNKSIZE;y++) {
 		for (x=0;x<wc->span.channels;x++) {
