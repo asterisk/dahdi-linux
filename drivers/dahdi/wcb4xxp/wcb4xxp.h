@@ -474,6 +474,7 @@ struct b4xxp {
 	/* Flags for our bottom half */
 	unsigned int shutdown;			/* 1=bottom half doesn't process anything, just returns */
 	struct tasklet_struct b4xxp_tlet;
+	struct dahdi_device *ddev;
 };
 
 /* CPLD access bits */

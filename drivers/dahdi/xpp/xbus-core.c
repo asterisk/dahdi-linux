@@ -871,6 +871,86 @@ err:
 	goto out;
 }
 
+static int xbus_register_dahdi_device(xbus_t *xbus)
+{
+	int	i;
+	int	offset = 0;
+
+	XBUS_NOTICE(xbus, "Entering %s\n", __func__);
+	xbus->ddev = dahdi_create_device();
+	/*
+	 * This actually describe the dahdi_spaninfo version 3
+	 * A bunch of unrelated data exported via a modified ioctl()
+	 * What a bummer...
+	 */
+	xbus->ddev->manufacturer = "Xorcom Inc.";	/* OK, that's obvious */
+	/* span->spantype = "...."; set in card_dahdi_preregistration() */
+	/*
+	 * Yes, this basically duplicates information available
+	 * from the description field. If some more is needed
+	 * why not add it there?
+	 * OK, let's add to the kernel more useless info.
+	 */
+	xbus->ddev->devicetype = kasprintf(GFP_KERNEL, "Astribank2");
+	if (!xbus->ddev->devicetype)
+		return -ENOMEM;
+
+	/*
+	 * location is the only usefull new data item.
+	 * For our devices it was available for ages via:
+	 *  - The legacy "/proc/xpp/XBUS-??/summary" (CONNECTOR=...)
+	 *  - The same info in "/proc/xpp/xbuses"
+	 *  - The modern "/sys/bus/astribanks/devices/xbus-??/connector" attribute
+	 * So let's also export it via the newfangled "location" field.
+	 */
+	xbus->ddev->location = xbus->connector;
+
+	/*
+	 * Prepare the span list
+	 */
+	for (i = 0; i < MAX_XPDS; i++) {
+		xpd_t *xpd = xpd_of(xbus, i);
+		if (xpd && IS_PHONEDEV(xpd)) {
+			XPD_DBG(DEVICES, xpd, "offset=%d\n", offset);
+			xpd_dahdi_preregister(xpd, offset++);
+		}
+	}
+	if (dahdi_register_device(xbus->ddev, &xbus->astribank)) {
+		XBUS_ERR(xbus, "Failed to dahdi_register_device()\n");
+		return -ENODEV;
+	}
+	for (i = 0; i < MAX_XPDS; i++) {
+		xpd_t *xpd = xpd_of(xbus, i);
+		if (xpd && IS_PHONEDEV(xpd)) {
+			XPD_DBG(DEVICES, xpd, "\n");
+			xpd_dahdi_postregister(xpd);
+		}
+	}
+	return 0;
+}
+
+static void xbus_unregister_dahdi_device(xbus_t *xbus)
+{
+	int i;
+
+	XBUS_NOTICE(xbus, "%s\n", __func__);
+	for(i = 0; i < MAX_XPDS; i++) {
+		xpd_t *xpd = xpd_of(xbus, i);
+		xpd_dahdi_preunregister(xpd);
+	}
+	dahdi_unregister_device(xbus->ddev);
+	XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n", __func__);
+	kfree(xbus->ddev->devicetype);
+	xbus->ddev->devicetype = NULL;
+	xbus->ddev->location = NULL;
+	dahdi_free_device(xbus->ddev);
+	xbus->ddev = NULL;
+	for(i = 0; i < MAX_XPDS; i++) {
+		xpd_t *xpd = xpd_of(xbus, i);
+		xpd_dahdi_postunregister(xpd);
+	}
+}
+
 /*
  * This must be called from synchronous (non-interrupt) context
  * it returns only when all XPD's on the bus are detected and
@@ -934,6 +1014,7 @@ void xbus_populate(void *data)
 	 */
 	xbus_request_sync(xbus, SYNC_MODE_PLL);
 	elect_syncer("xbus_populate(end)");	/* FIXME: try to do it later */
+	xbus_register_dahdi_device(xbus);
 out:
 	XBUS_DBG(DEVICES, xbus, "Leaving\n");
 	wake_up_interruptible_all(&worker->wait_for_xpd_initialization);
@@ -1206,12 +1287,12 @@ void xbus_deactivate(xbus_t *xbus)
 	xbus_request_sync(xbus, SYNC_MODE_NONE);	/* no more ticks */
 	elect_syncer("deactivate");
 	xbus_echocancel(xbus, 0);
-	xbus_request_removal(xbus);
 	XBUS_DBG(DEVICES, xbus, "[%s] Waiting for queues\n", xbus->label);
 	xbus_command_queue_clean(xbus);
 	xbus_command_queue_waitempty(xbus);
 	xbus_setstate(xbus, XBUS_STATE_DEACTIVATED);
 	worker_reset(xbus);
+	xbus_unregister_dahdi_device(xbus);
 	xbus_release_xpds(xbus);	/* taken in xpd_alloc() [kref_init] */
 }
 
@@ -1788,10 +1869,6 @@ err:
 
 void xbus_core_shutdown(void)
 {
-	int		i;
-
-	for(i = 0; i < MAX_BUSES; i++)
-		BUG_ON(xbus_num(i));
 	xbus_core_cleanup();
 	xpp_driver_exit();
 }

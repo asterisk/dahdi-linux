@@ -135,6 +135,7 @@ static int wecareregs[] =
 struct wcfxo {
 	struct pci_dev *dev;
 	char *variety;
+	struct dahdi_device *ddev;
 	struct dahdi_span span;
 	struct dahdi_chan _chan;
 	struct dahdi_chan *chan;
@@ -647,14 +648,20 @@ static const struct dahdi_span_ops wcfxo_span_ops = {
 
 static int wcfxo_initialize(struct wcfxo *wc)
 {
+	wc->ddev = dahdi_create_device();
+
 	/* DAHDI stuff */
 	sprintf(wc->span.name, "WCFXO/%d", wc->pos);
 	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Board %d", wc->variety, wc->pos + 1);
 	sprintf(wc->chan->name, "WCFXO/%d/%d", wc->pos, 0);
-	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
-		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
-	wc->span.manufacturer = "Digium";
-	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
+	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				      wc->dev->bus->number,
+				      PCI_SLOT(wc->dev->devfn) + 1);
+	if (!wc->ddev->location)
+		return -ENOMEM;
+
+	wc->ddev->manufacturer = "Digium";
+	wc->ddev->devicetype = wc->variety;
 	wc->chan->sigcap = DAHDI_SIG_FXSKS | DAHDI_SIG_FXSLS | DAHDI_SIG_SF;
 	wc->chan->chanpos = 1;
 	wc->span.chans = &wc->chan;
@@ -668,7 +675,8 @@ static int wcfxo_initialize(struct wcfxo *wc)
 
 	wc->chan->pvt = wc;
 	wc->span.ops = &wcfxo_span_ops;
-	if (dahdi_register(&wc->span, 0)) {
+	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
+	if (dahdi_register_device(wc->ddev, &wc->dev->dev)) {
 		printk(KERN_NOTICE "Unable to register span with DAHDI\n");
 		return -1;
 	}
@@ -976,7 +984,7 @@ static int __devinit wcfxo_init_one(struct pci_dev *pdev, const struct pci_devic
 		printk(KERN_NOTICE "Failed to initailize DAA, giving up...\n");
 		wcfxo_stop_dma(wc);
 		wcfxo_disable_interrupts(wc);
-		dahdi_unregister(&wc->span);
+		dahdi_unregister_device(wc->ddev);
 		free_irq(pdev->irq, wc);
 
 		/* Reset PCI chip and registers */
@@ -984,6 +992,8 @@ static int __devinit wcfxo_init_one(struct pci_dev *pdev, const struct pci_devic
 
 		if (wc->freeregion)
 			release_region(wc->ioaddr, 0xff);
+		kfree(wc->ddev->location);
+		dahdi_free_device(wc->ddev);
 		kfree(wc);
 		return -EIO;
 	}
@@ -995,9 +1005,11 @@ static int __devinit wcfxo_init_one(struct pci_dev *pdev, const struct pci_devic
 
 static void wcfxo_release(struct wcfxo *wc)
 {
-	dahdi_unregister(&wc->span);
+	dahdi_unregister_device(wc->ddev);
 	if (wc->freeregion)
 		release_region(wc->ioaddr, 0xff);
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
 	printk(KERN_INFO "Freed a Wildcard\n");
 }

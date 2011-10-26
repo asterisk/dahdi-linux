@@ -97,6 +97,7 @@ struct tor2 {
 	unsigned long xilinx8_region;	/* 8 bit Region allocated to Xilinx */
 	unsigned long xilinx8_len;	/* Length of 8 bit Xilinx region */
 	__iomem volatile unsigned char *mem8;	/* Virtual representation of 8 bit Xilinx memory area */
+	struct dahdi_device *ddev;
 	struct tor2_span tspans[SPANS_PER_CARD];	/* Span data */
 	struct dahdi_chan **chans[SPANS_PER_CARD]; /* Pointers to card channels */
 	struct tor2_chan tchans[32 * SPANS_PER_CARD];	/* Channel user data */
@@ -285,10 +286,6 @@ static void init_spans(struct tor2 *tor)
 		snprintf(s->desc, sizeof(s->desc) - 1,
 			 "Tormenta 2 (PCI) Quad %s Card %d Span %d",
 			 (tor->cardtype == TYPE_T1)  ?  "T1"  :  "E1", tor->num, x + 1);
-		s->manufacturer = "Digium";
-		strlcpy(s->devicetype, tor->type, sizeof(s->devicetype));
-		snprintf(s->location, sizeof(s->location) - 1,
-			 "PCI Bus %02d Slot %02d", tor->pci->bus->number, PCI_SLOT(tor->pci->devfn) + 1);
 		if (tor->cardtype == TYPE_T1) {
 			s->channels = 24;
 			s->deflaw = DAHDI_LAW_MULAW;
@@ -322,19 +319,31 @@ static void init_spans(struct tor2 *tor)
 
 static int __devinit tor2_launch(struct tor2 *tor)
 {
+	int res;
 	struct dahdi_span *s;
 	int i;
 
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &tor->tspans[0].dahdi_span.flags))
 		return 0;
 
+	tor->ddev = dahdi_create_device();
+	tor->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				       tor->pci->bus->number,
+				       PCI_SLOT(tor->pci->devfn) + 1);
+
+	if (!tor->ddev->location)
+		return -ENOMEM;
+
 	printk(KERN_INFO "Tor2: Launching card: %d\n", tor->order);
 	for (i = 0; i < SPANS_PER_CARD; ++i) {
 		s = &tor->tspans[i].dahdi_span;
-		if (dahdi_register(s, 0)) {
-			printk(KERN_ERR "Unable to register span %s\n", s->name);
-			goto error_exit;
-		}
+		list_add_tail(&s->device_node, &tor->ddev->spans);
+	}
+
+	res = dahdi_register_device(tor->ddev, &tor->pci->dev);
+	if (res) {
+		dev_err(&tor->pci->dev, "Unable to register with DAHDI.\n");
+		return res;
 	}
 	writew(PLX_INTENA, &tor->plx[INTCSR]); /* enable PLX interrupt */
 
@@ -342,14 +351,6 @@ static int __devinit tor2_launch(struct tor2 *tor)
 	tasklet_init(&tor->tor2_tlet, tor2_tasklet, (unsigned long)tor);
 #endif
 	return 0;
-
-error_exit:
-	for (i = 0; i < SPANS_PER_CARD; ++i) {
-		s = &tor->tspans[i].dahdi_span;
-		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &s->flags))
-			dahdi_unregister(s);
-	}
-	return -1;
 }
 
 static void free_tor(struct tor2 *tor)
@@ -365,6 +366,8 @@ static void free_tor(struct tor2 *tor)
 		if (tor->chans[x])
 			kfree(tor->chans[x]);
 	}
+	kfree(tor->ddev->location);
+	dahdi_free_device(tor->ddev);
 	kfree(tor);
 }
 
@@ -631,7 +634,6 @@ static struct pci_driver tor2_driver;
 static void __devexit tor2_remove(struct pci_dev *pdev)
 {
 	struct tor2 *tor;
-	int i;
 
 	tor = pci_get_drvdata(pdev);
 	if (!tor)
@@ -641,11 +643,7 @@ static void __devexit tor2_remove(struct pci_dev *pdev)
 	writeb(0, &tor->mem8[LEDREG]);
 	writew(0, &tor->plx[INTCSR]);
 	free_irq(tor->irq, tor);
-	for (i = 0; i < SPANS_PER_CARD; ++i) {
-		struct dahdi_span *s = &tor->tspans[i].dahdi_span;
-		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &s->flags))
-			dahdi_unregister(s);
-	}
+	dahdi_unregister_device(tor->ddev);
 	release_mem_region(tor->plx_region, tor->plx_len);
 	release_mem_region(tor->xilinx32_region, tor->xilinx32_len);
 	release_mem_region(tor->xilinx8_region, tor->xilinx8_len);

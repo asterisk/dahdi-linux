@@ -2030,7 +2030,7 @@ static int __init voicebus_module_init(void)
 	 * defined, but it will make sure that this module is a dependency of
 	 * dahdi.ko, so that when it is being unloded, this module will be
 	 * unloaded as well. */
-	dahdi_register(NULL, 0);
+	dahdi_register_device(NULL, NULL);
 	spin_lock_init(&loader_list_lock);
 	return 0;
 }

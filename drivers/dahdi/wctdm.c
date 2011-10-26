@@ -205,6 +205,7 @@ struct wctdm {
 	struct pci_dev *dev;
 	char *variety;
 	struct dahdi_span span;
+	struct dahdi_device *ddev;
 	unsigned char ios;
 	int usecount;
 	unsigned int intcount;
@@ -2362,13 +2363,26 @@ static int wctdm_initialize(struct wctdm *wc)
 {
 	int x;
 
+	wc->ddev = dahdi_create_device();
+	if (!wc->ddev)
+		return -ENOMEM;
+
 	/* DAHDI stuff */
 	sprintf(wc->span.name, "WCTDM/%d", wc->pos);
 	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Board %d", wc->variety, wc->pos + 1);
-	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
-		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
-	wc->span.manufacturer = "Digium";
-	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
+	wc->ddev->location = kasprintf(GFP_KERNEL,
+				      "PCI Bus %02d Slot %02d",
+				      wc->dev->bus->number,
+				      PCI_SLOT(wc->dev->devfn) + 1);
+	if (!wc->ddev->location) {
+		dahdi_free_device(wc->ddev);
+		wc->ddev = NULL;
+		return -ENOMEM;
+	}
+
+	wc->ddev->manufacturer = "Digium";
+	wc->ddev->devicetype = wc->variety;
+
 	if (alawoverride) {
 		printk(KERN_INFO "ALAW override parameter detected.  Device will be operating in ALAW\n");
 		wc->span.deflaw = DAHDI_LAW_ALAW;
@@ -2388,8 +2402,12 @@ static int wctdm_initialize(struct wctdm *wc)
 	wc->span.flags = DAHDI_FLAG_RBS;
 	wc->span.ops = &wctdm_span_ops;
 
-	if (dahdi_register(&wc->span, 0)) {
+	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
+	if (dahdi_register_device(wc->ddev, &wc->dev->dev)) {
 		printk(KERN_NOTICE "Unable to register span with DAHDI\n");
+		kfree(wc->ddev->location);
+		dahdi_free_device(wc->ddev);
+		wc->ddev = NULL;
 		return -1;
 	}
 	return 0;
@@ -2677,7 +2695,9 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 					release_region(wc->ioaddr, 0xff);
 				pci_free_consistent(pdev, DAHDI_MAX_CHUNKSIZE * 2 * 2 * 2 * 4, (void *)wc->writechunk, wc->writedma);
 				pci_set_drvdata(pdev, NULL);
-				dahdi_unregister(&wc->span);
+				dahdi_unregister_device(wc->ddev);
+				kfree(wc->ddev->location);
+				dahdi_free_device(wc->ddev);
 				kfree(wc);
 				return -EIO;
 
@@ -2708,10 +2728,14 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 
 static void wctdm_release(struct wctdm *wc)
 {
-	dahdi_unregister(&wc->span);
+	dahdi_unregister_device(wc->ddev);
 	if (wc->freeregion)
 		release_region(wc->ioaddr, 0xff);
+
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
+
 	printk(KERN_INFO "Freed a Wildcard\n");
 }
 

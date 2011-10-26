@@ -42,7 +42,7 @@
 #include <linux/config.h>
 #endif
 #include <linux/fs.h>
-#include <linux/kobject.h>
+#include <linux/device.h>
 #include <linux/ioctl.h>
 
 #ifdef CONFIG_DAHDI_NET	
@@ -885,6 +885,26 @@ struct dahdi_span_ops {
 
 	/*! Opt: Provide the name of the echo canceller on a channel */
 	const char *(*echocan_name)(const struct dahdi_chan *chan);
+
+	/*! When using "pinned_spans", this function is called back when this
+	 * span has been assigned with the system. */
+	void (*assigned)(struct dahdi_span *span);
+};
+
+/**
+ * dahdi_device - Represents a device that can contain one or more spans.
+ *
+ * @spans:	List of child spans.
+ * @manufacturer: Device manufacturer.
+ * @location:	The location of this device
+ * @devicetype: What type of device this is.
+ *
+ */
+struct dahdi_device {
+	struct list_head spans;
+	const char *manufacturer;
+	const char *location;
+	const char *devicetype;
 };
 
 struct dahdi_span {
@@ -892,9 +912,6 @@ struct dahdi_span {
 	char name[40];			/*!< Span name */
 	char desc[80];			/*!< Span description */
 	const char *spantype;		/*!< span type in text form */
-	const char *manufacturer;	/*!< span's device manufacturer */
-	char devicetype[80];		/*!< span's device type */
-	char location[40];		/*!< span device's location in system */
 	int deflaw;			/*!< Default law (DAHDI_MULAW or DAHDI_ALAW) */
 	int alarms;			/*!< Pending alarms on span */
 	unsigned long flags;
@@ -933,7 +950,10 @@ struct dahdi_span {
 #ifdef CONFIG_PROC_FS
 	struct proc_dir_entry *proc_entry;
 #endif
-	struct list_head node;
+	struct list_head spans_node;
+
+	struct dahdi_device *parent;
+	struct list_head device_node;
 };
 
 struct dahdi_transcoder_channel {
@@ -1031,6 +1051,7 @@ struct dahdi_dynamic {
 	long rxjif;
 	unsigned short txcnt;
 	unsigned short rxcnt;
+	struct dahdi_device *ddev;
 	struct dahdi_span span;
 	struct dahdi_chan *chans[256];
 	struct dahdi_dynamic_driver *driver;
@@ -1038,6 +1059,7 @@ struct dahdi_dynamic {
 	int timing;
 	int master;
 	unsigned char *msgbuf;
+	struct device *dev;
 
 	struct list_head list;
 };
@@ -1131,10 +1153,11 @@ void dahdi_hdlc_putbuf(struct dahdi_chan *ss, unsigned char *rxb, int bytes);
  * and 1 if the currently transmitted message is now done */
 int dahdi_hdlc_getbuf(struct dahdi_chan *ss, unsigned char *bufptr, unsigned int *size);
 
-
-/*! Register a span.  Returns 0 on success, -1 on failure.  Pref-master is non-zero if
-   we should have preference in being the master device */
-int dahdi_register(struct dahdi_span *span, int prefmaster);
+/*! Register a device.  Returns 0 on success, -1 on failure. */
+struct dahdi_device *dahdi_create_device(void);
+int dahdi_register_device(struct dahdi_device *ddev, struct device *parent);
+void dahdi_unregister_device(struct dahdi_device *ddev);
+void dahdi_free_device(struct dahdi_device *ddev);
 
 /*! Allocate / free memory for a transcoder */
 struct dahdi_transcoder *dahdi_transcoder_alloc(int numchans);
@@ -1148,9 +1171,6 @@ int dahdi_transcoder_unregister(struct dahdi_transcoder *tc);
 
 /*! \brief Alert a transcoder */
 int dahdi_transcoder_alert(struct dahdi_transcoder_channel *ztc);
-
-/*! \brief Unregister a span */
-int dahdi_unregister(struct dahdi_span *span);
 
 /*! \brief Gives a name to an LBO */
 const char *dahdi_lboname(int lbo);

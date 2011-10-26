@@ -755,7 +755,7 @@ static void __t1xxp_set_clear(struct t1 *wc)
 	/* Calculate all states on all 24 channels using the channel
 	   flags, then write all 3 clear channel registers at once */
 
-	for (i = 0; i < 24; i++) {
+	for (i = 0; i < wc->span.channels; i++) {
 		offset = i/8;
 		if (wc->span.chans[i]->flags & DAHDI_FLAG_CLEAR)
 			reg[offset] |= 1 << (7 - (i % 8));
@@ -783,7 +783,7 @@ static void free_wc(struct t1 *wc)
 	struct command *cmd;
 	LIST_HEAD(list);
 
-	for (x = 0; x < (wc->spantype == TYPE_E1 ? 31 : 24); x++) {
+	for (x = 0; x < ARRAY_SIZE(wc->chans); x++) {
 		kfree(wc->chans[x]);
 		kfree(wc->ec[x]);
 	}
@@ -808,14 +808,14 @@ static void free_wc(struct t1 *wc)
 	}
 #endif
 
+	kfree(wc->ddev->location);
+	kfree(wc->ddev->devicetype);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
 }
 
 static void t4_serial_setup(struct t1 *wc)
 {
-	t1_info(wc, "Setting up global serial parameters for %s\n",
-		((wc->spantype == TYPE_E1) ? "E1" : "T1"));
-
 	t1_setreg(wc, 0x85, 0xe0);	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from channel 0 */
 	t1_setreg(wc, 0x08, 0x05);	/* IPC: Interrupt push/pull active low */
 
@@ -1009,12 +1009,12 @@ static void t1_configure_e1(struct t1 *wc, int lineconfig)
 	t1_info(wc, "Span configured for %s/%s%s\n", framing, line, crc4);
 }
 
-static void t1xxp_framer_start(struct t1 *wc, struct dahdi_span *span)
+static void t1xxp_framer_start(struct t1 *wc)
 {
-	if (wc->spantype == TYPE_E1) { /* if this is an E1 card */
-		t1_configure_e1(wc, span->lineconfig);
+	if (dahdi_is_e1_span(&wc->span)) {
+		t1_configure_e1(wc, wc->span.lineconfig);
 	} else { /* is a T1 card */
-		t1_configure_t1(wc, span->lineconfig, span->txlevel);
+		t1_configure_t1(wc, wc->span.lineconfig, wc->span.txlevel);
 		__t1xxp_set_clear(wc);
 	}
 
@@ -1023,18 +1023,28 @@ static void t1xxp_framer_start(struct t1 *wc, struct dahdi_span *span)
 
 static void set_span_devicetype(struct t1 *wc)
 {
-	strncpy(wc->span.devicetype, wc->variety,
-		sizeof(wc->span.devicetype) - 1);
+	const char *olddevicetype;
+	olddevicetype = wc->ddev->devicetype;
 
 #if defined(VPM_SUPPORT)
 	if (wc->vpmadt032) {
-		strncat(wc->span.devicetype, " (VPMADT032)",
-			sizeof(wc->span.devicetype) - 1);
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL,
+						 "%s (VPMADT032)", wc->variety);
 	} else if (wc->vpmoct) {
-		strncat(wc->span.devicetype, " (VPMOCT032)",
-			sizeof(wc->span.devicetype) - 1);
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL,
+						 "%s (VPMOCT032)", wc->variety);
+	} else {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s", wc->variety);
 	}
+#else
+	wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s", wc->variety);
 #endif
+
+	/* On the off chance that we were able to allocate it previously. */
+	if (!wc->ddev->devicetype)
+		wc->ddev->devicetype = olddevicetype;
+	else
+		kfree(olddevicetype);
 }
 
 static int t1xxp_startup(struct file *file, struct dahdi_span *span)
@@ -1055,7 +1065,7 @@ static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 #endif
 
 	/* Reset framer with proper parameters and start */
-	t1xxp_framer_start(wc, span);
+	t1xxp_framer_start(wc);
 	debug_printk(wc, 1, "Calling startup (flags is %lu)\n", span->flags);
 
 	return 0;
@@ -1095,7 +1105,7 @@ static int t1xxp_chanconfig(struct file *file,
 	}
 
 	if (test_bit(DAHDI_FLAGBIT_RUNNING, &chan->span->flags) &&
-		(wc->spantype != TYPE_E1)) {
+	    dahdi_is_t1_span(&wc->span)) {
 		__t1xxp_set_clear(wc);
 	}
 	return 0;
@@ -1110,7 +1120,7 @@ static int t1xxp_rbsbits(struct dahdi_chan *chan, int bits)
 	
 	debug_printk(wc, 2, "Setting bits to %d on channel %s\n",
 		     bits, chan->name);
-	if (wc->spantype == TYPE_E1) { /* do it E1 way */
+	if (dahdi_is_e1_span(&wc->span)) { /* do it E1 way */
 		if (chan->chanpos == 16)
 			return 0;
 
@@ -1163,7 +1173,7 @@ static inline void t1_check_sigbits(struct t1 *wc)
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
-	if (wc->spantype == TYPE_E1) {
+	if (dahdi_is_e1_span(&wc->span)) {
 		for (i = 0; i < 15; i++) {
 			a = t1_getreg(wc, 0x71 + i);
 			if (a > -1) {
@@ -1258,7 +1268,7 @@ static void t1xxp_maint_work(struct work_struct *work)
 	int reg = 0;
 	int cmd = w->cmd;
 
-	if (wc->spantype == TYPE_E1) {
+	if (dahdi_is_e1_span(&wc->span)) {
 		switch (cmd) {
 		case DAHDI_MAINT_NONE:
 			t1_info(wc, "Clearing all maint modes\n");
@@ -1330,7 +1340,7 @@ static int t1xxp_maint(struct dahdi_span *span, int cmd)
 	struct maint_work_struct *work;
 	struct t1 *wc = container_of(span, struct t1, span);
 
-	if (wc->spantype == TYPE_E1) {
+	if (dahdi_is_e1_span(&wc->span)) {
 		switch (cmd) {
 		case DAHDI_MAINT_NONE:
 		case DAHDI_MAINT_LOCALLOOP:
@@ -1625,7 +1635,7 @@ static void check_and_load_vpm(struct t1 *wc)
 	options.vpmnlptype = vpmnlptype;
 	options.vpmnlpthresh = vpmnlpthresh;
 	options.vpmnlpmaxsupp = vpmnlpmaxsupp;
-	options.channels = (TYPE_T1 == wc->spantype) ? 24 : 32;
+	options.channels = dahdi_is_t1_span(&wc->span) ? 24 : 32;
 
 	/* We do not want to check that the VPM is alive until after we're
 	 * done setting it up here, an hour should cover it... */
@@ -1685,7 +1695,7 @@ static void t1_chan_set_sigcap(struct dahdi_span *span, int x)
 	struct dahdi_chan *chan = wc->chans[x];
 	chan->sigcap = DAHDI_SIG_CLEAR;
 	/* E&M variant supported depends on span type */
-	if (wc->spantype == TYPE_E1) {
+	if (dahdi_is_e1_span(&wc->span)) {
 		/* E1 sigcap setup */
 		if (span->lineconfig & DAHDI_CONFIG_CCS) {
 			/* CCS setup */
@@ -1784,9 +1794,19 @@ static const struct dahdi_span_ops t1_span_ops = {
 #endif
 };
 
-static int t1_software_init(struct t1 *wc)
+/**
+ * t1_software_init - Initialize the board for the given type.
+ * @wc:		The board to initialize.
+ * @type:	The type of board we are, T1 / E1
+ *
+ * This function is called at startup and when the type of the span is changed
+ * via the dahdi_device before the span is assigned a number.
+ *
+ */
+static int t1_software_init(struct t1 *wc, enum linemode type)
 {
 	int x;
+	int res;
 	int num;
 	struct pci_dev *pdev = wc->vb.pdev;
 
@@ -1801,21 +1821,23 @@ static int t1_software_init(struct t1 *wc)
 	if (x == ARRAY_SIZE(ifaces))
 		return -1;
 
-	t4_serial_setup(wc);
 
 	num = x;
 	sprintf(wc->span.name, "WCT1/%d", num);
 	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Card %d", wc->variety, num);
-	wc->span.manufacturer = "Digium";
+	wc->ddev->manufacturer = "Digium";
 	set_span_devicetype(wc);
 
-	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
-		"PCI Bus %02d Slot %02d", pdev->bus->number,
-		PCI_SLOT(pdev->devfn) + 1);
+	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				      pdev->bus->number,
+				      PCI_SLOT(pdev->devfn) + 1);
+
+	if (!wc->ddev->location)
+		return -ENOMEM;
 
 	wc->span.irq = pdev->irq;
 
-	if (wc->spantype == TYPE_E1) {
+	if (type == E1) {
 		wc->span.channels = 31;
 		wc->span.spantype = "E1";
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_HDB3 |
@@ -1828,6 +1850,11 @@ static int t1_software_init(struct t1 *wc)
 			DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
 		wc->span.deflaw = DAHDI_LAW_MULAW;
 	}
+
+	t1_info(wc, "Setting up global serial parameters for %s\n",
+		(dahdi_is_e1_span(&wc->span) ? "E1" : "T1"));
+
+	t4_serial_setup(wc);
 	wc->span.chans = wc->chans;
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
 	for (x = 0; x < wc->span.channels; x++) {
@@ -1840,9 +1867,11 @@ static int t1_software_init(struct t1 *wc)
 	check_and_load_vpm(wc);
 
 	wc->span.ops = &t1_span_ops;
-	if (dahdi_register(&wc->span, 0)) {
-		t1_info(wc, "Unable to register span with DAHDI\n");
-		return -1;
+	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
+	res = dahdi_register_device(wc->ddev, &wc->vb.pdev->dev);
+	if (res) {
+		t1_info(wc, "Unable to register with DAHDI\n");
+		return res;
 	}
 
 	return 0;
@@ -1864,7 +1893,7 @@ static inline unsigned char t1_vpm_out(struct t1 *wc, int unit, const unsigned i
 #endif
 #endif
 
-static int t1_hardware_post_init(struct t1 *wc)
+static int t1_hardware_post_init(struct t1 *wc, enum linemode *type)
 {
 	int res;
 	int reg;
@@ -1872,22 +1901,22 @@ static int t1_hardware_post_init(struct t1 *wc)
 
 	/* T1 or E1 */
 	if (-1 != t1e1override) {
-		pr_info("t1e1override is deprecated. Please use 'spantype'.\n");
-		wc->spantype = (t1e1override) ? TYPE_E1 : TYPE_T1;
+		pr_info("t1e1override is deprecated. Please use 'default_linemode'.\n");
+		*type = (t1e1override) ? E1 : T1;
 	} else {
 		if (!strcasecmp(default_linemode, "e1")) {
-			wc->spantype = TYPE_E1;
+			*type = E1;
 		} else if (!strcasecmp(default_linemode, "t1")) {
-			wc->spantype = TYPE_T1;
+			*type = T1;
 		} else {
 			u8 pins;
 			res = t1_getpins(wc, &pins);
 			if (res)
 				return res;
-			wc->spantype = (pins & 0x01) ? TYPE_T1 : TYPE_E1;
+			*type = (pins & 0x01) ? T1 : E1;
 		}
 	}
-	debug_printk(wc, 1, "linemode: %s\n", 1 == wc->spantype ? "T1" : "E1");
+	debug_printk(wc, 1, "linemode: %s\n", (*type == T1) ? "T1" : "E1");
 	
 	/* what version of the FALC are we using? */
 	reg = t1_setreg(wc, 0x4a, 0xaa);
@@ -1938,7 +1967,7 @@ static inline void t1_check_alarms(struct t1 *wc)
 	/* And consider only carrier alarms */
 	wc->span.alarms &= (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE | DAHDI_ALARM_NOTOPEN);
 
-	if (wc->spantype == TYPE_E1) {
+	if (dahdi_is_e1_span(&wc->span)) {
 		if (c & 0x04) {
 			/* No multiframe found, force RAI high after 400ms only if
 			   we haven't found a multiframe since last loss
@@ -2555,6 +2584,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	unsigned int x;
 	int res;
 	unsigned int index = -1;
+	enum linemode type;
 
 	for (x = 0; x < ARRAY_SIZE(ifaces); x++) {
 		if (!ifaces[x]) {
@@ -2582,6 +2612,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	ifaces[index] = wc;
 
 	wc->ledstate = -1;
+	wc->ddev = dahdi_create_device();
 	spin_lock_init(&wc->reglock);
 	INIT_LIST_HEAD(&wc->active_cmds);
 	INIT_LIST_HEAD(&wc->pending_cmds);
@@ -2656,14 +2687,14 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 		return -EIO;
 	}
 
-	res = t1_hardware_post_init(wc);
+	res = t1_hardware_post_init(wc, &type);
 	if (res) {
 		voicebus_release(&wc->vb);
 		free_wc(wc);
 		return res;
 	}
 
-	for (x = 0; x < (wc->spantype == TYPE_E1 ? 31 : 24); x++) {
+	for (x = 0; x < ((E1 == type) ? 31 : 24); x++) {
 		wc->chans[x] = kzalloc(sizeof(*wc->chans[x]), GFP_KERNEL);
 		if (!wc->chans[x]) {
 			free_wc(wc);
@@ -2679,7 +2710,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 		}
 	}
 
-	res = t1_software_init(wc);
+	res = t1_software_init(wc, type);
 	if (res) {
 		voicebus_release(&wc->vb);
 		free_wc(wc);
@@ -2710,7 +2741,7 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	if (!wc)
 		return;
 
-	dahdi_unregister(&wc->span);
+	dahdi_unregister_device(wc->ddev);
 
 	remove_sysfs_files(wc);
 

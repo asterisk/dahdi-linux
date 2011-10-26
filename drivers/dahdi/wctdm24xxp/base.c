@@ -4366,6 +4366,32 @@ wctdm_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	return wctdm_wait_for_ready(wc);
 }
 
+/*
+ * wctdm24xxp_assigned - Called when span is assigned.
+ * @span:	The span that is now assigned.
+ *
+ * This function is called by the core of DAHDI after the span number and
+ * channel numbers have been assigned.
+ *
+ */
+static void wctdm24xxp_assigned(struct dahdi_span *span)
+{
+	struct dahdi_span *s;
+	struct dahdi_device *ddev = span->parent;
+	struct wctdm *wc = NULL;
+
+	list_for_each_entry(s, &ddev->spans, device_node) {
+		wc = (container_of(s, struct wctdm_span, span))->wc;
+		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &s->flags))
+			return;
+	}
+
+	if (wc) {
+		WARN_ON(0 == wc->not_ready);
+		--wc->not_ready;
+	}
+}
+
 static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.owner = THIS_MODULE,
 	.hooksig = wctdm_hooksig,
@@ -4375,6 +4401,7 @@ static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.watchdog = wctdm_watchdog,
 	.chanconfig = wctdm_chanconfig,
 	.dacs = wctdm_dacs,
+	.assigned = wctdm24xxp_assigned,
 #ifdef VPM_SUPPORT
 	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
 	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
@@ -4393,6 +4420,7 @@ static const struct dahdi_span_ops wctdm24xxp_digital_span_ops = {
 	.spanconfig = b400m_spanconfig,
 	.chanconfig = b400m_chanconfig,
 	.dacs = wctdm_dacs,
+	.assigned = wctdm24xxp_assigned,
 #ifdef VPM_SUPPORT
 	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
 	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
@@ -4473,11 +4501,6 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 		sprintf(s->span.name, "WCTDM/%d", card_position);
 
 	snprintf(s->span.desc, sizeof(s->span.desc) - 1, "%s", wc->desc->name);
-	snprintf(s->span.location, sizeof(s->span.location) - 1,
-		 "PCI%s Bus %02d Slot %02d",
-		 (wc->desc->flags & FLAG_EXPRESS) ? " Express" : "",
-		 pdev->bus->number, PCI_SLOT(pdev->devfn) + 1);
-	s->span.manufacturer = "Digium";
 
 	if (wc->companding == DAHDI_LAW_DEFAULT) {
 		if (wc->digi_mods || digital_span)
@@ -4966,9 +4989,10 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 		kfree(frame);
 	}
 
-
-
 	kfree(wc->board_name);
+	kfree(wc->ddev->devicetype);
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
 }
 
@@ -5564,27 +5588,6 @@ static void wctdm_allocate_irq_commands(struct wctdm *wc, unsigned int count)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
-static void set_span_devicetype_string(struct wctdm *wc)
-{
-	unsigned int x;
-
-	for (x = 0; x < ARRAY_SIZE(wc->spans); x++) {
-		struct dahdi_span *const s = &wc->spans[x]->span;
-		if (!s)
-			continue;
-
-		strlcpy(s->devicetype, wc->desc->name, sizeof(s->devicetype));
-
-		if (wc->vpmadt032) {
-			strlcat(s->devicetype, " (VPMADT032)",
-				sizeof(s->devicetype));
-		} else if (wc->vpmoct) {
-			strlcat(s->devicetype, " (VPMOCT032)",
-				sizeof(s->devicetype));
-		}
-	}
-}
-
 #ifdef USE_ASYNC_INIT
 struct async_data {
 	struct pci_dev *pdev;
@@ -5852,27 +5855,56 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	wc->avchannels = curchan;
 
-	set_span_devicetype_string(wc);
-
 #ifdef USE_ASYNC_INIT
 		async_synchronize_cookie(cookie);
 #endif
+	wc->ddev = dahdi_create_device();
+	wc->ddev->manufacturer = "Digium";
+	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI%s Bus %02d Slot %02d",
+				       (wc->desc->flags & FLAG_EXPRESS) ?
+						" Express" : "",
+				       pdev->bus->number,
+				       PCI_SLOT(pdev->devfn) + 1);
+	if (!wc->ddev->location) {
+		wctdm_back_out_gracefully(wc);
+		return -ENOMEM;
+	}
+
+	if (wc->vpmadt032) {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (VPMADT032)",
+						wc->desc->name);
+	} else if (wc->vpmoct) {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (VPMOCT032)",
+						wc->desc->name);
+	} else  {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s",
+						wc->desc->name);
+	}
+
+	if (!wc->ddev->devicetype) {
+		wctdm_back_out_gracefully(wc);
+		return -ENOMEM;
+	}
+
 	/* We should be ready for DAHDI to come in now. */
 	for (i = 0; i < MAX_SPANS; ++i) {
+		struct dahdi_span *span;
+
 		if (!wc->spans[i])
 			continue;
 
-		if (dahdi_register(&wc->spans[i]->span, 0)) {
-			dev_notice(&wc->vb.pdev->dev, "Unable to register span %d with DAHDI\n", i);
-			while (i)
-				dahdi_unregister(&wc->spans[i--]->span);
-			wctdm_back_out_gracefully(wc);
-			return -1;
-		}
+		span = &wc->spans[i]->span;
+
+		list_add_tail(&span->device_node, &wc->ddev->spans);
 	}
 
 	wctdm_allocate_irq_commands(wc, anamods * latency * 4);
-	wc->not_ready--;
+
+	if (dahdi_register_device(wc->ddev, &wc->vb.pdev->dev)) {
+		dev_notice(&wc->vb.pdev->dev, "Unable to register device with DAHDI\n");
+		wctdm_back_out_gracefully(wc);
+		return -1;
+	}
 
 	dev_info(&wc->vb.pdev->dev,
 		 "Found a %s: %s (%d BRI spans, %d analog %s)\n",
@@ -5924,12 +5956,8 @@ static void wctdm_release(struct wctdm *wc)
 {
 	int i;
 
-	if (is_initialized(wc)) {
-		for (i = 0; i < MAX_SPANS; i++) {
-			if (wc->spans[i])
-				dahdi_unregister(&wc->spans[i]->span);
-		}
-	}
+	if (is_initialized(wc))
+		dahdi_unregister_device(wc->ddev);
 
 	down(&ifacelock);
 	for (i = 0; i < WC_MAX_IFACES; i++)

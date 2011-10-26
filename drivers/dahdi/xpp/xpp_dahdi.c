@@ -256,8 +256,8 @@ int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
 void xpd_post_init(xpd_t *xpd)
 {
 	XPD_DBG(DEVICES, xpd, "\n");
-	if(dahdi_autoreg)
-		dahdi_register_xpd(xpd);
+	/* DEBUG	if(dahdi_autoreg) */
+	/* DEBUG		dahdi_register_xpd(xpd); */
 }
 
 #ifdef CONFIG_PROC_FS
@@ -569,53 +569,12 @@ err:
 }
 
 /*
- * Try our best to make asterisk close all channels related to
- * this Astribank:
- *   - Set span state to DAHDI_ALARM_NOTOPEN in all relevant spans.
- *   - Notify dahdi afterwards about spans (so it can see all changes at once).
- *   - Also send DAHDI_EVENT_REMOVED on all channels.
- */
-void xbus_request_removal(xbus_t *xbus)
-{
-	unsigned long	flags;
-	int		i;
-
-	for(i = 0; i < MAX_XPDS; i++) {
-		xpd_t *xpd = xpd_of(xbus, i);
-		if(xpd) {
-			XPD_DBG(DEVICES, xpd, "\n");
-			spin_lock_irqsave(&xpd->lock, flags);
-			xpd->card_present = 0;
-			xpd_setstate(xpd, XPD_STATE_NOHW);
-			PHONEDEV(xpd).span.alarms = DAHDI_ALARM_NOTOPEN;
-			spin_unlock_irqrestore(&xpd->lock, flags);
-		}
-	}
-	/* Now notify dahdi */
-	for(i = 0; i < MAX_XPDS; i++) {
-		xpd_t *xpd = xpd_of(xbus, i);
-		if(xpd) {
-			if(SPAN_REGISTERED(xpd)) {
-				int j;
-
-				dahdi_alarm_notify(&PHONEDEV(xpd).span);
-				XPD_DBG(DEVICES, xpd, "Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
-				for (j=0; j<PHONEDEV(xpd).span.channels; j++) {
-					dahdi_qevent_lock(XPD_CHAN(xpd, j),DAHDI_EVENT_REMOVED);
-				}
-			}
-		}
-	}
-}
-
-/*
  * The xpd isn't open by anyone, we can unregister it and free it
  */
 void xpd_remove(xpd_t *xpd)
 {
 	BUG_ON(!xpd);
 	XPD_INFO(xpd, "Remove\n");
-	dahdi_unregister_xpd(xpd);
 	CALL_XMETHOD(card_remove, xpd);
 	xpd_free(xpd);
 }
@@ -992,48 +951,6 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 }
 EXPORT_SYMBOL(xpp_echocan_create);
 
-
-/**
- * Unregister an xpd from dahdi and release related resources
- * @xpd The xpd to be unregistered
- * @returns 0 on success, errno otherwise
- * 
- * Checks that nobody holds an open channel.
- *
- * Called by:
- * 	- User action through /proc
- * 	- During xpd_remove()
- */
-int dahdi_unregister_xpd(xpd_t *xpd)
-{
-	unsigned long	flags;
-
-	BUG_ON(!xpd);
-	spin_lock_irqsave(&xpd->lock, flags);
-
-	if (!IS_PHONEDEV(xpd)) {
-		XPD_ERR(xpd, "Not a telephony device\n");
-		spin_unlock_irqrestore(&xpd->lock, flags);
-		return -EBADF;
-	}
-	if(!SPAN_REGISTERED(xpd)) {
-		XPD_NOTICE(xpd, "Already unregistered\n");
-		spin_unlock_irqrestore(&xpd->lock, flags);
-		return -EIDRM;
-	}
-	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
-	mdelay(2);	// FIXME: This is to give chance for transmit/receiveprep to finish.
-	spin_unlock_irqrestore(&xpd->lock, flags);
-	if(xpd->card_present)
-		CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 0);
-	atomic_dec(&PHONEDEV(xpd).dahdi_registered);
-	atomic_dec(&num_registered_spans);
-	dahdi_unregister(&PHONEDEV(xpd).span);
-	if(xpd->card_present)
-		CALL_PHONE_METHOD(card_dahdi_postregistration, xpd, 0);
-	return 0;
-}
-
 static const struct dahdi_span_ops xpp_span_ops = {
 	.owner = THIS_MODULE,
 	.open = xpp_open,
@@ -1055,12 +972,39 @@ static const struct dahdi_span_ops xpp_rbs_span_ops = {
 	.echocan_name = xpp_echocan_name,
 };
 
-int dahdi_register_xpd(xpd_t *xpd)
+static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 {
 	struct dahdi_span	*span;
+	int			i;
+
+	XPD_NOTICE(xpd, "Initializing span(offset=%d): %d channels.\n", offset, cn);
+	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
+	for (i = 0; i < cn; i++)
+		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
+
+	span = &PHONEDEV(xpd).span;
+	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname, xpd->xpdname);
+	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
+	span->channels = cn;
+	span->chans = PHONEDEV(xpd).chans;
+
+	span->flags = DAHDI_FLAG_RBS;
+	span->offset = offset;
+	if (PHONEDEV(xpd).phoneops->card_hooksig)
+		span->ops = &xpp_rbs_span_ops;	/* Only with RBS bits */
+	else
+		span->ops = &xpp_span_ops;
+
+	snprintf(PHONEDEV(xpd).span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
+			xpd->xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
+	list_add_tail(&span->device_node, &xpd->xbus->ddev->spans);
+}
+
+int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset)
+{
 	xbus_t		*xbus;
 	int		cn;
-	int		i;
+	struct phonedev	*phonedev;
 
 	BUG_ON(!xpd);
 
@@ -1070,70 +1014,25 @@ int dahdi_register_xpd(xpd_t *xpd)
 		XPD_ERR(xpd, "Not a telephony device\n");
 		return -EBADF;
 	}
+
+	phonedev = &PHONEDEV(xpd);
+
 	if (SPAN_REGISTERED(xpd)) {
 		XPD_ERR(xpd, "Already registered\n");
 		return -EEXIST;
 	}
+
 	cn = PHONEDEV(xpd).channels;
-	XPD_DBG(DEVICES, xpd, "Initializing span: %d channels.\n", cn);
-	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
-	for(i = 0; i < cn; i++) {
-		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
-	}
-
-	span = &PHONEDEV(xpd).span;
-	snprintf(span->name, MAX_SPANNAME, "%s/%s", xbus->busname, xpd->xpdname);
-	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
-	span->channels = cn;
-	span->chans = PHONEDEV(xpd).chans;
-
-	span->flags = DAHDI_FLAG_RBS;
-	if(PHONEDEV(xpd).phoneops->card_hooksig)
-		span->ops = &xpp_rbs_span_ops;	/* Only with RBS bits */
-	else
-		span->ops = &xpp_span_ops;
-
-	/*
-	 * This actually describe the dahdi_spaninfo version 3
-	 * A bunch of unrelated data exported via a modified ioctl()
-	 * What a bummer...
-	 */
-	span->manufacturer = "Xorcom Inc.";	/* OK, that's obvious */
-	/* span->spantype = "...."; set in card_dahdi_preregistration() */
-	/*
-	 * Yes, this basically duplicates information available
-	 * from the description field. If some more is needed
-	 * why not add it there?
-	 * OK, let's add to the kernel more useless info.
-	 */
-	snprintf(span->devicetype, sizeof(span->devicetype) - 1,
-		"Astribank: Unit %x Subunit %x: %s",
-		XBUS_UNIT(xpd->xbus_idx), XBUS_SUBUNIT(xpd->xbus_idx),
-		xpd->type_name);
-	/*
-	 * location is the only usefull new data item.
-	 * For our devices it was available for ages via:
-	 *  - The legacy "/proc/xpp/XBUS-??/summary" (CONNECTOR=...)
-	 *  - The same info in "/proc/xpp/xbuses"
-	 *  - The modern "/sys/bus/astribanks/devices/xbus-??/connector" attribute
-	 * So let's also export it via the newfangled "location" field.
-	 */
-	snprintf(span->location, sizeof(span->location) - 1, "%s", xbus->connector); 
-	/*
-	 * Who said a span and irq have 1-1 relationship?
-	 * Also exporting this low-level detail isn't too wise.
-	 * No irq's for you today!
-	 */
-	span->irq = 0;
-
-	snprintf(PHONEDEV(xpd).span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
-			xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
+	xpd_init_span(xpd, offset, cn);
 	XPD_DBG(GENERAL, xpd, "Registering span '%s'\n", PHONEDEV(xpd).span.desc);
 	CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 1);
-	if(dahdi_register(&PHONEDEV(xpd).span, prefmaster)) {
-		XPD_ERR(xpd, "Failed to dahdi_register span\n");
-		return -ENODEV;
-	}
+	return 0;
+}
+
+int xpd_dahdi_postregister(xpd_t *xpd)
+{
+	int	cn;
+
 	atomic_inc(&num_registered_spans);
 	atomic_inc(&PHONEDEV(xpd).dahdi_registered);
 	CALL_PHONE_METHOD(card_dahdi_postregistration, xpd, 1);
@@ -1151,6 +1050,48 @@ int dahdi_register_xpd(xpd_t *xpd)
 			notify_rxsig(xpd, cn, DAHDI_RXSIG_OFFHOOK);
 	}
 	return 0;
+}
+
+/*
+ * Try our best to make asterisk close all channels related to
+ * this Astribank:
+ *   - Set span state to DAHDI_ALARM_NOTOPEN in all relevant spans.
+ *   - Notify dahdi afterwards about spans (so it can see all changes at once).
+ *   - Also send DAHDI_EVENT_REMOVED on all channels.
+ */
+void xpd_dahdi_preunregister(xpd_t *xpd)
+{
+	unsigned long	flags;
+	if (!xpd)
+		return;
+	XPD_DBG(DEVICES, xpd, "\n");
+	spin_lock_irqsave(&xpd->lock, flags);
+	xpd->card_present = 0;
+	xpd_setstate(xpd, XPD_STATE_NOHW);
+	spin_unlock_irqrestore(&xpd->lock, flags);
+	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
+	if(xpd->card_present)
+		CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 0);
+	/* Now notify dahdi */
+	if(SPAN_REGISTERED(xpd)) {
+		int j;
+
+		dahdi_alarm_notify(&PHONEDEV(xpd).span);
+		XPD_DBG(DEVICES, xpd, "Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
+		for (j=0; j<PHONEDEV(xpd).span.channels; j++) {
+			dahdi_qevent_lock(XPD_CHAN(xpd, j),DAHDI_EVENT_REMOVED);
+		}
+	}
+}
+
+void xpd_dahdi_postunregister(xpd_t *xpd)
+{
+	if (!xpd)
+		return;
+	atomic_dec(&PHONEDEV(xpd).dahdi_registered);
+	atomic_dec(&num_registered_spans);
+	if(xpd->card_present)
+		CALL_PHONE_METHOD(card_dahdi_postregistration, xpd, 0);
 }
 
 /*------------------------- Initialization -------------------------*/
@@ -1217,7 +1158,6 @@ EXPORT_SYMBOL(get_xpd);
 EXPORT_SYMBOL(put_xpd);
 EXPORT_SYMBOL(xpd_alloc);
 EXPORT_SYMBOL(xpd_free);
-EXPORT_SYMBOL(xbus_request_removal);
 EXPORT_SYMBOL(update_xpd_status);
 EXPORT_SYMBOL(oht_pcm);
 EXPORT_SYMBOL(mark_offhook);

@@ -325,6 +325,7 @@ struct t4 {
 	int num;			/* Which card we are */
 	int t1e1;			/* T1/E1 select pins */
 	int syncsrc;			/* active sync source */
+	struct dahdi_device *ddev;
 	struct t4_span *tspans[4];	/* Individual spans */
 	int numspans;			/* Number of spans on the card */
 	int blinktimer;
@@ -1698,33 +1699,29 @@ static int t4_close(struct dahdi_chan *chan)
 	return 0;
 }
 
+static int set_span_devicetype(struct t4 *wc)
+{
 #ifdef VPM_SUPPORT
-static void set_span_devicetype(struct t4 *wc)
-{
-	int x;
+	const char *vpmstring;
+	if (wc->vpm450m) {
+		if (wc->numspans > 2)
+			vpmstring = "OCT128";
+		else
+			vpmstring = "OCT064";
 
-	for (x = 0; x < wc->numspans; x++) {
-		struct t4_span *const ts = wc->tspans[x];
-		strlcpy(ts->span.devicetype, wc->devtype->desc,
-			sizeof(ts->span.devicetype));
-
-		if (wc->vpm450m) {
-			strncat(ts->span.devicetype, (wc->numspans > 2) ? " (VPMOCT128)" : " (VPMOCT064)",
-				sizeof(ts->span.devicetype) - 1);
-		}
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (VPM%s)",
+						wc->devtype->desc, vpmstring);
+	} else {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, wc->devtype->desc);
 	}
-}
 #else
-static void set_span_devicetype(struct t4 *wc)
-{
-	int x;
-	for (x = 0; x < wc->numspans; x++) {
-		struct t4_span *const ts = wc->tspans[x];
-		strlcpy(ts->span.devicetype, wc->devtype->desc,
-			sizeof(ts->span.devicetype));
-	}
-}
+	wc->ddev->devicetype = kasprintf(GFP_KERNEL, wc->devtype->desc);
 #endif
+
+	if (!wc->ddev->devicetype)
+		return -ENOMEM;
+	return 0;
+}
 
 /* The number of cards we have seen with each
    possible 'order' switch setting.
@@ -1805,13 +1802,6 @@ static void init_spans(struct t4 *wc)
 		sprintf(ts->span.name, "TE%d/%d/%d", wc->numspans, wc->num, x + 1);
 		snprintf(ts->span.desc, sizeof(ts->span.desc) - 1,
 			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
-		ts->span.manufacturer = "Digium";
-		if (!ignore_rotary && (1 == order_index[wc->order]))
-			snprintf(ts->span.location, sizeof(ts->span.location) - 1, "Board ID Switch %d", wc->order);
-		else
-			snprintf(ts->span.location, sizeof(ts->span.location) - 1,
-				 "PCI%s Bus %02d Slot %02d", (ts->spanflags & FLAG_EXPRESS) ? " Express" : " ",
-				 wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
 		switch (ts->linemode) {
 		case T1:
 			ts->span.spantype = "T1";
@@ -4043,7 +4033,10 @@ static int t4_hardware_init_2(struct t4 *wc)
 
 static int __devinit t4_launch(struct t4 *wc)
 {
+	int x;
+	int res;
 	unsigned long flags;
+
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &wc->tspans[0]->span.flags))
 		return 0;
 
@@ -4055,35 +4048,33 @@ static int __devinit t4_launch(struct t4 *wc)
 
 	t4_serial_setup(wc);
 
-	if (dahdi_register(&wc->tspans[0]->span, 0)) {
-		dev_err(&wc->dev->dev, "Unable to register span %s\n",
-				wc->tspans[0]->span.name);
-		return -1;
-	}
-	if (dahdi_register(&wc->tspans[1]->span, 0)) {
-		dev_err(&wc->dev->dev, "Unable to register span %s\n",
-				wc->tspans[1]->span.name);
-		dahdi_unregister(&wc->tspans[0]->span);
-		return -1;
+	wc->ddev->manufacturer = "Digium";
+	if (!ignore_rotary && (1 == order_index[wc->order])) {
+		wc->ddev->location = kasprintf(GFP_KERNEL,
+					      "Board ID Switch %d", wc->order);
+	} else {
+		bool express = ((wc->tspans[0]->spanflags & FLAG_EXPRESS) > 0);
+		wc->ddev->location = kasprintf(GFP_KERNEL,
+					      "PCI%s Bus %02d Slot %02d",
+					      (express) ?  " Express" : "",
+					      wc->dev->bus->number,
+					      PCI_SLOT(wc->dev->devfn) + 1);
 	}
 
-	if (wc->numspans == 4) {
-		if (dahdi_register(&wc->tspans[2]->span, 0)) {
-			dev_err(&wc->dev->dev, "Unable to register span %s\n",
-					wc->tspans[2]->span.name);
-			dahdi_unregister(&wc->tspans[0]->span);
-			dahdi_unregister(&wc->tspans[1]->span);
-			return -1;
-		}
-		if (dahdi_register(&wc->tspans[3]->span, 0)) {
-			dev_err(&wc->dev->dev, "Unable to register span %s\n",
-					wc->tspans[3]->span.name);
-			dahdi_unregister(&wc->tspans[0]->span);
-			dahdi_unregister(&wc->tspans[1]->span);
-			dahdi_unregister(&wc->tspans[2]->span);
-			return -1;
-		}
+	if (!wc->ddev->location)
+		return -ENOMEM;
+
+	for (x = 0; x < wc->numspans; ++x) {
+		list_add_tail(&wc->tspans[x]->span.device_node,
+			      &wc->ddev->spans);
 	}
+
+	res = dahdi_register_device(wc->ddev, &wc->dev->dev);
+	if (res) {
+		dev_err(&wc->dev->dev, "Failed to register with DAHDI.\n");
+		return res;
+	}
+
 	set_bit(T4_CHECK_TIMING, &wc->checkflag);
 	spin_lock_irqsave(&wc->reglock, flags);
 	__t4_set_sclk_src(wc, WC_SELF, 0, 0);
@@ -4105,6 +4096,10 @@ static void free_wc(struct t4 *wc)
 		}
 		kfree(wc->tspans[x]);
 	}
+
+	kfree(wc->ddev->devicetype);
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
 }
 
@@ -4146,11 +4141,16 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 		return -EIO;
 	}
 
-	if (!(wc = kmalloc(sizeof(*wc), GFP_KERNEL))) {
+	wc = kzalloc(sizeof(*wc), GFP_KERNEL);
+	if (!wc)
+		return -ENOMEM;
+
+	wc->ddev = dahdi_create_device();
+	if (!wc->ddev) {
+		kfree(wc);
 		return -ENOMEM;
 	}
 
-	memset(wc, 0x0, sizeof(*wc));
 	spin_lock_init(&wc->reglock);
 	wc->devtype = (const struct devtype *)(ent->driver_data);
 
@@ -4355,9 +4355,12 @@ static int t4_hardware_stop(struct t4 *wc)
 
 static void _t4_remove_one(struct t4 *wc)
 {
-	struct dahdi_span *span;
 	int basesize;
-	int i;
+
+	if (!wc)
+		return;
+
+	dahdi_unregister_device(wc->ddev);
 
 	remove_sysfs_files(wc);
 
@@ -4376,11 +4379,6 @@ static void _t4_remove_one(struct t4 *wc)
 	if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN))
 		basesize = basesize * 2;
 
-	for (i = 0; i < wc->numspans; ++i) {
-		span = &wc->tspans[i]->span;
-		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags))
-			dahdi_unregister(span);
-	}
 #ifdef ENABLE_WORKQUEUES
 	if (wc->workq) {
 		flush_workqueue(wc->workq);

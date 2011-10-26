@@ -2494,11 +2494,6 @@ static void init_spans(struct b4xxp *b4)
 
 		sprintf(bspan->span.name, "B4/%d/%d", b4->cardno, i+1);
 		sprintf(bspan->span.desc, "B4XXP (PCI) Card %d Span %d", b4->cardno, i+1);
-		bspan->span.manufacturer = "Digium";
-		strlcpy(bspan->span.devicetype, b4->variety,
-			sizeof(bspan->span.devicetype));
-		sprintf(bspan->span.location, "PCI Bus %02d Slot %02d",
-			b4->pdev->bus->number, PCI_SLOT(b4->pdev->devfn) + 1);
 
 		bspan->span.ops = &b4xxp_span_ops;
 /* HDLC stuff */
@@ -2930,14 +2925,27 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	hfc_init_all_st(b4);
 
 /* initialize the DAHDI structures, and let DAHDI know it has some new hardware to play with */
+	b4->ddev = dahdi_create_device();
 	init_spans(b4);
+
 	for (x=0; x < b4->numspans; x++) {
-		if (dahdi_register(&b4->spans[x].span, 0)) {
-			dev_err(&b4->pdev->dev,
-				"Unable to register span %s\n",
-				b4->spans[x].span.name);
-			goto err_out_unreg_spans;
-		}
+		struct dahdi_span *const s = &b4->spans[x].span;
+		list_add_tail(&s->device_node, &b4->ddev->spans);
+	}
+
+	b4->ddev->manufacturer = "Digium";
+	b4->ddev->devicetype = b4->variety;
+	b4->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				       b4->pdev->bus->number,
+				       PCI_SLOT(b4->pdev->devfn) + 1);
+	if (!b4->ddev->location) {
+		ret = -ENOMEM;
+		goto err_out_del_from_card_array;
+	}
+
+	if (dahdi_register_device(b4->ddev, &b4->pdev->dev)) {
+		dev_err(&b4->pdev->dev, "Unable to register device.\n");
+		goto err_out_unreg_spans;
 	}
 
 
@@ -2973,10 +2981,7 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 
 /* 'x' will have the failing span #. (0-3).  We need to unregister everything before it. */
 err_out_unreg_spans:
-	while (x) {
-		dahdi_unregister(&b4->spans[x].span);
-		x--;
-	};
+	dahdi_unregister_device(b4->ddev);
 
 	b4xxp_init_stage1(b4);			/* full reset, re-init to "no-irq" state */
 	free_irq(pdev->irq, b4);
@@ -2997,6 +3002,8 @@ err_out_free_mem:
 	pci_set_drvdata(pdev, NULL);
 	pci_iounmap(pdev, b4->ioaddr);
 	pci_iounmap(pdev, b4->addr);
+	kfree(b4->ddev->location);
+	dahdi_free_device(b4->ddev);
 	kfree(b4);
 
 err_out_release_regions:
@@ -3011,14 +3018,11 @@ err_out_disable_pdev:
 static void __devexit b4xxp_remove(struct pci_dev *pdev)
 {
 	struct b4xxp *b4 = pci_get_drvdata(pdev);
-	int i;
 
 	if (b4) {
 		b4->shutdown = 1;
 
-		for (i=b4->numspans - 1; i >= 0; i--) {
-			dahdi_unregister(&b4->spans[i].span);
-		}
+		dahdi_unregister_device(b4->ddev);
 
 		b4xxp_init_stage1(b4);
 		remove_sysfs_files(b4);
@@ -3033,6 +3037,8 @@ static void __devexit b4xxp_remove(struct pci_dev *pdev)
 
 		tasklet_kill(&b4->b4xxp_tlet);
 
+		kfree(b4->ddev->location);
+		dahdi_free_device(b4->ddev);
 		kfree(b4);
 	}
 

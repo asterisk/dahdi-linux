@@ -297,6 +297,7 @@ struct wctdm {
 	int not_ready;		 /* 0 when the entire card is ready to go */
 	unsigned long checkflag; /* Internal state flags and task bits */
 	int companding;
+	struct dahdi_device *ddev;
 };
 
 static inline bool is_initialized(struct wctdm *wc)

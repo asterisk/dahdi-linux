@@ -25,9 +25,10 @@
 #include "xpd.h"
 #include "xproto.h"
 
-int dahdi_register_xpd(xpd_t *xpd);
-int dahdi_unregister_xpd(xpd_t *xpd);
-void xbus_request_removal(xbus_t *xbus);
+int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset);
+int xpd_dahdi_postregister(xpd_t *xpd);
+void xpd_dahdi_preunregister(xpd_t *xpd);
+void xpd_dahdi_postunregister(xpd_t *xpd);
 int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
 		int unit, int subunit, byte type, byte subtype, int subunits, int subunit_ports, byte port_dir);
 void xpd_post_init(xpd_t *xpd);

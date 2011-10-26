@@ -400,6 +400,7 @@ static void dahdi_dynamic_release(struct kref *kref)
 	for (x = 0; x < d->span.channels; x++)
 		kfree(d->chans[x]);
 
+	dahdi_free_device(d->ddev);
 	kfree(d);
 }
 
@@ -469,7 +470,7 @@ static int _destroy_dynamic(struct dahdi_dynamic_span *dds)
 		return -EBUSY;
 	}
 
-	dahdi_unregister(&d->span);
+	dahdi_unregister_device(d->ddev);
 
 	spin_lock_irqsave(&dspan_lock, flags);
 	list_del_rcu(&d->list);
@@ -578,8 +579,8 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 	d = kzalloc(sizeof(*d), GFP_KERNEL);
 	if (!d)
 		return -ENOMEM;
-
 	kref_init(&d->kref);
+	d->ddev = dahdi_create_device();
 
 	for (x = 0; x < dds->numchans; x++) {
 		d->chans[x] = kzalloc(sizeof(*d->chans[x]), GFP_KERNEL);
@@ -657,8 +658,9 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 		return res;
 	}
 
+	list_add_tail(&d->span.device_node, &d->ddev->spans);
 	/* Whee!  We're created.  Now register the span */
-	if (dahdi_register(&d->span, 0)) {
+	if (dahdi_register_device(d->ddev, d->dev)) {
 		printk(KERN_NOTICE "Unable to register span '%s'\n",
 			d->span.name);
 		dynamic_put(d);
@@ -769,7 +771,7 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 					WARN_ON(1);
 				}
 			}
-			dahdi_unregister(&d->span);
+			dahdi_unregister_device(d->ddev);
 			spin_lock_irqsave(&dspan_lock, flags);
 			list_del_rcu(&d->list);
 			spin_unlock_irqrestore(&dspan_lock, flags);

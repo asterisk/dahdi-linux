@@ -623,29 +623,6 @@ static DEVICE_ATTR_READER(span_show, dev, buf)
 	return len;
 }
 
-static DEVICE_ATTR_WRITER(span_store, dev, buf, count)
-{
-	xpd_t		*xpd;
-	int		dahdi_reg;
-	int		ret;
-
-	BUG_ON(!dev);
-	xpd = dev_to_xpd(dev);
-	if(!xpd)
-		return -ENODEV;
-	ret = sscanf(buf, "%d", &dahdi_reg);
-	if(ret != 1)
-		return -EINVAL;
-	if(!XBUS_IS(xpd->xbus, READY))
-		return -ENODEV;
-	XPD_DBG(GENERAL, xpd, "%s\n", (dahdi_reg) ? "register" : "unregister");
-	if(dahdi_reg)
-		ret = dahdi_register_xpd(xpd);
-	else
-		ret = dahdi_unregister_xpd(xpd);
-	return (ret < 0) ? ret : count;
-}
-
 static DEVICE_ATTR_READER(type_show, dev, buf)
 {
 	xpd_t		*xpd;
@@ -728,7 +705,7 @@ static int xpd_match(struct device *dev, struct device_driver *driver)
 static struct device_attribute xpd_dev_attrs[] = {
 	__ATTR(chipregs,	S_IRUGO | S_IWUSR, chipregs_show, chipregs_store),
 	__ATTR(blink,		S_IRUGO | S_IWUSR, blink_show, blink_store),
-	__ATTR(span,		S_IRUGO | S_IWUSR, span_show, span_store),
+        __ATTR_RO(span),
         __ATTR_RO(type),
         __ATTR_RO(offhook),
         __ATTR_RO(timing_priority),

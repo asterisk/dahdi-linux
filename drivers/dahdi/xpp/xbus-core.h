@@ -188,6 +188,7 @@ struct xbus {
 	char			label[LABEL_SIZE];
 	byte			revision;		/* Protocol revision */
 	struct xbus_transport	transport;
+	struct dahdi_device	*ddev;
 
 	int			num;
 	struct xpd		*xpds[MAX_XPDS];

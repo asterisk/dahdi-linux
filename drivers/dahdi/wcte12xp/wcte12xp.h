@@ -74,8 +74,10 @@
 #define CMD_BYTE(slot, a, is_vpm) (slot*6)+(a*2)+is_vpm /* only even slots */
 //TODO: make a separate macro
 
-#define TYPE_T1	1
-#define TYPE_E1	2
+enum linemode {
+	T1 = 1,
+	E1,
+};
 
 struct command {
 	struct list_head node;
@@ -94,7 +96,6 @@ struct t1 {
 	unsigned char txident;
 	unsigned char rxident;
 	unsigned char statreg; /* bit 0 = vpmadt032 int */
-	int spantype;
 	struct {
 		unsigned int nmf:1;
 		unsigned int sendingyellow:1;
@@ -116,6 +117,7 @@ struct t1 {
 	unsigned long alarmtimer;
 	unsigned char ledstate;
 	unsigned char vpm_check_count;
+	struct dahdi_device *ddev;
 	struct dahdi_span span;						/* Span */
 	struct dahdi_chan *chans[32];					/* Channels */
 	struct dahdi_echocan_state *ec[32];				/* Echocan state for channels */

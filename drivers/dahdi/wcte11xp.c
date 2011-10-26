@@ -174,6 +174,7 @@ struct t1 {
 	unsigned char ec_chunk1[32][DAHDI_CHUNKSIZE];
 	unsigned char ec_chunk2[32][DAHDI_CHUNKSIZE];
 	unsigned char tempo[33];
+	struct dahdi_device *ddev;
 	struct dahdi_span span;						/* Span */
 	struct dahdi_chan *chans[32];					/* Channels */
 };
@@ -340,10 +341,12 @@ static void t1xxp_release(struct t1 *wc)
 {
 	unsigned int x;
 
-	dahdi_unregister(&wc->span);
+	dahdi_unregister_device(wc->ddev);
 	for (x = 0; x < (wc->spantype == TYPE_E1 ? 31 : 24); x++) {
 		kfree(wc->chans[x]);
 	}
+	kfree(wc->ddev->location);
+	dahdi_free_device(wc->ddev);
 	kfree(wc);
 	printk(KERN_INFO "Freed a Wildcard\n");
 }
@@ -976,14 +979,21 @@ static int t1xxp_software_init(struct t1 *wc)
 	}
 	if (x >= WC_MAX_CARDS)
 		return -1;
+
+	wc->ddev = dahdi_create_device();
+
 	t4_serial_setup(wc);
 	wc->num = x;
 	sprintf(wc->span.name, "WCT1/%d", wc->num);
 	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Card %d", wc->variety, wc->num);
-	wc->span.manufacturer = "Digium";
-	strlcpy(wc->span.devicetype, wc->variety, sizeof(wc->span.devicetype));
-	snprintf(wc->span.location, sizeof(wc->span.location) - 1,
-		 "PCI Bus %02d Slot %02d", wc->dev->bus->number, PCI_SLOT(wc->dev->devfn) + 1);
+	wc->ddev->manufacturer = "Digium";
+	wc->ddev->devicetype = wc->variety;
+	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				       wc->dev->bus->number,
+				       PCI_SLOT(wc->dev->devfn) + 1);
+	if (!wc->ddev->location)
+		return -ENOMEM;
+
 	wc->span.irq = wc->dev->irq;
 	if (wc->spantype == TYPE_E1) {
 		if (unchannelized)
@@ -1011,7 +1021,8 @@ static int t1xxp_software_init(struct t1 *wc)
 		wc->chans[x]->chanpos = x + 1;
 	}
 	wc->span.ops = &t1xxp_span_ops;
-	if (dahdi_register(&wc->span, 0)) {
+	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
+	if (dahdi_register_device(wc->ddev, &wc->dev->dev)) {
 		printk(KERN_NOTICE "Unable to register span with DAHDI\n");
 		return -1;
 	}
