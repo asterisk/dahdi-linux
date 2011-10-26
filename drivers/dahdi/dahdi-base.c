@@ -507,15 +507,10 @@ static struct dahdi_span *span_find_and_get(int spanno)
 
 	mutex_lock(&registration_mutex);
 	found = _find_span(spanno);
-	if (found && !try_module_get(found->ops->owner))
+	if (found && !get_span(found))
 		found = NULL;
 	mutex_unlock(&registration_mutex);
 	return found;
-}
-
-static void put_span(struct dahdi_span *span)
-{
-	module_put(span->ops->owner);
 }
 
 static unsigned int span_count(void)
@@ -1745,7 +1740,12 @@ static void dahdi_set_law(struct dahdi_chan *chan, int law)
 	}
 }
 
-static void dahdi_chan_reg(struct dahdi_chan *chan)
+/**
+ * __dahdi_init_chan - Initialize the channel data structures.
+ * @chan:	The channel to initialize
+ *
+ */
+static void __dahdi_init_chan(struct dahdi_chan *chan)
 {
 	might_sleep();
 
@@ -1759,12 +1759,17 @@ static void dahdi_chan_reg(struct dahdi_chan *chan)
 		chan->writechunk = chan->swritechunk;
 	chan->rxgain = NULL;
 	chan->txgain = NULL;
-	dahdi_set_law(chan, 0);
-	dahdi_set_law(chan, DAHDI_LAW_DEFAULT);
 	close_channel(chan);
+}
 
-	/* set this AFTER running close_channel() so that
-	   HDLC channels wont cause hangage */
+/**
+ * dahdi_chan_reg - Mark the channel registered.
+ *
+ * This must be called after close channel during registration, normally
+ * covered by the call to __dahdi_init_chan, to avoid "HDLC hangage"
+ */
+static inline void dahdi_chan_reg(struct dahdi_chan *chan)
+{
 	set_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags);
 }
 
@@ -2159,7 +2164,10 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 		chan->file->private_data = NULL;
 	}
 
+	spin_lock_irqsave(&chan->lock, flags);
 	release_echocan(chan->ec_factory);
+	chan->ec_factory = NULL;
+	spin_unlock_irqrestore(&chan->lock, flags);
 
 #ifdef CONFIG_DAHDI_NET
 	if (dahdi_have_netdev(chan)) {
@@ -3047,8 +3055,6 @@ static int can_open_timer(void)
 static unsigned int max_pseudo_channels = 512;
 static unsigned int num_pseudo_channels;
 
-static int pinned_spans = 1;
-
 /**
  * dahdi_alloc_pseudo() - Returns a new pseudo channel.
  *
@@ -3092,6 +3098,7 @@ static struct dahdi_chan *dahdi_alloc_pseudo(struct file *file)
 
 	pseudo->chan.channo = channo;
 	pseudo->chan.chanpos = channo - FIRST_PSEUDO_CHANNEL + 1;
+	__dahdi_init_chan(&pseudo->chan);
 	dahdi_chan_reg(&pseudo->chan);
 
 	snprintf(pseudo->chan.name, sizeof(pseudo->chan.name)-1,
@@ -6619,7 +6626,7 @@ static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
  * Must be callled with registration_mutex held.
  *
  */
-static int _get_next_channo(const struct dahdi_span *span)
+static unsigned int _get_next_channo(const struct dahdi_span *span)
 {
 	const struct list_head *pos = &span->spans_node;
 	while (pos != &span_list) {
@@ -6631,43 +6638,125 @@ static int _get_next_channo(const struct dahdi_span *span)
 	return -1;
 }
 
+static void
+set_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
+{
+	int i;
+	span->spanno = spanno;
+	for (i = 0; i < span->channels; ++i)
+		span->chans[i]->channo = basechan + i;
+}
+
 /**
- * _find_spanno_and_channo - Find the next available span and channel number.
+ * _assign_spanno_and_basechan - Assign next available span and channel numbers.
+ *
+ * This function will set span->spanno and channo for all the member channels.
+ * It will assign the first available location.
  *
  * Must be called with registration_mutex held.
  *
  */
-static struct list_head *_find_spanno_and_channo(const struct dahdi_span *span,
-						 int *spanno, int *channo,
-						 struct list_head *loc)
+static int _assign_spanno_and_basechan(struct dahdi_span *span)
 {
 	struct dahdi_span *pos;
-	int next_channo;
-
-	*spanno = 1;
-	*channo = 1;
+	unsigned int next_channo;
+	unsigned int spanno = 1;
+	unsigned int basechan = 1;
 
 	list_for_each_entry(pos, &span_list, spans_node) {
-		bool skip_span;
 
-		loc = &pos->spans_node;
+		if (pos->spanno <= spanno) {
+			spanno = pos->spanno + 1;
+			basechan = pos->chans[0]->channo + pos->channels;
+			continue;
+		}
+
 		next_channo = _get_next_channo(pos);
-
-		skip_span = (pos->spanno == *spanno) ||
-			     ((next_channo > 1) &&
-			      ((*channo + span->channels) > next_channo));
-
-		if (!skip_span)
+		if ((basechan + span->channels) >= next_channo)
 			break;
 
-		*spanno = pos->spanno + 1;
+		/* We can't fit here, let's look at the next location. */
+		spanno = pos->spanno + 1;
 		if (pos->channels)
-			*channo = next_channo + pos->channels;
-
+			basechan = pos->chans[0]->channo + pos->channels;
 	}
 
-	return loc;
+	set_spanno_and_basechan(span, spanno, basechan);
+	return 0;
 }
+
+static inline struct dahdi_span *span_from_node(struct list_head *node)
+{
+	return container_of(node, struct dahdi_span, spans_node);
+}
+
+/*
+ * Call with registration_mutex held.  Make sure all the spans are on the list
+ * ordered by span.
+ *
+ */
+static void _dahdi_add_span_to_span_list(struct dahdi_span *span)
+{
+	unsigned long flags;
+	struct dahdi_span *pos;
+
+	if (list_empty(&span_list)) {
+		list_add_tail(&span->spans_node, &span_list);
+		return;
+	}
+
+	list_for_each_entry(pos, &span_list, spans_node) {
+		WARN_ON(0 == pos->spanno);
+		if (pos->spanno > span->spanno)
+			break;
+	}
+
+	spin_lock_irqsave(&chan_lock, flags);
+	list_add(&span->spans_node, pos->spans_node.prev);
+	spin_unlock_irqrestore(&chan_lock, flags);
+}
+
+/**
+ * _check_spanno_and_basechan - Check if we can fit the new span in the requested location.
+ *
+ * Must be called with registration_mutex held.
+ *
+ */
+static int
+_check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
+{
+	struct dahdi_span *pos;
+	unsigned int next_channo;
+
+	list_for_each_entry(pos, &span_list, spans_node) {
+
+		next_channo = _get_next_channo(pos);
+
+		if (pos->spanno <= spanno) {
+			if (basechan < next_channo + pos->channels) {
+				/* Requested basechan breaks channel sorting */
+				dev_info(span->parent->dev.parent,
+					"[%d] basechan (%d) is too low for wanted span %d\n",
+					local_spanno(span), basechan, spanno);
+				return -EINVAL;
+			}
+			continue;
+		}
+
+		if (next_channo == -1)
+			break;
+
+		if ((basechan + span->channels) < next_channo)
+			break;
+
+		/* Cannot fit the span into the requested location. Abort. */
+		return -EINVAL;
+	}
+
+	set_spanno_and_basechan(span, spanno, basechan);
+	return 0;
+}
+
 
 struct dahdi_device *dahdi_create_device(void)
 {
@@ -6675,44 +6764,97 @@ struct dahdi_device *dahdi_create_device(void)
 	ddev = kzalloc(sizeof(*ddev), GFP_KERNEL);
 	if (!ddev)
 		return NULL;
-	device_initialize(&ddev->dev);
+	INIT_LIST_HEAD(&ddev->spans);
+	dahdi_sysfs_init_device(ddev);
 	return ddev;
 }
 EXPORT_SYMBOL(dahdi_create_device);
 
 void dahdi_free_device(struct dahdi_device *ddev)
 {
-	kfree(ddev);
+	put_device(&ddev->dev);
 }
 EXPORT_SYMBOL(dahdi_free_device);
 
 /**
- * _dahdi_register_span() - Register a new DAHDI span
+ * __dahdi_init_span - Setup all the data structures for the span.
+ * @span:	The span of interest.
+ *
+ */
+static void __dahdi_init_span(struct dahdi_span *span)
+{
+	int x;
+
+	INIT_LIST_HEAD(&span->spans_node);
+	spin_lock_init(&span->lock);
+	clear_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
+
+	if (!span->deflaw) {
+		module_printk(KERN_NOTICE, "Span %s didn't specify default "
+			      "law. Assuming mulaw, please fix driver!\n",
+			      span->name);
+		span->deflaw = DAHDI_LAW_MULAW;
+	}
+
+	for (x = 0; x < span->channels; ++x) {
+		span->chans[x]->span = span;
+		__dahdi_init_chan(span->chans[x]);
+	}
+}
+
+/**
+ * dahdi_init_span - (Re)Initializes a dahdi span.
+ * @span:		The span to initialize.
+ *
+ * Reinitializing a device span might be necessary if a span has been changed
+ * (channels added / removed) between when the dahdi_device it is on was first
+ * registered and when the spans are actually assigned.
+ *
+ */
+void dahdi_init_span(struct dahdi_span *span)
+{
+	mutex_lock(&registration_mutex);
+	__dahdi_init_span(span);
+	mutex_unlock(&registration_mutex);
+}
+EXPORT_SYMBOL(dahdi_init_span);
+
+/**
+ * _dahdi_assign_span() - Assign a new DAHDI span
  * @span:	the DAHDI span
+ * @spanno:	The span number we would like assigned. If 0, the first
+ *		available spanno/basechan will be used.
+ * @basechan:	The base channel number we would like. Ignored if spanno is 0.
  * @prefmaster:	will the new span be preferred as a master?
  *
- * Registers a span for usage with DAHDI. All the channel numbers in it
- * will get the lowest available channel numbers.
+ * Assigns a span for usage with DAHDI. All the channel numbers in it will
+ * have their numbering started at basechan.
  *
  * If prefmaster is set to anything > 0, span will attempt to become the
  * master DAHDI span at registration time. If 0: it will only become
  * master if no other span is currently the master (i.e.: it is the
  * first one).
  *
- * Must be called with registration_mutex held.
+ * Must be called with registration_mutex held, and the span must have already
+ * been initialized ith the __dahdi_init_span call.
  *
  */
-static int _dahdi_register_span(struct dahdi_span *span, int prefmaster)
+static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
+			      unsigned int basechan, int prefmaster)
 {
-	unsigned int spanno;
-	unsigned int x;
-	struct list_head *loc = &span_list;
-	unsigned long flags;
-	unsigned int channo;
 	int res = 0;
+	unsigned int x;
 
 	if (!span || !span->ops || !span->ops->owner)
 		return -EINVAL;
+
+	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
+		dev_info(span->parent->dev.parent,
+			 "local span %d is already assigned span %d "
+			 "with base channel %d\n", local_spanno(span), span->spanno,
+			 span->chans[0]->channo);
+		return -EINVAL;
+	}
 
 	if (span->ops->enable_hw_preechocan ||
 	    span->ops->disable_hw_preechocan) {
@@ -6727,24 +6869,20 @@ static int _dahdi_register_span(struct dahdi_span *span, int prefmaster)
 		span->deflaw = DAHDI_LAW_MULAW;
 	}
 
-	INIT_LIST_HEAD(&span->spans_node);
-	spin_lock_init(&span->lock);
-
 	/* Look through the span list to find the first available span number.
 	 * The spans are kept on this list in sorted order. We'll also save
 	 * off the next available channel number to use. */
 
-	loc = _find_spanno_and_channo(span, &spanno, &channo, loc);
+	if (0 == spanno)
+		res = _assign_spanno_and_basechan(span);
+	else
+		res = _check_spanno_and_basechan(span, spanno, basechan);
 
-	if (unlikely(channo >= FIRST_PSEUDO_CHANNEL))
-		return -EINVAL;
+	if (res)
+		return res;
 
-	span->spanno = spanno;
-	for (x = 0; x < span->channels; x++) {
-		span->chans[x]->span = span;
-		span->chans[x]->channo = channo + x;
+	for (x = 0; x < span->channels; x++)
 		dahdi_chan_reg(span->chans[x]);
-	}
 
 #ifdef CONFIG_PROC_FS
 	{
@@ -6771,13 +6909,12 @@ static int _dahdi_register_span(struct dahdi_span *span, int prefmaster)
 				"%d channels\n", span->spanno, span->name, span->channels);
 	}
 
-	spin_lock_irqsave(&chan_lock, flags);
-	if (loc == &span_list)
-		list_add_tail(&span->spans_node, &span_list);
-	else
-		list_add(&span->spans_node, loc);
-	spin_unlock_irqrestore(&chan_lock, flags);
+	_dahdi_add_span_to_span_list(span);
+
 	set_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
+	if (span->ops->assigned)
+		span->ops->assigned(span);
+
 	__dahdi_find_master_span();
 
 	return 0;
@@ -6800,16 +6937,36 @@ cleanup:
 	return res;
 }
 
+int dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
+		      unsigned int basechan, int prefmaster)
+{
+	int ret;
+	mutex_lock(&registration_mutex);
+	ret = _dahdi_assign_span(span, spanno, basechan, prefmaster);
+	mutex_unlock(&registration_mutex);
+	return ret;
+}
+
+int dahdi_assign_device_spans(struct dahdi_device *ddev)
+{
+	struct dahdi_span *span;
+	mutex_lock(&registration_mutex);
+	list_for_each_entry(span, &ddev->spans, device_node)
+		_dahdi_assign_span(span, 0, 0, 1);
+	mutex_unlock(&registration_mutex);
+	return 0;
+}
+
+static int auto_assign_spans = 1;
 static const char *UNKNOWN = "";
 
 /**
- * _dahdi_register_device - Registers the spans of a DAHDI device.
+ * _dahdi_register_device - Registers a DAHDI device and assign its spans.
  * @ddev:	the DAHDI device
  *
- * If pinned_spans is defined add the device to the device list and wait for
+ * If auto_assign_spans is 0, add the device to the device list and wait for
  * userspace to finish registration. Otherwise, go ahead and register the
- * spans in order as was done historically since the beginning of the zaptel
- * days.
+ * spans in order as was done historically.
  *
  * Must hold registration_mutex when this function is called.
  *
@@ -6818,18 +6975,27 @@ static int _dahdi_register_device(struct dahdi_device *ddev,
 				  struct device *parent)
 {
 	struct dahdi_span *s;
-	int ret = 0;
+	int ret;
 
 	ddev->manufacturer	= (ddev->manufacturer) ?: UNKNOWN;
 	ddev->location		= (ddev->location) ?: UNKNOWN;
 	ddev->devicetype	= (ddev->devicetype) ?: UNKNOWN;
 
-	ddev->dev.parent = parent;
-
 	list_for_each_entry(s, &ddev->spans, device_node) {
 		s->parent = ddev;
-		ret = _dahdi_register_span(s, 1);
+		s->spanno = 0;
+		__dahdi_init_span(s);
 	}
+
+	ret = dahdi_sysfs_add_device(ddev, parent);
+	if (ret)
+		return ret;
+
+	if (!auto_assign_spans)
+		return 0;
+
+	list_for_each_entry(s, &ddev->spans, device_node)
+		ret = _dahdi_assign_span(s, 0, 0, 1);
 
 	return ret;
 }
@@ -6857,26 +7023,27 @@ int dahdi_register_device(struct dahdi_device *ddev, struct device *parent)
 EXPORT_SYMBOL(dahdi_register_device);
 
 /**
- * _dahdi_unregister_span() - unregister a DAHDI span
+ * _dahdi_unassign_span() - unassign a DAHDI span
  * @span:	the DAHDI span
  *
- * Unregisters a span that has been previously registered with
- * dahdi_register_span().
+ * Unassigns a span that has been previously assigned with
+ * dahdi_assign_span().
  *
  * Must be called with the registration_mutex held.
  *
  */
-static int _dahdi_unregister_span(struct dahdi_span *span)
+static int _dahdi_unassign_span(struct dahdi_span *span)
 {
 	int x;
 	struct dahdi_span *new_master, *s;
 	unsigned long flags;
 
-	if (span != _find_span(span->spanno)) {
-		module_printk(KERN_ERR, "Span %s does not appear to be registered\n", span->name);
-		return -1;
+	if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
+		dev_info(span->parent->dev.parent,
+			"local span %d is already unassigned\n",
+			local_spanno(span));
+		return -EINVAL;
 	}
-
 	spin_lock_irqsave(&chan_lock, flags);
 	list_del_init(&span->spans_node);
 	spin_unlock_irqrestore(&chan_lock, flags);
@@ -6888,9 +7055,10 @@ static int _dahdi_unregister_span(struct dahdi_span *span)
 		span->ops->shutdown(span);
 
 	if (debug & DEBUG_MAIN)
-		module_printk(KERN_NOTICE, "Unregistering Span '%s' with %d channels\n", span->name, span->channels);
+		module_printk(KERN_NOTICE, "Unassigning Span '%s' with %d channels\n", span->name, span->channels);
 #ifdef CONFIG_PROC_FS
-	remove_proc_entry(span->proc_entry->name, root_proc_entry);
+	if (span->proc_entry)
+		remove_proc_entry(span->proc_entry->name, root_proc_entry);
 #endif /* CONFIG_PROC_FS */
 
 	span_sysfs_remove(span);
@@ -6920,6 +7088,17 @@ static int _dahdi_unregister_span(struct dahdi_span *span)
 	return 0;
 }
 
+int dahdi_unassign_span(struct dahdi_span *span)
+{
+	int ret;
+
+	module_printk(KERN_NOTICE, "%s: %s\n", __func__, span->name);
+	mutex_lock(&registration_mutex);
+	ret = _dahdi_unassign_span(span);
+	mutex_unlock(&registration_mutex);
+	return ret;
+}
+
 /**
  * dahdi_unregister_device() - unregister a DAHDI device
  * @span:	the DAHDI span
@@ -6931,15 +7110,20 @@ static int _dahdi_unregister_span(struct dahdi_span *span)
 void dahdi_unregister_device(struct dahdi_device *ddev)
 {
 	struct dahdi_span *s;
+	struct dahdi_span *next;
 	WARN_ON(!ddev);
 	might_sleep();
 	if (unlikely(!ddev))
 		return;
 
 	mutex_lock(&registration_mutex);
-	list_for_each_entry(s, &ddev->spans, device_node)
-		_dahdi_unregister_span(s);
+	list_for_each_entry_safe(s, next, &ddev->spans, device_node) {
+		_dahdi_unassign_span(s);
+		list_del_init(&s->device_node);
+	}
 	mutex_unlock(&registration_mutex);
+
+	dahdi_sysfs_unregister_device(ddev);
 
 	if (UNKNOWN == ddev->location)
 		ddev->location = NULL;
@@ -6947,6 +7131,7 @@ void dahdi_unregister_device(struct dahdi_device *ddev)
 		ddev->manufacturer = NULL;
 	if (UNKNOWN == ddev->devicetype)
 		ddev->devicetype = NULL;
+
 }
 EXPORT_SYMBOL(dahdi_unregister_device);
 
@@ -9547,10 +9732,11 @@ MODULE_PARM_DESC(max_pseudo_channels, "Maximum number of pseudo channels.");
 module_param(hwec_overrides_swec, int, 0644);
 MODULE_PARM_DESC(hwec_overrides_swec, "When true, a hardware echo canceller is used instead of configured SWEC.");
 
-module_param(pinned_spans, int, 0644);
-MODULE_PARM_DESC(pinned_spans, "If 1, span/channel numbers can be statically "
-		 "defined. If 0, spans/channels are numbered in first come "
-		 "first serve order. Default 1");
+module_param(auto_assign_spans, int, 0644);
+MODULE_PARM_DESC(auto_assign_spans,
+		 "If 1 spans will automatically have their children span and "
+		 "channel numbers assigned by the driver. If 0, user space "
+		 "will need to assign them via /sys/bus/dahdi_devices.");
 
 static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,

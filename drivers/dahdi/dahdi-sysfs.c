@@ -218,12 +218,19 @@ static BUS_ATTR_READER(field##_show, dev, buf)			\
 span_attr(name, "%s\n");
 span_attr(desc, "%s\n");
 span_attr(spantype, "%s\n");
-span_attr(offset, "%d\n");
 span_attr(alarms, "0x%x\n");
 span_attr(irq, "%d\n");
 span_attr(irqmisses, "%d\n");
 span_attr(lbo, "%d\n");
 span_attr(syncsrc, "%d\n");
+
+static BUS_ATTR_READER(local_spanno_show, dev, buf)
+{
+	struct dahdi_span *span;
+
+	span = dev_to_span(dev);
+	return sprintf(buf, "%d\n", local_spanno(span));
+}
 
 static BUS_ATTR_READER(is_digital_show, dev, buf)
 {
@@ -245,7 +252,7 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(name),
 	__ATTR_RO(desc),
 	__ATTR_RO(spantype),
-	__ATTR_RO(offset),
+	__ATTR_RO(local_spanno),
 	__ATTR_RO(alarms),
 	__ATTR_RO(irq),
 	__ATTR_RO(irqmisses),
@@ -255,7 +262,6 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(is_sync_master),
 	__ATTR_NULL,
 };
-
 
 static struct driver_attribute dahdi_attrs[] = {
 	__ATTR_NULL,
@@ -335,7 +341,6 @@ static void span_release(struct device *dev)
 	dahdi_dbg(DEVICES, "%s: %s\n", __func__, dev_name(dev));
 }
 
-
 int dahdi_register_chardev(struct dahdi_chardev *dev)
 {
 	static const char *DAHDI_STRING = "dahdi!";
@@ -370,10 +375,8 @@ void span_sysfs_remove(struct dahdi_span *span)
 	span_dbg(DEVICES, span, "\n");
 	span_device = span->span_device;
 
-	if (!span_device) {
-		WARN_ON(!span_device);
+	if (!span_device)
 		return;
-	}
 
 	for (x = 0; x < span->channels; x++) {
 		struct dahdi_chan *chan = span->chans[x];
@@ -396,6 +399,9 @@ void span_sysfs_remove(struct dahdi_span *span)
 	dev_set_drvdata(span_device, NULL);
 	span_device->parent = NULL;
 	put_device(span_device);
+	memset(&span->span_device, 0, sizeof(span->span_device));
+	kfree(span->span_device);
+	span->span_device = NULL;
 }
 
 int span_sysfs_create(struct dahdi_span *span)
@@ -404,7 +410,10 @@ int span_sysfs_create(struct dahdi_span *span)
 	int res = 0;
 	int x;
 
-	BUG_ON(span->span_device);
+	if (span->span_device) {
+		WARN_ON(1);
+		return -EEXIST;
+	}
 
 	span->span_device = kzalloc(sizeof(*span->span_device), GFP_KERNEL);
 	if (!span->span_device)
@@ -414,8 +423,8 @@ int span_sysfs_create(struct dahdi_span *span)
 	span_dbg(DEVICES, span, "\n");
 
 	span_device->bus = &spans_bus_type;
-	span_device->parent = span->parent->dev.parent;
-	dev_set_name(span_device, "span-%03d", span->spanno);
+	span_device->parent = &span->parent->dev;
+	dev_set_name(span_device, "span-%d", span->spanno);
 	dev_set_drvdata(span_device, span);
 	span_device->release = span_release;
 	res = device_register(span_device);
@@ -471,7 +480,169 @@ static struct {
 	unsigned int pseudo:1;
 	unsigned int sysfs_driver_registered:1;
 	unsigned int sysfs_spans_bus_type:1;
+	unsigned int dahdi_device_bus_registered:1;
 } dummy_dev;
+
+static inline struct dahdi_device *to_ddev(struct device *dev)
+{
+	return container_of(dev, struct dahdi_device, dev);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t dahdi_device_manufacturer_show(struct device *dev, char *buf)
+#else
+static ssize_t
+dahdi_device_manufacturer_show(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	return sprintf(buf, "%s\n", ddev->manufacturer);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t dahdi_device_type_show(struct device *dev, char *buf)
+#else
+static ssize_t
+dahdi_device_type_show(struct device *dev,
+		       struct device_attribute *attr, char *buf)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	return sprintf(buf, "%s\n", ddev->devicetype);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t dahdi_device_span_count_show(struct device *dev, char *buf)
+#else
+static ssize_t
+dahdi_device_span_count_show(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	unsigned int count = 0;
+	struct list_head *pos;
+
+	list_for_each(pos, &ddev->spans)
+		++count;
+
+	return sprintf(buf, "%d\n", count);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t dahdi_device_hardware_id_show(struct device *dev, char *buf)
+#else
+static ssize_t
+dahdi_device_hardware_id_show(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+
+	return sprintf(buf, "%s\n",
+		(ddev->hardware_id) ? ddev->hardware_id : "");
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t
+dahdi_device_auto_assign(struct device *dev, const char *buf, size_t count)
+#else
+static ssize_t
+dahdi_device_auto_assign(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	dahdi_assign_device_spans(ddev);
+	return count;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t
+dahdi_device_assign_span(struct device *dev, const char *buf, size_t count)
+#else
+static ssize_t
+dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+#endif
+{
+	int ret;
+	struct dahdi_span *span;
+	unsigned int local_span_number;
+	unsigned int desired_spanno;
+	unsigned int desired_basechanno;
+	struct dahdi_device *const ddev = to_ddev(dev);
+
+	ret = sscanf(buf, "%u:%u:%u", &local_span_number, &desired_spanno,
+		     &desired_basechanno);
+	if (ret != 3)
+		return -EINVAL;
+
+	if (desired_spanno && !desired_basechanno) {
+		dev_notice(dev, "Must set span number AND base chan number\n");
+		return -EINVAL;
+	}
+
+	list_for_each_entry(span, &ddev->spans, device_node) {
+		if (local_span_number == local_spanno(span)) {
+			ret = dahdi_assign_span(span, desired_spanno,
+						desired_basechanno, 1);
+			return (ret) ? ret : count;
+		}
+	}
+	dev_notice(dev, "no match for local span number %d\n", local_span_number);
+	return -EINVAL;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t
+dahdi_device_unassign_span(struct device *dev, const char *buf, size_t count)
+#else
+static ssize_t
+dahdi_device_unassign_span(struct device *dev, struct device_attribute *attr,
+			   const char *buf, size_t count)
+#endif
+{
+	int ret;
+	unsigned int local_span_number;
+	struct dahdi_span *span;
+	struct dahdi_device *const ddev = to_ddev(dev);
+
+	ret = sscanf(buf, "%u", &local_span_number);
+	if (ret != 1)
+		return -EINVAL;
+
+	ret = -ENODEV;
+	list_for_each_entry(span, &ddev->spans, device_node) {
+		if (local_span_number == local_spanno(span))
+			ret = dahdi_unassign_span(span);
+	}
+	if (-ENODEV == ret) {
+		if (printk_ratelimit()) {
+			dev_info(dev, "'%d' is an invalid local span number.\n",
+				 local_span_number);
+		}
+		return -EINVAL;
+	}
+	return (ret < 0) ? ret : count;
+}
+
+static struct device_attribute dahdi_device_attrs[] = {
+	__ATTR(manufacturer, S_IRUGO, dahdi_device_manufacturer_show, NULL),
+	__ATTR(type, S_IRUGO, dahdi_device_type_show, NULL),
+	__ATTR(span_count, S_IRUGO, dahdi_device_span_count_show, NULL),
+	__ATTR(hardware_id, S_IRUGO, dahdi_device_hardware_id_show, NULL),
+	__ATTR(auto_assign, S_IWUSR, NULL, dahdi_device_auto_assign),
+	__ATTR(assign_span, S_IWUSR, NULL, dahdi_device_assign_span),
+	__ATTR(unassign_span, S_IWUSR, NULL, dahdi_device_unassign_span),
+	__ATTR_NULL,
+};
+
+static struct bus_type dahdi_device_bus = {
+	.name = "dahdi_devices",
+	.dev_attrs = dahdi_device_attrs,
+};
 
 void dahdi_sysfs_exit(void)
 {
@@ -512,12 +683,61 @@ void dahdi_sysfs_exit(void)
 		dummy_dev.sysfs_spans_bus_type = 0;
 	}
 	unregister_chrdev(DAHDI_MAJOR, "dahdi");
+
+	if (dummy_dev.dahdi_device_bus_registered) {
+		bus_unregister(&dahdi_device_bus);
+		dummy_dev.dahdi_device_bus_registered = 0;
+	}
+}
+
+static void dahdi_device_release(struct device *dev)
+{
+	struct dahdi_device *ddev = container_of(dev, struct dahdi_device, dev);
+	kfree(ddev);
+}
+
+/**
+ * dahdi_sysfs_add_device - Add the dahdi_device into the sysfs hierarchy.
+ * @ddev:	The device to add.
+ * @parent:	The physical device that is implementing this device.
+ *
+ * By adding the dahdi_device to the sysfs hierarchy user space can control
+ * how spans are numbered.
+ *
+ */
+int dahdi_sysfs_add_device(struct dahdi_device *ddev, struct device *parent)
+{
+	int ret;
+	struct device *const dev = &ddev->dev;
+
+	dev->parent = parent;
+	dev->bus = &dahdi_device_bus;
+	dev_set_name(dev, "%s:%s", parent->bus->name, dev_name(parent));
+	ret = device_add(dev);
+	return ret;
+}
+
+void dahdi_sysfs_init_device(struct dahdi_device *ddev)
+{
+	device_initialize(&ddev->dev);
+	ddev->dev.release = dahdi_device_release;
+}
+
+void dahdi_sysfs_unregister_device(struct dahdi_device *ddev)
+{
+	device_del(&ddev->dev);
 }
 
 int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 {
 	int res = 0;
 	void *dev;
+
+	res = bus_register(&dahdi_device_bus);
+	if (res)
+		return res;
+
+	dummy_dev.dahdi_device_bus_registered = 1;
 
 	res = register_chrdev(DAHDI_MAJOR, "dahdi", dahdi_fops);
 	if (res) {

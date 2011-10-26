@@ -1874,7 +1874,7 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 		return res;
 	}
 
-	return 0;
+	return res;
 }
 
 #if 0

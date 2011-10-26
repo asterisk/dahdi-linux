@@ -34,4 +34,28 @@ void span_sysfs_remove(struct dahdi_span *span);
 int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops);
 void dahdi_sysfs_exit(void);
 
+void dahdi_sysfs_init_device(struct dahdi_device *ddev);
+int dahdi_sysfs_add_device(struct dahdi_device *ddev, struct device *parent);
+void dahdi_sysfs_unregister_device(struct dahdi_device *ddev);
+
+int dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
+			unsigned int basechan, int prefmaster);
+int dahdi_unassign_span(struct dahdi_span *span);
+int dahdi_assign_device_spans(struct dahdi_device *ddev);
+
+static inline int get_span(struct dahdi_span *span)
+{
+	return try_module_get(span->ops->owner);
+}
+
+static inline void put_span(struct dahdi_span *span)
+{
+	module_put(span->ops->owner);
+}
+
+static inline int local_spanno(struct dahdi_span *span)
+{
+	return span->offset + 1;
+}
+
 #endif /* _DAHDI_H */

@@ -896,16 +896,21 @@ struct dahdi_span_ops {
 /**
  * dahdi_device - Represents a device that can contain one or more spans.
  *
- * @spans:	List of child spans.
+ * @spans:        List of child spans.
  * @manufacturer: Device manufacturer.
- * @location:	The location of this device
- * @devicetype: What type of device this is.
+ * @location:     The location of this device. This should not change if
+ *                the device is replaced (e.g: in the same PCI slot)
+ * @hardware_id:  The hardware_id of this device (NULL for devices without
+ *                a hardware_id). This should not change if the device is
+ *                relocated to a different location (e.g: different PCI slot)
+ * @devicetype:   What type of device this is.
  *
  */
 struct dahdi_device {
 	struct list_head spans;
 	const char *manufacturer;
 	const char *location;
+	const char *hardware_id;
 	const char *devicetype;
 	struct device dev;
 };
@@ -1164,6 +1169,7 @@ struct dahdi_device *dahdi_create_device(void);
 int dahdi_register_device(struct dahdi_device *ddev, struct device *parent);
 void dahdi_unregister_device(struct dahdi_device *ddev);
 void dahdi_free_device(struct dahdi_device *ddev);
+void dahdi_init_span(struct dahdi_span *span);
 
 /*! Allocate / free memory for a transcoder */
 struct dahdi_transcoder *dahdi_transcoder_alloc(int numchans);
@@ -1450,6 +1456,10 @@ typedef u32 __bitwise pm_message_t;
 #endif /* 2.6.25 */
 #endif /* 2.6.26 */
 #endif /* 2.6.31 */
+
+#ifndef CONFIG_TRACING
+#define trace_printk printk
+#endif
 
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED

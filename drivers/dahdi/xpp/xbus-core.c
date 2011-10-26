@@ -904,6 +904,7 @@ static int xbus_register_dahdi_device(xbus_t *xbus)
 	 * So let's also export it via the newfangled "location" field.
 	 */
 	xbus->ddev->location = xbus->connector;
+	xbus->ddev->hardware_id = xbus->label;
 
 	/*
 	 * Prepare the span list
@@ -943,6 +944,7 @@ static void xbus_unregister_dahdi_device(xbus_t *xbus)
 	kfree(xbus->ddev->devicetype);
 	xbus->ddev->devicetype = NULL;
 	xbus->ddev->location = NULL;
+	xbus->ddev->hardware_id = NULL;
 	dahdi_free_device(xbus->ddev);
 	xbus->ddev = NULL;
 	for(i = 0; i < MAX_XPDS; i++) {
