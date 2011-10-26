@@ -891,6 +891,10 @@ struct dahdi_span_ops {
 	/*! When using "pinned_spans", this function is called back when this
 	 * span has been assigned with the system. */
 	void (*assigned)(struct dahdi_span *span);
+
+	/*! Called when the spantype / linemode is changed before the span is
+	 * assigned a number. */
+	int (*set_spantype)(struct dahdi_span *span, const char *spantype);
 };
 
 /**

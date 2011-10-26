@@ -624,6 +624,75 @@ dahdi_device_unassign_span(struct device *dev, struct device_attribute *attr,
 	return (ret < 0) ? ret : count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t dahdi_spantype_show(struct device *dev, char *buf)
+#else
+static ssize_t
+dahdi_spantype_show(struct device *dev,
+		    struct device_attribute *attr, char *buf)
+#endif
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	int count = 0;
+	ssize_t total = 0;
+	struct dahdi_span *span;
+
+	/* TODO: Make sure this doesn't overflow the page. */
+	list_for_each_entry(span, &ddev->spans, device_node) {
+		count = sprintf(buf, "%d:%s\n", local_spanno(span), span->spantype);
+		buf += count;
+		total += count;
+	}
+
+	return total;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
+static ssize_t
+dahdi_spantype_store(struct device *dev, const char *buf, size_t count)
+#else
+static ssize_t
+dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
+		     const char *buf, size_t count)
+#endif
+{
+	struct dahdi_device *const ddev = to_ddev(dev);
+	int ret;
+	struct dahdi_span *span;
+	unsigned int local_span_number;
+	char desired_spantype[80];
+
+	ret = sscanf(buf, "%u:%70s", &local_span_number, desired_spantype);
+	if (ret != 2)
+		return -EINVAL;
+
+	list_for_each_entry(span, &ddev->spans, device_node) {
+		if (local_spanno(span) == local_span_number)
+			break;
+	}
+
+	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
+		module_printk(KERN_WARNING, "Span %s is already assigned.\n",
+			      span->name);
+		return -EINVAL;
+	}
+
+	if (local_spanno(span) != local_span_number) {
+		module_printk(KERN_WARNING, "%d is not a valid local span number "
+			      "for this device.\n", local_span_number);
+		return -EINVAL;
+	}
+
+	if (!span->ops->set_spantype) {
+		module_printk(KERN_WARNING, "Span %s does not support "
+			      "setting type.\n", span->name);
+		return -EINVAL;
+	}
+
+	ret = span->ops->set_spantype(span, &desired_spantype[0]);
+	return (ret < 0) ? ret : count;
+}
+
 static struct device_attribute dahdi_device_attrs[] = {
 	__ATTR(manufacturer, S_IRUGO, dahdi_device_manufacturer_show, NULL),
 	__ATTR(type, S_IRUGO, dahdi_device_type_show, NULL),
@@ -632,6 +701,8 @@ static struct device_attribute dahdi_device_attrs[] = {
 	__ATTR(auto_assign, S_IWUSR, NULL, dahdi_device_auto_assign),
 	__ATTR(assign_span, S_IWUSR, NULL, dahdi_device_assign_span),
 	__ATTR(unassign_span, S_IWUSR, NULL, dahdi_device_unassign_span),
+	__ATTR(spantype, S_IWUSR | S_IRUGO, dahdi_spantype_show,
+	       dahdi_spantype_store),
 	__ATTR_NULL,
 };
 
