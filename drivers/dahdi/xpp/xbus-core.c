@@ -776,7 +776,6 @@ static int xpd_initialize(xpd_t *xpd)
 		goto out;
 	}
 	XPD_INFO(xpd, "Initialized: %s\n", xpd->type_name);
-	xpd_post_init(xpd);
 	ret = 0;
 out:
 	return ret;

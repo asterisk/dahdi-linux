@@ -57,7 +57,6 @@ struct proc_dir_entry *xpp_proc_toplevel = NULL;
 #define	DELAY_UNTIL_DIALTONE	3000
 
 DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
-static DEF_PARM_BOOL(dahdi_autoreg, 0, 0644, "Register spans automatically (1) or not (0)");
 static DEF_PARM_BOOL(prefmaster, 0, 0644, "Do we want to be dahdi preferred sync master");
 // DEF_ARRAY(int, pcmtx, 4, 0, "Forced PCM values to transmit");
 
@@ -251,13 +250,6 @@ int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
 		return -EINVAL;
 	}
 	return 0;
-}
-
-void xpd_post_init(xpd_t *xpd)
-{
-	XPD_DBG(DEVICES, xpd, "\n");
-	/* DEBUG	if(dahdi_autoreg) */
-	/* DEBUG		dahdi_register_xpd(xpd); */
 }
 
 #ifdef CONFIG_PROC_FS
@@ -1166,7 +1158,6 @@ static void __exit xpp_dahdi_cleanup(void)
 
 EXPORT_SYMBOL(debug);
 EXPORT_SYMBOL(create_xpd);
-EXPORT_SYMBOL(xpd_post_init);
 EXPORT_SYMBOL(get_xpd);
 EXPORT_SYMBOL(put_xpd);
 EXPORT_SYMBOL(xpd_alloc);
