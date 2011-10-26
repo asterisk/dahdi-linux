@@ -80,6 +80,7 @@ static int pri_shutdown(struct dahdi_span *span);
 static int pri_rbsbits(struct dahdi_chan *chan, int bits);
 static int pri_lineconfig(xpd_t *xpd, int lineconfig);
 static void send_idlebits(xpd_t *xpd, bool saveold);
+static int apply_pri_protocol(xpd_t *xpd);
 
 #define	PROC_REGISTER_FNAME	"slics"
 
@@ -90,15 +91,27 @@ enum pri_protocol {
 	PRI_PROTO_J1 	= 3
 };
 
+static const char *protocol_names[] = {
+	[PRI_PROTO_0] = "??",	/* unknown */
+	[PRI_PROTO_E1] = "E1",
+	[PRI_PROTO_T1] = "T1",
+	[PRI_PROTO_J1] = "J1"
+};
+
 static const char *pri_protocol_name(enum pri_protocol pri_protocol)
 {
-	static const char *protocol_names[] = {
-		[PRI_PROTO_0] = "??",	/* unknown */
-		[PRI_PROTO_E1] = "E1",
-		[PRI_PROTO_T1] = "T1",
-		[PRI_PROTO_J1] = "J1"
-		};
 	return protocol_names[pri_protocol];
+}
+
+static enum pri_protocol pri_protocol_bystr(const char *spantype)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(protocol_names); i++) {
+		if (strcasecmp(protocol_names[i], spantype) == 0)
+			return i;
+	}
+	return PRI_PROTO_0;
 }
 
 static int pri_num_channels(enum pri_protocol pri_protocol)
@@ -551,12 +564,14 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	unsigned int		dchan_num;
 	int			default_lineconfig = 0;
 	int			ret;
+	struct phonedev		*phonedev;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
-	if(SPAN_REGISTERED(xpd)) {
-		XPD_NOTICE(xpd, "Registered as span %d. Cannot do setup pri protocol (%s)\n",
-			PHONEDEV(xpd).span.spanno, __FUNCTION__);
+	phonedev = &PHONEDEV(xpd);
+	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &phonedev->span.flags)) {
+		XPD_NOTICE(xpd, "%s: %s already assigned as span %d\n",
+			__func__, phonedev->span.name, phonedev->span.spanno);
 		return -EBUSY;
 	}
 	if(priv->pri_protocol != PRI_PROTO_0) {
@@ -596,8 +611,8 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	}
 	priv->pri_protocol = set_proto;
 	priv->is_cas = -1;
-	PHONEDEV(xpd).channels = pri_num_channels(set_proto);
-	PHONEDEV(xpd).offhook_state = BITMASK(PHONEDEV(xpd).channels);
+	phonedev->channels = pri_num_channels(set_proto);
+	phonedev->offhook_state = BITMASK(phonedev->channels);
 	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	priv->deflaw = deflaw;
 	priv->dchan_num = dchan_num;
@@ -605,7 +620,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	xpd->type_name = type_name(priv->pri_protocol);
 	XPD_DBG(GENERAL, xpd, "%s, channels=%d, dchan_num=%d, deflaw=%d\n",
 			pri_protocol_name(set_proto),
-			PHONEDEV(xpd).channels,
+			phonedev->channels,
 			priv->dchan_num,
 			priv->deflaw
 			);
@@ -618,7 +633,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 		XPD_NOTICE(xpd, "Failed setting PRI default line config\n");
 		return ret;
 	}
-	return 0;
+	return apply_pri_protocol(xpd);
 }
 
 static void dahdi_update_syncsrc(xpd_t *xpd)
@@ -1029,6 +1044,17 @@ bad_lineconfig:
 	return -EINVAL;
 }
 
+static int pri_set_spantype(struct dahdi_span *span, const char *spantype)
+{
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
+	enum pri_protocol set_proto = PRI_PROTO_0;
+
+	XPD_INFO(xpd, "%s: %s\n", __func__, spantype);
+	set_proto = pri_protocol_bystr(spantype);
+	return set_pri_proto(xpd, set_proto);
+}
+
 /*
  * Called only for 'span' keyword in /etc/dahdi/system.conf
  */
@@ -1204,6 +1230,7 @@ static int pri_audio_notify(struct dahdi_chan *chan, int on)
 
 static const struct dahdi_span_ops PRI_span_ops = {
 	.owner = THIS_MODULE,
+	.set_spantype = pri_set_spantype,
 	.spanconfig = pri_spanconfig,
 	.chanconfig = pri_chanconfig,
 	.startup = pri_startup,
@@ -1227,7 +1254,7 @@ static const struct dahdi_span_ops PRI_span_ops = {
 #endif
 };
 
-static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
+static int apply_pri_protocol(xpd_t *xpd)
 {
 	xbus_t			*xbus;
 	struct PRI_priv_data	*priv;
@@ -1237,15 +1264,7 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	BUG_ON(!xbus);
-	XPD_DBG(GENERAL, xpd, "%s (proto=%s, channels=%d, deflaw=%d)\n",
-		(on)?"on":"off",
-		pri_protocol_name(priv->pri_protocol),
-		PHONEDEV(xpd).channels,
-		priv->deflaw);
-	if(!on) {
-		/* Nothing to do yet */
-		return 0;
-	}
+	XPD_DBG(GENERAL, xpd, "\n");
 	PHONEDEV(xpd).span.spantype = pri_protocol_name(priv->pri_protocol);
 	PHONEDEV(xpd).span.linecompat = pri_linecompat(priv->pri_protocol);
 	PHONEDEV(xpd).span.deflaw = priv->deflaw;
@@ -1268,7 +1287,30 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	}
 	PHONEDEV(xpd).offhook_state = PHONEDEV(xpd).wanted_pcm_mask;
 	PHONEDEV(xpd).span.ops = &PRI_span_ops;
+	PHONEDEV(xpd).span.channels = PHONEDEV(xpd).channels;
+	xpd_set_spanname(xpd);
 	return 0;
+}
+
+static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
+{
+	xbus_t			*xbus;
+	struct PRI_priv_data	*priv;
+
+	BUG_ON(!xpd);
+	xbus = xpd->xbus;
+	priv = xpd->priv;
+	BUG_ON(!xbus);
+	XPD_DBG(GENERAL, xpd, "%s (proto=%s, channels=%d, deflaw=%d)\n",
+		(on)?"on":"off",
+		pri_protocol_name(priv->pri_protocol),
+		PHONEDEV(xpd).channels,
+		priv->deflaw);
+	if(!on) {
+		/* Nothing to do yet */
+		return 0;
+	}
+	return apply_pri_protocol(xpd);
 }
 
 static int PRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
@@ -2200,41 +2242,7 @@ static DEVICE_ATTR_READER(pri_protocol_show, dev, buf)
 	return len;
 }
 
-static DEVICE_ATTR_WRITER(pri_protocol_store, dev, buf, count)
-{
-	xpd_t			*xpd;
-	enum pri_protocol	new_protocol = PRI_PROTO_0;
-	int			i;
-	int			ret;
-
-	BUG_ON(!dev);
-	xpd = dev_to_xpd(dev);
-	XPD_DBG(GENERAL, xpd, "%s\n", buf);
-	if(!xpd)
-		return -ENODEV;
-	if((i = strcspn(buf, " \r\n")) != 2) {
-		XPD_NOTICE(xpd,
-			"Protocol name '%s' has %d characters (should be 2). Ignored.\n",
-			buf, i);
-		return -EINVAL;
-	}
-	if(strnicmp(buf, "E1", 2) == 0)
-		new_protocol = PRI_PROTO_E1;
-	else if(strnicmp(buf, "T1", 2) == 0)
-		new_protocol = PRI_PROTO_T1;
-	else if(strnicmp(buf, "J1", 2) == 0)
-		new_protocol = PRI_PROTO_J1;
-	else {
-		XPD_NOTICE(xpd,
-			"Unknown PRI protocol '%s' (should be E1|T1|J1). Ignored.\n",
-			buf);
-		return -EINVAL;
-	}
-	ret = set_pri_proto(xpd, new_protocol);
-	return (ret < 0) ? ret : count;
-}
-
-static	DEVICE_ATTR(pri_protocol, S_IRUGO | S_IWUSR, pri_protocol_show, pri_protocol_store);
+static	DEVICE_ATTR(pri_protocol, S_IRUGO, pri_protocol_show, NULL);
 
 static DEVICE_ATTR_READER(pri_localloop_show, dev, buf)
 {

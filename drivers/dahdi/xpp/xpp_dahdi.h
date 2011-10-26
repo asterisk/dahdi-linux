@@ -25,6 +25,7 @@
 #include "xpd.h"
 #include "xproto.h"
 
+void xpd_set_spanname(xpd_t *xpd);
 int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset);
 int xpd_dahdi_postregister(xpd_t *xpd);
 void xpd_dahdi_preunregister(xpd_t *xpd);

@@ -972,6 +972,16 @@ static const struct dahdi_span_ops xpp_rbs_span_ops = {
 	.echocan_name = xpp_echocan_name,
 };
 
+void xpd_set_spanname(xpd_t *xpd)
+{
+	struct dahdi_span *span = &PHONEDEV(xpd).span;
+
+	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname, xpd->xpdname);
+	snprintf(span->desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
+			xpd->xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
+}
+EXPORT_SYMBOL(xpd_set_spanname);
+
 static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 {
 	struct dahdi_span	*span;
@@ -983,7 +993,6 @@ static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
 
 	span = &PHONEDEV(xpd).span;
-	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname, xpd->xpdname);
 	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
 	span->channels = cn;
 	span->chans = PHONEDEV(xpd).chans;
@@ -994,9 +1003,7 @@ static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 		span->ops = &xpp_rbs_span_ops;	/* Only with RBS bits */
 	else
 		span->ops = &xpp_span_ops;
-
-	snprintf(PHONEDEV(xpd).span.desc, MAX_SPANDESC, "Xorcom XPD #%02d/%1d%1d: %s",
-			xpd->xbus->num, xpd->addr.unit, xpd->addr.subunit, xpd->type_name);
+	xpd_set_spanname(xpd);
 	list_add_tail(&span->device_node, &xpd->xbus->ddev->spans);
 }
 
