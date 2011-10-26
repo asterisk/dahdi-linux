@@ -246,6 +246,22 @@ static BUS_ATTR_READER(is_sync_master_show, dev, buf)
 	return sprintf(buf, "%d\n", dahdi_is_sync_master(span));
 }
 
+static BUS_ATTR_READER(basechan_show, dev, buf)
+{
+	struct dahdi_span *span;
+
+	span = dev_to_span(dev);
+	return sprintf(buf, "%d\n", span->chans[0]->channo);
+}
+
+static BUS_ATTR_READER(channels_show, dev, buf)
+{
+	struct dahdi_span *span;
+
+	span = dev_to_span(dev);
+	return sprintf(buf, "%d\n", span->channels);
+}
+
 static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(name),
 	__ATTR_RO(desc),
@@ -256,6 +272,8 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(syncsrc),
 	__ATTR_RO(is_digital),
 	__ATTR_RO(is_sync_master),
+	__ATTR_RO(basechan),
+	__ATTR_RO(channels),
 	__ATTR_NULL,
 };
 
