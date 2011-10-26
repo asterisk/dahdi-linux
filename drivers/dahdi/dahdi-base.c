@@ -612,6 +612,12 @@ void dahdi_unregister_echocan_factory(const struct dahdi_echocan_factory *ec)
 	spin_unlock(&ecfactory_list_lock);
 }
 
+/* Is this span our syncronization master? */
+int dahdi_is_sync_master(const struct dahdi_span *span)
+{
+	return span == master;
+}
+
 static inline void rotate_sums(void)
 {
 	/* Rotate where we sum and so forth */
@@ -805,7 +811,7 @@ static int dahdi_seq_show(struct seq_file *sfile, void *v)
 	else
 		seq_printf(sfile, "\"\"");
 
-	if (s == master)
+	if (dahdi_is_sync_master(s))
 		seq_printf(sfile, " (MASTER)");
 
 	if (s->lineconfig) {
@@ -6669,6 +6675,7 @@ struct dahdi_device *dahdi_create_device(void)
 	ddev = kzalloc(sizeof(*ddev), GFP_KERNEL);
 	if (!ddev)
 		return NULL;
+	device_initialize(&ddev->dev);
 	return ddev;
 }
 EXPORT_SYMBOL(dahdi_create_device);
@@ -6817,6 +6824,8 @@ static int _dahdi_register_device(struct dahdi_device *ddev,
 	ddev->location		= (ddev->location) ?: UNKNOWN;
 	ddev->devicetype	= (ddev->devicetype) ?: UNKNOWN;
 
+	ddev->dev.parent = parent;
+
 	list_for_each_entry(s, &ddev->spans, device_node) {
 		s->parent = ddev;
 		ret = _dahdi_register_span(s, 1);
@@ -6908,16 +6917,6 @@ static int _dahdi_unregister_span(struct dahdi_span *span)
 		}
 	}
 	master = new_master;
-	return 0;
-}
-
-int dahdi_unregister_span(struct dahdi_span *span)
-{
-	module_printk(KERN_NOTICE, "%s: %s\n", __func__, span->name);
-	mutex_lock(&registration_mutex);
-	_dahdi_unregister_span(span);
-	list_del_init(&span->device_node);
-	mutex_unlock(&registration_mutex);
 	return 0;
 }
 
@@ -9184,7 +9183,7 @@ static inline void pseudo_rx_audio(struct dahdi_chan *chan)
 static inline void dahdi_sync_tick(struct dahdi_span *const s)
 {
 	if (s->ops->sync_tick)
-		s->ops->sync_tick(s, s == master);
+		s->ops->sync_tick(s, dahdi_is_sync_master(s));
 }
 #else
 #define dahdi_sync_tick(x) do { ; } while (0)
@@ -9521,7 +9520,7 @@ int _dahdi_receive(struct dahdi_span *span)
 		spin_unlock(&chan->lock);
 	}
 
-	if (span == master)
+	if (dahdi_is_sync_master(span))
 		_process_masterspan();
 
 	return 0;

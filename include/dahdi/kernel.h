@@ -54,6 +54,8 @@
 #include <linux/skbuff.h>
 #include <linux/interrupt.h>
 #endif
+#include <linux/device.h>
+#include <linux/sysfs.h>
 
 #include <linux/poll.h>
 
@@ -905,6 +907,7 @@ struct dahdi_device {
 	const char *manufacturer;
 	const char *location;
 	const char *devicetype;
+	struct device dev;
 };
 
 struct dahdi_span {
@@ -954,6 +957,7 @@ struct dahdi_span {
 
 	struct dahdi_device *parent;
 	struct list_head device_node;
+	struct device *span_device;
 };
 
 struct dahdi_transcoder_channel {
@@ -969,6 +973,8 @@ struct dahdi_transcoder_channel {
 	u32 dstfmt;
 	u32 srcfmt;
 };
+
+int dahdi_is_sync_master(const struct dahdi_span *span);
 
 static inline int 
 dahdi_tc_is_built(struct dahdi_transcoder_channel *dtc) {
