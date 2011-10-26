@@ -776,19 +776,31 @@ static void __t1xxp_set_clear(struct t1 *wc)
 		t1_info(wc, "Unable to set clear/rbs mode!\n");
 }
 
+/**
+ * _t1_free_channels - Free the memory allocated for the channels.
+ *
+ * Must be called with wc->reglock held.
+ *
+ */
+static void _t1_free_channels(struct t1 *wc)
+{
+	int x;
+	for (x = 0; x < ARRAY_SIZE(wc->chans); x++) {
+		kfree(wc->chans[x]);
+		kfree(wc->ec[x]);
+		wc->chans[x] = NULL;
+		wc->ec[x] = NULL;
+	}
+}
+
 static void free_wc(struct t1 *wc)
 {
-	unsigned int x;
 	unsigned long flags;
 	struct command *cmd;
 	LIST_HEAD(list);
 
-	for (x = 0; x < ARRAY_SIZE(wc->chans); x++) {
-		kfree(wc->chans[x]);
-		kfree(wc->ec[x]);
-	}
-
 	spin_lock_irqsave(&wc->reglock, flags);
+	_t1_free_channels(wc);
 	list_splice_init(&wc->active_cmds, &list);
 	list_splice_init(&wc->pending_cmds, &list);
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -1589,6 +1601,7 @@ static int vpm_start_load(struct t1 *wc)
 	work->wc = wc;
 
 	queue_work(wc->wq, &work->work);
+	wc->not_ready++;
 	return 0;
 }
 
@@ -1640,6 +1653,17 @@ static void check_and_load_vpm(struct t1 *wc)
 	/* We do not want to check that the VPM is alive until after we're
 	 * done setting it up here, an hour should cover it... */
 	wc->vpm_check = jiffies + HZ*3600;
+
+	/* If there was one already allocated, let's free it. */
+	if (wc->vpmadt032) {
+		vpmadt = wc->vpmadt032;
+		clear_bit(VPM150M_ACTIVE, &vpmadt->control);
+		flush_workqueue(vpmadt->wq);
+		spin_lock_irqsave(&wc->reglock, flags);
+		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpmadt);
+	}
 
 	vpmadt = vpmadt032_alloc(&options);
 	if (!vpmadt)
@@ -1778,22 +1802,6 @@ static void t1xxp_disable_hw_preechocan(struct dahdi_chan *chan)
 	vpmoct_preecho_disable(wc->vpmoct, chan->chanpos - 1);
 }
 
-static const struct dahdi_span_ops t1_span_ops = {
-	.owner = THIS_MODULE,
-	.spanconfig = t1xxp_spanconfig,
-	.chanconfig = t1xxp_chanconfig,
-	.startup = t1xxp_startup,
-	.rbsbits = t1xxp_rbsbits,
-	.maint = t1xxp_maint,
-	.ioctl = t1xxp_ioctl,
-#ifdef VPM_SUPPORT
-	.enable_hw_preechocan = t1xxp_enable_hw_preechocan,
-	.disable_hw_preechocan = t1xxp_disable_hw_preechocan,
-	.echocan_create = t1xxp_echocan_create,
-	.echocan_name = t1xxp_echocan_name,
-#endif
-};
-
 /**
  * t1_software_init - Initialize the board for the given type.
  * @wc:		The board to initialize.
@@ -1806,34 +1814,32 @@ static const struct dahdi_span_ops t1_span_ops = {
 static int t1_software_init(struct t1 *wc, enum linemode type)
 {
 	int x;
-	int res;
-	int num;
-	struct pci_dev *pdev = wc->vb.pdev;
+	struct dahdi_chan *chans[32] = {NULL,};
+	struct dahdi_echocan_state *ec[32] = {NULL,};
+	unsigned long flags;
+	int res = 0;
 
-	/* Find position */
-	for (x = 0; x < ARRAY_SIZE(ifaces); ++x) {
-		if (ifaces[x] == wc) {
-			debug_printk(wc, 1, "software init for card %d\n", x);
-			break;
-		}
+	/* We may already be setup properly. */
+	if (wc->span.channels == ((E1 == type) ? 31 : 24))
+		return 0;
+
+	for (x = 0; x < ((E1 == type) ? 31 : 24); x++) {
+		chans[x] = kzalloc(sizeof(*chans[x]), GFP_KERNEL);
+		ec[x] = kzalloc(sizeof(*ec[x]), GFP_KERNEL);
+		if (!chans[x] || !ec[x])
+			goto error_exit;
 	}
 
-	if (x == ARRAY_SIZE(ifaces))
-		return -1;
-
-
-	num = x;
-	sprintf(wc->span.name, "WCT1/%d", num);
-	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Card %d", wc->variety, num);
-	wc->ddev->manufacturer = "Digium";
 	set_span_devicetype(wc);
 
-	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
-				      pdev->bus->number,
-				      PCI_SLOT(pdev->devfn) + 1);
-
-	if (!wc->ddev->location)
-		return -ENOMEM;
+	/* Because the interrupt handler is running, we need to atomically
+	 * swap the channel arrays. */
+	spin_lock_irqsave(&wc->reglock, flags);
+	_t1_free_channels(wc);
+	memcpy(wc->chans, chans, sizeof(wc->chans));
+	memcpy(wc->ec, ec, sizeof(wc->ec));
+	memset(chans, 0, sizeof(chans));
+	memset(ec, 0, sizeof(ec));
 
 	if (type == E1) {
 		wc->span.channels = 31;
@@ -1849,29 +1855,87 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 		wc->span.deflaw = DAHDI_LAW_MULAW;
 	}
 
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	if (!wc->ddev->location)
+		return -ENOMEM;
+
 	t1_info(wc, "Setting up global serial parameters for %s\n",
 		(dahdi_is_e1_span(&wc->span) ? "E1" : "T1"));
 
 	t4_serial_setup(wc);
-	wc->span.chans = wc->chans;
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
 	for (x = 0; x < wc->span.channels; x++) {
-		sprintf(wc->chans[x]->name, "WCT1/%d/%d", num, x + 1);
+		sprintf(wc->chans[x]->name, "%s/%d", wc->span.name, x + 1);
 		t1_chan_set_sigcap(&wc->span, x);
 		wc->chans[x]->pvt = wc;
 		wc->chans[x]->chanpos = x + 1;
 	}
 
 	check_and_load_vpm(wc);
+	set_span_devicetype(wc);
 
-	wc->span.ops = &t1_span_ops;
-	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
-	res = dahdi_register_device(wc->ddev, &wc->vb.pdev->dev);
-	if (res) {
-		t1_info(wc, "Unable to register with DAHDI\n");
+	return 0;
+
+error_exit:
+	for (x = 0; x < ARRAY_SIZE(chans); ++x) {
+		kfree(chans[x]);
+		kfree(ec[x]);
+	}
+	return res;
+}
+
+/**
+ * t1xx_set_linemode - Change the type of span before assignment.
+ * @span:		The span to change.
+ * @linemode:		Text string for the line mode.
+ *
+ * This function may be called after the dahdi_device is registered but
+ * before the spans are assigned numbers (and are visible to the rest of
+ * DAHDI).
+ *
+ */
+static int t1xxp_set_linemode(struct dahdi_span *span, const char *linemode)
+{
+	int res;
+	struct t1 *wc = container_of(span, struct t1, span);
+
+	/* We may already be set to the requested type. */
+	if (!strcasecmp(span->spantype, linemode))
+		return 0;
+
+	res = t1_wait_for_ready(wc);
+	if (res)
 		return res;
+
+	/* Stop the processing of the channels since we're going to change
+	 * them. */
+	clear_bit(INITIALIZED, &wc->bit_flags);
+	smp_mb__after_clear_bit();
+	del_timer_sync(&wc->timer);
+	flush_workqueue(wc->wq);
+
+	if (!strcasecmp(linemode, "t1")) {
+		dev_info(&wc->vb.pdev->dev,
+			 "Changing from E1 to T1 line mode.\n");
+		res = t1_software_init(wc, T1);
+	} else if (!strcasecmp(linemode, "e1")) {
+		dev_info(&wc->vb.pdev->dev,
+			 "Changing from T1 to E1 line mode.\n");
+		res = t1_software_init(wc, E1);
+	} else {
+		dev_err(&wc->vb.pdev->dev,
+			"'%s' is an unknown linemode.\n", linemode);
+		res = -EINVAL;
 	}
 
+	/* Since we probably reallocated the channels we need to make
+	 * sure they are configured before setting INITIALIZED again. */
+	if (!res) {
+		dahdi_init_span(span);
+		set_bit(INITIALIZED, &wc->bit_flags);
+		mod_timer(&wc->timer, jiffies + HZ/5);
+	}
 	return res;
 }
 
@@ -2574,11 +2638,27 @@ static inline void remove_sysfs_files(struct t1 *wc) { return; }
 
 #endif /* CONFIG_VOICEBUS_SYSFS */
 
+static const struct dahdi_span_ops t1_span_ops = {
+	.owner = THIS_MODULE,
+	.spanconfig = t1xxp_spanconfig,
+	.chanconfig = t1xxp_chanconfig,
+	.startup = t1xxp_startup,
+	.rbsbits = t1xxp_rbsbits,
+	.maint = t1xxp_maint,
+	.ioctl = t1xxp_ioctl,
+	.set_spantype = t1xxp_set_linemode,
+#ifdef VPM_SUPPORT
+	.enable_hw_preechocan = t1xxp_enable_hw_preechocan,
+	.disable_hw_preechocan = t1xxp_disable_hw_preechocan,
+	.echocan_create = t1xxp_echocan_create,
+	.echocan_name = t1xxp_echocan_name,
+#endif
+};
 
 static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	struct t1 *wc;
-	struct t1_desc *d = (struct t1_desc *) ent->driver_data;
+	const struct t1_desc *d = (struct t1_desc *) ent->driver_data;
 	unsigned int x;
 	int res;
 	unsigned int index = -1;
@@ -2605,19 +2685,18 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	 * not support collecting them. */
 	memset(&wc->span.count, -1, sizeof(wc->span.count));
 
-	wc->not_ready = 1;
-
 	ifaces[index] = wc;
 
+	sprintf(wc->span.name, "WCT1/%d", index);
+	snprintf(wc->span.desc, sizeof(wc->span.desc) - 1, "%s Card %d",
+		 d->name, index);
+	wc->not_ready = 1;
 	wc->ledstate = -1;
-	wc->ddev = dahdi_create_device();
+	wc->variety = d->name;
+	wc->txident = 1;
 	spin_lock_init(&wc->reglock);
 	INIT_LIST_HEAD(&wc->active_cmds);
 	INIT_LIST_HEAD(&wc->pending_cmds);
-
-	wc->variety = d->name;
-	wc->txident = 1;
-
 #	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
 	wc->timer.function = te12xp_timer;
 	wc->timer.data = (unsigned long)wc;
@@ -2637,6 +2716,22 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 #	else
 	INIT_WORK(&wc->vpm_check_work, vpm_check_func);
 #	endif
+
+	wc->ddev = dahdi_create_device();
+	if (!wc->ddev) {
+		ifaces[index] = NULL;
+		kfree(wc);
+		return -ENOMEM;
+	}
+	wc->ddev->manufacturer = "Digium";
+	wc->ddev->location = kasprintf(GFP_KERNEL, "PCI Bus %02d Slot %02d",
+				      pdev->bus->number,
+				      PCI_SLOT(pdev->devfn) + 1);
+	if (!wc->ddev->location) {
+		ifaces[index] = NULL;
+		kfree(wc);
+		return -ENOMEM;
+	}
 
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
 	for (x = 0; x < ARRAY_SIZE(wc->ec_reference); ++x) {
@@ -2669,6 +2764,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	wc->wq = create_singlethread_workqueue(wc->name);
 	if (!wc->wq) {
 		kfree(wc);
+		ifaces[index] = NULL;
 		return -ENOMEM;
 	}
 
@@ -2682,6 +2778,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	if (voicebus_start(&wc->vb)) {
 		voicebus_release(&wc->vb);
 		free_wc(wc);
+		ifaces[index] = NULL;
 		return -EIO;
 	}
 
@@ -2689,29 +2786,25 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	if (res) {
 		voicebus_release(&wc->vb);
 		free_wc(wc);
+		ifaces[index] = NULL;
 		return res;
 	}
 
-	for (x = 0; x < ((E1 == type) ? 31 : 24); x++) {
-		wc->chans[x] = kzalloc(sizeof(*wc->chans[x]), GFP_KERNEL);
-		if (!wc->chans[x]) {
-			free_wc(wc);
-			ifaces[index] = NULL;
-			return -ENOMEM;
-		}
-
-		wc->ec[x] = kzalloc(sizeof(*wc->ec[x]), GFP_KERNEL);
-		if (!wc->ec[x]) {
-			free_wc(wc);
-			ifaces[index] = NULL;
-			return -ENOMEM;
-		}
-	}
+	wc->span.chans = wc->chans;
 
 	res = t1_software_init(wc, type);
 	if (res) {
 		voicebus_release(&wc->vb);
 		free_wc(wc);
+		ifaces[index] = NULL;
+		return res;
+	}
+
+	wc->span.ops = &t1_span_ops;
+	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
+	res = dahdi_register_device(wc->ddev, &wc->vb.pdev->dev);
+	if (res) {
+		t1_info(wc, "Unable to register with DAHDI\n");
 		return res;
 	}
 
@@ -2721,10 +2814,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	t1_info(wc, "Found a %s\n", wc->variety);
 	voicebus_unlock_latency(&wc->vb);
 
-	/* If there is VPMADT032 module attached to this device, it will
-	 * signal ready after the channels are configured and ready for use. */
-	if (!wc->vpmadt032)
-		wc->not_ready--;
+	wc->not_ready--;
 	return 0;
 }
 
