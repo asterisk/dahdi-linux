@@ -563,7 +563,7 @@ Span Assignments
 A DAHDI device (e.g. a PCI card) is represented within the DAHDI drivers
 as a 'DAHDI device'. Normally (with auto_assign_spans=1 in the module
 dahdi, which is the default), when a device is discovered and loaded,
-it regiters with the DAHDI core and its spans automatically become
+it registers with the DAHDI core and its spans automatically become
 available. However if you have more than one device, you may be
 interested to set explicit spans and channels numbers for them. To use
 manual span assigment, set 'auto_assign_spans' to 0 . e.g. in a file
@@ -600,11 +600,15 @@ the file 'assign_span' in the SysFS node
 
 Thus:
 
-  echo 1:1:1  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
-  echo 3:2:5  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
   echo 9:5:10 >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
-  echo 4:6:20 >/sys/bus/dahdi_devices/devices/pci:0000:00:09.0/assign_span
   echo 2:8:40 >/sys/bus/dahdi_devices/devices/pci:0000:00:09.0/assign_span
+  echo 1:1:1  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
+  echo 4:6:20 >/sys/bus/dahdi_devices/devices/pci:0000:00:09.0/assign_span
+  echo 3:2:5  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
+
+As you can see, the order of span numbers or local span number is
+insignificant. However the order of channel numbers must be the same as
+that of span numbers.
 
 Which indeed produced:
 
@@ -762,9 +766,10 @@ it before span nodes are created.
 ===== /sys/bus/dahdi_devices/devices/DEVICE/spantype
 Device type.
 
-===== /sys/bus/dahdi_devices/devices/DEVICE/assgin-span
-Write-only attribute: this device's spans should now be unassigned
-("unregistered"). See section about <<_span_assignments>>.
+===== /sys/bus/dahdi_devices/devices/DEVICE/unassign-span
+Write-only attribute: the span whose device-local number is written
+should now be unassigned ("unregistered"). See section about
+<<_span_assignments>>.
 
 
 Spans Bus
@@ -809,7 +814,7 @@ A concise name for this span.
 A very short type string.
 
 ===== /sys/bus/dahdi_spans/devices/span-N/syncsrc
-???
+Current sync source.
 
 
 User-space Interface
@@ -889,7 +894,7 @@ standard HDLC rate of 64k).
 Low-Level Drivers
 ~~~~~~~~~~~~~~~~~
 Low-level drivers create spans ('struct dahdi_span'). They register the
-spans with the DAHDI core using 'dahdi_register()'.
+spans with the DAHDI core using 'dahdi_device_register()'.
 
 'struct dahdi_span' has a number of informative members that are updated
 solely by the low-level driver:
