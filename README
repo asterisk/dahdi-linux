@@ -538,6 +538,7 @@ timing device it will hang forever in the first cycle. Otherwise it will just
 give you in each cycle the percent of how close it was. Also try running it
 with the option -v for a verbose output.
 
+
 Spans and Channels
 ~~~~~~~~~~~~~~~~~~
 DAHDI provides telephony *channels* to the userspace applications. 
@@ -555,6 +556,77 @@ generated, and ditto for spans.
 There are up to 128 spans and 1024 channels. This is a hard-wired limit
 (see dahdi/user.h . Several places throuout the code assume a channel
 number fits in a 16 bits number). Channel and span numbers start at 1.
+
+
+Span Assignments
+~~~~~~~~~~~~~~~~
+A DAHDI device (e.g. a PCI card) is represented within the DAHDI drivers
+as a 'DAHDI device'. Normally (with auto_assign_spans=1 in the module
+dahdi, which is the default), when a device is discovered and loaded,
+it regiters with the DAHDI core and its spans automatically become
+available. However if you have more than one device, you may be
+interested to set explicit spans and channels numbers for them. To use
+manual span assigment, set 'auto_assign_spans' to 0 . e.g. in a file
+under /etc/modprobe.d/ include the following line:
+
+  options dahdi auto_assign_spans=0
+
+You will then need to assign the spans manually at device startup. You
+will need to assign a span number and channel numbers for each
+available span on the system. On my test system I have one BRI PCI card
+and one Astribank BRI+FXS:
+
+  # grep . /sys/bus/dahdi_devices/devices/*/spantype
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:1:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:2:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:3:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:4:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:5:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:6:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:7:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:8:BRI
+  /sys/bus/dahdi_devices/devices/astribanks:xbus-00/spantype:9:FXS
+  /sys/bus/dahdi_devices/devices/pci:0000:00:09.0/spantype:1:TE
+  /sys/bus/dahdi_devices/devices/pci:0000:00:09.0/spantype:2:TE
+  /sys/bus/dahdi_devices/devices/pci:0000:00:09.0/spantype:3:NT
+  /sys/bus/dahdi_devices/devices/pci:0000:00:09.0/spantype:4:NT
+
+All spans here, except the FXS one, are BRI spans with 3 channels per span.
+
+In order to assign a span, we write three numbers separated by colns to
+the file 'assign_span' in the SysFS node
+
+  local_num:span_num:base_chan_num
+
+Thus:
+
+  echo 1:1:1  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
+  echo 3:2:5  >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
+  echo 9:5:10 >/sys/bus/dahdi_devices/devices/astribanks:xbus-00/assign_span
+  echo 4:6:20 >/sys/bus/dahdi_devices/devices/pci:0000:00:09.0/assign_span
+  echo 2:8:40 >/sys/bus/dahdi_devices/devices/pci:0000:00:09.0/assign_span
+
+Which indeed produced:
+
+  # head -n3 -q /proc/dahdi/*
+  Span 1: XBUS-00/XPD-00 "Xorcom XPD [usb:LAB-0003].1: BRI_NT"
+
+             1 XPP_BRI_NT/00/00/0
+  Span 2: XBUS-00/XPD-02 "Xorcom XPD [usb:LAB-0003].3: BRI_TE"
+
+             5 XPP_BRI_TE/00/02/0
+  Span 5: XBUS-00/XPD-10 "Xorcom XPD [usb:LAB-0003].9: FXS" (MASTER)
+
+            10 XPP_FXS/00/10/0
+  Span 6: B4/0/4 "B4XXP (PCI) Card 0 Span 4" RED
+
+            23 B4/0/4/1 YELLOW
+  Span 8: B4/0/2 "B4XXP (PCI) Card 0 Span 2" RED
+
+            40 B4/0/2/1 RED
+
+Likewise spans can be unassigned by writing to the 'unassign-span'
+"file".
 
 
 Dynamic Spans
@@ -642,6 +714,102 @@ If the channel is in use (typically opened by Asterisk) then you will
 see an extra '(In use)':
 
            2 XPP_FXS/0/0/1 FXOLS (In use)
+
+
+SysFS Interface
+~~~~~~~~~~~~~~~
+DAHDI exposes several interfaces under the SysFS virtual file system.
+SysFS represents kernel objects in nodes - directories. There properties
+are often files. They may also contain other nodes or include symlinks
+to other nodes.
+
+Class DAHDI
+^^^^^^^^^^^
+under /sys/class/dadhi there exists a node for each DAHDI device file
+under /dev/dahdi. The name is 'dahdi!foo' for the file '/dev/dahdi/foo'
+(udev translates exclamation marks to slashes). Those nodes are not, for
+the most part, proper SysFS nodes, and don't include any interesting
+properties.
+
+
+Devices Bus
+^^^^^^^^^^^
+Each DAHDI device (a physical device, such as a PCI card) is represented
+by a node under /sys/bus/dahdi_devices/devices named with the name of
+its device.
+
+Its attributes include:
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/assgin-span
+Write-only attribute: this device's spans should now be assigned
+("registered"). See section about <<_span_assignments>>.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/auto-assign
+Write-only attribute. Spans in the device auto-assign ("register" as in
+the original interface). See section about <<_span_assignments>>.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/hardware_id
+A unique hardware-level identifier (e.g. serial number), if available.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/manufacturer
+The name of the manufacturer. Freeform-string.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/spantype
+A line for each available span: <num>:<type>. This has to be provided
+here as in the case of manual assignment, userspace may need to know
+it before span nodes are created.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/spantype
+Device type.
+
+===== /sys/bus/dahdi_devices/devices/DEVICE/assgin-span
+Write-only attribute: this device's spans should now be unassigned
+("unregistered"). See section about <<_span_assignments>>.
+
+
+Spans Bus
+^^^^^^^^^
+Each DAHDI span is represented by a node under
+/sys/bus/dahdi_spans/devices with the name 'span-N' (where N is the
+number of the span). Spans of each device also reside under the node of
+the device.
+
+Useful attributes in the span node:
+
+===== /sys/bus/dahdi_spans/devices/span-N/alarms
+The alarms of the span. Currently this is a numeric representation.
+This may change in the future.
+
+===== /sys/bus/dahdi_spans/devices/span-N/basechan
+The channel number of the first channel. The channel numbers of the
+following channels are guaranteed to follow it.
+
+===== /sys/bus/dahdi_spans/devices/span-N/channels
+The number of the channels in the span.
+
+===== /sys/bus/dahdi_spans/devices/span-N/desc
+A free-form description of the span.
+
+===== /sys/bus/dahdi_spans/devices/span-N/is_digital
+1 if the span is digital, 0 if it isn't.
+
+===== /sys/bus/dahdi_spans/devices/span-N/is_sync_master
+1 if the span is the sync master, 0 if it isn't.
+
+===== /sys/bus/dahdi_spans/devices/span-N/lbo
+LBO setting for the channel.
+
+===== /sys/bus/dahdi_spans/devices/span-N/local_spanno
+The number of the span within the DAHDI device.
+
+===== /sys/bus/dahdi_spans/devices/span-N/name
+A concise name for this span.
+
+===== /sys/bus/dahdi_spans/devices/span-N/spantype
+A very short type string.
+
+===== /sys/bus/dahdi_spans/devices/span-N/syncsrc
+???
 
 
 User-space Interface
