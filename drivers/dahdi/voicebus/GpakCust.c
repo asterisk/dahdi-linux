@@ -126,8 +126,8 @@ static int vpmadt032_getreg_full_return(struct vpmadt032 *vpm, int pagechange,
 	unsigned long ret;
 	BUG_ON(!cmd);
 
-	/* We'll wait for 200ms */
-	ret = wait_for_completion_timeout(&cmd->complete, HZ/5);
+	/* We'll wait for 2s */
+	ret = wait_for_completion_timeout(&cmd->complete, HZ*2);
 	if (unlikely(!ret)) {
 		spin_lock_irqsave(&vpm->list_lock, flags);
 		list_del(&cmd->node);
