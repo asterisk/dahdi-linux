@@ -2044,6 +2044,7 @@ static void free_wc(struct t4 *wc)
 
 	kfree(wc->ddev->devicetype);
 	kfree(wc->ddev->location);
+	kfree(wc->ddev->hardware_id);
 	dahdi_free_device(wc->ddev);
 	kfree(wc);
 }
@@ -4630,6 +4631,66 @@ error_exit:
 	return res;
 }
 
+static char read_flash_byte(struct t4 *wc, unsigned int addr)
+{
+	int cmd = 0x03;
+	char data;
+
+	set_cs(wc, 0);
+
+	shift_out(wc, cmd);
+
+	shift_out(wc, (addr >> 16) & 0xff);
+	shift_out(wc, (addr >> 8) & 0xff);
+	shift_out(wc, (addr >> 0) & 0xff);
+
+	data = shift_in(wc) & 0xff;
+
+	set_cs(wc, 1);
+
+	return data;
+}
+
+/**
+ * t8_read_serial - Returns the serial number of the board.
+ * @wc: The board whos serial number we are reading.
+ *
+ * The buffer returned is dynamically allocated and must be kfree'd by the
+ * caller. If memory could not be allocated, NULL is returned.
+ *
+ * Must be called in process context.
+ *
+ */
+static char *t8_read_serial(struct t4 *wc)
+{
+	int i;
+	static const int MAX_SERIAL = 14;
+	static const u32 base_addr = 0x00080000-256;
+	unsigned char c;
+	unsigned char *serial = kzalloc(MAX_SERIAL + 1, GFP_KERNEL);
+
+	if (!serial)
+		return NULL;
+
+	for (i = 0; i < MAX_SERIAL; ++i) {
+		c = read_flash_byte(wc, base_addr+i);
+		if ((c >= 'a' && c <= 'z') ||
+		    (c >= 'A' && c <= 'Z') ||
+		    (c >= '0' && c <= '9'))
+			serial[i] = c;
+		else
+			break;
+
+	}
+
+	if (!i) {
+		kfree(serial);
+		serial = NULL;
+	}
+
+	return serial;
+}
+
 static void setup_spi(struct t4 *wc)
 {
 	wc->st.rdreg = wc->st.wrreg = 0;
@@ -4671,14 +4732,15 @@ static int t8_check_firmware(struct t4 *wc, unsigned int version)
 		goto cleanup;
 	}
 
+	/* Spi struct must be setup before any access to flash memory */
+	setup_spi(wc);
+
 	/* Check the two firmware versions */
 	if (le32_to_cpu(header->version) == version)
 		goto cleanup;
 
 	dev_info(&wc->dev->dev, "%s Version: %08x available for flash\n",
 				t8_firmware, header->version);
-
-	setup_spi(wc);
 
 	res = t8_update_firmware(wc, fw, t8_firmware);
 	if (res && res != -EAGAIN) {
@@ -4717,6 +4779,8 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 		res = t8_check_firmware(wc, version);
 		if (res)
 			return res;
+
+		wc->ddev->hardware_id = t8_read_serial(wc);
 	}
 
 #if defined(CONFIG_FORCE_EXTENDED_RESET)
@@ -5106,7 +5170,14 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (!ignore_rotary)
 		wct4xxp_sort_cards();
 	
-	dev_info(&wc->dev->dev, "Found a Wildcard: %s\n", wc->devtype->desc);
+	if (wc->ddev->hardware_id) {
+		dev_info(&wc->dev->dev,
+			 "Found a Wildcard: %s (SN: %s)\n", wc->devtype->desc,
+			 wc->ddev->hardware_id);
+	} else {
+		dev_info(&wc->dev->dev,
+			 "Found a Wildcard: %s\n", wc->devtype->desc);
+	}
 	wc->gpio = 0x00000000;
 	t4_pci_out(wc, WC_GPIO, wc->gpio);
 	t4_gpio_setdir(wc, (1 << 17), (1 << 17));
