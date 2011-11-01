@@ -39,6 +39,7 @@
 #include <linux/version.h>
 #include <linux/delay.h>
 #include <linux/moduleparam.h>
+#include <linux/crc32.h>
 
 #include <stdbool.h>
 #include <dahdi/kernel.h>
@@ -273,6 +274,11 @@ struct t4;
 
 enum linemode {T1, E1, J1};
 
+struct spi_state {
+	int wrreg;
+	int rdreg;
+};
+
 struct t4_span {
 	struct t4 *owner;
 	u32 *writechunk;	/* Double-word aligned write memory */
@@ -369,7 +375,7 @@ struct t4 {
 #ifdef VPM_SUPPORT
 	struct vpm450m *vpm450m;
 #endif	
-
+	struct spi_state st;
 };
 
 static inline bool has_e1_span(const struct t4 *wc)
@@ -533,6 +539,12 @@ static void t4_isr_bh(unsigned long data);
 
 static struct t4 *cards[MAX_T4_CARDS];
 
+struct t8_firm_header {
+	u8	header[6];
+	__le32	chksum;
+	u8	pad[18];
+	__le32	version;
+} __packed;
 
 #define MAX_TDM_CHAN 32
 #define MAX_DTMF_DET 16
@@ -4375,9 +4387,314 @@ static void t4_extended_reset(struct t4 *wc)
 }
 #endif
 
+#define SPI_CS (0)
+#define SPI_CLK (1)
+#define SPI_IO0 (2)
+#define SPI_IO1 (3)
+#define SPI_IO3 (4)
+#define SPI_IO2 (5)
+#define SPI_IN  (0)
+#define SPI_OUT (1)
+#define ESPI_REG 13
+
+static void t8_clear_bit(struct t4 *wc, int whichb)
+{
+	wc->st.wrreg &= ~(1 << whichb);
+}
+
+static void t8_set_bit(struct t4 *wc, int whichb, int val)
+{
+	t8_clear_bit(wc, whichb);
+	wc->st.wrreg |= (val << whichb);
+}
+
+static int t8_get_bit(struct t4 *wc, int whichb)
+{
+	return (wc->st.rdreg >> whichb) & 1;
+}
+
+static void set_iodir(struct t4 *wc, int whichb, int dir)
+{
+	whichb += 16;
+	t8_clear_bit(wc, whichb);
+	t8_set_bit(wc, whichb, dir);
+}
+
+static void write_hwreg(struct t4 *wc)
+{
+	t4_pci_out(wc, ESPI_REG, wc->st.wrreg);
+}
+
+static void read_hwreg(struct t4 *wc)
+{
+	wc->st.rdreg = t4_pci_in(wc, ESPI_REG);
+}
+
+static void set_cs(struct t4 *wc, int state)
+{
+	t8_set_bit(wc, SPI_CS, state);
+	write_hwreg(wc);
+}
+
+static void set_clk(struct t4 *wc, int clk)
+{
+	t8_set_bit(wc, SPI_CLK, clk);
+	write_hwreg(wc);
+}
+
+static void clk_bit_out(struct t4 *wc, int val)
+{
+	t8_set_bit(wc, SPI_IO0, val & 1);
+	set_clk(wc, 0);
+	set_clk(wc, 1);
+}
+
+static void shift_out(struct t4 *wc, int val)
+{
+	int i;
+	for (i = 7; i >= 0; i--)
+		clk_bit_out(wc, (val >> i) & 1);
+}
+
+static int clk_bit_in(struct t4 *wc)
+{
+	int ret;
+	set_clk(wc, 0);
+	read_hwreg(wc);
+	ret = t8_get_bit(wc, SPI_IO1);
+	set_clk(wc, 1);
+	return ret;
+}
+
+static int shift_in(struct t4 *wc)
+{
+	int ret = 0;
+	int i;
+	int bit;
+
+	for (i = 7; i >= 0; i--) {
+		bit = clk_bit_in(wc);
+		ret |= ((bit & 1) << i);
+	}
+	return ret;
+}
+
+static void write_enable(struct t4 *wc)
+{
+	int cmd = 0x06;
+	set_cs(wc, 0);
+	shift_out(wc, cmd);
+	set_cs(wc, 1);
+}
+
+static int read_sr1(struct t4 *wc)
+{
+	int cmd = 0x05;
+	int ret;
+	set_cs(wc, 0);
+	shift_out(wc, cmd);
+	ret = shift_in(wc);
+	set_cs(wc, 1);
+	return ret;
+}
+
+static void clear_busy(struct t4 *wc)
+{
+	static const int SR1_BUSY = (1 << 0);
+	unsigned long stop;
+
+	stop = jiffies + 2*HZ;
+	while (read_sr1(wc) & SR1_BUSY) {
+		if (time_after(jiffies, stop)) {
+			if (printk_ratelimit()) {
+				dev_err(&wc->dev->dev,
+					"Lockup in %s\n", __func__);
+			}
+			break;
+		}
+		cond_resched();
+	}
+}
+
+static void sector_erase(struct t4 *wc, uint32_t addr)
+{
+	int cmd = 0x20;
+	write_enable(wc);
+	set_cs(wc, 0);
+	shift_out(wc, cmd);
+	shift_out(wc, (addr >> 16) & 0xff);
+	shift_out(wc, (addr >> 8) & 0xff);
+	shift_out(wc, (addr >> 0) & 0xff);
+	set_cs(wc, 1);
+	clear_busy(wc);
+}
+
+static void erase_half(struct t4 *wc)
+{
+	uint32_t addr = 0x00080000;
+	uint32_t i;
+
+	dev_info(&wc->dev->dev, "Erasing octal firmware\n");
+
+	for (i = addr; i < (addr + 0x80000); i += 4096)
+		sector_erase(wc, i);
+}
+
+
+#define T8_FLASH_PAGE_SIZE 256UL
+
+static void t8_update_firmware_page(struct t4 *wc, u32 address,
+				    const u8 *page_data, size_t size)
+{
+	int i;
+
+	write_enable(wc);
+	set_cs(wc, 0);
+	shift_out(wc, 0x02);
+	shift_out(wc, (address >> 16) & 0xff);
+	shift_out(wc, (address >> 8) & 0xff);
+	shift_out(wc, (address >> 0) & 0xff);
+
+	for (i = 0; i < size; ++i)
+		shift_out(wc, page_data[i]);
+
+	set_cs(wc, 1);
+	clear_busy(wc);
+}
+
+static int t8_update_firmware(struct t4 *wc, const struct firmware *fw,
+				const char *t8_firmware)
+{
+	int res;
+	size_t offset = 0;
+	const u32 BASE_ADDRESS = 0x00080000;
+	const u8 *data, *end;
+	size_t size = 0;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
+	u32 *pci_state;
+	pci_state = kzalloc(64 * sizeof(u32), GFP_KERNEL);
+	if (!pci_state)
+		return -ENOMEM;
+#endif
+
+	/* Erase flash */
+	erase_half(wc);
+
+	dev_info(&wc->dev->dev,
+		"Uploading %s. This can take up to 30 seconds.\n", t8_firmware);
+
+	data  = &fw->data[sizeof(struct t8_firm_header)];
+	end = &fw->data[fw->size];
+
+	while (data < end) {
+		/* Calculate the tail end of data that's shorter than a page */
+		size = min(T8_FLASH_PAGE_SIZE, (unsigned long)(end - data));
+
+		t8_update_firmware_page(wc, BASE_ADDRESS + offset,
+					data, size);
+		data += T8_FLASH_PAGE_SIZE;
+		offset += T8_FLASH_PAGE_SIZE;
+
+		cond_resched();
+	}
+
+	/* Reset te820 fpga after loading firmware */
+	dev_info(&wc->dev->dev, "Firmware load complete. Reseting device.\n");
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
+	res = pci_save_state(wc->dev, pci_state);
+#else
+	res = pci_save_state(wc->dev);
+#endif
+	if (res)
+		goto error_exit;
+	/* Set the fpga reset bits and clobber the remainder of the
+	 * register, device will be reset anyway */
+	t4_pci_out(wc, WC_LEDS, 0xe0000000);
+	msleep(1000);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
+	pci_restore_state(wc->dev, pci_state);
+#else
+	pci_restore_state(wc->dev);
+#endif
+
+	/* Signal the driver to restart initialization.
+	 * This will back out all initialization so far and
+	 * restart the driver load process */
+	return -EAGAIN;
+
+error_exit:
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
+	kfree(pci_state);
+#endif
+	return res;
+}
+
+static void setup_spi(struct t4 *wc)
+{
+	wc->st.rdreg = wc->st.wrreg = 0;
+
+	set_iodir(wc, SPI_IO0, SPI_OUT);
+	set_iodir(wc, SPI_IO1, SPI_IN);
+	set_iodir(wc, SPI_CS, SPI_OUT);
+	set_iodir(wc, SPI_CLK, SPI_OUT);
+
+	t8_set_bit(wc, SPI_CS, 1);
+	t8_set_bit(wc, SPI_CLK, 1);
+
+	write_hwreg(wc);
+}
+
+static int t8_check_firmware(struct t4 *wc, unsigned int version)
+{
+	const struct firmware *fw;
+	static const char t8_firmware[] = "dahdi-fw-te820.bin";
+	const struct t8_firm_header *header;
+	int res = 0;
+	u32 crc;
+
+	res = request_firmware(&fw, t8_firmware, &wc->dev->dev);
+	if (res) {
+		dev_info(&wc->dev->dev, "firmware %s not "
+			"available from userspace\n", t8_firmware);
+		goto cleanup;
+	}
+
+	header = (const struct t8_firm_header *)fw->data;
+
+	/* Check the crc before anything else */
+	crc = crc32(~0, &fw->data[10], fw->size - 10) ^ ~0;
+	if (memcmp("DIGIUM", header->header, sizeof(header->header)) ||
+		 (le32_to_cpu(header->chksum) != crc)) {
+		dev_info(&wc->dev->dev,
+			"%s is invalid. Please reinstall.\n", t8_firmware);
+		goto cleanup;
+	}
+
+	/* Check the two firmware versions */
+	if (le32_to_cpu(header->version) == version)
+		goto cleanup;
+
+	dev_info(&wc->dev->dev, "%s Version: %08x available for flash\n",
+				t8_firmware, header->version);
+
+	setup_spi(wc);
+
+	res = t8_update_firmware(wc, fw, t8_firmware);
+	if (res && res != -EAGAIN) {
+		dev_info(&wc->dev->dev, "Failed to load firmware %s\n",
+					t8_firmware);
+	}
+
+cleanup:
+	release_firmware(fw);
+	return res;
+}
+
 static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 {
 	unsigned int version;
+	int res;
 
 	version = t4_pci_in(wc, WC_VERSION);
 	if (is_octal(wc)) {
@@ -4393,6 +4710,13 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 #ifdef ENABLE_WORKQUEUES
 		dev_info(&wc->dev->dev, "Work Queues: Enabled\n");
 #endif
+	}
+
+	/* Check the field updatable firmware for the wcte820 */
+	if (is_octal(wc)) {
+		res = t8_check_firmware(wc, version);
+		if (res)
+			return res;
 	}
 
 #if defined(CONFIG_FORCE_EXTENDED_RESET)
@@ -4615,7 +4939,8 @@ static void wct4xxp_sort_cards(void)
 	}
 }
 
-static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
+static int __devinit
+t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	int res;
 	struct t4 *wc;
@@ -4692,7 +5017,19 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	}
 
 	/* Initialize hardware */
-	t4_hardware_init_1(wc, wc->devtype->flags);
+	res = t4_hardware_init_1(wc, wc->devtype->flags);
+	if (res) {
+		/* If this function returns -EAGAIN, we expect
+		 * to attempt another driver load. Clean everything
+		 * up first */
+		pci_iounmap(wc->dev, wc->membase);
+		pci_release_regions(wc->dev);
+		pci_free_consistent(wc->dev, T4_BASE_SIZE(wc) * wc->numbufs * 2,
+			    wc->writechunk, wc->writedma);
+		pci_set_drvdata(wc->dev, NULL);
+		free_wc(wc);
+		return res;
+	}
 	
 	for(x = 0; x < MAX_T4_CARDS; x++) {
 		if (!cards[x])
@@ -4822,6 +5159,25 @@ static int t4_hardware_stop(struct t4 *wc)
 	return 0;
 }
 
+static int __devinit
+t4_init_one_retry(struct pci_dev *pdev, const struct pci_device_id *ent)
+{
+	int res;
+	res = t4_init_one(pdev, ent);
+
+	/* If the driver was reset by a firmware load,
+	 * try to load once again */
+	if (-EAGAIN == res) {
+		res = t4_init_one(pdev, ent);
+		if (-EAGAIN == res) {
+			dev_err(&pdev->dev, "Failed to update firmware.\n");
+			res = -EIO;
+		}
+	}
+
+	return res;
+}
+
 static void _t4_remove_one(struct t4 *wc)
 {
 	int basesize;
@@ -4927,7 +5283,7 @@ static int t4_suspend(struct pci_dev *pdev, pm_message_t state)
 
 static struct pci_driver t4_driver = {
 	.name = "wct4xxp",
-	.probe = t4_init_one,
+	.probe = t4_init_one_retry,
 	.remove = __devexit_p(t4_remove_one),
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = _t4_shutdown,

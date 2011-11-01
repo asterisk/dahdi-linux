@@ -29,10 +29,11 @@ TC400M_VERSION:=MR6.12
 VPMADT032_VERSION:=1.25.0
 HX8_VERSION:=2.06
 VPMOCT032_VERSION:=1.11.0
+WCT820_VERSION:=1.76
 
 FIRMWARE_URL:=http://downloads.digium.com/pub/telephony/firmware/releases
 
-ALL_FIRMWARE=FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-OCT6114-256 FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032
+ALL_FIRMWARE=FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-OCT6114-256 FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032 FIRMWARE-TE820
 
 # Firmware files should use the naming convention: dahdi-fw-<base name>-<sub name>-<version> or dahdi-fw-<base name>-<version>
 # First example: dahdi-fw-oct6114-064-1.05.01
@@ -47,6 +48,7 @@ FIRMWARE:=$(FIRMWARE:FIRMWARE-OCT6114-256=dahdi-fw-oct6114-256-$(OCT6114_256_VER
 FIRMWARE:=$(FIRMWARE:FIRMWARE-TC400M=dahdi-fw-tc400m-$(TC400M_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-HX8=dahdi-fw-hx8-$(HX8_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032-$(VPMOCT032_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-TE820=dahdi-fw-te820-$(WCT820_VERSION).tar.gz)
 
 FWLOADERS:=dahdi-fwload-vpmadt032-$(VPMADT032_VERSION).tar.gz
 
@@ -169,6 +171,17 @@ ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-vpmoct032-
 	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-vpmoct032-$(VPMOCT032_VERSION)
 else
 	@echo "Firmware dahdi-fw-vpmoct032.bin is already installed with required version $(VPMOCT032_VERSION)"
+endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-$(WCT820_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-te820-$(WCT820_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-te820.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-te820.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-$(WCT820_VERSION)
+	@install -m 644 dahdi-fw-te820.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-te820-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te820-$(WCT820_VERSION)
+else
+	@echo "Firmware dahdi-fw-te820.bin is already installed with required version $(WCT820_VERSION)"
 endif
 
 # Uninstall any installed dahdi firmware images from hotplug firmware directories
