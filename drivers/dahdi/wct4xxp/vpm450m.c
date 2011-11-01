@@ -172,9 +172,9 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 
 struct vpm450m {
 	tPOCT6100_INSTANCE_API pApiInstance;
-	UINT32 aulEchoChanHndl[128];
-	int chanflags[128];
-	int ecmode[128];
+	UINT32 aulEchoChanHndl[256];
+	int chanflags[256];
+	int ecmode[256];
 	int numchans;
 };
 
@@ -422,6 +422,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	tOCT6100_GET_INSTANCE_SIZE InstanceSize;
 	tOCT6100_CHANNEL_OPEN *ChannelOpen;
 	UINT32 ulResult;
+	unsigned int sout_stream, rout_stream;
 	struct vpm450m *vpm450m;
 	int x,y,law;
 	
@@ -467,14 +468,21 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	ChipOpen->ulMemoryType = cOCT6100_MEM_TYPE_DDR;
 	ChipOpen->ulMemoryChipSize = cOCT6100_MEMORY_CHIP_SIZE_32MB;
 	ChipOpen->ulNumMemoryChips = 1;
-	ChipOpen->ulMaxTdmStreams = 4;
 	ChipOpen->aulTdmStreamFreqs[0] = cOCT6100_TDM_STREAM_FREQ_8MHZ;
-	ChipOpen->ulTdmSampling = cOCT6100_TDM_SAMPLE_AT_FALLING_EDGE;
 	ChipOpen->ulMaxFlexibleConfParticipants = 0;
 	ChipOpen->ulMaxConfBridges = 0;
 	ChipOpen->ulMaxRemoteDebugSessions = 0;
 	ChipOpen->fEnableChannelRecording = FALSE;
 	ChipOpen->ulSoftToneEventsBufSize = 64;
+
+	if (vpm450m->numchans <= 128) {
+		ChipOpen->ulMaxTdmStreams = 4;
+		ChipOpen->ulTdmSampling = cOCT6100_TDM_SAMPLE_AT_FALLING_EDGE;
+	} else {
+		ChipOpen->ulMaxTdmStreams = 32;
+		ChipOpen->fEnableFastH100Mode = TRUE;
+		ChipOpen->ulTdmSampling = cOCT6100_TDM_SAMPLE_AT_RISING_EDGE;
+	}
 
 #if 0
 	ChipOpen->fEnableAcousticEcho = TRUE;
@@ -507,7 +515,11 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		kfree(ChannelOpen);
 		return NULL;
 	}
-	for (x = 0; x < ARRAY_SIZE(vpm450m->aulEchoChanHndl); x++) {
+
+	sout_stream = (8 == numspans) ? 29 : 2;
+	rout_stream = (8 == numspans) ? 24 : 3;
+
+	for (x = 0; x < ((8 == numspans) ? 256 : 128); x++) {
 		/* execute this loop always on 4 span cards but
 		*  on 2 span cards only execute for the channels related to our spans */
 		if (( numspans > 2) || ((x & 0x03) <2)) {
@@ -515,7 +527,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		 	*  therefore, the lower 2 bits tell us which span this 
 			*  timeslot/channel
 		 	*/
-			if (isalaw[x & 0x03]) 
+			if (isalaw[x & 0x07])
 				law = cOCT6100_PCM_A_LAW;
 			else
 				law = cOCT6100_PCM_U_LAW;
@@ -529,11 +541,13 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 			ChannelOpen->TdmConfig.ulSinStream = 1;
 			ChannelOpen->TdmConfig.ulSinTimeslot = x;
 			ChannelOpen->TdmConfig.ulSoutPcmLaw = law;
-			ChannelOpen->TdmConfig.ulSoutStream = 2;
+			ChannelOpen->TdmConfig.ulSoutStream = sout_stream;
 			ChannelOpen->TdmConfig.ulSoutTimeslot = x;
+#if 1
 			ChannelOpen->TdmConfig.ulRoutPcmLaw = law;
-			ChannelOpen->TdmConfig.ulRoutStream = 3;
+			ChannelOpen->TdmConfig.ulRoutStream = rout_stream;
 			ChannelOpen->TdmConfig.ulRoutTimeslot = x;
+#endif
 			ChannelOpen->VqeConfig.fEnableNlp = TRUE;
 			ChannelOpen->VqeConfig.fRinDcOffsetRemoval = TRUE;
 			ChannelOpen->VqeConfig.fSinDcOffsetRemoval = TRUE;
@@ -543,7 +557,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 			
 			ulResult = Oct6100ChannelOpen(vpm450m->pApiInstance, ChannelOpen);
 			if (ulResult != GENERIC_OK) {
-				printk(KERN_NOTICE "Failed to open channel %d!\n", x);
+				printk(KERN_NOTICE "Failed to open channel %d %x!\n", x, ulResult);
 				continue;
 			}
 			for (y = 0; y < ARRAY_SIZE(tones); y++) {

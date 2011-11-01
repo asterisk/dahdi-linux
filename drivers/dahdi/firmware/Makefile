@@ -24,6 +24,7 @@
 
 OCT6114_064_VERSION:=1.05.01
 OCT6114_128_VERSION:=1.05.01
+OCT6114_256_VERSION:=1.05.01
 TC400M_VERSION:=MR6.12
 VPMADT032_VERSION:=1.25.0
 HX8_VERSION:=2.06
@@ -31,7 +32,7 @@ VPMOCT032_VERSION:=1.11.0
 
 FIRMWARE_URL:=http://downloads.digium.com/pub/telephony/firmware/releases
 
-ALL_FIRMWARE=FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032
+ALL_FIRMWARE=FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-OCT6114-256 FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032
 
 # Firmware files should use the naming convention: dahdi-fw-<base name>-<sub name>-<version> or dahdi-fw-<base name>-<version>
 # First example: dahdi-fw-oct6114-064-1.05.01
@@ -42,6 +43,7 @@ ALL_FIRMWARE=FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-TC400M FIRMWARE-
 # Build a list of firmware package filenames we need
 FIRMWARE:=$(ALL_FIRMWARE:FIRMWARE-OCT6114-064=dahdi-fw-oct6114-064-$(OCT6114_064_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-OCT6114-128=dahdi-fw-oct6114-128-$(OCT6114_128_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-OCT6114-256=dahdi-fw-oct6114-256-$(OCT6114_256_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-TC400M=dahdi-fw-tc400m-$(TC400M_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-HX8=dahdi-fw-hx8-$(HX8_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032-$(VPMOCT032_VERSION).tar.gz)
@@ -51,6 +53,7 @@ FWLOADERS:=dahdi-fwload-vpmadt032-$(VPMADT032_VERSION).tar.gz
 # Build a list of object files if hotplug will not be used
 OBJECT_FILES:=$(ALL_FIRMWARE:FIRMWARE-OCT6114-064=dahdi-fw-oct6114-064.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-OCT6114-128=dahdi-fw-oct6114-128.o)
+OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-OCT6114-256=dahdi-fw-oct6114-256.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-TC400M=dahdi-fw-tc400m.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-HX8=dahdi-fw-hx8.o)
 
@@ -123,6 +126,17 @@ ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-12
 else
 	@echo "Firmware dahdi-fw-oct6114-128.bin is already installed with required version $(OCT6114_128_VERSION)"
 endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-oct6114-256.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-oct6114-256.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION)
+	@install -m 644 dahdi-fw-oct6114-256.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION)
+else
+	@echo "Firmware dahdi-fw-oct6114-256.bin is already installed with required version $(OCT6114_256_VERSION)"
+endif
 ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
 	@echo "Installing dahdi-fw-tc400m.bin to hotplug firmware directories"
 	@install -m 644 dahdi-fw-tc400m.bin $(DESTDIR)/usr/lib/hotplug/firmware
@@ -183,6 +197,11 @@ dahdi-fw-oct6114-064.o: dahdi-fw-oct6114-064-$(OCT6114_064_VERSION).tar.gz dahdi
 dahdi-fw-oct6114-128.o: dahdi-fw-oct6114-128-$(OCT6114_128_VERSION).tar.gz dahdi-fw-oct6114-128.bin make_firmware_object
 	@echo Making firmware object file for dahdi-fw-oct6114-128.bin
 	./make_firmware_object dahdi-fw-oct6114-128.bin $@
+
+# Build object file of an oct6114 256 firmware image for linking
+dahdi-fw-oct6114-256.o: dahdi-fw-oct6114-256-$(OCT6114_256_VERSION).tar.gz dahdi-fw-oct6114-256.bin make_firmware_object
+	@echo Making firmware object file for dahdi-fw-oct6114-256.bin
+	./make_firmware_object dahdi-fw-oct6114-256.bin $@
 
 # Build object file of a TC400M firmware image for linking
 dahdi-fw-tc400m.o: dahdi-fw-tc400m-$(TC400M_VERSION).tar.gz dahdi-fw-tc400m.bin make_firmware_object

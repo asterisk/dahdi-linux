@@ -397,7 +397,7 @@ $Octasic_Revision: 171 $
 
 /* Max defines.*/
 #ifndef	cOCT6100_MAX_ECHO_CHANNELS
-#define cOCT6100_MAX_ECHO_CHANNELS				128
+#define cOCT6100_MAX_ECHO_CHANNELS				256
 #endif
 #define cOCT6100_MAX_TSI_CNCTS					1530
 #define cOCT6100_MAX_CALLER_ID_PLAYOUT_BUFFERS	( 3328 + 6 )

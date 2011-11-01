@@ -54,6 +54,12 @@
 #define FRMR_SIC3 0x40
 #define FRMR_CMR1 0x44
 #define FRMR_CMR2 0x45
+/* OctalFALC Only */
+#define FRMR_CMR4 0x41
+#define FRMR_CMR5 0x42
+#define FRMR_CMR6 0x43
+#define FRMR_GPC2 0x8a
+/* End Octal */
 #define FRMR_GCR 0x46
 #define FRMR_ISR0 0x68
 #define FRMR_ISR0_RME 0x80
@@ -76,6 +82,13 @@
 #define FRMR_CIS_GIS2 0x02
 #define FRMR_CIS_GIS3 0x04
 #define FRMR_CIS_GIS4 0x08
+
+/* CIS - Octal falc bits */
+#define FRMR_CIS_GIS5 0x10
+#define FRMR_CIS_GIS6 0x20
+#define FRMR_CIS_GIS7 0x40
+#define FRMR_CIS_GIS8 0x80
+
 #define FRMR_CMDR 0x02
 #define FRMR_CMDR_SRES 0x01
 #define FRMR_CMDR_XRES 0x10
@@ -113,6 +126,11 @@ struct t4_regs {
 	unsigned char regs[NUM_REGS];
 };
 
+struct t4_reg {
+	unsigned int reg;
+	unsigned int val;
+};
+
 #define T4_CHECK_VPM		0
 #define T4_LOADING_FW		1
 #define T4_STOP_DMA		2
@@ -120,5 +138,7 @@ struct t4_regs {
 #define T4_CHANGE_LATENCY	4
 #define T4_IGNORE_LATENCY	5
 
-#define WCT4_GET_REGS	_IOW (DAHDI_CODE, 60, struct t4_regs)
+#define WCT4_GET_REGS	_IOW(DAHDI_CODE, 60, struct t4_regs)
+#define WCT4_GET_REG	_IOW(DAHDI_CODE, 61, struct t4_reg)
+#define WCT4_SET_REG	_IOW(DAHDI_CODE, 62, struct t4_reg)
 

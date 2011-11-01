@@ -77,8 +77,6 @@
 /* Maximum latency to be used with Gen 5 */
 #define GEN5_MAX_LATENCY	127
 
-#define T4_BASE_SIZE (DAHDI_MAX_CHUNKSIZE * 32 * 4) 
-
 #ifdef ENABLE_WORKQUEUES
 #include <linux/cpu.h>
 
@@ -229,6 +227,7 @@ static int altab[] = {
 #define FLAG_BURST   (1 << 8)
 #define FLAG_EXPRESS (1 << 9)
 #define FLAG_5THGEN  (1 << 10)
+#define FLAG_8PORT  (1 << 11)
 
 #define CANARY 0xc0de
 
@@ -237,15 +236,15 @@ static int altab[] = {
 #define T4_VPM_PRESENT (1 << 28)
 static const char *vpmoct064_name = "VPMOCT064";
 static const char *vpmoct128_name = "VPMOCT128";
+static const char *vpmoct256_name = "VPMOCT256";
 #endif
-
-#define PORTS_PER_FRAMER 4
 
 struct devtype {
 	char *desc;
 	unsigned int flags;
 };
 
+static struct devtype wct820p5 = { "Wildcard TE820 (5th Gen)", FLAG_8PORT | FLAG_5THGEN | FLAG_BURST | FLAG_2NDGEN | FLAG_3RDGEN | FLAG_EXPRESS };
 static struct devtype wct420p5 = { "Wildcard TE420 (5th Gen)", FLAG_5THGEN | FLAG_BURST | FLAG_2NDGEN | FLAG_3RDGEN | FLAG_EXPRESS };
 static struct devtype wct410p5 = { "Wildcard TE410P (5th Gen)", FLAG_5THGEN | FLAG_BURST | FLAG_2NDGEN | FLAG_3RDGEN };
 static struct devtype wct405p5 = { "Wildcard TE405P (5th Gen)", FLAG_5THGEN | FLAG_BURST | FLAG_2NDGEN | FLAG_3RDGEN };
@@ -326,7 +325,7 @@ struct t4 {
 	int num;			/* Which card we are */
 	int syncsrc;			/* active sync source */
 	struct dahdi_device *ddev;
-	struct t4_span *tspans[4];	/* Individual spans */
+	struct t4_span *tspans[8];	/* Individual spans */
 	int numspans;			/* Number of spans on the card */
 	int blinktimer;
 #ifdef FANCY_ALARM
@@ -336,8 +335,9 @@ struct t4 {
 	int order;			/* Order */
 	const struct devtype *devtype;
 	unsigned int falc31:1;	/* are we falc v3.1 (atomic not necessary) */
-	unsigned int t1e1:4;	/* T1 / E1 select pins */
+	unsigned int t1e1:8;	/* T1 / E1 select pins */
 	int ledreg;				/* LED Register */
+	int ledreg2;				/* LED Register2 */
 	unsigned int gpio;
 	unsigned int gpioctl;
 	int e1recover;			/* E1 recovery timer */
@@ -375,6 +375,32 @@ struct t4 {
 static inline bool has_e1_span(const struct t4 *wc)
 {
 	return (wc->t1e1) != 0;
+}
+
+static inline bool is_octal(const struct t4 *wc)
+{
+	return (wc->devtype->flags & FLAG_8PORT) > 0;
+}
+
+static inline int T4_BASE_SIZE(struct t4 *wc)
+{
+	if (is_octal(wc))
+		return DAHDI_MAX_CHUNKSIZE * 32 * 8;
+	else
+		return DAHDI_MAX_CHUNKSIZE * 32 * 4;
+}
+
+/**
+ * ports_on_framer - The number of ports on the framers.
+ * @wc:		Board to check.
+ *
+ * The framer ports could be different the the number of ports on the card
+ * since the dual spans have four ports internally but two ports extenally.
+ *
+ */
+static inline unsigned int ports_on_framer(const struct t4 *wc)
+{
+	return (is_octal(wc)) ? 8 : 4;
 }
 
 #ifdef VPM_SUPPORT
@@ -424,13 +450,20 @@ static void t4_check_sigbits(struct t4 *wc, int span);
 #define WC_GPIO		9
 #define WC_LADDR	10
 #define WC_LDATA		11
+#define WC_LEDS2		12
+
+#define WC_SET_AUTH	(1 << 20)
+#define WC_GET_AUTH	(1 << 12)
+
+#define WC_LFRMR_CS	(1 << 10)	/* Framer's ChipSelect signal */
 #define WC_LCS		(1 << 11)
 #define WC_LCS2		(1 << 12)
-#define WC_LALE			(1 << 13)
-#define WC_LFRMR_CS	(1 << 10)	/* Framer's ChipSelect signal */
+#define WC_LALE		(1 << 13)
+#define WC_LFRMR_CS2	(1 << 14)	/* Framer's ChipSelect signal 2 */
+#define WC_LREAD	(1 << 15)
+#define WC_LWRITE	(1 << 16)
+
 #define WC_ACTIVATE	(1 << 12)
-#define WC_LREAD			(1 << 15)
-#define WC_LWRITE		(1 << 16)
 
 #define WC_OFF    (0)
 #define WC_RED    (1)
@@ -577,11 +610,22 @@ static inline void t4_pci_out(struct t4 *wc, const unsigned int addr, const unsi
 
 static inline void __t4_set_led(struct t4 *wc, int span, int color)
 {
-	int oldreg = wc->ledreg;
-	wc->ledreg &= ~(0x3 << (span << 1));
-	wc->ledreg |= (color << (span << 1));
-	if (oldreg != wc->ledreg)
-		__t4_pci_out(wc, WC_LEDS, wc->ledreg);
+	if (span <= 3) {
+		int oldreg = wc->ledreg;
+
+		wc->ledreg &= ~(0x3 << (span << 1));
+		wc->ledreg |= (color << (span << 1));
+		if (oldreg != wc->ledreg)
+			__t4_pci_out(wc, WC_LEDS, wc->ledreg);
+	} else {
+		int oldreg = wc->ledreg2;
+
+		span &= 3;
+		wc->ledreg2 &= ~(0x3 << (span << 1));
+		wc->ledreg2 |= (color << (span << 1));
+		if (oldreg != wc->ledreg2)
+			__t4_pci_out(wc, WC_LEDS2, wc->ledreg2);
+	}
 }
 
 static inline void t4_activate(struct t4 *wc)
@@ -609,9 +653,10 @@ static unsigned int __t4_framer_in(const struct t4 *wc, int unit,
 	void __iomem *const wc_laddr = wc->membase + (WC_LADDR*sizeof(u32));
 	void __iomem *const wc_version = wc->membase + (WC_VERSION*sizeof(u32));
 	void __iomem *const wc_ldata = wc->membase + (WC_LDATA*sizeof(u32));
+	int haddr = (((unit & 4) ? 0 : WC_LFRMR_CS2));
 	unit &= 0x3;
 
-	val = ((unit & 0x3) << 8) | (addr & 0xff);
+	val = ((unit & 0x3) << 8) | (addr & 0xff) | haddr;
 	writel(val, wc_laddr);
 	/* readl(wc_version); */
 	writel(val | WC_LFRMR_CS | WC_LREAD, wc_laddr);
@@ -639,8 +684,9 @@ static void __t4_framer_out(const struct t4 *wc, int unit, const u8 addr,
 	void __iomem *const wc_laddr = wc->membase + (WC_LADDR*sizeof(u32));
 	void __iomem *const wc_version = wc->membase + (WC_VERSION*sizeof(u32));
 	void __iomem *const wc_ldata = wc->membase + (WC_LDATA*sizeof(u32));
+	int haddr = (((unit & 4) ? 0 : WC_LFRMR_CS2));
 
-	val = ((unit & 0x3) << 8) | (addr & 0xff);
+	val = ((unit & 0x3) << 8) | (addr & 0xff) | haddr;
 	writel(val, wc_laddr);
 	writel(value, wc_ldata);
 	readl(wc_version);
@@ -1020,16 +1066,23 @@ unsigned int oct_get_reg(void *data, unsigned int reg)
 	return ret;
 }
 
-static const char *t4_echocan_name(const struct dahdi_chan *chan)
+static const char *__t4_echocan_name(struct t4 *wc)
 {
-	struct t4 *wc = chan->pvt;
 	if (wc->vpm450m) {
 		if (wc->numspans == 2)
 			return vpmoct064_name;
 		else if (wc->numspans == 4)
 			return vpmoct128_name;
+		else if (wc->numspans == 8)
+			return vpmoct256_name;
 	}
 	return NULL;
+}
+
+static const char *t4_echocan_name(const struct dahdi_chan *chan)
+{
+	struct t4 *wc = chan->pvt;
+	return __t4_echocan_name(wc);
 }
 
 static int t4_echocan_create(struct dahdi_chan *chan,
@@ -1063,7 +1116,10 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
 	if (wc->vpm450m) {
-		channel = channel << 2;
+		if (is_octal(wc))
+			channel = channel << 3;
+		else
+			channel = channel << 2;
 		channel |= chan->span->offset;
 		if (debug & DEBUG_ECHOCAN)
 			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
@@ -1085,7 +1141,10 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
 	if (wc->vpm450m) {
-		channel = channel << 2;
+		if (is_octal(wc))
+			channel = channel << 3;
+		else
+			channel = channel << 2;
 		channel |= chan->span->offset;
 		if (debug & DEBUG_ECHOCAN)
 			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
@@ -1100,6 +1159,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long data)
 {
 	struct t4_regs regs;
+	struct t4_reg reg;
 	int x;
 	struct t4 *wc = chan->pvt;
 #ifdef VPM_SUPPORT
@@ -1109,12 +1169,28 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 #endif
 
 	switch(cmd) {
+	case WCT4_SET_REG:
+		if (copy_from_user(&reg, (struct t4_reg __user *)data,
+				   sizeof(reg)))
+			return -EFAULT;
+		t4_pci_out(wc, reg.reg, reg.val);
+		break;
+	case WCT4_GET_REG:
+		if (copy_from_user(&reg, (struct t4_reg __user *)data,
+				   sizeof(reg)))
+			return -EFAULT;
+		reg.val = t4_pci_in(wc, reg.reg);
+		if (copy_to_user((struct t4_reg __user *)data,
+				  &reg, sizeof(reg)))
+			return -EFAULT;
+		break;
 	case WCT4_GET_REGS:
 		for (x=0;x<NUM_PCI;x++)
 			regs.pci[x] = t4_pci_in(wc, x);
 		for (x=0;x<NUM_REGS;x++)
 			regs.regs[x] = t4_framer_in(wc, chan->span->offset, x);
-		if (copy_to_user((__user void *) data, &regs, sizeof(regs)))
+		if (copy_to_user((void __user *) data,
+				 &regs, sizeof(regs)))
 			return -EFAULT;
 		break;
 #ifdef VPM_SUPPORT
@@ -1134,9 +1210,9 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 		else
 			clear_bit(chan->chanpos - 1, &ts->dtmfmutemask);
 
-		channel = (chan->chanpos) << 2;
+		channel = (chan->chanpos) << 3;
 		if (!has_e1_span(wc))
-			channel += (4 << 2);
+			channel += (4 << 3);
 		channel |= chan->span->offset;
 		vpm450m_setdtmf(wc->vpm450m, channel, j & DAHDI_TONEDETECT_ON,
 				j & DAHDI_TONEDETECT_MUTE);
@@ -1515,13 +1591,23 @@ static int t4_shutdown(struct dahdi_span *span)
 
 	span->flags &= ~DAHDI_FLAG_RUNNING;
 	__t4_set_led(wc, span->offset, WC_OFF);
-	if (((wc->numspans == 4) && 
+	if (((wc->numspans == 8) &&
+	    (!(wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[2]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[3]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[4]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[5]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[6]->span.flags & DAHDI_FLAG_RUNNING)) &&
+	    (!(wc->tspans[7]->span.flags & DAHDI_FLAG_RUNNING)))
+				||
+	    ((wc->numspans == 4) &&
 	    (!(wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)) &&
 	    (!(wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)) &&
 	    (!(wc->tspans[2]->span.flags & DAHDI_FLAG_RUNNING)) &&
 	    (!(wc->tspans[3]->span.flags & DAHDI_FLAG_RUNNING)))
-	    			|| 
-	    ((wc->numspans == 2) && 
+				||
+	    ((wc->numspans == 2) &&
 	    (!(wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)) &&
 	    (!(wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)))) {
 		/* No longer in use, disable interrupts */
@@ -1597,7 +1683,7 @@ t4_spanconfig(struct file *file, struct dahdi_span *span,
 
 	if (lc->sync < 0)
 		lc->sync = 0;
-	if (lc->sync > 4)
+	if (lc->sync > wc->numspans)
 		lc->sync = 0;
 	
 	/* remove this span number from the current sync sources, if there */
@@ -1703,15 +1789,11 @@ static int t4_close(struct dahdi_chan *chan)
 static int set_span_devicetype(struct t4 *wc)
 {
 #ifdef VPM_SUPPORT
-	const char *vpmstring;
-	if (wc->vpm450m) {
-		if (wc->numspans > 2)
-			vpmstring = "OCT128";
-		else
-			vpmstring = "OCT064";
+	const char *vpmstring = __t4_echocan_name(wc);
 
-		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (VPM%s)",
-						wc->devtype->desc, vpmstring);
+	if (vpmstring) {
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (%s)",
+						 wc->devtype->desc, vpmstring);
 	} else {
 		wc->ddev->devicetype = kasprintf(GFP_KERNEL, wc->devtype->desc);
 	}
@@ -1735,6 +1817,7 @@ static void setup_chunks(struct t4 *wc, int which)
 	int offset = 1;
 	int x, y;
 	int gen2;
+	int basesize = T4_BASE_SIZE(wc) >> 2;
 
 	if (!has_e1_span(wc))
 		offset += 4;
@@ -1743,13 +1826,13 @@ static void setup_chunks(struct t4 *wc, int which)
 
 	for (x = 0; x < wc->numspans; x++) {
 		ts = wc->tspans[x];
-		ts->writechunk = (void *)(wc->writechunk + (x * 32 * 2) + (which * (1024 >> 2)));
-		ts->readchunk = (void *)(wc->readchunk + (x * 32 * 2) + (which * (1024 >> 2)));
+		ts->writechunk = (void *)(wc->writechunk + (x * 32 * 2) + (which * (basesize)));
+		ts->readchunk = (void *)(wc->readchunk + (x * 32 * 2) + (which * (basesize)));
 		for (y=0;y<wc->tspans[x]->span.channels;y++) {
 			struct dahdi_chan *mychans = ts->chans[y];
 			if (gen2) {
-				mychans->writechunk = (void *)(wc->writechunk + ((x * 32 + y + offset) * 2) + (which * (1024 >> 2)));
-				mychans->readchunk = (void *)(wc->readchunk + ((x * 32 + y + offset) * 2) + (which * (1024 >> 2)));
+				mychans->writechunk = (void *)(wc->writechunk + ((x * 32 + y + offset) * 2) + (which * (basesize)));
+				mychans->readchunk = (void *)(wc->readchunk + ((x * 32 + y + offset) * 2) + (which * (basesize)));
 			}
 		}
 	}
@@ -1774,24 +1857,37 @@ static void t4_serial_setup(struct t4 *wc)
 	spin_lock_irqsave(&wc->reglock, flags);
 	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from
 	 * channel 0 */
-	/* GPC1: Multiplex mode enabled, FSC is output, active low, RCLK from
-	 * channel 0 */
 	__t4_framer_out(wc, 0, 0x85, 0xe0);
+	if (is_octal(wc))
+		__t4_framer_out(wc, 0, FRMR_GPC2, 0x00);
+
 	/* IPC: Interrupt push/pull active low */
 	__t4_framer_out(wc, 0, 0x08, 0x01);
 
-	/* Global clocks (8.192 Mhz CLK) */
-	__t4_framer_out(wc, 0, 0x92, 0x00);
-	__t4_framer_out(wc, 0, 0x93, 0x18);
-	__t4_framer_out(wc, 0, 0x94, 0xfb);
-	__t4_framer_out(wc, 0, 0x95, 0x0b);
-	__t4_framer_out(wc, 0, 0x96, 0x00);
-	__t4_framer_out(wc, 0, 0x97, 0x0b);
-	__t4_framer_out(wc, 0, 0x98, 0xdb);
-	__t4_framer_out(wc, 0, 0x99, 0xdf);
+	if (is_octal(wc)) {
+		/* Global clocks (16.384 Mhz CLK) */
+		__t4_framer_out(wc, 0, 0x92, 0x00);	 /* GCM1 */
+		__t4_framer_out(wc, 0, 0x93, 0x18);
+		__t4_framer_out(wc, 0, 0x94, 0xfb);
+		__t4_framer_out(wc, 0, 0x95, 0x0b);
+		__t4_framer_out(wc, 0, 0x96, 0x01);
+		__t4_framer_out(wc, 0, 0x97, 0x0b);
+		__t4_framer_out(wc, 0, 0x98, 0xdb);
+		__t4_framer_out(wc, 0, 0x99, 0xdf);
+	} else {
+		/* Global clocks (8.192 Mhz CLK) */
+		__t4_framer_out(wc, 0, 0x92, 0x00);
+		__t4_framer_out(wc, 0, 0x93, 0x18);
+		__t4_framer_out(wc, 0, 0x94, 0xfb);
+		__t4_framer_out(wc, 0, 0x95, 0x0b);
+		__t4_framer_out(wc, 0, 0x96, 0x00);
+		__t4_framer_out(wc, 0, 0x97, 0x0b);
+		__t4_framer_out(wc, 0, 0x98, 0xdb);
+		__t4_framer_out(wc, 0, 0x99, 0xdf);
+	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	for (unit = 0; unit < PORTS_PER_FRAMER; ++unit) {
+	for (unit = 0; unit < ports_on_framer(wc); ++unit) {
 		spin_lock_irqsave(&wc->reglock, flags);
 
 		/* Configure interrupts */
@@ -1799,29 +1895,60 @@ static void t4_serial_setup(struct t4 *wc)
 		__t4_framer_out(wc, unit, FRMR_GCR, 0x00);
 
 		/* Configure system interface */
-		/* SIC1: 8.192 Mhz clock/bus, double buffer receive /
-		 * transmit, byte interleaved */
-		__t4_framer_out(wc, unit, FRMR_SIC1, 0xc2);
+		if (is_octal(wc)) {
+			/* SIC1: 16.384 Mhz clock/bus, double buffer receive /
+			 * transmit, byte interleaved */
+			__t4_framer_out(wc, unit, FRMR_SIC1, 0xc2 | 0x08);
+		} else {
+			/* SIC1: 8.192 Mhz clock/bus, double buffer receive /
+			 * transmit, byte interleaved */
+			__t4_framer_out(wc, unit, FRMR_SIC1, 0xc2);
+		}
 		/* SIC2: No FFS, no center receive eliastic buffer, phase */
 		__t4_framer_out(wc, unit, FRMR_SIC2, 0x20 | (unit << 1));
 		/* SIC3: Edges for capture */
-		__t4_framer_out(wc, unit, FRMR_SIC3, 0x04);
+		if (is_octal(wc)) {
+			__t4_framer_out(wc, unit, FRMR_SIC3, 0x04 | (1 << 4));
+		} else {
+			__t4_framer_out(wc, unit, FRMR_SIC3, 0x04);
+		}
 		/* CMR2: We provide sync and clock for tx and rx. */
 		__t4_framer_out(wc, unit, FRMR_CMR2, 0x00);
 
-		if (!has_e1_span(wc)) {	/* T1/J1 mode */
-			__t4_framer_out(wc, unit, FRMR_XC0, 0x03);
-			__t4_framer_out(wc, unit, FRMR_XC1, 0x84);
-			if (J1 == wc->tspans[unit]->linemode)
-				__t4_framer_out(wc, unit, FRMR_RC0, 0x83);
-			else
-				__t4_framer_out(wc, unit, FRMR_RC0, 0x03);
-			__t4_framer_out(wc, unit, FRMR_RC1, 0x84);
-		} else { /* E1 mode */
-			__t4_framer_out(wc, unit, FRMR_XC0, 0x00);
-			__t4_framer_out(wc, unit, FRMR_XC1, 0x04);
-			__t4_framer_out(wc, unit, FRMR_RC0, 0x04);
-			__t4_framer_out(wc, unit, FRMR_RC1, 0x04);
+		if (is_octal(wc)) {
+			/* Set RCLK to 16 MHz */
+			__t4_framer_out(wc, unit, FRMR_CMR4, 0x5);
+
+			if (!has_e1_span(wc)) { /* T1/J1 mode */
+				__t4_framer_out(wc, unit, FRMR_XC0, 0x07);
+				__t4_framer_out(wc, unit, FRMR_XC1, 0x04);
+				if (wc->tspans[unit]->linemode == J1)
+					__t4_framer_out(wc, unit, FRMR_RC0, 0x87);
+				else
+					__t4_framer_out(wc, unit, FRMR_RC0, 0x07);
+				__t4_framer_out(wc, unit, FRMR_RC1, 0x04);
+			} else { /* E1 mode */
+				__t4_framer_out(wc, unit, FRMR_XC0, 0x00);
+				__t4_framer_out(wc, unit, FRMR_XC1, 0x04);
+				__t4_framer_out(wc, unit, FRMR_RC0, 0x00);
+				__t4_framer_out(wc, unit, FRMR_RC1, 0x04);
+			}
+
+		} else {
+			if (!has_e1_span(wc)) {	/* T1/J1 mode */
+				__t4_framer_out(wc, unit, FRMR_XC0, 0x03);
+				__t4_framer_out(wc, unit, FRMR_XC1, 0x84);
+				if (J1 == wc->tspans[unit]->linemode)
+					__t4_framer_out(wc, unit, FRMR_RC0, 0x83);
+				else
+					__t4_framer_out(wc, unit, FRMR_RC0, 0x03);
+				__t4_framer_out(wc, unit, FRMR_RC1, 0x84);
+			} else { /* E1 mode */
+				__t4_framer_out(wc, unit, FRMR_XC0, 0x00);
+				__t4_framer_out(wc, unit, FRMR_XC1, 0x04);
+				__t4_framer_out(wc, unit, FRMR_RC0, 0x04);
+				__t4_framer_out(wc, unit, FRMR_RC1, 0x04);
+			}
 		}
 
 		/* Configure ports */
@@ -1832,7 +1959,11 @@ static void t4_serial_setup(struct t4 *wc)
 		/* PC2: RMFB/XSIG output/input on RPB/XPB */
 		/* PC3: Some unused stuff */
 		/* PC4: Some more unused stuff */
-		if (wc->falc31) {
+		if (is_octal(wc)) {
+			__t4_framer_out(wc, unit, 0x81, 0xBB);
+			__t4_framer_out(wc, unit, 0x82, 0xf5);
+			__t4_framer_out(wc, unit, 0x83, 0x35);
+		} else if (wc->falc31) {
 			__t4_framer_out(wc, unit, 0x81, 0xBB);
 			__t4_framer_out(wc, unit, 0x82, 0xBB);
 			__t4_framer_out(wc, unit, 0x83, 0xBB);
@@ -2214,10 +2345,19 @@ static DEFINE_SPINLOCK(synclock);
 
 static void __t4_set_rclk_src(struct t4 *wc, int span)
 {
-	int cmr1 = 0x38;	/* Clock Mode: RCLK sourced by DCO-R1
-				   by default, Disable Clock-Switching */
-	cmr1 |= (span << 6);
-	__t4_framer_out(wc, 0, 0x44, cmr1);
+	if (is_octal(wc)) {
+		int cmr5 = 0x00 | (span << 5);
+		int cmr1 = 0x38;	/* Clock Mode: RCLK sourced by DCO-R1
+					   by default, Disable Clock-Switching */
+
+		__t4_framer_out(wc, 0, 0x44, cmr1);
+		__t4_framer_out(wc, 0, FRMR_CMR5, cmr5);
+	} else {
+		int cmr1 = 0x38;	/* Clock Mode: RCLK sourced by DCO-R1
+					   by default, Disable Clock-Switching */
+		cmr1 |= (span << 6);
+		__t4_framer_out(wc, 0, 0x44, cmr1);
+	}
 
 	dev_info(&wc->dev->dev, "RCLK source set to span %d\n", span+1);
 }
@@ -2452,7 +2592,12 @@ static void __t4_configure_t1(struct t4 *wc, int unit, int lineconfig, int txlev
 		mytxlevel = 0;
 	else
 		mytxlevel = txlevel - 4;
-	fmr1 = 0x9c; /* FMR1: Mode 1, T1 mode, CRC on for ESF, 8.192 Mhz system data rate, no XAIS */
+
+	if (is_octal(wc))
+		fmr1 = 0x9c | 0x02; /* FMR1: Mode 1, T1 mode, CRC on for ESF, 8.192 Mhz system data rate, no XAIS */
+	else
+		fmr1 = 0x9c; /* FMR1: Mode 1, T1 mode, CRC on for ESF, 8.192 Mhz system data rate, no XAIS */
+
 	fmr2 = 0x20; /* FMR2: no payload loopback, don't auto yellow */
 	fmr4 = 0x0c; /* FMR4: Lose sync on 2 out of 5 framing bits, auto resync */
 	lim2 = 0x21; /* LIM2: 50% peak is a "1", Advanced Loss recovery */
@@ -2543,7 +2688,13 @@ static void __t4_configure_e1(struct t4 *wc, int unit, int lineconfig)
 	unsigned int imr3extra=0;
 	char *crc4 = "";
 	char *framing, *line;
-	fmr1 = 0x44; /* FMR1: E1 mode, Automatic force resync, PCM30 mode, 8.192 Mhz backplane, no XAIS */
+	if (is_octal(wc)) {
+		/* 16 MHz */
+		fmr1 = 0x44 | 0x02; /* FMR1: E1 mode, Automatic force resync, PCM30 mode, 8.192 Mhz backplane, no XAIS */
+	} else {
+		/* 8 MHz */
+		fmr1 = 0x44; /* FMR1: E1 mode, Automatic force resync, PCM30 mode, 8.192 Mhz backplane, no XAIS */
+	}
 	fmr2 = 0x03; /* FMR2: Auto transmit remote alarm, auto loss of multiframe recovery, no payload loopback */
 	if (lineconfig & DAHDI_CONFIG_CRC4) {
 		fmr1 |= 0x08;	/* CRC4 transmit */
@@ -2636,6 +2787,7 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 	set_bit(T4_IGNORE_LATENCY, &wc->checkflag);
 	if (debug)
 		dev_info(&wc->dev->dev, "About to enter startup!\n");
+
 	tspan = span->offset + 1;
 	if (tspan < 0) {
 		dev_info(&wc->dev->dev, "TE%dXXP: Span '%d' isn't us?\n",
@@ -2676,6 +2828,8 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 
 		if (wc->devtype->flags & FLAG_5THGEN)
 			__t4_pci_out(wc, 5, (ms_per_irq << 16) | wc->numbufs);
+		else
+			__t4_pci_out(wc, 5, (1 << 16) | 1);
 		/* enable interrupts */
 		/* Start DMA, enabling DMA interrupts on read only */
 		wc->dmactrl |= (ts->spanflags & FLAG_2NDGEN) ? 0xc0000000 : 0xc0000003;
@@ -2686,6 +2840,8 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		__t4_pci_out(wc, WC_INTR, 0x0c);
 		if (noburst || !(ts->spanflags & FLAG_BURST))
 			wc->dmactrl |= (1 << 26);
+		else
+			wc->dmactrl &= ~(1 << 26);
 		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 
 		/* Startup HDLC controller too */
@@ -2716,7 +2872,7 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 	if (wc->tspans[1]->sync == span->spanno)
 		dev_info(&wc->dev->dev, "SPAN %d: Secondary Sync Source\n",
 				span->spanno);
-	if (wc->numspans == 4) {
+	if (wc->numspans >= 4) {
 		if (wc->tspans[2]->sync == span->spanno)
 			dev_info(&wc->dev->dev, "SPAN %d: Tertiary Sync Source"
 					"\n", span->spanno);
@@ -2724,6 +2880,21 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 			dev_info(&wc->dev->dev, "SPAN %d: Quaternary Sync "
 					"Source\n", span->spanno);
 	}
+	if (wc->numspans == 8) {
+		if (wc->tspans[4]->sync == span->spanno)
+			dev_info(&wc->dev->dev, "SPAN %d: Quinary Sync "
+					"Source\n", span->spanno);
+		if (wc->tspans[5]->sync == span->spanno)
+			dev_info(&wc->dev->dev, "SPAN %d: Senary Sync "
+					"Source\n", span->spanno);
+		if (wc->tspans[6]->sync == span->spanno)
+			dev_info(&wc->dev->dev, "SPAN %d: Septenary Sync "
+					"Source\n", span->spanno);
+		if (wc->tspans[7]->sync == span->spanno)
+			dev_info(&wc->dev->dev, "SPAN %d: Octonary Sync "
+					"Source\n", span->spanno);
+	}
+
 	if (debug)
 		dev_info(&wc->dev->dev, "Completed startup!\n");
 	clear_bit(T4_IGNORE_LATENCY, &wc->checkflag);
@@ -3622,7 +3793,7 @@ static int t4_allocate_buffers(struct t4 *wc, int numbufs,
 	dma_addr_t writedma;
 
 	/* 32 channels, Double-buffer, Read/Write, 4 spans */
-	alloc = pci_alloc_consistent(wc->dev, numbufs * T4_BASE_SIZE * 2,
+	alloc = pci_alloc_consistent(wc->dev, numbufs * T4_BASE_SIZE(wc) * 2,
 				     &writedma);
 
 	if (!alloc) {
@@ -3640,21 +3811,21 @@ static int t4_allocate_buffers(struct t4 *wc, int numbufs,
 	wc->writedma = writedma;
 
 	/* Read is after the whole write piece (in words) */
-	wc->readchunk = wc->writechunk + (T4_BASE_SIZE * numbufs) / 4;
+	wc->readchunk = wc->writechunk + (T4_BASE_SIZE(wc) * numbufs) / 4;
 	
 	/* Same thing but in bytes...  */
-	wc->readdma = wc->writedma + (T4_BASE_SIZE * numbufs);
+	wc->readdma = wc->writedma + (T4_BASE_SIZE(wc) * numbufs);
 
 	wc->numbufs = numbufs;
 	
 	/* Initialize Write/Buffers to all blank data */
-	memset(wc->writechunk, 0x00, T4_BASE_SIZE * numbufs);
-	memset(wc->readchunk, 0xff, T4_BASE_SIZE * numbufs);
+	memset(wc->writechunk, 0x00, T4_BASE_SIZE(wc) * numbufs);
+	memset(wc->readchunk, 0xff, T4_BASE_SIZE(wc) * numbufs);
 
 	if (debug) {
 		dev_notice(&wc->dev->dev, "DMA memory base of size %d at " \
 			"%p.  Read: %p and Write %p\n",
-			numbufs * T4_BASE_SIZE * 2, wc->writechunk,
+			numbufs * T4_BASE_SIZE(wc) * 2, wc->writechunk,
 			wc->readchunk, wc->writechunk);
 	}
 
@@ -3701,7 +3872,7 @@ static void t4_increase_latency(struct t4 *wc, int newlatency)
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	pci_free_consistent(wc->dev, T4_BASE_SIZE * oldbufs * 2,
+	pci_free_consistent(wc->dev, T4_BASE_SIZE(wc) * oldbufs * 2,
 			    oldalloc, oldaddr);
 
 	dev_info(&wc->dev->dev, "Increased latency to %d\n", newlatency);
@@ -3884,6 +4055,17 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 			t4_framer_interrupt(wc, 2);
 		if (cis & FRMR_CIS_GIS4)
 			t4_framer_interrupt(wc, 3);
+
+		if (is_octal(wc)) {
+			if (cis & FRMR_CIS_GIS5)
+				t4_framer_interrupt(wc, 4);
+			if (cis & FRMR_CIS_GIS6)
+				t4_framer_interrupt(wc, 5);
+			if (cis & FRMR_CIS_GIS7)
+				t4_framer_interrupt(wc, 6);
+			if (cis & FRMR_CIS_GIS8)
+				t4_framer_interrupt(wc, 7);
+		}
 	}
 
 #ifdef VPM_SUPPORT
@@ -3946,7 +4128,7 @@ static int t4_reset_dma(struct t4 *wc)
 #ifdef VPM_SUPPORT
 static void t4_vpm450_init(struct t4 *wc)
 {
-	int laws[4] = { 0, };
+	int laws[8] = { 0, };
 	int x;
 	unsigned int vpm_capacity;
 	struct firmware embedded_firmware;
@@ -3954,11 +4136,14 @@ static void t4_vpm450_init(struct t4 *wc)
 #if !defined(HOTPLUG_FIRMWARE)
 	extern void _binary_dahdi_fw_oct6114_064_bin_size;
 	extern void _binary_dahdi_fw_oct6114_128_bin_size;
+	extern void _binary_dahdi_fw_oct6114_256_bin_size;
 	extern u8 _binary_dahdi_fw_oct6114_064_bin_start[];
 	extern u8 _binary_dahdi_fw_oct6114_128_bin_start[];
+	extern u8 _binary_dahdi_fw_oct6114_256_bin_start[];
 #else
 	static const char oct064_firmware[] = "dahdi-fw-oct6114-064.bin";
 	static const char oct128_firmware[] = "dahdi-fw-oct6114-128.bin";
+	static const char oct256_firmware[] = "dahdi-fw-oct6114-256.bin";
 #endif
 
 	if (!vpmsupport) {
@@ -4026,6 +4211,25 @@ static void t4_vpm450_init(struct t4 *wc)
 		embedded_firmware.size = (size_t) &_binary_dahdi_fw_oct6114_128_bin_size;
 #endif
 		break;
+	case 256:
+#if defined(HOTPLUG_FIRMWARE)
+		if ((request_firmware(&firmware, oct256_firmware, &wc->dev->dev) != 0) ||
+		    !firmware) {
+			dev_notice(&wc->dev->dev, "VPM450: firmware %s not "
+				"available from userspace\n", oct256_firmware);
+			return;
+		}
+#else
+		embedded_firmware.data = _binary_dahdi_fw_oct6114_256_bin_start;
+		/* Yes... this is weird. objcopy gives us a symbol containing
+		   the size of the firmware, not a pointer a variable containing
+		   the size. The only way we can get the value of the symbol
+		   is to take its address, so we define it as a pointer and
+		   then cast that value to the proper type.
+		*/
+		embedded_firmware.size = (size_t) &_binary_dahdi_fw_oct6114_256_bin_size;
+#endif
+		break;
 	default:
 		dev_notice(&wc->dev->dev, "Unsupported channel capacity found "
 				"on VPM module (%d).\n", vpm_capacity);
@@ -4056,12 +4260,21 @@ static void t4_vpm450_init(struct t4 *wc)
 static void t4_tsi_reset(struct t4 *wc) 
 {
 	int x;
-	for (x=0;x<128;x++) {
+	if (is_octal(wc)) {
+		for (x = 0; x < 256; x++) {
+			wc->dmactrl &= ~0x0001ffff;
+			wc->dmactrl |= (0x00004000 | ((x & 0x7f) << 7) | ((x >> 7) << 15));
+			t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		}
+		wc->dmactrl &= ~0x0001ffff;
+	} else {
+		for (x = 0; x < 128; x++) {
+			wc->dmactrl &= ~0x00007fff;
+			wc->dmactrl |= (0x00004000 | (x << 7));
+			t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		}
 		wc->dmactrl &= ~0x00007fff;
-		wc->dmactrl |= (0x00004000 | (x << 7));
-		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 	}
-	wc->dmactrl &= ~0x00007fff;
 	t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 }
 
@@ -4079,11 +4292,24 @@ static void t4_tsi_assign(struct t4 *wc, int fromspan, int fromchan, int tospan,
 		tots += 4;
 	}
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->dmactrl &= ~0x00007fff;
-	wc->dmactrl |= (0x00004000 | (tots << 7) | (fromts));
-	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
-	wc->dmactrl &= ~0x00007fff;
-	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	if (is_octal(wc)) {
+		int fromts_b = fromts & 0x7f;
+		int fromts_t = fromts >> 7;
+		int tots_b = tots & 0x7f;
+		int tots_t = tots >> 7;
+
+		wc->dmactrl &= ~0x0001ffff;
+		wc->dmactrl |= ((fromts_t << 16) | (tots_t << 15) | 0x00004000 | (tots_b << 7) | (fromts_b));
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		wc->dmactrl &= ~0x0001ffff;
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	} else {
+		wc->dmactrl &= ~0x00007fff;
+		wc->dmactrl |= (0x00004000 | (tots << 7) | (fromts));
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		wc->dmactrl &= ~0x00007fff;
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
@@ -4097,13 +4323,26 @@ static void t4_tsi_unassign(struct t4 *wc, int tospan, int tochan)
 	if (!has_e1_span(wc))
 		tots += 4;
 	spin_lock_irqsave(&wc->reglock, flags);
-	wc->dmactrl &= ~0x00007fff;
-	wc->dmactrl |= (0x00004000 | (tots << 7));
-	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
-	if (debug & DEBUG_TSI)
-		dev_notice(&wc->dev->dev, "Sending '%08x\n", wc->dmactrl);
-	wc->dmactrl &= ~0x00007fff;
-	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	if (is_octal(wc)) {
+		int tots_b = tots & 0x7f;
+		int tots_t = tots >> 7;
+
+		wc->dmactrl &= ~0x0001ffff;
+		wc->dmactrl |= ((tots_t << 15) | 0x00004000 | (tots_b << 7));
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		if (debug & DEBUG_TSI)
+			dev_notice(&wc->dev->dev, "Sending '%08x\n", wc->dmactrl);
+		wc->dmactrl &= ~0x0001ffff;
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	} else {
+		wc->dmactrl &= ~0x00007fff;
+		wc->dmactrl |= (0x00004000 | (tots << 7));
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+		if (debug & DEBUG_TSI)
+			dev_notice(&wc->dev->dev, "Sending '%08x\n", wc->dmactrl);
+		wc->dmactrl &= ~0x00007fff;
+		__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
+	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
@@ -4141,7 +4380,13 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 	unsigned int version;
 
 	version = t4_pci_in(wc, WC_VERSION);
-	dev_info(&wc->dev->dev, "Firmware Version: %08x\n", version);
+	if (is_octal(wc)) {
+		dev_info(&wc->dev->dev, "Firmware Version: %01x.%02x\n",
+			(version & 0xf00) >> 8,
+			version & 0xff);
+	} else {
+		dev_info(&wc->dev->dev, "Firmware Version: %08x\n", version);
+	}
 	if (debug) {
 		dev_info(&wc->dev->dev, "Burst Mode: %s\n",
 			(!(cardflags & FLAG_BURST) && noburst) ? "Off" : "On");
@@ -4182,6 +4427,10 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 		if (-1 == t1e1override) {
 			wc->t1e1 = (((t4_pci_in(wc, WC_LEDS)) & 0x0f00) >> 8);
 			wc->t1e1 &= 0xf;
+			if (is_octal(wc)) {
+				wc->t1e1 |= ((t4_pci_in(wc, WC_LEDS2)) &
+							0x0f00) >> 4;
+			}
 		} else {
 			dev_warn(&wc->dev->dev, "'t1e1override' is deprecated. "
 				 "Please use 'default_linemode'.\n");
@@ -4202,6 +4451,25 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 
 	wc->order = ((t4_pci_in(wc, WC_LEDS)) & 0xf0000000) >> 28;
 	order_index[wc->order]++;
+
+	/* TE820 Auth Check */
+	if (is_octal(wc)) {
+		uint32_t donebit;
+
+		donebit = t4_pci_in(wc, WC_LEDS2);
+		t4_pci_out(wc, WC_LEDS2, WC_SET_AUTH);
+
+		msleep(1000);
+
+		donebit = t4_pci_in(wc, WC_LEDS2);
+		if (!(donebit & WC_GET_AUTH)) {
+			/* Encryption check failed, stop operation */
+			dev_info(&wc->dev->dev, "Failed encryption check. "\
+						"Unloading driver.\n");
+			return -EIO;
+		}
+	}
+
 	return 0;
 }
 
@@ -4217,7 +4485,9 @@ static int t4_hardware_init_2(struct t4 *wc)
 	}
 	/* Setup LEDS, take out of reset */
 	t4_pci_out(wc, WC_LEDS, 0x000000ff);
+	udelay(100);
 	t4_activate(wc);
+	udelay(100);
 
 	/* In order to find out the QFALC framer version, we have to
 	 * temporarily turn off compat mode and take a peak at VSTR.  We turn
@@ -4229,20 +4499,27 @@ static int t4_hardware_init_2(struct t4 *wc)
 				"in compatibility mode.\n");
 	spin_lock_irqsave(&wc->reglock, flags);
 	regval = __t4_framer_in(wc, 0, 0xd6);
-	regval |= (1 << 5); /* set COMP_DIS*/
+	if (is_octal(wc))
+		regval |= (1 << 4); /*  SSI16 - For 16 MHz multiplex mode with comp = 1 */
+	else
+		regval |= (1 << 5); /* set COMP_DIS*/
+
 	__t4_framer_out(wc, 0, 0xd6, regval);
-	regval = __t4_framer_in(wc, 0, 0x4a);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	if (regval == 0x05)
-		dev_info(&wc->dev->dev, "FALC Framer Version: 2.1 or "
-				"earlier\n");
-	else if (regval == 0x20) {
-		dev_info(&wc->dev->dev, "FALC Framer Version: 3.1\n");
-		wc->falc31 = 1;
-	} else
-		dev_info(&wc->dev->dev, "FALC Framer Version: Unknown "
-				"(VSTR = 0x%02x)\n", regval);
+	if (!is_octal(wc)) {
+		regval = t4_framer_in(wc, 0, 0x4a);
+		if (regval == 0x05) {
+			dev_info(&wc->dev->dev, "FALC Framer Version: 2.1 or "
+				 "earlier\n");
+		} else if (regval == 0x20) {
+			dev_info(&wc->dev->dev, "FALC Framer Version: 3.1\n");
+			wc->falc31 = 1;
+		} else {
+			dev_info(&wc->dev->dev, "FALC Framer Version: Unknown "
+				 "(VSTR = 0x%02x)\n", regval);
+		}
+	}
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	regval = __t4_framer_in(wc, 0, 0xd6);
@@ -4362,7 +4639,9 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	spin_lock_init(&wc->reglock);
 	wc->devtype = (const struct devtype *)(ent->driver_data);
 
-	if (wc->devtype->flags & FLAG_2PORT)
+	if (is_octal(wc))
+		wc->numspans = 8;
+	else if (wc->devtype->flags & FLAG_2PORT)
 		wc->numspans = 2;
 	else
 		wc->numspans = 4;
@@ -4439,7 +4718,7 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 #endif			
 
 	/* Allocate pieces we need here */
-	for (x = 0; x < PORTS_PER_FRAMER; x++) {
+	for (x = 0; x < ports_on_framer(wc); x++) {
 		struct t4_span *ts;
 		enum linemode linemode;
 
@@ -4465,7 +4744,10 @@ static int __devinit t4_init_one(struct pci_dev *pdev, const struct pci_device_i
 	if (request_irq(pdev->irq, (wc->devtype->flags & FLAG_2NDGEN) ?
 					t4_interrupt_gen2 : t4_interrupt,
 			DAHDI_IRQ_SHARED_DISABLED,
-			(wc->numspans == 2) ? "wct2xxp" : "wct4xxp", wc))
+			(wc->numspans == 8) ? "wct8xxp" :
+					      (wc->numspans == 2) ? "wct2xxp" :
+								    "wct4xxp",
+			wc))
 #else
 		if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN)) {
 			dev_notice(&wc->dev->dev, "This driver does not "
@@ -4581,7 +4863,7 @@ static void _t4_remove_one(struct t4 *wc)
 	pci_release_regions(wc->dev);
 	
 	/* Immediately free resources */
-	pci_free_consistent(wc->dev, T4_BASE_SIZE * wc->numbufs * 2,
+	pci_free_consistent(wc->dev, T4_BASE_SIZE(wc) * wc->numbufs * 2,
 			    wc->writechunk, wc->writedma);
 	
 	order_index[wc->order]--;
@@ -4605,10 +4887,11 @@ static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 {
 	{ 0x10ee, 0x0314, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct4xxp },
 
- 	{ 0xd161, 0x1420, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct420p5 },
+	{ 0xd161, 0x1820, PCI_ANY_ID,     PCI_ANY_ID, 0, 0, (unsigned long)&wct820p5 },
+	{ 0xd161, 0x1420, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct420p5 },
 	{ 0xd161, 0x1410, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct410p5 },
 	{ 0xd161, 0x1405, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct405p5 },
- 	{ 0xd161, 0x0420, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct420p4 },
+	{ 0xd161, 0x0420, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct420p4 },
 	{ 0xd161, 0x0410, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct410p4 },
 	{ 0xd161, 0x0405, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct405p4 },
 	{ 0xd161, 0x0410, 0x0003,     PCI_ANY_ID, 0, 0, (unsigned long)&wct410p3 },
@@ -4616,10 +4899,10 @@ static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 	{ 0xd161, 0x0410, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct410p2 },
 	{ 0xd161, 0x0405, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wct405p2 },
 
- 	{ 0xd161, 0x1220, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct220p5 },
+	{ 0xd161, 0x1220, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct220p5 },
 	{ 0xd161, 0x1205, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct205p5 },
 	{ 0xd161, 0x1210, 0x0005,     PCI_ANY_ID, 0, 0, (unsigned long)&wct210p5 },
- 	{ 0xd161, 0x0220, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct220p4 },
+	{ 0xd161, 0x0220, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct220p4 },
 	{ 0xd161, 0x0205, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct205p4 },
 	{ 0xd161, 0x0210, 0x0004,     PCI_ANY_ID, 0, 0, (unsigned long)&wct210p4 },
 	{ 0xd161, 0x0205, 0x0003,     PCI_ANY_ID, 0, 0, (unsigned long)&wct205p3 },
@@ -4705,7 +4988,7 @@ static void __exit t4_cleanup(void)
 }
 
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
-MODULE_DESCRIPTION("Wildcard Dual-/Quad-port Digital Card Driver");
+MODULE_DESCRIPTION("Wildcard Dual/Quad/Octal-port Digital Card Driver");
 MODULE_ALIAS("wct2xxp");
 MODULE_LICENSE("GPL v2");
 
