@@ -176,6 +176,9 @@ $(LTZ_SO): $(LTZ_SO_OBJS)
 
 dahdi_cfg: $(LTZ_A)
 dahdi_cfg: LIBS+=-lm
+dahdi_pcap:
+	$(CC) $(CFLAGS) dahdi_pcap.c -lpcap -o $@ $<
+	
 
 fxstest: $(LTZ_SO)
 fxstest: LIBS+=-lm
@@ -345,6 +348,7 @@ clean:
 	rm -f core
 	rm -f dahdi_cfg-shared fxstest
 	rm -rf $(GENERATED_DOCS) *.asciidoc tonezones.txt
+	rm -f dahdi_pcap
 
 distclean: dist-clean
 
