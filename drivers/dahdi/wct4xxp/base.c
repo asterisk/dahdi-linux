@@ -4869,7 +4869,6 @@ static int t4_hardware_init_2(struct t4 *wc)
 
 	if (t4_pci_in(wc, WC_VERSION) >= 0xc01a0165) {
 		wc->tspans[0]->spanflags |= FLAG_OCTOPT;
-		dev_info(&wc->dev->dev, "Octasic Optimizations: Enabled\n");
 	}
 	/* Setup LEDS, take out of reset */
 	t4_pci_out(wc, WC_LEDS, 0x000000ff);
@@ -4882,9 +4881,6 @@ static int t4_hardware_init_2(struct t4 *wc)
 	 * compat back on when we are done.
 	 *
 	 */
-	if (t4_framer_in(wc, 0, 0x4a) != 0x05)
-		dev_info(&wc->dev->dev, "WARNING: FALC framer not intialized "
-				"in compatibility mode.\n");
 	spin_lock_irqsave(&wc->reglock, flags);
 	regval = __t4_framer_in(wc, 0, 0xd6);
 	if (is_octal(wc))
