@@ -27,7 +27,6 @@
 enum fxs_opcodes {
 	XPROTO_NAME(FXS, SIG_CHANGED)		= 0x06,
 /**/
-	XPROTO_NAME(FXS, XPD_STATE)		= 0x0F,	/* Write to SLIC */
 	XPROTO_NAME(FXS, CHAN_POWER)		= 0x0F,	/* Write to SLIC */
 	XPROTO_NAME(FXS, CHAN_CID)		= 0x0F,	/* Write to SLIC */
 	XPROTO_NAME(FXS, LED)			= 0x0F,	/* Write to SLIC */

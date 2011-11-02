@@ -28,7 +28,6 @@ enum fxo_opcodes {
 	XPROTO_NAME(FXO, SIG_CHANGED)		= 0x06,
 /**/
 	XPROTO_NAME(FXO, DAA_WRITE)		= 0x0F,	/* Write to DAA */
-	XPROTO_NAME(FXO, XPD_STATE)		= 0x0F,	/* Write to DAA */
 	XPROTO_NAME(FXO, CHAN_CID)		= 0x0F,	/* Write to DAA */
 	XPROTO_NAME(FXO, LED)			= 0x0F,	/* Write to DAA */
 };
