@@ -85,6 +85,13 @@ static struct dahdi_lineconfig lc[DAHDI_MAX_SPANS];
 
 static struct dahdi_chanconfig cc[DAHDI_MAX_CHANNELS];
 
+static int current_span = 0;
+static int only_span = 0;
+static int restrict_channels = 0;
+static int selected_channels[DAHDI_MAX_CHANNELS];
+static int chan2span[DAHDI_MAX_CHANNELS];
+static int declared_spans[DAHDI_MAX_SPANS];
+
 static struct dahdi_attach_echocan ae[DAHDI_MAX_CHANNELS];
 
 static struct dahdi_dynamic_span zds[NUM_DYNAMIC];
@@ -228,6 +235,35 @@ static char *trim(char *buf)
 	return buf;
 }
 
+static int skip_channel(int x)
+{
+	int	spanno = chan2span[x];
+
+	if (restrict_channels) {
+		if (!selected_channels[x])
+			return 1;
+		/* sanity check */
+		if (only_span) {
+			if (spanno != 0 && only_span != spanno) {
+				fprintf(stderr,
+					"Only span %d. Skip selected channel %d from span %d\n",
+					only_span, x, spanno);
+				return 1;
+			}
+		}
+	} else {
+		if (only_span && !declared_spans[only_span]) {
+			fprintf(stderr,
+				"Error: analog span %d given to '-S', without '-C' restriction.\n",
+				only_span);
+			exit(1);
+		}
+		if (only_span && only_span != spanno)
+			return 1;
+	}
+	return 0;
+}
+
 static int parseargs(char *input, char *output[], int maxargs, char sep)
 {
 	char *c;
@@ -311,6 +347,8 @@ int spanconfig(char *keyword, char *args)
 		error("Span number should be a valid span number, not '%s'\n", realargs[0]);
 		return -1;
 	}
+	current_span = span;
+	declared_spans[span] = 1;
 	res = sscanf(realargs[1], "%d", &timing);
 	if ((res != 1) || (timing < 0) || (timing > MAX_TIMING)) {
 		error("Timing should be a number from 0 to %d, not '%s'\n", 
@@ -482,6 +520,7 @@ static int chanconfig(char *keyword, char *args)
 	int master=0;
 	int dacschan = 0;
 	char *idle;
+	int is_digital;
 	bzero(chans, sizeof(chans));
 	strtok(args, ":");
 	idle = strtok(NULL, ":");
@@ -493,6 +532,7 @@ static int chanconfig(char *keyword, char *args)
 	if (res <= 0)
 		return -1;
 	for (x=1;x<DAHDI_MAX_CHANNELS;x++) {
+		is_digital = 0;
 		if (chans[x]) {
 			if (slineno[x]) {
 				error("Channel %d already configured as '%s' at line %d\n", x, sig[x], slineno[x]);
@@ -538,6 +578,7 @@ static int chanconfig(char *keyword, char *args)
 					return -1;
 				cc[x].sigtype = DAHDI_SIG_CAS;
 				sig[x] = sigtype_to_str(cc[x].sigtype);
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "dacs")) {
 				/* Setup channel for monitor */
 				cc[x].idlebits = dacschan;
@@ -548,6 +589,7 @@ static int chanconfig(char *keyword, char *args)
 				cc[dacschan].sigtype = DAHDI_SIG_DACS;
 				sig[x] = sigtype_to_str(cc[dacschan].sigtype);
 				dacschan++;
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "dacsrbs")) {
 				/* Setup channel for monitor */
 				cc[x].idlebits = dacschan;
@@ -557,6 +599,7 @@ static int chanconfig(char *keyword, char *args)
 				cc[dacschan].idlebits = x;
 				cc[dacschan].sigtype = DAHDI_SIG_DACS_RBS;
 				sig[x] = sigtype_to_str(cc[dacschan].sigtype);
+				is_digital = 1;
 				dacschan++;
 			} else if (!strcasecmp(keyword, "unused")) {
 				cc[x].sigtype = 0;
@@ -564,6 +607,7 @@ static int chanconfig(char *keyword, char *args)
 			} else if (!strcasecmp(keyword, "indclear") || !strcasecmp(keyword, "bchan")) {
 				cc[x].sigtype = DAHDI_SIG_CLEAR;
 				sig[x] = sigtype_to_str(cc[x].sigtype);
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "clear")) {
 				sig[x] = sigtype_to_str(DAHDI_SIG_CLEAR);
 				if (master) {
@@ -573,6 +617,7 @@ static int chanconfig(char *keyword, char *args)
 					cc[x].sigtype = DAHDI_SIG_CLEAR;
 					master = x;
 				}
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "rawhdlc")) {
 				sig[x] = sigtype_to_str(DAHDI_SIG_HDLCRAW);
 				if (master) {
@@ -582,6 +627,7 @@ static int chanconfig(char *keyword, char *args)
 					cc[x].sigtype = DAHDI_SIG_HDLCRAW;
 					master = x;
 				}
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "nethdlc")) {
 				sig[x] = sigtype_to_str(DAHDI_SIG_HDLCNET);
 				memset(cc[x].netdev_name, 0, sizeof(cc[x].netdev_name));
@@ -595,6 +641,7 @@ static int chanconfig(char *keyword, char *args)
 					}
 					master = x;
 				}
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "fcshdlc")) {
 				sig[x] = sigtype_to_str(DAHDI_SIG_HDLCFCS);
 				if (master) {
@@ -604,18 +651,26 @@ static int chanconfig(char *keyword, char *args)
 					cc[x].sigtype = DAHDI_SIG_HDLCFCS;
 					master = x;
 				}
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "dchan")) {
 				sig[x] = "D-channel";
 				cc[x].sigtype = DAHDI_SIG_HDLCFCS;
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "hardhdlc")) {
 				sig[x] = "Hardware assisted D-channel";
 				cc[x].sigtype = DAHDI_SIG_HARDHDLC;
+				is_digital = 1;
 			} else if (!strcasecmp(keyword, "mtp2")) {
 				sig[x] = "MTP2";
 				cc[x].sigtype = DAHDI_SIG_MTP2;
+				is_digital = 1;
 			} else {
 				fprintf(stderr, "Huh? (%s)\n", keyword);
 			}
+			if (is_digital)
+				chan2span[x] = current_span;
+			else
+				current_span = 0;
 		}
 	}
 	return 0;
@@ -667,6 +722,8 @@ static void apply_fiftysix(void)
 	int chanfd;
 
 	for (x = 1; x < DAHDI_MAX_CHANNELS; x++) {
+		if (skip_channel(x))
+			continue;
 		chanfd = open("/dev/dahdi/channel", O_RDWR);
 		if (chanfd == -1) {
 			fprintf(stderr, 
@@ -1227,6 +1284,8 @@ static void printconfig(int fd)
 	       "Configuration\n"
 	       "======================\n\n", vi.version, vi.echo_canceller);
 	for (x = 0; x < spans; x++) {
+		if (only_span && only_span != x)
+			continue;
 		printf("SPAN %d: %3s/%4s Build-out: %s\n",
 		       lc[x].span,
 		       (lc[x].lineconfig & DAHDI_CONFIG_D4 ? "D4" :
@@ -1244,6 +1303,8 @@ static void printconfig(int fd)
 	if (verbose > 1) {
 		printf("\nChannel map:\n\n");
 		for (x=1;x<DAHDI_MAX_CHANNELS;x++) {
+			if (skip_channel(x))
+				continue;
 			if ((cc[x].sigtype != DAHDI_SIG_SLAVE) && (cc[x].sigtype)) {
 				configs++;
 				ps = 0;
@@ -1267,6 +1328,8 @@ static void printconfig(int fd)
 		}
 	} else {
 		for (x=1;x<DAHDI_MAX_CHANNELS;x++) {
+			if (skip_channel(x))
+				continue;
 			if (cc[x].sigtype)
 				configs++;
 		}
@@ -1361,9 +1424,37 @@ static void usage(char *argv0, int exitcode)
 		"  -h                -- Generate this help statement\n"
 		"  -s                -- Shutdown spans only\n"
 		"  -t                -- Test mode only, do not apply\n"
+		"  -C <chan_list>    -- Only configure specified channels\n"
+		"  -S <spanno>       -- Only configure specified span\n"
 		"  -v                -- Verbose (more -v's means more verbose)\n"
 	,c);
 	exit(exitcode);
+}
+
+static int chan_restrict(char *str)
+{
+	if (apply_channels(selected_channels, str) < 0)
+		return 0;
+	restrict_channels = 1;
+	return 1;
+}
+
+static int span_restrict(char *str)
+{
+	long	spanno;
+	char	*endptr;
+
+	spanno = strtol(str, &endptr, 10);
+	if (endptr == str) {
+		fprintf(stderr, "Missing valid span number after '-S'\n");
+		return 0;
+	}
+	if (*endptr != '\0') {
+		fprintf(stderr, "Extra garbage after span number in '-S'\n");
+		return 0;
+	}
+	only_span = spanno;
+	return 1;
 }
 
 int main(int argc, char *argv[])
@@ -1373,7 +1464,7 @@ int main(int argc, char *argv[])
 	char *key, *value;
 	int x,found;
 
-	while((c = getopt(argc, argv, "fthc:vsd::")) != -1) {
+	while((c = getopt(argc, argv, "fthc:vsd::C:S:")) != -1) {
 		switch(c) {
 		case 'c':
 			filename=optarg;
@@ -1395,6 +1486,14 @@ int main(int argc, char *argv[])
 			break;
 		case 's':
 			stopmode = 1;
+			break;
+		case 'C':
+			if (!chan_restrict(optarg))
+				usage(argv[0], 1);
+			break;
+		case 'S':
+			if (!span_restrict(optarg))
+				usage(argv[0], 1);
 			break;
 		case 'd':
 			if (optarg)
@@ -1478,6 +1577,8 @@ finish:
 	}
 	if (stopmode) {
 		for (x=0;x<spans;x++) {
+			if (only_span && x != only_span)
+				continue;
 			if (ioctl(fd, DAHDI_SHUTDOWN, &lc[x].span)) {
 				fprintf(stderr, "DAHDI shutdown failed: %s\n", strerror(errno));
 				close(fd);
@@ -1487,6 +1588,8 @@ finish:
 		exit(1);
 	}
 	for (x=0;x<spans;x++) {
+		if (only_span && x != only_span)
+			continue;
 		if (ioctl(fd, DAHDI_SPANCONFIG, lc + x)) {
 			fprintf(stderr, "DAHDI_SPANCONFIG failed on span %d: %s (%d)\n", lc[x].span, strerror(errno), errno);
 			close(fd);
@@ -1504,7 +1607,14 @@ finish:
 		struct dahdi_params current_state;
 		int master;
 		int needupdate = force;
-		
+
+		if (skip_channel(x)) {
+			if (debug & DEBUG_APPLY) {
+				printf("Skip device %d\n", x);
+				fflush(stdout);
+			}
+			continue;
+		}
 		if (debug & DEBUG_APPLY) {
 			printf("Configuring device %d\n", x);
 			fflush(stdout);
@@ -1657,6 +1767,8 @@ finish:
 		}
 	}
 	for (x=0;x<spans;x++) {
+		if (only_span && x != only_span)
+			continue;
 		if (ioctl(fd, DAHDI_STARTUP, &lc[x].span)) {
 			fprintf(stderr, "DAHDI startup failed: %s\n", strerror(errno));
 			close(fd);

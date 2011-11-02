@@ -4,7 +4,7 @@
 dahdi_cfg \- configures DAHDI kernel modules from /etc/dahdi/system.conf
 .SH SYNOPSIS
 
-.B dahdi_cfg [\-c \fICFG_FILE\fB] [\-s] [\-f] [\-t] [\-v [\-v ... ] ]
+.B dahdi_cfg [\-c \fICFG_FILE\fB] [\-S\fINUM\fB [-S\fICHANS\fB]] [\-s] [\-f] [\-t] [\-v [\-v ... ] ]
 
 .B dahdi_cfg \-h
 
@@ -26,9 +26,23 @@ Use an alternative configuration file instead of
 .I /etc/dahdi/system.conf
 .RE
 
+.B \-C \fICHANNELS
+.RS
+Only apply changes to channels in the specified range. Only
+applicable when \-S is in use.
+.RE
+
 .B \-s
 .RS
 Only shutdown spans.
+.RE
+
+.B \-S \fISPAN
+.RS
+Only apply changes to span no. \fISPAN\fR. For a digital span (with
+a 'span=' line in the configuration file) this will do. For an analog
+span you'll have to explicitly tell dahdi_cfg the range of channels,
+using \-C .
 .RE
 
 .B \-f
