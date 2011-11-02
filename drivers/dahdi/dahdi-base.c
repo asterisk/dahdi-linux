@@ -3741,10 +3741,11 @@ static void __dahdi_find_master_span(void)
 	spin_lock_irqsave(&chan_lock, flags);
 	old_master = master;
 	list_for_each_entry(s, &span_list, spans_node) {
-		if (s->alarms)
+		if (s->alarms && old_master)
 			continue;
 		if (dahdi_is_digital_span(s) &&
-		    !test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags))
+		    !test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags) &&
+		    old_master)
 			continue;
 		if (!can_provide_timing(s))
 			continue;
