@@ -1429,6 +1429,11 @@ static inline void list_replace(struct list_head *old, struct list_head *new)
 } while (0)
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 17)
+#ifndef POLLRDHUP
+#define POLLRDHUP 0
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 #define kzalloc(a, b) kcalloc(1, a, b)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
@@ -1455,6 +1460,7 @@ typedef u32 __bitwise pm_message_t;
 #endif /* 2.6.11 */
 #endif /* 2.6.12 */
 #endif /* 2.6.14 */
+#endif /* 2.6.17 */
 #endif /* 2.6.18 */
 #endif /* 2.6.22 */
 #endif /* 2.6.25 */
