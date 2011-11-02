@@ -945,6 +945,19 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 }
 EXPORT_SYMBOL(xpp_echocan_create);
 
+void xpp_span_assigned(struct dahdi_span *span)
+{
+	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
+	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
+
+	XPD_INFO(xpd, "Span assigned: %d\n", span->spanno);
+	if (xpd->card_present) {
+		span->alarms &= ~DAHDI_ALARM_NOTOPEN;
+		dahdi_alarm_notify(&phonedev->span);
+	}
+}
+EXPORT_SYMBOL(xpp_span_assigned);
+
 static const struct dahdi_span_ops xpp_span_ops = {
 	.owner = THIS_MODULE,
 	.open = xpp_open,
@@ -953,6 +966,7 @@ static const struct dahdi_span_ops xpp_span_ops = {
 	.maint = xpp_maint,
 	.echocan_create = xpp_echocan_create,
 	.echocan_name = xpp_echocan_name,
+	.assigned = xpp_span_assigned,
 };
 
 static const struct dahdi_span_ops xpp_rbs_span_ops = {
@@ -964,6 +978,7 @@ static const struct dahdi_span_ops xpp_rbs_span_ops = {
 	.maint = xpp_maint,
 	.echocan_create = xpp_echocan_create,
 	.echocan_name = xpp_echocan_name,
+	.assigned = xpp_span_assigned,
 };
 
 void xpd_set_spanname(xpd_t *xpd)

@@ -863,6 +863,7 @@ static const struct dahdi_span_ops BRI_span_ops = {
 	.maint = xpp_maint,
 	.echocan_create = xpp_echocan_create,
 	.echocan_name = xpp_echocan_name,
+	.assigned = xpp_span_assigned,
 #ifdef	DAHDI_SYNC_TICK
 	.sync_tick = dahdi_sync_tick,
 #endif

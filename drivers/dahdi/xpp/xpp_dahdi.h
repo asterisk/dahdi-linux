@@ -47,6 +47,7 @@ int xpp_close(struct dahdi_chan *chan);
 int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg);
 int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig);
 int xpp_maint(struct dahdi_span *span, int cmd);
+void xpp_span_assigned(struct dahdi_span *span);
 void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd);
 int total_registered_spans(void);
 void oht_pcm(xpd_t *xpd, int pos, bool pass);
