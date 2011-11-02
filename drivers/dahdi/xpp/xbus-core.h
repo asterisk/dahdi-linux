@@ -29,8 +29,9 @@
 #include "xframe_queue.h"
 #include "xbus-pcm.h"
 
-#define	MAX_BUSES		32
-#define	XFRAME_DATASIZE		512
+#define	MAX_BUSES	32
+#define	XFRAME_DATASIZE	512
+#define	MAX_ENV_STR	40
 
 /* forward declarations */
 struct xbus_workqueue;
@@ -108,6 +109,7 @@ struct xbus_transport {
 	atomic_t		transport_refcount;
 	wait_queue_head_t	transport_unused;
 	spinlock_t		lock;
+	char			model_string[MAX_ENV_STR];
 };
 
 #define	MAX_SEND_SIZE(xbus)	((xbus)->transport.max_send_size)

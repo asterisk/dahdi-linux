@@ -737,6 +737,12 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 		retval = -ENOMEM;
 		goto probe_failed;
 	}
+	snprintf(xbus->transport.model_string,
+		ARRAY_SIZE(xbus->transport.model_string),
+		"usb:%04x/%04x/%x",
+		udev->descriptor.idVendor,
+		udev->descriptor.idProduct,
+		udev->descriptor.bcdDevice);
 	spin_lock_irqsave(&xusb_lock, flags);
 	for(i = 0; i < MAX_BUSES; i++) {
 		if(xusb_array[i] == NULL)

@@ -51,6 +51,7 @@ BEGIN { $init_dir = dirname($0); unshift(@INC, "$init_dir"); }
 use XppConfig $init_dir;
 my $unit_id;
 my %opts;
+my $vbat_48 = 0;
 
 getopts('o:', \%opts);
 
@@ -78,6 +79,7 @@ if (-t STDERR) {
 	foreach my $k (qw(
 			XBUS_NAME
 			XBUS_NUMBER
+			XBUS_MODEL_STRING
 			UNIT_NUMBER
 			UNIT_TYPE
 			UNIT_SUBUNITS
@@ -89,6 +91,10 @@ if (-t STDERR) {
 			logit "Missing ENV{$k}\n";
 			die;
 		}
+	}
+	logit "XBUS_MODEL_STRING='$ENV{XBUS_MODEL_STRING}'";
+	if ($ENV{XBUS_MODEL_STRING} =~ m{.*/.*/201}) {
+		$vbat_48 = 1;
 	}
 	$chipregs = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/chipregs",
 		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
@@ -286,11 +292,15 @@ sub init_indirect_registers() {
 }
 
 sub init_early_direct_regs() {
+	my $lbv = ($vbat_48) ? "20" : "10";
+	my $vcm = ($vbat_48) ? "02" : "03";
+
 	return write_to_slic_file("#
 *	WD	08	00	# Audio Path Loopback Control
 *	WD	6C	01
 *	WD	4A	3F	# High Battery Voltage
-*	WD	4B	10	# Low Battery Voltage
+*	WD	4B	$lbv	# Low Battery Voltage
+*	WD	49	$vcm	# Common Mode Voltage (VCM)
 *	WD	40	00	# Line Feed Control
 #")
 }
@@ -577,9 +587,6 @@ __DATA__
 
 # On-Hook Line Voltage (VOC)
 *	WD	48 20
-
-# Common Mode Voltage (VCM)
-*	WD	49 03
 
 *	WS	1E	23	00 80
 *	WS	1E	24	20 03
