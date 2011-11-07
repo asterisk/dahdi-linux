@@ -7025,6 +7025,9 @@ static int _dahdi_register_device(struct dahdi_device *ddev,
 	list_for_each_entry(s, &ddev->spans, device_node)
 		ret = _dahdi_assign_span(s, 0, 0, 1);
 
+	if (ret)
+		dahdi_sysfs_unregister_device(ddev);
+
 	return ret;
 }
 
