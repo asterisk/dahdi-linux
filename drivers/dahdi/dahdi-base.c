@@ -6751,7 +6751,7 @@ _check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 		if (next_channo == -1)
 			break;
 
-		if ((basechan + span->channels) < next_channo)
+		if ((basechan + span->channels) <= next_channo)
 			break;
 
 		/* Cannot fit the span into the requested location. Abort. */
