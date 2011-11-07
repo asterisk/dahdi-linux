@@ -6647,6 +6647,9 @@ static void
 set_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 {
 	int i;
+	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		"set: spanno=%d, basechan=%d (span->channels=%d)\n",
+		spanno, basechan, span->channels);
 	span->spanno = spanno;
 	for (i = 0; i < span->channels; ++i)
 		span->chans[i]->channo = basechan + i;
@@ -6668,6 +6671,8 @@ static int _assign_spanno_and_basechan(struct dahdi_span *span)
 	unsigned int spanno = 1;
 	unsigned int basechan = 1;
 
+	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		"assign: channels=%d\n", span->channels);
 	list_for_each_entry(pos, &span_list, spans_node) {
 
 		if (pos->spanno <= spanno) {
@@ -6686,6 +6691,9 @@ static int _assign_spanno_and_basechan(struct dahdi_span *span)
 			basechan = pos->chans[0]->channo + pos->channels;
 	}
 
+	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		"good: spanno=%d, basechan=%d (span->channels=%d)\n",
+		spanno, basechan, span->channels);
 	set_spanno_and_basechan(span, spanno, basechan);
 	return 0;
 }
@@ -6733,14 +6741,20 @@ _check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 	struct dahdi_span *pos;
 	unsigned int next_channo;
 
+	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		"check: spanno=%d, basechan=%d (span->channels=%d)\n",
+		spanno, basechan, span->channels);
 	list_for_each_entry(pos, &span_list, spans_node) {
 
 		next_channo = _get_next_channo(pos);
+		dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+			"pos: spanno=%d channels=%d (next_channo=%d)\n",
+			pos->spanno, pos->channels, next_channo);
 
 		if (pos->spanno <= spanno) {
 			if (basechan < next_channo + pos->channels) {
 				/* Requested basechan breaks channel sorting */
-				dev_info(span->parent->dev.parent,
+				dev_notice(span->parent->dev.parent,
 					"[%d] basechan (%d) is too low for wanted span %d\n",
 					local_spanno(span), basechan, spanno);
 				return -EINVAL;
@@ -6755,9 +6769,15 @@ _check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 			break;
 
 		/* Cannot fit the span into the requested location. Abort. */
+		dev_notice(span->parent->dev.parent,
+			"cannot fit span %d (basechan=%d) into requested location\n",
+			spanno, basechan);
 		return -EINVAL;
 	}
 
+	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		"good: spanno=%d, basechan=%d (span->channels=%d)\n",
+		spanno, basechan, span->channels);
 	set_spanno_and_basechan(span, spanno, basechan);
 	return 0;
 }
@@ -6851,10 +6871,10 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 	unsigned int x;
 
 	if (!span || !span->ops || !span->ops->owner)
-		return -EINVAL;
+		return -EFAULT;
 
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
-		dev_info(span->parent->dev.parent,
+		dev_notice(span->parent->dev.parent,
 			 "local span %d is already assigned span %d "
 			 "with base channel %d\n", local_spanno(span), span->spanno,
 			 span->chans[0]->channo);
@@ -6865,7 +6885,9 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 	    span->ops->disable_hw_preechocan) {
 		if ((NULL == span->ops->enable_hw_preechocan) ||
 		    (NULL == span->ops->disable_hw_preechocan))
-			return -EINVAL;
+			dev_notice(span->parent->dev.parent,
+				"span with inconsistent enable/disable hw_preechocan");
+			return -EFAULT;
 	}
 
 	if (!span->deflaw) {

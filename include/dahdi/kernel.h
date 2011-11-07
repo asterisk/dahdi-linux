@@ -1567,6 +1567,7 @@ struct mutex {
  * be of the form DAHDI_DBG_*
  */
 #define	DAHDI_DBG_GENERAL	BIT(0)
+#define	DAHDI_DBG_ASSIGN	BIT(1)
 #define	DAHDI_DBG_DEVICES	BIT(7)	/* instantiation/destruction etc. */
 #define	dahdi_dbg(bits, fmt, ...)	\
 	((void)((debug & (DAHDI_DBG_ ## bits)) && DAHDI_PRINTK(DEBUG, \
@@ -1579,6 +1580,10 @@ struct mutex {
 			((void)((debug & (DAHDI_DBG_ ## bits)) && \
 				chan_printk(DEBUG, "-" #bits, chan, \
 					"%s: " fmt, __func__, ## __VA_ARGS__)))
+#define dahdi_dev_dbg(bits, dev, fmt, ...)         \
+			((void)((debug & (DAHDI_DBG_ ## bits)) && \
+			dev_printk(KERN_DEBUG, dev, \
+			"DBG-%s(%s): " fmt, #bits, __func__, ## __VA_ARGS__)))
 #endif /* DAHDI_PRINK_MACROS_USE_debug */
 
 #endif /* _DAHDI_KERNEL_H */

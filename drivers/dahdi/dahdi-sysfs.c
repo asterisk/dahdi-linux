@@ -590,8 +590,10 @@ dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
 
 	ret = sscanf(buf, "%u:%u:%u", &local_span_number, &desired_spanno,
 		     &desired_basechanno);
-	if (ret != 3)
+	if (ret != 3) {
+		dev_notice(dev, "badly formatted input (should be <num>:<num>:<num>)\n");
 		return -EINVAL;
+	}
 
 	if (desired_spanno && !desired_basechanno) {
 		dev_notice(dev, "Must set span number AND base chan number\n");
