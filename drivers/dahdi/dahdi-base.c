@@ -6884,10 +6884,11 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 	if (span->ops->enable_hw_preechocan ||
 	    span->ops->disable_hw_preechocan) {
 		if ((NULL == span->ops->enable_hw_preechocan) ||
-		    (NULL == span->ops->disable_hw_preechocan))
+		    (NULL == span->ops->disable_hw_preechocan)) {
 			dev_notice(span->parent->dev.parent,
 				"span with inconsistent enable/disable hw_preechocan");
 			return -EFAULT;
+		}
 	}
 
 	if (!span->deflaw) {
