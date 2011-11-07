@@ -4937,7 +4937,29 @@ static void wctdm_back_out_gracefully(struct wctdm *wc)
 {
 	int i;
 	unsigned long flags;
+	struct vpmadt032 *vpm;
 	LIST_HEAD(local_list);
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	if (wc->not_ready) {
+		wc->not_ready--;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		while (wctdm_wait_for_ready(wc))
+			schedule();
+		spin_lock_irqsave(&wc->reglock, flags);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	if (wc->vpmadt032) {
+		flush_workqueue(wc->vpmadt032->wq);
+		clear_bit(VPM150M_ACTIVE, &wc->vpmadt032->control);
+		flush_workqueue(wc->vpmadt032->wq);
+		spin_lock_irqsave(&wc->reglock, flags);
+		vpm = wc->vpmadt032;
+		wc->vpmadt032 = NULL;
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		vpmadt032_free(vpm);
+	}
 
 	voicebus_release(&wc->vb);
 #ifdef CONFIG_VOICEBUS_ECREFERENCE
@@ -5991,6 +6013,8 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 		while (wctdm_wait_for_ready(wc))
 			schedule();
 	}
+
+	flush_scheduled_work();
 
 	/* shut down any BRI modules */
 	for (i = 0; i < wc->mods_per_board; i += 4) {
