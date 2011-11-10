@@ -343,6 +343,10 @@ int	xpd_device_register(xbus_t *xbus, xpd_t *xpd);
 void	xpd_device_unregister(xpd_t *xpd);
 int	echocancel_xpd(xpd_t *xpd, int on);
 
+int	xbus_is_registered(xbus_t *xbus);
+int	xbus_register_dahdi_device(xbus_t *xbus);
+void	xbus_unregister_dahdi_device(xbus_t *xbus);
+
 int	xpp_driver_init(void);
 void	xpp_driver_exit(void);
 int	xbus_sysfs_transport_create(xbus_t *xbus);

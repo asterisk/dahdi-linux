@@ -61,6 +61,8 @@ extern int debug;
 static DEF_PARM(uint, command_queue_length, 1000, 0444, "Maximal command queue length");
 static DEF_PARM(uint, poll_timeout, 1000, 0644, "Timeout (in jiffies) waiting for units to reply");
 static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
+static DEF_PARM_BOOL(dahdi_autoreg, 0, 0644,
+		"Register devices automatically (1) or not (0)");
 
 #ifdef	CONFIG_PROC_FS
 static int xbus_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data);
@@ -870,12 +872,22 @@ err:
 	goto out;
 }
 
-static int xbus_register_dahdi_device(xbus_t *xbus)
+int	xbus_is_registered(xbus_t *xbus)
+{
+	return xbus->ddev && xbus->ddev->dev.parent;
+}
+
+int xbus_register_dahdi_device(xbus_t *xbus)
 {
 	int	i;
 	int	offset = 0;
 
 	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __func__);
+	if (xbus_is_registered(xbus)) {
+		XBUS_ERR(xbus, "Already registered to DAHDI\n");
+		WARN_ON(1);
+		return -EINVAL;
+	}
 	xbus->ddev = dahdi_create_device();
 	/*
 	 * This actually describe the dahdi_spaninfo version 3
@@ -929,7 +941,7 @@ static int xbus_register_dahdi_device(xbus_t *xbus)
 	return 0;
 }
 
-static void xbus_unregister_dahdi_device(xbus_t *xbus)
+void xbus_unregister_dahdi_device(xbus_t *xbus)
 {
 	int i;
 
@@ -1017,7 +1029,8 @@ void xbus_populate(void *data)
 	 */
 	xbus_request_sync(xbus, SYNC_MODE_PLL);
 	elect_syncer("xbus_populate(end)");	/* FIXME: try to do it later */
-	xbus_register_dahdi_device(xbus);
+	if (dahdi_autoreg)
+		xbus_register_dahdi_device(xbus);
 out:
 	XBUS_DBG(DEVICES, xbus, "Leaving\n");
 	wake_up_interruptible_all(&worker->wait_for_xpd_initialization);
