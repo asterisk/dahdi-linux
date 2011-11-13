@@ -1424,14 +1424,17 @@ static int PRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 		return -ENODEV;
 	chan = XPD_CHAN(xpd, pos);
 	switch (cmd) {
+		/*
+		 * Asterisk may send FXS type ioctl()'s to us:
+		 *   - Some are sent to everybody (DAHDI_TONEDETECT)
+		 *   - Some are sent because we may be in CAS mode
+		 *     (FXS signalling)
+		 * Ignore them.
+		 */
 		case DAHDI_TONEDETECT:
-			/*
-			 * Asterisk call all span types with this (FXS specific)
-			 * call. Silently ignore it.
-			 */
 			LINE_DBG(SIGNAL, xpd, pos, "PRI: TONEDETECT (%s)\n",
 				(chan->flags & DAHDI_FLAG_AUDIO) ?
-					"AUDIO" : "SILENCE");
+				"AUDIO" : "SILENCE");
 			return -ENOTTY;
 		case DAHDI_ONHOOKTRANSFER:
 			LINE_DBG(SIGNAL, xpd, pos, "PRI: ONHOOKTRANSFER\n");
@@ -1442,6 +1445,10 @@ static int PRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 		case DAHDI_VMWI_CONFIG:
 			LINE_DBG(SIGNAL, xpd, pos, "PRI: VMWI_CONFIG\n");
 			return -ENOTTY;
+		case DAHDI_SETPOLARITY:
+			LINE_DBG(SIGNAL, xpd, pos, "PRI: SETPOLARITY\n");
+			return -ENOTTY;
+		/* report on really bad ioctl()'s */
 		default:
 			report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
 			return -ENOTTY;
