@@ -58,7 +58,7 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 
 /* Command line parameters */
 extern int debug;
-static DEF_PARM(uint, command_queue_length, 1000, 0444, "Maximal command queue length");
+static DEF_PARM(uint, command_queue_length, 1500, 0444, "Maximal command queue length");
 static DEF_PARM(uint, poll_timeout, 1000, 0644, "Timeout (in jiffies) waiting for units to reply");
 static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
 
