@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <errno.h>
 #include <assert.h>
 #include <arpa/inet.h>
@@ -36,7 +37,7 @@
 #include "../autoconfig.h"
 
 #define	DBG_MASK	0x80
-#define	MAX_HEX_LINES	10000
+#define	MAX_HEX_LINES	64000
 #define HAVE_OCTASIC	1
 
 static char	*progname;
@@ -81,15 +82,27 @@ int handle_hexline(struct astribank_device *astribank, struct hexline *hexline)
 	return 0;
 }
 
+void print_parse_errors(int level, const char *msg, ...)
+{
+	va_list ap;
+
+	if (verbose > level) {
+		va_start (ap, msg);
+		vfprintf (stderr, msg, ap);
+		va_end (ap);
+	}
+}
+
 static int load_hexfile(struct astribank_device *astribank, const char *hexfile, enum dev_dest dest)
 {
 	struct hexdata		*hexdata = NULL;
 	int			finished = 0;
 	int			ret;
-	int			i;
+	unsigned		i;
 	char			star[] = "+\\+|+/+-";
 	const char		*devstr;
 
+	parse_hexfile_set_reporting(print_parse_errors);
 	if((hexdata  = parse_hexfile(hexfile, MAX_HEX_LINES)) == NULL) {
 		perror(hexfile);
 		return -errno;
@@ -100,13 +113,6 @@ static int load_hexfile(struct astribank_device *astribank, const char *hexfile,
 		xusb_serial(astribank->xusb),
 		dev_dest2str(dest),
 		hexdata->fname, hexdata->version_info);
-#if 0
-	FILE		*fp;
-	if((fp = fopen("fpga_dump_new.txt", "w")) == NULL) {
-		perror("dump");
-		exit(1);
-	}
-#endif
 	if((ret = mpp_send_start(astribank, dest, hexdata->version_info)) < 0) {
 		ERR("%s: Failed hexfile send start: %d\n", devstr, ret);
 		return ret;
