@@ -70,6 +70,8 @@ ASTRIBANK_TOOL=${ASTRIBANK_TOOL:-/usr/sbin/astribank_tool}
 XPP_CONFIG="${XPP_CONFIG:-/etc/dahdi/xpp.conf}"
 XPP_UDEV_SLEEP_TIME="${XPP_UDEV_SLEEP_TIME:-15}"
 
+USB_RECOV="${USB_RECOV:-USB_RECOV.hex}"
+
 if [ -r "$DEFAULTS" ]; then
 	. "$DEFAULTS"
 fi
@@ -469,6 +471,11 @@ xppdetect|load|usb)
 	$LOGGER -- "--------- FIRMWARE IS LOADED"
 	exit 0
 	;;
+recover-sb)
+	# Load a firmware that fixes a but which makes the Source Byte in the
+	# EEPROM reset and make the device appear like a Cypress dev kit:
+	load_usb_fw 04b4 8613 $USB_RECOV
+	;;
 help)
 	usage
 	exit 0
@@ -522,6 +529,14 @@ udev_delayed_load() {
 
 	$LOGGER "Trying to find what to do for product $PRODUCT, device $DEVICE"
 	case "$PRODUCT" in
+	4b4/8613/*)
+		# This case is for a potentially-broken Astribank.
+		# In most systems you should not set udev rules for those to
+		# get here, as this is actually the ID of a Cypress dev-kit:
+		FIRM_USB="$FIRMWARE_DIR/$USB_RECOV"
+		$LOGGER "Loading recovery firmware '$FIRM_USB' into '$DEVICE'"
+		run_fxload -D "$DEVICE" -I "$FIRM_USB"
+		;;
 	e4e4/11[3456]0/*|e4e4/1163/*)
 		usb_firmware_device "$PRODUCT" "$DEVICE"
 		;;
