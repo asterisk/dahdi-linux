@@ -940,10 +940,25 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 		case DAHDI_SETPOLARITY:
 			if (get_user(val, (int __user *)arg))
 				return -EFAULT;
-			/* Can't change polarity while ringing or when open */
+			/*
+			 * Asterisk may send us this if chan_dahdi config
+			 * has "hanguponpolarityswitch=yes" to notify
+			 * that the other side has hanged up.
+			 *
+			 * This has no effect on normal phone (but we may
+			 * be connected to another FXO equipment).
+			 * note that this chan_dahdi settings has different
+			 * meaning for FXO, where it signals polarity
+			 * reversal *detection* logic.
+			 *
+			 * It seems that sometimes we get this from
+			 * asterisk in wrong state (e.g: while ringing).
+			 * In these cases, silently ignore it.
+			 */
 			if (priv->lasttxhook[pos] == FXS_LINE_RING || priv->lasttxhook[pos] == FXS_LINE_OPEN) {
-				LINE_ERR(xpd, pos, "DAHDI_SETPOLARITY: %s Cannot change when lasttxhook=0x%X\n",
-						(val)?"ON":"OFF", priv->lasttxhook[pos]);
+				LINE_DBG(SIGNAL, xpd, pos,
+					"DAHDI_SETPOLARITY: %s Cannot change when lasttxhook=0x%X\n",
+					(val)?"ON":"OFF", priv->lasttxhook[pos]);
 				return -EINVAL;
 			}
 			LINE_DBG(SIGNAL, xpd, pos, "DAHDI_SETPOLARITY: %s\n", (val)?"ON":"OFF");
