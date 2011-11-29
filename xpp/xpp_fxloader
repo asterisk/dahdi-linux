@@ -70,9 +70,6 @@ ASTRIBANK_TOOL=${ASTRIBANK_TOOL:-/usr/sbin/astribank_tool}
 XPP_CONFIG="${XPP_CONFIG:-/etc/dahdi/xpp.conf}"
 XPP_UDEV_SLEEP_TIME="${XPP_UDEV_SLEEP_TIME:-15}"
 
-USB_FW="${USB_FW:-USB_FW.hex}"
-USB_RECOV="${USB_RECOV:-USB_RECOV.hex}"
-
 if [ -r "$DEFAULTS" ]; then
 	. "$DEFAULTS"
 fi
@@ -113,6 +110,132 @@ run_fxload() {
   fi
 }
 
+list_via_proc() {
+	cat /proc/bus/usb/devices | egrep '^P:|^T:' | sed \
+		-e '/^T:/s/ *Spd.*//' \
+		-e '/^T:/s, *Lev.*Dev#= *,\t,' \
+		-e '/^T:/s,Bus=,,' \
+		-e '/^P:/s,[A-Za-z]\+=,,g' \
+		-e '/^P:/s,\.,,g' | awk -vusb_prefix="$USB_PREFIX" '
+			/^T:/	{
+				bus=$2
+				dev=$3
+			}
+			/^P:/	{
+				vendor=$2
+				sub("0x", "", vendor);
+				prod=$3
+				sub("0x", "", product);
+				bcd=$4
+				printf("%4s/%4s/%d\t%s/%03d/%03d\n",
+					vendor, prod, bcd, usb_prefix, bus, dev);
+			}
+			'
+}
+
+list_via_sysfs() {
+	find /sys/bus/usb/devices -maxdepth 1 -mindepth 1 | \
+		egrep -v '/usb[0-9]|:' | while read dev; do
+			(
+				cat "$dev/idVendor"
+				cat "$dev/idProduct"
+				cat "$dev/bcdDevice"
+				echo "$dev" | sed \
+					-e 's,/sys/bus/usb/devices/,,' \
+					-e 's,-.*,,'
+				cat "$dev/devnum"
+			) | tr -s '\n' '\t'
+			echo ''
+		done | awk -vusb_prefix="$USB_PREFIX" '{
+			printf("%4s/%4s/%d\t%s/%03d/%03d\n",
+				$1, $2, $3, usb_prefix, $4, $5);
+			}'
+}
+
+list_via_lsusb() {
+	lsusb -v | awk -vusb_prefix="$USB_PREFIX" '
+		/^Bus/ {
+			sub(":", "", $4);
+			dev = sprintf("%s/%s/%s ", usb_prefix, $2, $4);
+		}
+		/idVendor/  {
+			id_vendor = $2
+			sub("0x", "", id_vendor);
+		}
+		/idProduct/ {
+			id_product = $2
+			sub("0x", "", id_product);
+		}
+		/bcdDevice/ {
+			bcd_device = $2
+			sub("^0*", "", bcd_device);
+			sub("[.]", "", bcd_device);
+			printf("%s/%s/%s\t%s\n",
+				id_vendor, id_product, bcd_device, dev);
+		}
+		'
+}
+
+list_devs() {
+	#echo >&2 "list_devs"
+	if [ "$#" -eq 0 ]; then
+		if [ -f /proc/bus/usb/devices ]; then
+			method='via_proc'
+		elif [ -d /sys/bus/usb/devices ]; then
+			method='via_sysfs'
+		else
+			method='via_lsusb'
+		fi
+	elif [ "$#" -eq 1 ]; then
+		method="$1"
+	else
+		echo >&2 "$0: unknown list_devs method='$method'"
+		exit 1
+	fi
+
+	case "$method" in
+	via_proc|via_sysfs|via_lsusb)
+		;;
+	*)
+		echo >&2 "$0: unknown list_devs method='$method'"
+		exit 1
+		;;
+	esac
+	list_$method | grep -v '^0000/0000/' | sort
+}
+
+filter_devs() {
+	id_str="$1"
+
+	#echo >&2 "filter_devs($id_str)"
+	list_devs | awk -vid_str="$id_str" '{ if ($1 ~ id_str) { print } }'
+}
+
+usb_firmware_device() {
+	id_str="$1"
+	devpath="$2"
+
+	case "$id_str" in
+	e4e4/11[3456]0/101|e4e4/1163/101)
+		fw="USB_FW.hex"
+		;;
+	e4e4/116[03]/201)
+		fw="USB_FW.201.hex"
+		;;
+	e4e4/*)
+		debug "No USB firmware for device $devpath ($id_str)"
+		return
+		;;
+	*)
+		return
+		;;
+	esac
+	fw_file="$FIRMWARE_DIR/$fw"
+	ver=$(awk '/\$Id:/ { print $4 }' $fw_file)
+	debug "USB Firmware $fw_file (Version=$ver) into $devpath"
+	run_fxload -D "$devpath" -I "$fw_file" || exit 1
+}
+
 run_astribank_hexload() {
 	debug "Running: $ASTRIBANK_HEXLOAD $*"
 	$ASTRIBANK_HEXLOAD "$@" | $LOGGER
@@ -133,18 +256,14 @@ run_astribank_tool() {
 	fi
 }
 
-load_usb_fw() {
-  v_id=$1
-  p_id=$2
-  fw=$3
-  
-  devices=`find_dev $v_id $p_id`
-  for dev in $devices
-  do
-    ver=$(awk '/\$Id:/ { print $4 }' $FIRMWARE_DIR/$fw)
-    debug "USB Firmware $FIRMWARE_DIR/$fw (Version=$ver) into $dev"
-    run_fxload -D $dev -I $FIRMWARE_DIR/$fw || exit 1
-  done
+usb_firmware_all_devices() {
+	devs=`list_devs`
+	echo "USB firmware"
+	echo "$devs" | while read id_str devpath
+	do
+		usb_firmware_device "$id_str" "$devpath"
+	done
+	wait_renumeration $numdevs 'e4e4/11[3456]1/*' "usb_firmware_all_devices"
 }
 
 load_fw_device() {
@@ -152,16 +271,17 @@ load_fw_device() {
 	fw="$2"
 	debug "FPGA loading $fw into $dev"
 	run_astribank_hexload -D "$dev" -F "$FIRMWARE_DIR/$fw"
-	if [ "$fw" = "FPGA_1161.hex" ]; then
+	case "$fw" in
+	FPGA_1161*.hex)
 	        echo_file="$FIRMWARE_DIR/OCT6104E-256D.ima"
 		law=''
 		law_str='uLaw'
-		abtool_output=`$ASTRIBANK_TOOL -D "$dev" -Q 2>/dev/null`
-		card_type=`echo "$abtool_output" | grep '^CARD 4:' |  cut -d= -f2 | cut -d. -f1`
-		if [ "$card_type" = '5' ]; then
+		card_type=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'CARD 4' | sed -e 's/.*type=//' -e 's/\..*//'`
+		caps_num=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'ECHO ports' | sed -e 's/.*: *//'`
+		if [ $card_type -eq 5 ]; then
 			debug "ECHO burning into $dev: $echo_file"
-			card_type_first=`echo "$abtool_output" | grep '^CARD 0:' |  cut -d= -f2 | cut -d. -f1`
-			case "$card_type_first" in
+			card_type=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'CARD 0' | sed -e 's/.*type=//' -e 's/\..*//'`
+			case "$card_type" in
 			3) 	law="-A";;
 			4)
 				pri_protocol=''
@@ -182,88 +302,116 @@ load_fw_device() {
 			if [ "$caps_num" != '0' ]; then
 				run_astribank_hexload -D "$dev" -O $law "$echo_file"
 			else
-				$LOGGER "WARNING: ECHO burning was skipped (no capabilities)"
+				echo "WARNING: ECHO burning was skipped (no capabilities)"
 			fi
 		fi
 		pic_files=`echo "$FIRMWARE_DIR"/PIC_TYPE_[1-4].hex`
-		debug "PIC burning into $dev: $pic_files"
+		debug "PIC burning into $dev: begin $pic_files"
 		run_astribank_hexload -D "$dev" -p $pic_files
-		debug "PIC burning finished $pic_files"
-	fi
+		debug "PIC burning into $dev: end $pic_files"
+		;;
+	esac
 	# Do renumeration!
-	run_astribank_tool -D "$dev" -n > /dev/null
-	debug "Reenumeration done."
+	run_astribank_tool -D "$dev" -n > /dev/null 2>&1
+	debug "Renumeration of $dev done."
 }
 
-#
-# Use in manual loading. Parallelize loading
-# firmwares to all of our devices
-#
-firmware_by_id() {
-  v_id=$1
-  p_id=$2
-  fw=$3
-  
-  devices=`find_dev $v_id $p_id`
-  childs=""
-  for dev in $devices
-  do
-	(
-	set -e
+fpga_firmware_device() {
+	id_str="$1"
+	devpath="$2"
 
-	load_fw_device "$dev" "$fw"
+	id_product=`echo "$id_str" | cut -d/ -f2`
+	bcd_device=`echo "$id_str" | cut -d/ -f3`
+	case "$id_str" in
+	e4e4/1131/101)
+		fw="FPGA_FXS.hex"
+		;;
+	e4e4/11[456]1/101)
+		fw="FPGA_${id_product}.hex"
+		;;
+	e4e4/1161/201)
+		fw="FPGA_${id_product}.${bcd_device}.hex"
+		;;
+	e4e4/*)
+		debug "No FPGA firmware for device $devpath ($id_str)"
+		return
+		;;
+	*)
+		return
+		;;
+	esac
+	debug "Loading $fw into $devpath"
+	load_fw_device "$devpath" "$fw"
 	sleep_if_race
-	) &
-	childs="$childs $!"
-	sleep 0.4
-  done
-  # Wait for specific childs to get their exit status
-  wait $childs
 }
 
 numdevs() {
-  v_ids="$1"
-  p_ids="$2"
+	id_str="$1"
 
-  for v in $v_ids
-  do
-    (
-      for p in $p_ids
-      do
-        find_dev $v $p
-      done
-    )
-  done | wc -w
+	#echo >&2 "numdevs($id_str)"
+	filter_devs "$id_str" | wc -l
 }
 
 wait_renumeration() {
-  num="$1"
-  v_ids="$2"
-  p_ids="$3"
+	num="$1"
+	id_str="$2"
+	caller="$3"
+	iter=10
 
-  while
-    n=`numdevs "$v_ids" "$p_ids"`
-    [ "$num" -gt "$n" ]
-  do
-    echo -n "."
-    sleep 1
-  done
-  echo "Got all $num devices"
+	prev=0
+	echo "Waiting renumeration ($caller)"
+	while
+		n=`numdevs "$id_str"`
+		[ "$num" -gt "$n" ]
+	do
+		if [ "$prev" -lt "$n" ]; then
+			echo -n "+"
+		else
+			echo -n "."
+		fi
+		sleep 1
+		prev="$n"
+		debug "wait($iter) (found $n from $num devices) ($caller)"
+		if ! iter=`expr $iter - 1`; then
+			echo "Timeout (found $n from $num devices) ($caller)"
+			break;
+		fi
+	done
+	echo "Got all $num devices ($caller)"
+	sleep 1	# Let everything settle
+}
+
+fpga_firmware_all_devices() {
+	echo "Loading FPGA firmwares" | $LOGGER
+	devs=`filter_devs 'e4e4/11[3456]1/*'`
+	n=`echo "$devs" | wc -l`
+	echo "$devs" | (
+		while read id_str devpath; do
+			fpga_firmware_device "$id_str" "$devpath" &
+		done
+		sleep 1
+		echo "Wait for FPGA loading processes"
+		wait
+		) 2>&1 | $LOGGER
+	wait_renumeration $numdevs 'e4e4/11[3456]2/*' "fpga_firmware_device"
 }
 
 reset_fpga() {
-  totaldevs=`numdevs e4e4 '11[3456][0123]'`
-  devices=`find_dev e4e4 '11[3456][12]'`
-  debug "Reseting devices [$totaldevs devices]"
-  for dev in $devices
-  do
-	debug "Resetting FPGA Firmware on $dev"
-	sleep_if_race
-	run_astribank_tool -D "$dev" -r full 2>&1 >/dev/null
-  done
-  if [ "$1" = 'wait' ]; then
-	  wait_renumeration $totaldevs e4e4 '11[3456][03]'
-  fi
+	devices=`filter_devs 'e4e4/11[3456][124]/*'`
+	totaldevs=`numdevs 'e4e4/11[3456][124]/*'`
+	$LOGGER -- "Reseting devices [$totaldevs devices]"
+	echo "$devices" | grep -v '^$' | while read id_str dev
+	do
+		(
+			debug "Resetting FPGA Firmware on $dev"
+			sleep_if_race
+			run_astribank_tool -D "$dev" -r full >/dev/null 2>&1
+		) &
+	done
+	wait
+	if [ "$1" = 'wait' ]; then
+		wait_renumeration $totaldevs 'e4e4/11[3456][03]/*' "reset_fpga"
+	fi
 }
 
 usage() {
@@ -304,26 +452,20 @@ reset-wait)
 reset)
 	reset_fpga
 	;;
+list)
+	filter_devs 'e4e4/*/*'
+	exit 0
+	;;
 xppdetect|load|usb)
-	numdevs=`numdevs e4e4 '11[3456][013]'`
+	numdevs=`numdevs 'e4e4/11[3456][0134]/*'`
 	$LOGGER -- "--------- FIRMWARE LOADING: ($1) [$numdevs devices]"
 
-	load_usb_fw e4e4 1130 $USB_FW
-	load_usb_fw e4e4 1140 $USB_FW
-	load_usb_fw e4e4 1150 $USB_FW
-	load_usb_fw e4e4 1160 $USB_FW
-	load_usb_fw e4e4 1163 $USB_FW
-	wait_renumeration $numdevs e4e4 '11[3456]1'
+	usb_firmware_all_devices 2>&1 | $LOGGER
 	if [ "$1" != 'usb' ]
 	then
-		firmware_by_id e4e4 1131 FPGA_FXS.hex
-		firmware_by_id e4e4 1141 FPGA_1141.hex
-		firmware_by_id e4e4 1151 FPGA_1151.hex
-		firmware_by_id e4e4 1161 FPGA_1161.hex
-		wait_renumeration $numdevs e4e4 '11[3456]2'
+		fpga_firmware_all_devices
 	fi
 
-	sleep 3		# Let it stabilize
 	$LOGGER -- "--------- FIRMWARE IS LOADED"
 	exit 0
 	;;
@@ -379,27 +521,17 @@ udev_delayed_load() {
 	fi
 
 	$LOGGER "Trying to find what to do for product $PRODUCT, device $DEVICE"
-	prod_id=`echo "$PRODUCT" | cut -d/ -f2`
 	case "$PRODUCT" in
 	e4e4/11[3456]0/*|e4e4/1163/*)
-		FIRM_USB="$FIRMWARE_DIR/$USB_FW"
-		$LOGGER "Loading firmware '$FIRM_USB' into '$DEVICE'"
-		run_fxload -D "$DEVICE" -I "$FIRM_USB"
+		usb_firmware_device "$PRODUCT" "$DEVICE"
 		;;
 	e4e4/11[3456]1/*)
-		# There are potentially two separate udev events, for
-		# each of the two endpoints. Ignore the first interface:
-		case "$DEVPATH" in *.0) exit 0;; esac
-		if [ "$prod_id" = 1131 ]; then
-			FIRM_FPGA="FPGA_FXS.hex"	# Legacy
-		else
-			FIRM_FPGA="FPGA_$prod_id.hex"
-		fi
 		sleep_if_race
-		load_fw_device "$DEVICE" "$FIRM_FPGA"
+		fpga_firmware_device "$PRODUCT" "$DEVICE" &
+		wait	# parallel firmware loading
 		;;
 	esac	
 }
 
-udev_delayed_load &
+udev_delayed_load 2>&1 | $LOGGER &
 

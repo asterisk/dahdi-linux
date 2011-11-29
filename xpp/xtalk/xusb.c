@@ -30,11 +30,16 @@
 #include <arpa/inet.h>
 #include <debug.h>
 #include <xusb.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
 static const char rcsid[] = "$Id$";
 
 #define	DBG_MASK	0x01
 #define	TIMEOUT	500
+#define	MAX_RETRIES	10
 
 struct xusb {
 	struct usb_device	*dev;
@@ -55,6 +60,8 @@ struct xusb {
 	int			is_open;
 	size_t			packet_size;
 };
+
+static void xusb_init();
 
 void xusb_init_spec(struct xusb_spec *spec, char *name,
 		uint16_t vendor_id, uint16_t product_id,
@@ -363,9 +370,7 @@ struct xusb *xusb_find_iface(const char *devpath, int iface_num, int ep_out, int
 	struct usb_bus		*bus;
 
 	DBG("\n");
-	usb_init();
-	usb_find_busses();
-	usb_find_devices();
+	xusb_init();
 	for (bus = usb_get_busses(); bus; bus = bus->next) {
 		int			bus_num;
 		char			tmppath[PATH_MAX + 1];
@@ -477,9 +482,7 @@ struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs, int numspe
 		ERR("Failed allocation new xlist");
 		goto fail_xlist;
 	}
-	usb_init();
-	usb_find_busses();
-	usb_find_devices();
+	xusb_init();
 	for (bus = usb_get_busses(); bus; bus = bus->next) {
 		for (dev = bus->devices; dev; dev = dev->next) {
 			struct usb_device_descriptor	*dev_desc;
@@ -540,7 +543,10 @@ struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs, xusb_fil
 		xusb = curr->data;
 		xlist_destroy(curr, NULL);
 		xlist_destroy(xusb_list, NULL);
-		xusb_claim_interface(xusb);
+		if(!xusb_claim_interface(xusb)) {
+			xusb_destroy(xusb);
+			return NULL;
+		}
 		xusb_showinfo(xusb);
 		break;
 	default:
@@ -657,12 +663,14 @@ int xusb_close(struct xusb *xusb)
 int xusb_send(struct xusb *xusb, char *buf, int len, int timeout)
 {
 	int		ret;
+	int		retries = 0;
 
 	dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, buf, len);
 	if(EP_OUT(xusb) & USB_ENDPOINT_IN) {
 		ERR("%s called with an input endpoint 0x%x\n", __FUNCTION__, EP_OUT(xusb));
 		return -EINVAL;
 	}
+retry_write:
 	ret = usb_bulk_write(xusb->handle, EP_OUT(xusb), buf, len, timeout);
 	if(ret < 0) {
 		/*
@@ -672,17 +680,39 @@ int xusb_send(struct xusb *xusb, char *buf, int len, int timeout)
 		if(ret != -ENODEV) {
 			ERR("bulk_write to endpoint 0x%x failed: (%d) %s\n",
 				EP_OUT(xusb), ret, usb_strerror());
-			dump_packet(LOG_ERR, DBG_MASK, "xbus_send[ERR]", buf, len);
+			dump_packet(LOG_ERR, DBG_MASK, "xusb_send[ERR]", buf, len);
 			//exit(2);
 		} else {
 			DBG("bulk_write to endpoint 0x%x got ENODEV\n", EP_OUT(xusb));
 			xusb_close(xusb);
 		}
 		return ret;
-	} else if(ret != len) {
+	}
+	if(!ret) {
+#if 0
+		FILE	*fp;
+
+		fp = fopen("/tmp/xusb.log", "a");
+		if (!fp) {
+			ERR("%s: Failed writing to /tmp/xusb.log\n", __func__);
+			return -EFAULT;
+		}
+		fprintf(fp, "[%ld] bulk_write to endpoint 0x%x short write[%d]: (%d)\n",
+			time(NULL), EP_OUT(xusb), retries, ret);
+		fclose(fp);
+#endif
+		ERR("bulk_write to endpoint 0x%x short write[%d]: (%d)\n",
+			EP_OUT(xusb), retries, ret);
+		if (retries++ > MAX_RETRIES) {
+			return -EFAULT;
+		}
+		usleep(100);
+		goto retry_write;
+	}
+	if(ret != len) {
 		ERR("bulk_write to endpoint 0x%x short write: (%d) %s\n",
 			EP_OUT(xusb), ret, usb_strerror());
-		dump_packet(LOG_ERR, DBG_MASK, "xbus_send[ERR]", buf, len);
+		dump_packet(LOG_ERR, DBG_MASK, "xusb_send[ERR]", buf, len);
 		return -EFAULT;
 	}
 	return ret;
@@ -691,17 +721,40 @@ int xusb_send(struct xusb *xusb, char *buf, int len, int timeout)
 int xusb_recv(struct xusb *xusb, char *buf, size_t len, int timeout)
 {
 	int	ret;
+	int	retries = 0;
 
 	if(EP_IN(xusb) & USB_ENDPOINT_OUT) {
 		ERR("%s called with an output endpoint 0x%x\n", __FUNCTION__, EP_IN(xusb));
 		return -EINVAL;
 	}
+retry_read:
 	ret = usb_bulk_read(xusb->handle, EP_IN(xusb), buf, len, timeout);
 	if(ret < 0) {
 		DBG("bulk_read from endpoint 0x%x failed: (%d) %s\n",
 			EP_IN(xusb), ret, usb_strerror());
 		memset(buf, 0, len);
 		return ret;
+	}
+	if(!ret) {
+#if 0
+		FILE	*fp;
+
+		fp = fopen("/tmp/xusb.log", "a");
+		if (!fp) {
+			ERR("%s: Failed writing to /tmp/xusb.log\n", __func__);
+			return -EFAULT;
+		}
+		fprintf(fp, "[%ld] bulk_read from endpoint 0x%x short read[%d]: (%d)\n",
+			time(NULL), EP_IN(xusb), retries, ret);
+		fclose(fp);
+#endif
+		ERR("bulk_read to endpoint 0x%x short read[%d]: (%d)\n",
+			EP_IN(xusb), retries, ret);
+		if (retries++ > MAX_RETRIES) {
+			return -EFAULT;
+		}
+		usleep(100);
+		goto retry_read;
 	}
 	dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, buf, ret);
 	return ret;
@@ -723,4 +776,75 @@ int xusb_flushread(struct xusb *xusb)
 		dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, tmpbuf, ret);
 	}
 	return 0;
+}
+
+/*
+ * Serialize calls to usb_find_busses()/usb_find_devices()
+ */
+
+static const key_t	SEM_KEY = 0x1a2b3c4d;
+static int semid = -1;	/* Failure */
+
+static void xusb_lock_usb()
+{
+	struct sembuf	sembuf;
+
+	while (semid < 0) {
+		/* Maybe it was already created? */
+		semid = semget(SEM_KEY, 1, 0);
+		if (semid < 0) {
+			/* No, let's create ourselves */
+			semid = semget(SEM_KEY, 1, IPC_CREAT | IPC_EXCL | 0644);
+			if (semid < 0) {
+				/* Someone else won the race to create it */
+				if (errno != ENOENT)
+					ERR("%s: semget() failed: %s\n",
+						__func__, strerror(errno));
+				/* Retry */
+				continue;
+			}
+			/* Initialize */
+			if (semctl(semid, 0, SETVAL, 1) < 0)
+				ERR("%s: SETVAL() failed: %s\n",
+					__func__, strerror(errno));
+		}
+	}
+	DBG("%d: LOCKING\n", getpid());
+	sembuf.sem_num = 0;
+	sembuf.sem_op = -1;
+	sembuf.sem_flg = SEM_UNDO;
+	if (semop(semid, &sembuf, 1) < 0) {
+		ERR("%s: semop() failed: %s\n", __func__, strerror(errno));
+	}
+	DBG("%d: LOCKED\n", getpid());
+}
+
+static void xusb_unlock_usb()
+{
+	struct sembuf	sembuf;
+
+	DBG("%d: UNLOCKING\n", getpid());
+	sembuf.sem_num = 0;
+	sembuf.sem_op = 1;
+	sembuf.sem_flg = SEM_UNDO;
+	if (semop(semid, &sembuf, 1) < 0) {
+		ERR("%s: semop() failed: %s\n", __func__, strerror(errno));
+	}
+	DBG("%d: UNLOCKED\n", getpid());
+}
+
+static int		initizalized = 0;
+
+static void xusb_init()
+{
+	if (!initizalized) {
+		if (!getenv("XUSB_NOLOCK"))
+			xusb_lock_usb();
+		usb_init();
+		usb_find_busses();
+		usb_find_devices();
+		initizalized = 1;
+		if (!getenv("XUSB_NOLOCK"))
+			xusb_unlock_usb();
+	}
 }
