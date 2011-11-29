@@ -2261,7 +2261,43 @@ static DEVICE_ATTR_READER(pri_protocol_show, dev, buf)
 	return len;
 }
 
-static	DEVICE_ATTR(pri_protocol, S_IRUGO, pri_protocol_show, NULL);
+static DEVICE_ATTR_WRITER(pri_protocol_store, dev, buf, count)
+{
+	xpd_t			*xpd;
+	enum pri_protocol	new_protocol = PRI_PROTO_0;
+	int			i;
+	int			ret;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	XPD_DBG(GENERAL, xpd, "%s\n", buf);
+	if (!xpd)
+		return -ENODEV;
+	i = strcspn(buf, " \r\n");
+	if (i != 2) {
+		XPD_NOTICE(xpd,
+			"Protocol name '%s' has %d characters (should be 2). Ignored.\n",
+			buf, i);
+		return -EINVAL;
+	}
+	if (strnicmp(buf, "E1", 2) == 0)
+		new_protocol = PRI_PROTO_E1;
+	else if (strnicmp(buf, "T1", 2) == 0)
+		new_protocol = PRI_PROTO_T1;
+	else if (strnicmp(buf, "J1", 2) == 0)
+		new_protocol = PRI_PROTO_J1;
+	else {
+		XPD_NOTICE(xpd,
+			"Unknown PRI protocol '%s' (should be E1|T1|J1). Ignored.\n",
+			buf);
+		return -EINVAL;
+	}
+	ret = set_pri_proto(xpd, new_protocol);
+	return (ret < 0) ? ret : count;
+}
+
+static	DEVICE_ATTR(pri_protocol, S_IRUGO | S_IWUSR, pri_protocol_show,
+		pri_protocol_store);
 
 static DEVICE_ATTR_READER(pri_localloop_show, dev, buf)
 {
