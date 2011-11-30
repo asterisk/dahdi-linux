@@ -642,7 +642,6 @@ static void global_packet_dump(const char *msg, xpacket_t *pack)
 	DBG(GENERAL, "%s\n", msg);
 }
 
-#define	MAX_ENV_STR	40
 #define	MAX_PATH_STR	128
 
 int run_initialize_registers(xpd_t *xpd)
@@ -651,6 +650,7 @@ int run_initialize_registers(xpd_t *xpd)
 	xbus_t	*xbus;
 	char	busstr[MAX_ENV_STR];
 	char	busnumstr[MAX_ENV_STR];
+	char	modelstr[MAX_ENV_STR];
 	char	unitstr[MAX_ENV_STR];
 	char	subunitsstr[MAX_ENV_STR];
 	char	typestr[MAX_ENV_STR];
@@ -668,6 +668,7 @@ int run_initialize_registers(xpd_t *xpd)
 	char	*envp[] = {
 		busstr,
 		busnumstr,
+		modelstr,
 		unitstr,
 		subunitsstr,
 		typestr,
@@ -703,6 +704,7 @@ int run_initialize_registers(xpd_t *xpd)
 	}
 	snprintf(busstr, MAX_ENV_STR, "XBUS_NAME=%s", xbus->busname);
 	snprintf(busnumstr, MAX_ENV_STR, "XBUS_NUMBER=%d", xbus->num);
+	snprintf(modelstr, MAX_ENV_STR, "XBUS_MODEL_STRING=%s", xbus->transport.model_string);
 	snprintf(unitstr, MAX_ENV_STR, "UNIT_NUMBER=%d", xpd->addr.unit);
 	snprintf(typestr, MAX_ENV_STR, "UNIT_TYPE=%d", xpd->type);
 	snprintf(subunitsstr, MAX_ENV_STR, "UNIT_SUBUNITS=%d", xpd->subunits);
