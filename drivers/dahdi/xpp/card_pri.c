@@ -1019,6 +1019,17 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 	}
 #endif
 	if(force_cas) {
+		if(priv->pri_protocol == PRI_PROTO_E1) {
+			int	rs1 = 0x0B;
+
+			/*
+			 * Set correct X1-X3 bits in the E1 CAS MFAS
+			 * They are unused in E1 and should be 1
+			 */
+			XPD_DBG(GENERAL, xpd, "%s: rs1(0x%02X) = 0x%02X\n",
+				__FUNCTION__, REG_RS1_E, rs1);
+			write_subunit(xpd, REG_RS1_E, rs1);
+		}
 		xsp |= REG_XSP_E_CASEN;	/* Same as REG_FMR5_T_EIBR for T1 */
 	}
 	XPD_DBG(GENERAL, xpd, "%s: xsp(0x%02X) = 0x%02X\n", __FUNCTION__, REG_XSP_E, xsp);
