@@ -133,7 +133,7 @@ my %pci_ids = (
 	'0b0b:0105'	=> { DRIVER => 'r1t1', DESCRIPTION => 'Rhino R1T1' },
 	'0b0b:0205'	=> { DRIVER => 'r4fxo', DESCRIPTION => 'Rhino R14FXO' },
 	'0b0b:0206'	=> { DRIVER => 'rcbfx', DESCRIPTION => 'Rhino RCB4FXO 4-channel FXO analog telphony card' },
-	'0b0b:0305'	=> { DRIVER => 'r1t1', DESCRIPTION => 'Rhino R1T1' },
+	'0b0b:0305'	=> { DRIVER => 'rxt1', DESCRIPTION => 'Rhino R4T1' },
 	'0b0b:0405'	=> { DRIVER => 'rcbfx', DESCRIPTION => 'Rhino R8FXX' },
 	'0b0b:0406'	=> { DRIVER => 'rcbfx', DESCRIPTION => 'Rhino RCB8FXX 8-channel modular analog telphony card' },
 	'0b0b:0505'	=> { DRIVER => 'rcbfx', DESCRIPTION => 'Rhino R24FXX' },
