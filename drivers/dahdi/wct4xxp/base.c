@@ -373,7 +373,7 @@ struct t4 {
 	int needed_latency;
 	
 #ifdef VPM_SUPPORT
-	struct vpm450m *vpm450m;
+	struct vpm450m *vpm;
 #endif	
 	struct spi_state st;
 };
@@ -410,7 +410,7 @@ static inline unsigned int ports_on_framer(const struct t4 *wc)
 }
 
 #ifdef VPM_SUPPORT
-static void t4_vpm450_init(struct t4 *wc);
+static void t4_vpm_init(struct t4 *wc);
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 
@@ -819,12 +819,12 @@ static inline void t4_oct_out(struct t4 *wc, const unsigned int addr, const unsi
 	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
-static void t4_check_vpm450(struct t4 *wc)
+static void t4_check_vpm(struct t4 *wc)
 {
 	int channel, tone, start, span;
 
-	if (vpm450m_checkirq(wc->vpm450m)) {
-		while(vpm450m_getdtmf(wc->vpm450m, &channel, &tone, &start)) {
+	if (vpm450m_checkirq(wc->vpm)) {
+		while(vpm450m_getdtmf(wc->vpm, &channel, &tone, &start)) {
 			span = channel & 0x3;
 			channel >>= 2;
 			if (!has_e1_span(wc))
@@ -1080,7 +1080,7 @@ unsigned int oct_get_reg(void *data, unsigned int reg)
 
 static const char *__t4_echocan_name(struct t4 *wc)
 {
-	if (wc->vpm450m) {
+	if (wc->vpm) {
 		if (wc->numspans == 2)
 			return vpmoct064_name;
 		else if (wc->numspans == 4)
@@ -1108,7 +1108,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	const struct dahdi_echocan_ops *ops;
 	const struct dahdi_echocan_features *features;
 
-	if (!vpmsupport || !wc->vpm450m)
+	if (!vpmsupport || !wc->vpm)
 		return -ENODEV;
 
 	ops = &vpm_ec_ops;
@@ -1127,7 +1127,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
-	if (wc->vpm450m) {
+	if (wc->vpm) {
 		if (is_octal(wc))
 			channel = channel << 3;
 		else
@@ -1138,7 +1138,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 				"Channel is %d, Span is %d, offset is %d "
 				"length %d\n", wc->num, chan->chanpos,
 				chan->span->offset, channel, ecp->tap_length);
-		vpm450m_setec(wc->vpm450m, channel, ecp->tap_length);
+		vpm450m_setec(wc->vpm, channel, ecp->tap_length);
 	}
 	return 0;
 }
@@ -1152,7 +1152,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
-	if (wc->vpm450m) {
+	if (wc->vpm) {
 		if (is_octal(wc))
 			channel = channel << 3;
 		else
@@ -1163,7 +1163,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 				"Channel is %d, Span is %d, offset is %d "
 				"length 0\n", wc->num, chan->chanpos,
 				chan->span->offset, channel);
-		vpm450m_setec(wc->vpm450m, channel, 0);
+		vpm450m_setec(wc->vpm, channel, 0);
 	}
 }
 #endif
@@ -1209,7 +1209,7 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 	case DAHDI_TONEDETECT:
 		if (get_user(j, (__user int *) data))
 			return -EFAULT;
-		if (!wc->vpm450m)
+		if (!wc->vpm)
 			return -ENOSYS;
 		if (j && (vpmdtmfsupport == 0))
 			return -ENOSYS;
@@ -1226,7 +1226,7 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 		if (!has_e1_span(wc))
 			channel += (4 << 3);
 		channel |= chan->span->offset;
-		vpm450m_setdtmf(wc->vpm450m, channel, j & DAHDI_TONEDETECT_ON,
+		vpm450m_setdtmf(wc->vpm, channel, j & DAHDI_TONEDETECT_ON,
 				j & DAHDI_TONEDETECT_MUTE);
 		return 0;
 #endif
@@ -2847,7 +2847,7 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		/* Start DMA, enabling DMA interrupts on read only */
 		wc->dmactrl |= (ts->spanflags & FLAG_2NDGEN) ? 0xc0000000 : 0xc0000003;
 #ifdef VPM_SUPPORT
-		wc->dmactrl |= (wc->vpm450m) ? T4_VPM_PRESENT : 0;
+		wc->dmactrl |= (wc->vpm) ? T4_VPM_PRESENT : 0;
 #endif
 		/* Seed interrupt register */
 		__t4_pci_out(wc, WC_INTR, 0x0c);
@@ -3903,12 +3903,12 @@ static void t4_isr_bh(unsigned long data)
 		}
 	}
 #ifdef VPM_SUPPORT
-	if (wc->vpm450m) {
+	if (wc->vpm) {
 		if (test_and_clear_bit(T4_CHECK_VPM, &wc->checkflag)) {
 			/* How stupid is it that the octasic can't generate an
 			 * interrupt when there's a tone, in spite of what
 			 * their documentation says? */
-			t4_check_vpm450(wc);
+			t4_check_vpm(wc);
 		}
 	}
 #endif
@@ -4082,7 +4082,7 @@ DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
 	}
 
 #ifdef VPM_SUPPORT
-	if (wc->vpm450m && vpmdtmfsupport) {
+	if (wc->vpm && vpmdtmfsupport) {
 		/* How stupid is it that the octasic can't generate an
 		 * interrupt when there's a tone, in spite of what their
 		 * documentation says? */
@@ -4127,7 +4127,7 @@ static int t4_reset_dma(struct t4 *wc)
 	t4_pci_out(wc, WC_INTR, 0);
 #ifdef VPM_SUPPORT
 	wc->dmactrl = 0xc0000000 | (1 << 29) |
-		      ((wc->vpm450m) ? T4_VPM_PRESENT : 0);
+		      ((wc->vpm) ? T4_VPM_PRESENT : 0);
 #else	
 	wc->dmactrl = 0xc0000000 | (1 << 29);
 #endif
@@ -4139,7 +4139,7 @@ static int t4_reset_dma(struct t4 *wc)
 #endif
 
 #ifdef VPM_SUPPORT
-static void t4_vpm450_init(struct t4 *wc)
+static void t4_vpm_init(struct t4 *wc)
 {
 	int laws[8] = { 0, };
 	int x;
@@ -4257,7 +4257,7 @@ static void t4_vpm450_init(struct t4 *wc)
 		return;
 	}
 
-	if (!(wc->vpm450m = init_vpm450m(wc, laws, wc->numspans, firmware))) {
+	if (!(wc->vpm = init_vpm450m(wc, laws, wc->numspans, firmware))) {
 		dev_notice(&wc->dev->dev, "VPM450: Failed to initialize\n");
 		if (firmware != &embedded_firmware)
 			release_firmware(firmware);
@@ -5188,11 +5188,11 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	t4_gpio_setdir(wc, (0xff), (0xff));
 
 #ifdef VPM_SUPPORT
-	if (!wc->vpm450m) {
-		t4_vpm450_init(wc);
-		wc->dmactrl |= (wc->vpm450m) ? T4_VPM_PRESENT : 0;
+	if (!wc->vpm) {
+		t4_vpm_init(wc);
+		wc->dmactrl |= (wc->vpm) ? T4_VPM_PRESENT : 0;
 		t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
-		if (wc->vpm450m)
+		if (wc->vpm)
 			set_span_devicetype(wc);
 	}
 #endif
@@ -5268,10 +5268,10 @@ static void _t4_remove_one(struct t4 *wc)
 	t4_hardware_stop(wc);
 	
 #ifdef VPM_SUPPORT
-	/* Release vpm450m */
-	if (wc->vpm450m)
-		release_vpm450m(wc->vpm450m);
-	wc->vpm450m = NULL;
+	/* Release vpm */
+	if (wc->vpm)
+		release_vpm450m(wc->vpm);
+	wc->vpm = NULL;
 #endif
 	/* Unregister spans */
 
