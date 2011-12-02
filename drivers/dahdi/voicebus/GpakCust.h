@@ -36,6 +36,7 @@
 #ifndef _GPAKCUST_H  /* prevent multiple inclusion */
 #define _GPAKCUST_H
 
+#include <linux/module.h>
 #include <linux/device.h>
 #include <linux/completion.h>
 #include <linux/workqueue.h>
