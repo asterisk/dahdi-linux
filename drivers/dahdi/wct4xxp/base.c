@@ -4185,7 +4185,15 @@ static void t4_vpm450_init(struct t4 *wc)
 			laws[x] = 1;
 	}
 
-	switch ((vpm_capacity = get_vpm450m_capacity(wc))) {
+	vpm_capacity = get_vpm450m_capacity(wc);
+	if (vpm_capacity != wc->numspans * 32) {
+		dev_info(&wc->dev->dev, "Disabling VPMOCT%03d. TE%dXXP"\
+				" requires a VPMOCT%03d", vpm_capacity,
+				wc->numspans, wc->numspans*32);
+		return;
+	}
+
+	switch (vpm_capacity) {
 	case 64:
 #if defined(HOTPLUG_FIRMWARE)
 		if ((request_firmware(&firmware, oct064_firmware, &wc->dev->dev) != 0) ||
