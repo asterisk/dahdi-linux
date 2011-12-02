@@ -43,6 +43,7 @@
 #endif
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/module.h>
 #include <linux/ioctl.h>
 
 #ifdef CONFIG_DAHDI_NET	
