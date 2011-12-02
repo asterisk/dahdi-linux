@@ -474,6 +474,7 @@ wctc4xxp_skb_to_cmd(struct wcdte *wc, const struct sk_buff *skb)
 	return cmd;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
 static void
 wctc4xxp_net_set_multi(struct net_device *netdev)
 {
@@ -481,6 +482,15 @@ wctc4xxp_net_set_multi(struct net_device *netdev)
 	DTE_DEBUG(DTE_DEBUG_GENERAL, "%s promiscuity:%d\n",
 	   __func__, netdev->promiscuity);
 }
+#else
+static void
+wctc4xxp_set_rx_mode(struct net_device *netdev)
+{
+	struct wcdte *wc = wcdte_from_netdev(netdev);
+	DTE_DEBUG(DTE_DEBUG_GENERAL, "%s promiscuity:%d\n",
+	   __func__, netdev->promiscuity);
+}
+#endif
 
 static int
 wctc4xxp_net_up(struct net_device *netdev)
@@ -644,7 +654,11 @@ wctc4xxp_net_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
 
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops wctc4xxp_netdev_ops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
 	.ndo_set_multicast_list = &wctc4xxp_net_set_multi,
+#else
+	.ndo_set_rx_mode = &wctc4xxp_set_rx_mode,
+#endif
 	.ndo_open = &wctc4xxp_net_up,
 	.ndo_stop = &wctc4xxp_net_down,
 	.ndo_start_xmit = &wctc4xxp_net_hard_start_xmit,
