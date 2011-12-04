@@ -64,6 +64,8 @@ static const struct xusb_spec	astribank_specs[] = {
 
 	TYPE_ENTRY("USB-MULTI",		0x1161, 2, 1, 2, MP_EP_OUT, MP_EP_IN),
 	TYPE_ENTRY("FPGA-MULTI",	0x1162, 2, 1, 2, MP_EP_OUT, MP_EP_IN),
+	TYPE_ENTRY("BURNED-MULTI",	0x1164, 2, 1, 2, MP_EP_OUT, MP_EP_IN),
+	TYPE_ENTRY("USB-BURN",		0x1112, 2, 1, 2, MP_EP_OUT, MP_EP_IN),
 };
 
 static const struct xusb_spec	astribank_pic_specs[] = {
