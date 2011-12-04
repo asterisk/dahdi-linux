@@ -278,11 +278,12 @@ load_fw_device() {
 	        echo_file="$FIRMWARE_DIR/OCT6104E-256D.ima"
 		law=''
 		law_str='uLaw'
-		card_type=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'CARD 4' | sed -e 's/.*type=//' -e 's/\..*//'`
-		caps_num=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'ECHO ports' | sed -e 's/.*: *//'`
-		if [ $card_type -eq 5 ]; then
+		abtool_output=`$ASTRIBANK_TOOL -D "$dev" -Q 2>&1`
+		ec_card_type=`echo "$abtool_output" | grep 'CARD 4' | sed -e 's/.*type=//' -e 's/\..*//'`
+		caps_num=`echo "$abtool_output" | grep 'ECHO ports' | sed -e 's/.*: *//'`
+		if [ "$ec_card_type" = '5' ]; then
 			debug "ECHO burning into $dev: $echo_file"
-			card_type=`run_astribank_tool -D "$dev" -Q 2>&1 | grep 'CARD 0' | sed -e 's/.*type=//' -e 's/\..*//'`
+			card_type=`echo "$abtool_output" | grep 'CARD 0' | sed -e 's/.*type=//' -e 's/\..*//'`
 			case "$card_type" in
 			3) 	law="-A";;
 			4)
@@ -541,6 +542,9 @@ udev_delayed_load() {
 		usb_firmware_device "$PRODUCT" "$DEVICE"
 		;;
 	e4e4/11[3456]1/*)
+		# There are potentially two separate udev events, for
+		# each of the two endpoints. Ignore the first interface:
+		case "$DEVPATH" in *.0) exit 0;; esac
 		sleep_if_race
 		fpga_firmware_device "$PRODUCT" "$DEVICE" &
 		wait	# parallel firmware loading
