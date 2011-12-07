@@ -1202,6 +1202,8 @@ static int bri_spanconfig(struct file *file, struct dahdi_span *span,
 		framingstr, codingstr, crcstr,
 		lc->lineconfig,
 		lc->sync);
+	PHONEDEV(xpd).timing_priority = lc->sync;
+	elect_syncer("BRI-spanconfig");
 	/*
 	 * FIXME: validate
 	 */
@@ -1427,6 +1429,18 @@ static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 		XPD_COUNTER(tmp_xpd, PCM_READ)++;
 		spin_unlock_irqrestore(&tmp_xpd->lock, flags);
 	}
+}
+
+static int BRI_timing_priority(xpd_t *xpd)
+{
+	struct BRI_priv_data	*priv;
+
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	if (priv->layer1_up)
+		return PHONEDEV(xpd).timing_priority;
+	XPD_DBG(SYNC, xpd, "No timing priority (no layer1)\n");
+	return -ENOENT;
 }
 
 int BRI_echocancel_timeslot(xpd_t *xpd, int pos)
@@ -1696,7 +1710,7 @@ static const struct phoneops	bri_phoneops = {
 	.card_pcm_recompute	= BRI_card_pcm_recompute,
 	.card_pcm_fromspan	= BRI_card_pcm_fromspan,
 	.card_pcm_tospan	= BRI_card_pcm_tospan,
-	.card_timing_priority	= generic_timing_priority,
+	.card_timing_priority	= BRI_timing_priority,
 	.echocancel_timeslot	= BRI_echocancel_timeslot,
 	.echocancel_setmask	= BRI_echocancel_setmask,
 	.card_ioctl	= BRI_card_ioctl,
