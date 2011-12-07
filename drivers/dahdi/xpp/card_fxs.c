@@ -134,6 +134,7 @@ struct FXS_priv_data {
 	xpp_line_t		want_dtmf_events;	/* what dahdi want */
 	xpp_line_t		want_dtmf_mute;		/* what dahdi want */
 	xpp_line_t		prev_key_down;		/* DTMF down sets the bit */
+	xpp_line_t		neon_blinking;
 	struct timeval		prev_key_time[CHANNELS_PERXPD];
 	int			led_counter[NUM_LEDS][CHANNELS_PERXPD];
 	int			ohttimer[CHANNELS_PERXPD];
@@ -564,12 +565,16 @@ static int FXS_card_dahdi_postregistration(xpd_t *xpd, bool on)
  */
 static void __do_mute_dtmf(xpd_t *xpd, int pos, bool muteit)
 {
+	struct FXS_priv_data	*priv;
+
+	priv = xpd->priv;
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (muteit) ? "MUTE" : "UNMUTE");
 	if(muteit)
 		BIT_SET(PHONEDEV(xpd).mute_dtmf, pos);
 	else
 		BIT_CLR(PHONEDEV(xpd).mute_dtmf, pos);
-	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);	/* already spinlocked */
+	/* already spinlocked */
+	CALL_PHONE_METHOD(card_pcm_recompute, xpd, priv->search_fsk_pattern);
 }
 
 static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
@@ -584,6 +589,7 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 	if (VMWI_NEON(priv, pos) && msg_waiting) {
 		/* A write to register 0x40 will now turn on/off the VM led */
 		LINE_DBG(SIGNAL, xpd, pos, "NEON\n");
+		BIT_SET(priv->neon_blinking, pos);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16, 0xE8, 0x03);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15, 0xEF, 0x7B);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x14, 0x9F, 0x00);
@@ -618,6 +624,7 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 	} else {
 		/* A write to register 0x40 will now turn on/off the ringer */
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER\n");
+		BIT_CLR(priv->neon_blinking, pos);
 
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16, 0x00, 0x00);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15, 0x77, 0x01);
@@ -877,7 +884,8 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 			if (IS_SET(PHONEDEV(xpd).digital_inputs | PHONEDEV(xpd).digital_outputs, pos))
 				return 0;	/* Nothing to do */
 			oht_pcm(xpd, pos, 1);	/* Get ready of VMWI FSK tones */
-			if(priv->lasttxhook[pos] == FXS_LINE_POL_ACTIVE) {
+			if (priv->lasttxhook[pos] == FXS_LINE_POL_ACTIVE ||
+					IS_SET(priv->neon_blinking, pos)) {
 				priv->ohttimer[pos] = val;
 				priv->idletxhookstate[pos] = FXS_LINE_POL_OHTRANS;
 				vmwi_search(xpd, pos, 1);
@@ -1060,7 +1068,8 @@ static void handle_linefeed(xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	for_each_line(xpd, i) {
-		if (priv->lasttxhook[i] == FXS_LINE_RING) {
+		if (priv->lasttxhook[i] == FXS_LINE_RING &&
+				!IS_SET(priv->neon_blinking, i)) {
 			/* RINGing, prepare for OHT */
 			priv->ohttimer[i] = OHT_TIMER;
 			priv->idletxhookstate[i] = FXS_LINE_POL_OHTRANS;
@@ -1519,11 +1528,13 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	len += sprintf(page + len, "%-8s %-10s %-10s %-10s\n",
+	len += sprintf(page + len, "%-8s %-10s %-10s %-10s %-10s %-10s\n",
 			"Channel",
 			"idletxhookstate",
 			"lasttxhook",
-			"ohttimer"
+			"ohttimer",
+			"neon_blinking",
+			"search_fsk_pattern"
 			);
 	for_each_line(xpd, i) {
 		char	pref;
@@ -1534,12 +1545,14 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 			pref = 'I';
 		else
 			pref = ' ';
-		len += sprintf(page + len, "%c%7d %10d %10d %10d\n",
+		len += sprintf(page + len, "%c%7d %10d %10d %10d %10d %10d\n",
 				pref,
 				i,
 				priv->idletxhookstate[i],
 				priv->lasttxhook[i],
-				priv->ohttimer[i]
+				priv->ohttimer[i],
+				IS_SET(priv->neon_blinking, i),
+				IS_SET(priv->search_fsk_pattern, i)
 			      );
 	}
 	len += sprintf(page + len, "\n");
