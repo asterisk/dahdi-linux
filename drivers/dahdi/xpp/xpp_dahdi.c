@@ -915,6 +915,7 @@ static void echocan_free(struct dahdi_chan *chan,
 	LINE_DBG(GENERAL, xpd, pos, "mode=0x%X\n", ec->status.mode);
 	CALL_EC_METHOD(ec_set, xbus, xpd, pos, 0);
 	CALL_EC_METHOD(ec_update, xbus, xbus);
+	put_xpd(__FUNCTION__, xpd);	/* aquired in xpp_echocan_create() */
 }
 
 static const struct dahdi_echocan_features xpp_ec_features = {
@@ -937,7 +938,7 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 	xpd = chan->pvt;
 	xbus = xpd->xbus;
 	pos = chan->chanpos - 1;
-	LINE_DBG(GENERAL, xpd, pos, "%s:\n", __func__);
+	LINE_DBG(GENERAL, xpd, pos, "\n");
 	if (!ECHOOPS(xbus))
 		return NULL;
 	/*
@@ -986,6 +987,7 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 	*ec = phonedev->ec[pos];
 	(*ec)->ops = &xpp_ec_ops;
 	(*ec)->features = xpp_ec_features;
+	xpd = get_xpd(__FUNCTION__, xpd);	/* Returned in echocan_free() */
 	LINE_DBG(GENERAL, xpd, pos, "(tap=%d, param_count=%d)\n",
 		ecp->tap_length, ecp->param_count);
 	ret = CALL_EC_METHOD(ec_set, xbus, xpd, pos, 1);
