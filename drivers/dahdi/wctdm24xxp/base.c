@@ -5411,7 +5411,6 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (is_hx8(wc)) {
 		ret = hx8_check_firmware(wc);
 		if (ret) {
-			voicebus_release(&wc->vb);
 			wctdm_back_out_gracefully(wc);
 			return -EIO;
 		}
