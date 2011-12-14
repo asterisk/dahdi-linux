@@ -2786,6 +2786,39 @@ static void __t4_configure_e1(struct t4 *wc, int unit, int lineconfig)
 			wc->numspans, unit + 1, framing, line, crc4);
 }
 
+/**
+ * t4_check_for_interrupts - Return 0 if the card is generating interrupts.
+ * @wc:	The card to check.
+ *
+ * If the card is not generating interrupts, this function will also place all
+ * the spans on the card into red alarm.
+ *
+ */
+static int t4_check_for_interrupts(struct t4 *wc)
+{
+	unsigned int starting_intcount = wc->intcount;
+	unsigned long stop_time = jiffies + HZ*2;
+	unsigned long flags;
+	int x;
+
+	msleep(20);
+	spin_lock_irqsave(&wc->reglock, flags);
+	while (starting_intcount == wc->intcount) {
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		if (time_after(jiffies, stop_time)) {
+			for (x = 0; x < wc->numspans; x++)
+				wc->tspans[x]->span.alarms = DAHDI_ALARM_RED;
+			dev_err(&wc->dev->dev, "Interrupts not detected.\n");
+			return -EIO;
+		}
+		msleep(100);
+		spin_lock_irqsave(&wc->reglock, flags);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	return 0;
+}
+
 static int t4_startup(struct file *file, struct dahdi_span *span)
 {
 #ifdef SUPPORT_GEN1
@@ -2906,6 +2939,11 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		if (wc->tspans[7]->sync == span->spanno)
 			dev_info(&wc->dev->dev, "SPAN %d: Octonary Sync "
 					"Source\n", span->spanno);
+	}
+
+	if (!alreadyrunning) {
+		if (t4_check_for_interrupts(wc))
+			return -EIO;
 	}
 
 	if (debug)
