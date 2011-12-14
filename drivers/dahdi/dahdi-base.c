@@ -2150,6 +2150,8 @@ static unsigned long _chan_cleanup(struct dahdi_chan *pos, unsigned long data)
 	return 0;
 }
 
+static const struct file_operations nodev_fops;
+
 static void dahdi_chan_unreg(struct dahdi_chan *chan)
 {
 	unsigned long flags;
@@ -2164,6 +2166,11 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 			"%s: surprise removal: chan %d\n",
 			__func__, chan->channo);
 		chan->file->private_data = NULL;
+		chan->file->f_op = &nodev_fops;
+		/*
+		 * From now on, any file_operations for this device
+		 * would call the nodev_fops methods.
+		 */
 	}
 
 	spin_lock_irqsave(&chan->lock, flags);
@@ -2240,14 +2247,12 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 	count &= 0xffff;
 
 	if (unlikely(!chan)) {
-		/* We would typically be here because of surprise hardware
-		 * removal or driver unbinding while a user space application
-		 * has a channel open.  Most telephony applications are run at
-		 * elevated priorities so this sleep can prevent the high
-		 * priority threads from consuming the CPU if they're not
-		 * expecting surprise device removal.
+		/*
+		 * This should never happen. Surprise device removal
+		 * should lead us to the nodev_* file_operations
 		 */
 		msleep(5);
+		module_printk(KERN_ERR, "%s: NODEV\n", __func__);
 		return -ENODEV;
 	}
 
@@ -2363,14 +2368,12 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 	count &= 0xffff;
 
 	if (unlikely(!chan)) {
-		/* We would typically be here because of surprise hardware
-		 * removal or driver unbinding while a user space application
-		 * has a channel open.  Most telephony applications are run at
-		 * elevated priorities so this sleep can prevent the high
-		 * priority threads from consuming the CPU if they're not
-		 * expecting surprise device removal.
+		/*
+		 * This should never happen. Surprise device removal
+		 * should lead us to the nodev_* file_operations
 		 */
 		msleep(5);
+		module_printk(KERN_ERR, "%s: NODEV\n", __func__);
 		return -ENODEV;
 	}
 
@@ -5500,13 +5503,12 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		wait_result = 0;
 		prepare_to_wait(&chan->waitq, &wait, TASK_INTERRUPTIBLE);
 		if (unlikely(!chan->file->private_data)) {
-			static int rate_limit;
-
-			if ((rate_limit++ % 1000) == 0)
-				module_printk(KERN_NOTICE,
-					"%s: (%d) nodev\n",
-					__func__, rate_limit);
+			/*
+			 * This should never happen. Surprise device removal
+			 * should lead us to the nodev_* file_operations
+			 */
 			msleep(5);
+			module_printk(KERN_ERR, "%s: NODEV\n", __func__);
 			ret = -ENODEV;
 			break;
 		}
@@ -9171,12 +9173,12 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 			ret |= POLLPRI;
 		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
 	} else {
-		static int rate_limit;
-
-		if ((rate_limit++ % 1000) == 0)
-			module_printk(KERN_NOTICE, "%s: (%d) nodev\n",
-				__func__, rate_limit);
+		/*
+		 * This should never happen. Surprise device removal
+		 * should lead us to the nodev_* file_operations
+		 */
 		msleep(5);
+		module_printk(KERN_ERR, "%s: NODEV\n", __func__);
 		return POLLERR | POLLHUP | POLLRDHUP | POLLNVAL | POLLPRI;
 	}
 	return ret;
@@ -9191,12 +9193,12 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 	unsigned long flags;
 
 	if (unlikely(!c)) {
-		static int rate_limit;
-
-		if ((rate_limit++ % 1000) == 0)
-			module_printk(KERN_NOTICE, "%s: (%d) nodev\n",
-				__func__, rate_limit);
-		msleep(20);
+		/*
+		 * This should never happen. Surprise device removal
+		 * should lead us to the nodev_* file_operations
+		 */
+		msleep(5);
+		module_printk(KERN_ERR, "%s: NODEV\n", __func__);
 		return POLLERR | POLLHUP | POLLRDHUP | POLLNVAL | POLLPRI;
 	}
 
@@ -9831,6 +9833,97 @@ static const struct file_operations dahdi_fops = {
 	.ioctl   = dahdi_ioctl,
 #endif
 	.poll    = dahdi_poll,
+};
+
+/*
+ * DAHDI stability should not depend on the calling process behaviour.
+ * In case of suprise device removal, we should be able to return
+ * sane results (-ENODEV) even after the underlying device was released.
+ *
+ * This should be OK even if the calling process (hint, hint Asterisk)
+ * ignores the system calls return value.
+ *
+ * We simply use dummy file_operations to implement this.
+ */
+
+/*
+ * Common behaviour called from all other nodev_*() file_operations
+ */
+static int nodev_common(const char msg[])
+{
+	if (printk_ratelimit()) {
+		module_printk(KERN_NOTICE,
+			"nodev: %s: process %d still calling\n",
+			msg, current->tgid);
+	}
+	msleep(5);
+	return -ENODEV;
+}
+
+static ssize_t nodev_chan_read(struct file *file, char __user *usrbuf,
+			       size_t count, loff_t *ppos)
+{
+	return nodev_common("read");
+}
+
+static ssize_t nodev_chan_write(struct file *file, const char __user *usrbuf,
+				size_t count, loff_t *ppos)
+{
+	return nodev_common("write");
+}
+
+static unsigned int
+nodev_chan_poll(struct file *file, struct poll_table_struct *wait_table)
+{
+	return nodev_common("poll");
+}
+
+static long
+nodev_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
+{
+	switch (cmd) {
+	case DAHDI_GETEVENT:  /* Get event on queue */
+		/*
+		 * Hint the bugger that the channel is gone for good
+		 */
+		put_user(DAHDI_EVENT_REMOVED, (int __user *)data);
+		break;
+	}
+	return nodev_common("ioctl");
+}
+
+#ifndef HAVE_UNLOCKED_IOCTL
+static int nodev_ioctl(struct inode *inode, struct file *file,
+		unsigned int cmd, unsigned long data)
+{
+	return nodev_unlocked_ioctl(file, cmd, data);
+}
+#endif
+
+#ifdef HAVE_COMPAT_IOCTL
+static long nodev_ioctl_compat(struct file *file, unsigned int cmd,
+		unsigned long data)
+{
+	if (cmd == DAHDI_SFCONFIG)
+		return -ENOTTY; /* Not supported yet */
+
+	return nodev_unlocked_ioctl(file, cmd, data);
+}
+#endif
+
+static const struct file_operations nodev_fops = {
+	.owner   = THIS_MODULE,
+#ifdef HAVE_UNLOCKED_IOCTL
+	.unlocked_ioctl  = nodev_unlocked_ioctl,
+#ifdef HAVE_COMPAT_IOCTL
+	.compat_ioctl = nodev_ioctl_compat,
+#endif
+#else
+	.ioctl   = nodev_ioctl,
+#endif
+	.read    = nodev_chan_read,
+	.write   = nodev_chan_write,
+	.poll    = nodev_chan_poll,
 };
 
 static const struct file_operations dahdi_chan_fops = {
