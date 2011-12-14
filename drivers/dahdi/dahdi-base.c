@@ -4877,7 +4877,7 @@ static int dahdi_ioctl_startup(struct file *file, unsigned long data)
 		__dahdi_find_master_span();
 	}
 	put_span(s);
-	return 0;
+	return res;
 }
 
 static int dahdi_ioctl_shutdown(unsigned long data)
