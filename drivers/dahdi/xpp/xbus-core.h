@@ -29,7 +29,7 @@
 #include "xframe_queue.h"
 #include "xbus-pcm.h"
 
-#define	MAX_BUSES	32
+#define	MAX_BUSES	128
 #define	XFRAME_DATASIZE	512
 #define	MAX_ENV_STR	40
 
