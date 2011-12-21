@@ -1413,7 +1413,6 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size, struct device *tran
 	xbus = xbus_alloc();
 	if(!xbus) {
 		ERR("%s: Failed allocating new xbus\n", __FUNCTION__);
-		module_put(THIS_MODULE);
 		return NULL;
 	}
 	snprintf(xbus->busname, XBUS_NAMELEN, "XBUS-%02d", xbus->num);
