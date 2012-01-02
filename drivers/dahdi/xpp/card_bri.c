@@ -208,7 +208,6 @@ struct BRI_priv_data {
 	 * D-Chan: buffers + extra state info.
 	 */
 	atomic_t			hdlc_pending;
-	byte				dchan_tbuf[DCHAN_BUFSIZE];
 	bool				txframe_begin;
 
 	uint				tick_counter;
@@ -514,90 +513,125 @@ static void bri_hdlc_hard_xmit(struct dahdi_chan *chan)
 	}
 }
 
-int send_multibyte_request(xbus_t *xbus,
-	unsigned unit, xportno_t portno,
-	bool eoftx, byte *buf, unsigned len)
+static int send_dchan_frame(xpd_t *xpd, xframe_t *xframe, bool is_eof)
 {
-	xframe_t	*xframe;
-	xpacket_t	*pack;
-	reg_cmd_t	*reg_cmd;
-	int		ret;
+	struct BRI_priv_data *priv;
+	int ret;
 
-	if (!len) {
-		PORT_ERR(xbus, unit, portno,
-			"%s: zero length request. dropping.\n", __func__);
-		return -EINVAL;
-	}
-	if (len > MULTIBYTE_MAX_LEN) {
-		PORT_ERR(xbus, unit, portno,
-			"%s: len=%d is too long. dropping.\n", __func__, len);
-		return -EINVAL;
-	}
-	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
-	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
-	reg_cmd->bytes = len;
-	reg_cmd->is_multibyte = 1;
-	reg_cmd->portnum = portno;
-	reg_cmd->eoframe = eoftx;
-	memcpy(REG_XDATA(reg_cmd), (byte *)buf, len);
-	if (debug & DBG_REGS)
-		dump_xframe(__func__, xbus, xframe, debug);
-	ret = send_cmd_frame(xbus, xframe);
-	if (ret < 0)
-		PORT_ERR(xbus, unit, portno,
-			"%s: failed sending xframe\n", __func__);
-	return ret;
-}
-
-static int tx_dchan(xpd_t *xpd)
-{
-	struct BRI_priv_data	*priv;
-	struct dahdi_chan	*dchan;
-	int			len;
-	int			eoframe;
-	int			ret;
-
+	XPD_DBG(COMMANDS, xpd, "eoframe=%d\n", is_eof);
 	priv = xpd->priv;
-	BUG_ON(!priv);
-	if(atomic_read(&priv->hdlc_pending) == 0)
-		return 0;
-	if(!SPAN_REGISTERED(xpd) || !(PHONEDEV(xpd).span.flags & DAHDI_FLAG_RUNNING))
-		return 0;
-	dchan = XPD_CHAN(xpd, 2);
-	len = ARRAY_SIZE(priv->dchan_tbuf);
-	if(len > MULTIBYTE_MAX_LEN)
-		len = MULTIBYTE_MAX_LEN;
-	eoframe = dahdi_hdlc_getbuf(dchan, priv->dchan_tbuf, &len);
-	if(len <= 0)
-		return 0; /* Nothing to transmit on D channel */
-	if(len > MULTIBYTE_MAX_LEN) {
-		XPD_ERR(xpd, "%s: len=%d. need to split. Unimplemented.\n", __FUNCTION__, len);
-		dump_hex_buf(xpd, "D-Chan TX:", priv->dchan_tbuf, len);
-		return -EINVAL;
-	}
-	if(!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags) && !test_bit(HFC_L1_ACTIVATING, &priv->l1_flags)) {
+	if (!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags)
+			&& !test_bit(HFC_L1_ACTIVATING, &priv->l1_flags)) {
 		XPD_DBG(SIGNAL, xpd, "Want to transmit: Kick D-Channel transmiter\n");
-		if(! IS_NT(xpd))
+		if (!IS_NT(xpd))
 			te_activation(xpd, 1);
 		else
 			nt_activation(xpd, 1);
 	}
-	if(debug)
-		dump_dchan_packet(xpd, 1, priv->dchan_tbuf, len);
-	if(eoframe)
-		priv->txframe_begin = 1;
-	else
-		priv->txframe_begin = 0;
-	XPD_DBG(COMMANDS, xpd, "eoframe=%d len=%d\n", eoframe, len);
-	ret = send_multibyte_request(xpd->xbus, xpd->addr.unit, xpd->addr.subunit,
-			eoframe, priv->dchan_tbuf, len);
-	if(ret < 0)
-		XPD_NOTICE(xpd, "%s: failed sending xframe\n", __FUNCTION__);
-	if(eoframe) {
+	dump_xframe("send_dchan_frame", xpd->xbus, xframe, debug);
+	ret = send_cmd_frame(xpd->xbus, xframe);
+	if (ret < 0)
+		XPD_ERR(xpd, "%s: failed sending xframe\n", __func__);
+	if (is_eof) {
 		atomic_dec(&priv->hdlc_pending);
 		priv->dchan_tx_counter++;
-	}
+		priv->txframe_begin = 1;
+	} else
+		priv->txframe_begin = 0;
 	priv->dchan_notx_ticks = 0;
+	return ret;
+}
+
+/*
+ * Fill a single multibyte REGISTER_REQUEST
+ */
+static void fill_multibyte(xpd_t *xpd, xpacket_t *pack, bool eoframe,
+		char *buf, int len)
+{
+	reg_cmd_t *reg_cmd;
+	char *p;
+
+	XPACKET_INIT(pack, GLOBAL, REGISTER_REQUEST, xpd->xbus_idx, 0, 0);
+	XPACKET_LEN(pack) = RPACKET_SIZE(GLOBAL, REGISTER_REQUEST);
+	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
+	reg_cmd->bytes = len;
+	reg_cmd->is_multibyte = 1;
+	reg_cmd->portnum = xpd->addr.subunit;
+	reg_cmd->eoframe = eoframe;
+	p = REG_XDATA(reg_cmd);
+	memcpy(p, buf, len);
+	if (debug)
+		dump_dchan_packet(xpd, 1, p, len);
+}
+
+/*
+ * Transmit available D-Channel frames
+ *
+ * - FPGA firmware expect to get this as a sequence of REGISTER_REQUEST
+ *   multibyte commands.
+ * - The payload of each command is limited to MULTIBYTE_MAX_LEN bytes.
+ * - We batch several REGISTER_REQUEST packets into a single xframe.
+ * - The xframe is terminated when we get a bri "end of frame"
+ *   or when the xframe is full (should not happen).
+ */
+static int tx_dchan(xpd_t *xpd)
+{
+	struct BRI_priv_data *priv;
+	xframe_t *xframe;
+	xpacket_t *pack;
+	int packet_count;
+	int eoframe;
+	int ret;
+
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	if (atomic_read(&priv->hdlc_pending) == 0)
+		return 0;
+	if (!SPAN_REGISTERED(xpd) ||
+			!(PHONEDEV(xpd).span.flags & DAHDI_FLAG_RUNNING))
+		return 0;
+	/* Allocate frame */
+	xframe = ALLOC_SEND_XFRAME(xpd->xbus);
+	if (!xframe) {
+		XPD_NOTICE(xpd, "%s: failed to allocate new xframe\n",
+			__func__);
+		return -ENOMEM;
+	}
+	for (packet_count = 0, eoframe = 0; !eoframe; packet_count++) {
+		int packet_len = RPACKET_SIZE(GLOBAL, REGISTER_REQUEST);
+		char buf[MULTIBYTE_MAX_LEN];
+		int len = MULTIBYTE_MAX_LEN;
+
+		/* Reserve packet */
+		pack = xframe_next_packet(xframe, packet_len);
+		if (!pack) {
+			BUG_ON(!packet_count);
+			/*
+			 * A split. Send what we currently have.
+			 */
+			XPD_NOTICE(xpd,
+				"%s: xframe is full (%d packets)\n",
+				__func__, packet_count);
+			break;
+		}
+		/* Get data from DAHDI */
+		eoframe = dahdi_hdlc_getbuf(XPD_CHAN(xpd, 2), buf, &len);
+		if (len <= 0) {
+			/*
+			 * Already checked priv->hdlc_pending,
+			 * should never get here.
+			 */
+			if (printk_ratelimit())
+				XPD_ERR(xpd,
+					"%s: hdlc_pending, but nothing to transmit?\n",
+					__func__);
+			FREE_SEND_XFRAME(xpd->xbus, xframe);
+			return -EINVAL;
+		}
+		BUG_ON(len > MULTIBYTE_MAX_LEN);
+		fill_multibyte(xpd, pack, eoframe != 0, buf, len);
+	}
+	return send_dchan_frame(xpd, xframe, eoframe != 0);
 	return ret;
 }
 
