@@ -40,6 +40,36 @@ extern	int debug;
 
 /*---------------- GLOBAL PROC handling -----------------------------------*/
 
+static int send_magic_request(xbus_t *xbus,
+	unsigned unit, xportno_t portno, bool eoftx)
+{
+	xframe_t	*xframe;
+	xpacket_t	*pack;
+	reg_cmd_t	*reg_cmd;
+	int		ret;
+
+	/*
+	 * Zero length multibyte is legal and has special meaning for the
+	 * firmware:
+	 *   eoftx==1: Start sending us D-channel packets.
+	 *   eoftx==0: Stop sending us D-channel packets.
+	 */
+	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
+	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
+	reg_cmd->bytes = 0;
+	reg_cmd->is_multibyte = 1;
+	reg_cmd->portnum = portno;
+	reg_cmd->eoframe = eoftx;
+	PORT_DBG(REGS, xbus, unit, portno, "Magic Packet (eoftx=%d)\n", eoftx);
+	if (debug & DBG_REGS)
+		dump_xframe(__func__, xbus, xframe, debug);
+	ret = send_cmd_frame(xbus, xframe);
+	if (ret < 0)
+		PORT_ERR(xbus, unit, portno,
+			"%s: failed sending xframe\n", __func__);
+	return ret;
+}
+
 static int parse_hexbyte(const char *buf)
 {
 	char		*endp;
@@ -155,8 +185,8 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 					addr_mode, argc - argno);
 			goto out;
 		}
-		ret = send_multibyte_request(xpd->xbus, xpd->addr.unit, portno,
-			addr_mode == 'm', NULL, 0);
+		ret = send_magic_request(xpd->xbus, xpd->addr.unit, portno,
+			addr_mode == 'm');
 		goto out;
 	}
 	/* Normal (non-Magic) register commands */
@@ -367,44 +397,6 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 			xframe->usec_towait = 1000;
 	}
 	ret = send_cmd_frame(xbus, xframe);
-	return ret;
-}
-
-int send_multibyte_request(xbus_t *xbus,
-	unsigned unit, xportno_t portno,
-	bool eoftx, byte *buf, unsigned len)
-{
-	xframe_t	*xframe;
-	xpacket_t	*pack;
-	reg_cmd_t	*reg_cmd;
-	int		ret;
-
-	/*
-	 * Zero length multibyte is legal and has special meaning for the
-	 * firmware:
-	 *   eoftx==1: Start sending us D-channel packets.
-	 *   eoftx==0: Stop sending us D-channel packets.
-	 */
-	if(len > MULTIBYTE_MAX_LEN) {
-		PORT_ERR(xbus, unit, portno, "%s: len=%d is too long. dropping.\n", __FUNCTION__, len);
-		return -EINVAL;
-	}
-	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
-	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
-	reg_cmd->bytes = len;
-	reg_cmd->is_multibyte = 1;
-	reg_cmd->portnum = portno;
-	reg_cmd->eoframe = eoftx;
-	if(len > 0) {
-		memcpy(REG_XDATA(reg_cmd), (byte *)buf, len);
-	} else {
-		PORT_DBG(REGS, xbus, unit, portno, "Magic Packet (eoftx=%d)\n", eoftx);
-	}
-	if(debug & DBG_REGS)
-		dump_xframe(__FUNCTION__, xbus, xframe, debug);
-	ret = send_cmd_frame(xbus, xframe);
-	if(ret < 0)
-		PORT_ERR(xbus, unit, portno, "%s: failed sending xframe\n", __FUNCTION__);
 	return ret;
 }
 
@@ -752,4 +744,3 @@ err:
 EXPORT_SYMBOL(sync_mode_name);
 EXPORT_SYMBOL(run_initialize_registers);
 EXPORT_SYMBOL(xpp_register_request);
-EXPORT_SYMBOL(send_multibyte_request);

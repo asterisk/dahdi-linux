@@ -514,6 +514,41 @@ static void bri_hdlc_hard_xmit(struct dahdi_chan *chan)
 	}
 }
 
+int send_multibyte_request(xbus_t *xbus,
+	unsigned unit, xportno_t portno,
+	bool eoftx, byte *buf, unsigned len)
+{
+	xframe_t	*xframe;
+	xpacket_t	*pack;
+	reg_cmd_t	*reg_cmd;
+	int		ret;
+
+	if (!len) {
+		PORT_ERR(xbus, unit, portno,
+			"%s: zero length request. dropping.\n", __func__);
+		return -EINVAL;
+	}
+	if (len > MULTIBYTE_MAX_LEN) {
+		PORT_ERR(xbus, unit, portno,
+			"%s: len=%d is too long. dropping.\n", __func__, len);
+		return -EINVAL;
+	}
+	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
+	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
+	reg_cmd->bytes = len;
+	reg_cmd->is_multibyte = 1;
+	reg_cmd->portnum = portno;
+	reg_cmd->eoframe = eoftx;
+	memcpy(REG_XDATA(reg_cmd), (byte *)buf, len);
+	if (debug & DBG_REGS)
+		dump_xframe(__func__, xbus, xframe, debug);
+	ret = send_cmd_frame(xbus, xframe);
+	if (ret < 0)
+		PORT_ERR(xbus, unit, portno,
+			"%s: failed sending xframe\n", __func__);
+	return ret;
+}
+
 static int tx_dchan(xpd_t *xpd)
 {
 	struct BRI_priv_data	*priv;
