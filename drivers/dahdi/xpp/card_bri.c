@@ -422,15 +422,6 @@ static void nt_activation(xpd_t *xpd, bool on)
 /*
  * D-Chan receive
  */
-static void bri_hdlc_abort(xpd_t *xpd, struct dahdi_chan *dchan, int event)
-{
-	struct BRI_priv_data	*priv;
-
-	priv = xpd->priv;
-	BUG_ON(!priv);
-	dahdi_hdlc_abort(dchan, event);
-}
-
 static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int len)
 {
 	struct BRI_priv_data	*priv;
@@ -440,7 +431,7 @@ static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int l
 	BUG_ON(!priv);
 	if(len <= 0) {
 		XPD_NOTICE(xpd, "D-Chan RX DROP: short frame (len=%d)\n", len);
-		bri_hdlc_abort(xpd, dchan, DAHDI_EVENT_ABORT);
+		dahdi_hdlc_abort(dchan, DAHDI_EVENT_ABORT);
 		return -EPROTO;
 	}
 	status = buf[len-1];
@@ -454,26 +445,10 @@ static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int l
 			event = DAHDI_EVENT_BADFCS;
 		}
 		dump_hex_buf(xpd, "D-Chan RX:    current packet", buf, len);
-		bri_hdlc_abort(xpd, dchan, event);
+		dahdi_hdlc_abort(dchan, event);
 		return -EPROTO;
 	}
 	return 0;
-}
-
-static int bri_hdlc_putbuf(xpd_t *xpd, struct dahdi_chan *dchan,
-		unsigned char *buf, int len)
-{
-	dahdi_hdlc_putbuf(dchan, buf, len);
-	return 0;
-}
-
-static void bri_hdlc_finish(xpd_t *xpd, struct dahdi_chan *dchan)
-{
-	struct BRI_priv_data	*priv;
-
-	priv = xpd->priv;
-	BUG_ON(!priv);
-	dahdi_hdlc_finish(dchan);
 }
 
 static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
@@ -504,9 +479,7 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 		goto out;
 	}
 	XPD_DBG(GENERAL, xpd, "D-Chan RX: eoframe=%d len=%d\n", eoframe, len);
-	ret = bri_hdlc_putbuf(xpd, dchan, src, (eoframe) ? len - 1 : len);
-	if(ret < 0)
-		goto out;
+	dahdi_hdlc_putbuf(dchan, src, (eoframe) ? len - 1 : len);
 	if(!eoframe)
 		goto out;
 	if((ret = bri_check_stat(xpd, dchan, src, len)) < 0)
@@ -516,7 +489,7 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	 * The last byte (that we don't pass on) is 0 if the checksum is correct. If it were wrong,
 	 * we would drop the packet in the "if(src[len-1])" above.
 	 */
-	bri_hdlc_finish(xpd, dchan);
+	dahdi_hdlc_finish(dchan);
 	priv->dchan_rx_counter++;
 	priv->dchan_norx_ticks = 0;
 out:
@@ -541,17 +514,6 @@ static void bri_hdlc_hard_xmit(struct dahdi_chan *chan)
 	}
 }
 
-static int bri_hdlc_getbuf(struct dahdi_chan *dchan, unsigned char *buf,
-		unsigned int *size)
-{
-	int			len = *size;
-	int			eoframe;
-
-	eoframe = dahdi_hdlc_getbuf(dchan, buf, &len);
-	*size = len;
-	return eoframe;
-}
-
 static int tx_dchan(xpd_t *xpd)
 {
 	struct BRI_priv_data	*priv;
@@ -570,7 +532,7 @@ static int tx_dchan(xpd_t *xpd)
 	len = ARRAY_SIZE(priv->dchan_tbuf);
 	if(len > MULTIBYTE_MAX_LEN)
 		len = MULTIBYTE_MAX_LEN;
-	eoframe = bri_hdlc_getbuf(dchan, priv->dchan_tbuf, &len);
+	eoframe = dahdi_hdlc_getbuf(dchan, priv->dchan_tbuf, &len);
 	if(len <= 0)
 		return 0; /* Nothing to transmit on D channel */
 	if(len > MULTIBYTE_MAX_LEN) {
