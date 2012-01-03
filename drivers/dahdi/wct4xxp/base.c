@@ -4888,19 +4888,21 @@ static int t4_hardware_init_1(struct t4 *wc, unsigned int cardflags)
 
 	/* TE820 Auth Check */
 	if (is_octal(wc)) {
+		unsigned long stop = jiffies + HZ;
 		uint32_t donebit;
 
-		donebit = t4_pci_in(wc, WC_LEDS2);
 		t4_pci_out(wc, WC_LEDS2, WC_SET_AUTH);
-
-		msleep(1000);
-
 		donebit = t4_pci_in(wc, WC_LEDS2);
-		if (!(donebit & WC_GET_AUTH)) {
-			/* Encryption check failed, stop operation */
-			dev_info(&wc->dev->dev, "Failed encryption check. "\
-						"Unloading driver.\n");
-			return -EIO;
+		while (!(donebit & WC_GET_AUTH)) {
+			if (time_after(jiffies, stop)) {
+				/* Encryption check failed, stop operation */
+				dev_info(&wc->dev->dev,
+					 "Failed encryption check. "
+					 "Unloading driver.\n");
+				return -EIO;
+			}
+			msleep(20);
+			donebit = t4_pci_in(wc, WC_LEDS2);
 		}
 	}
 
