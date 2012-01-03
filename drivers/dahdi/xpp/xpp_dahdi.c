@@ -1183,11 +1183,6 @@ static int __init xpp_dahdi_init(void)
 
 	INFO("revision %s MAX_XPDS=%d (%d*%d)\n", XPP_VERSION,
 			MAX_XPDS, MAX_UNIT, MAX_SUBUNIT);
-#ifdef CONFIG_DAHDI_BRI_DCHANS
-	INFO("FEATURE: with BRISTUFF support\n");
-#else
-	INFO("FEATURE: without BRISTUFF support\n");
-#endif
 #ifdef CONFIG_PROC_FS
 	xpp_proc_toplevel = proc_mkdir(PROC_DIR, NULL);
 	if(!xpp_proc_toplevel) {
