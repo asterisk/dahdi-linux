@@ -697,7 +697,6 @@ int xpp_open(struct dahdi_chan *chan)
 	pos = chan->chanpos - 1;
 	if(!xpd->card_present) {
 		LINE_NOTICE(xpd, pos, "Cannot open -- device not ready\n");
-		put_xpd(__FUNCTION__, xpd);
 		return -ENODEV;
 	}
 	spin_lock_irqsave(&xbus->lock, flags);
