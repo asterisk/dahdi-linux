@@ -1082,14 +1082,9 @@ int xpd_dahdi_postregister(xpd_t *xpd)
  */
 void xpd_dahdi_preunregister(xpd_t *xpd)
 {
-	unsigned long	flags;
 	if (!xpd)
 		return;
 	XPD_DBG(DEVICES, xpd, "\n");
-	spin_lock_irqsave(&xpd->lock, flags);
-	xpd->card_present = 0;
-	xpd_setstate(xpd, XPD_STATE_NOHW);
-	spin_unlock_irqrestore(&xpd->lock, flags);
 	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
 	if(xpd->card_present)
 		CALL_PHONE_METHOD(card_dahdi_preregistration, xpd, 0);

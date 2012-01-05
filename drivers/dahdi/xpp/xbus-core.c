@@ -811,6 +811,29 @@ static int xbus_echocancel(xbus_t *xbus, int on)
 	return 0;
 }
 
+static void xbus_deactivate_xpds(xbus_t *xbus)
+{
+	unsigned long flags;
+	int unit;
+	int subunit;
+	xpd_t *xpd;
+
+	for (unit = 0; unit < MAX_UNIT; unit++) {
+		xpd = xpd_byaddr(xbus, unit, 0);
+		if (!xpd)
+			continue;
+		for (subunit = 0; subunit < MAX_SUBUNIT; subunit++) {
+			xpd = xpd_byaddr(xbus, unit, subunit);
+			if (!xpd)
+				continue;
+			spin_lock_irqsave(&xpd->lock, flags);
+			xpd->card_present = 0;
+			xpd_setstate(xpd, XPD_STATE_NOHW);
+			spin_unlock_irqrestore(&xpd->lock, flags);
+		}
+	}
+}
+
 static int xbus_initialize(xbus_t *xbus)
 {
 	int	unit;
@@ -1303,6 +1326,7 @@ void xbus_deactivate(xbus_t *xbus)
 	xbus_request_sync(xbus, SYNC_MODE_NONE);	/* no more ticks */
 	elect_syncer("deactivate");
 	xbus_echocancel(xbus, 0);
+	xbus_deactivate_xpds(xbus);
 	XBUS_DBG(DEVICES, xbus, "[%s] Waiting for queues\n", xbus->label);
 	xbus_command_queue_clean(xbus);
 	xbus_command_queue_waitempty(xbus);
