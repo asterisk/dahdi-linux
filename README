@@ -34,8 +34,6 @@ Installation
 Note: If using `sudo` to build/install, you may need to add /sbin to your PATH.
 ----------------------------------
 ./configure
-# optional step: select custom configuration:
-#make menuselect
 make
 make install
 # To install init scripts and config files:

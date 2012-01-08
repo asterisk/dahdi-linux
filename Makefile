@@ -5,19 +5,7 @@
 #
 #
 
-# If the file .dahdi.makeopts is present in your home directory, you can
-# include all of your favorite menuselect options so that every time you download
-# a new version of Asterisk, you don't have to run menuselect to set them.
-# The file /etc/dahdi.makeopts will also be included but can be overridden
-# by the file in your home directory.
-
-GLOBAL_MAKEOPTS=$(wildcard /etc/dahdi.makeopts)
-USER_MAKEOPTS=$(wildcard ~/.dahdi.makeopts)
-
 ifeq ($(strip $(foreach var,clean distclean dist-clean update,$(findstring $(var),$(MAKECMDGOALS)))),)
- ifneq ($(wildcard menuselect.makeopts),)
-  include menuselect.makeopts
- endif
 endif
 
 ifeq ($(strip $(foreach var,clean distclean dist-clean update,$(findstring $(var),$(MAKECMDGOALS)))),)
@@ -111,8 +99,14 @@ UTILS		= dahdi_tool dahdi_test dahdi_monitor dahdi_speed sethdlc dahdi_cfg \
 UTILS		+= patgen pattest patlooptest hdlcstress hdlctest hdlcgen \
 		   hdlcverify timertest dahdi_maint
 
-BINS:=fxotune fxstest sethdlc dahdi_cfg dahdi_diag dahdi_monitor dahdi_speed dahdi_test dahdi_scan dahdi_tool dahdi_maint
-BINS:=$(filter-out $(MENUSELECT_UTILS),$(BINS))
+
+BINS:=fxotune dahdi_cfg dahdi_monitor dahdi_speed dahdi_test dahdi_scan dahdi_maint
+ifeq	(1,$(PBX_NEWT))
+	BINS	+= dahdi_tool
+endif
+ifeq	(1,$(PBX_HDLC))
+	BINS	+= sethdlc
+endif
 MAN_PAGES:=$(wildcard $(BINS:%=doc/%.8))
 
 TEST_BINS:=patgen pattest patlooptest hdlcstress hdlctest hdlcgen hdlcverify timertest dahdi_maint
@@ -122,10 +116,7 @@ GROFF_HTML	:= $(GROFF_PAGES:%=%.html)
 
 GENERATED_DOCS	:= $(GROFF_HTML) README.html README.Astribank.html
 
-all: menuselect.makeopts 
-	@$(MAKE) _all
-
-_all: prereq programs
+all: prereq programs
 
 libs: $(LTZ_SO) $(LTZ_A)
 
@@ -333,7 +324,6 @@ update:
 	fi
 
 clean:
-	-@$(MAKE) -C menuselect clean
 	rm -f $(BINS) $(TEST_BINS)
 	rm -f *.o dahdi_cfg tzdriver sethdlc
 	rm -f $(LTZ_SO) $(LTZ_A) *.lo
@@ -353,8 +343,7 @@ clean:
 distclean: dist-clean
 
 dist-clean: clean
-	@$(MAKE) -C menuselect dist-clean
-	rm -f makeopts menuselect.makeopts menuselect-tree build_tools/menuselect-deps
+	rm -f makeopts
 	rm -f config.log config.status
 	rm -f .*.d
 
@@ -366,62 +355,7 @@ config.status: configure
 	@echo "****"
 	@exit 1
 
-menuselect.makeopts: menuselect/menuselect menuselect-tree makeopts
-	menuselect/menuselect --check-deps $@ $(GLOBAL_MAKEOPTS) $(USER_MAKEOPTS)
-
-menuconfig: menuselect
-
-cmenuconfig: cmenuselect
-
-gmenuconfig: gmenuselect
-
-nmenuconfig: nmenuselect
-
-menuselect: menuselect/cmenuselect menuselect/nmenuselect menuselect/gmenuselect
-	@if [ -x menuselect/nmenuselect ]; then \
-		$(MAKE) nmenuselect; \
-	elif [ -x menuselect/cmenuselect ]; then \
-		$(MAKE) cmenuselect; \
-	elif [ -x menuselect/gmenuselect ]; then \
-		$(MAKE) gmenuselect; \
-	else \
-		echo "No menuselect user interface found. Install ncurses,"; \
-		echo "newt or GTK libraries to build one and re-rerun"; \
-		echo "'make menuselect'."; \
-	fi
-
-cmenuselect: menuselect/cmenuselect menuselect-tree
-	-@menuselect/cmenuselect menuselect.makeopts $(GLOBAL_MAKEOPTS) $(USER_MAKEOPTS) && echo "menuselect changes saved!" || echo "menuselect changes NOT saved!"
-
-gmenuselect: menuselect/gmenuselect menuselect-tree
-	-@menuselect/gmenuselect menuselect.makeopts $(GLOBAL_MAKEOPTS) $(USER_MAKEOPTS) && echo "menuselect changes saved!" || echo "menuselect changes NOT saved!"
-
-nmenuselect: menuselect/nmenuselect menuselect-tree
-	-@menuselect/nmenuselect menuselect.makeopts $(GLOBAL_MAKEOPTS) $(USER_MAKEOPTS) && echo "menuselect changes saved!" || echo "menuselect changes NOT saved!"
-
-# options for make in menuselect/
-MAKE_MENUSELECT=CC="$(HOST_CC)" CXX="$(CXX)" LD="" AR="" RANLIB="" CFLAGS="" $(MAKE) -C menuselect CONFIGURE_SILENT="--silent"
-
-menuselect/menuselect: menuselect/makeopts
-	+$(MAKE_MENUSELECT) menuselect
-
-menuselect/cmenuselect: menuselect/makeopts
-	+$(MAKE_MENUSELECT) cmenuselect
-
-menuselect/gmenuselect: menuselect/makeopts
-	+$(MAKE_MENUSELECT) gmenuselect
-
-menuselect/nmenuselect: menuselect/makeopts
-	+$(MAKE_MENUSELECT) nmenuselect
-
-menuselect/makeopts: makeopts
-	+$(MAKE_MENUSELECT) makeopts
-
-menuselect-tree: dahdi.xml
-	@echo "Generating input for menuselect ..."
-	@build_tools/make_tree > $@
-
-.PHONY: menuselect distclean dist-clean clean all _all install programs tests devel data config update install-programs install-libs install-utils-subdirs utils-subdirs prereq
+.PHONY: distclean dist-clean clean all install programs tests devel data config update install-programs install-libs install-utils-subdirs utils-subdirs prereq
 
 FORCE:
 
