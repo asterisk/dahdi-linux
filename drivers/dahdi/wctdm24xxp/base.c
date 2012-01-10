@@ -3727,14 +3727,15 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 		if (((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_ACTIVE_FWD) ||
 		    ((fxs->lasttxhook & SLIC_LF_SETMASK) == SLIC_LF_ACTIVE_REV)) {
+			int res;
 
-			x = set_lasttxhook_interruptible(wc, fxs,
+			res = set_lasttxhook_interruptible(wc, fxs,
 				(POLARITY_XOR(fxs) ?
 				SLIC_LF_OHTRAN_REV : SLIC_LF_OHTRAN_FWD),
 				&mod->sethook);
 
 			if (debug & DEBUG_CARD) {
-				if (x) {
+				if (res) {
 					dev_info(&wc->vb.pdev->dev,
 						 "Channel %d TIMEOUT: "
 						 "OnHookTransfer start\n",
