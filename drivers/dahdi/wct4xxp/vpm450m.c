@@ -422,6 +422,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	tOCT6100_GET_INSTANCE_SIZE InstanceSize;
 	tOCT6100_CHANNEL_OPEN *ChannelOpen;
 	UINT32 ulResult;
+	const unsigned int mask = (8 == numspans) ? 0x7 : 0x3;
 	unsigned int sout_stream, rout_stream;
 	struct vpm450m *vpm450m;
 	int x,y,law;
@@ -527,7 +528,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		 	*  therefore, the lower 2 bits tell us which span this 
 			*  timeslot/channel
 		 	*/
-			if (isalaw[x & 0x07])
+			if (isalaw[x & mask])
 				law = cOCT6100_PCM_A_LAW;
 			else
 				law = cOCT6100_PCM_U_LAW;
