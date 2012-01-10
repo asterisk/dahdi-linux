@@ -900,18 +900,37 @@ int	xbus_is_registered(xbus_t *xbus)
 	return xbus->ddev && xbus->ddev->dev.parent;
 }
 
+static void xbus_free_ddev(xbus_t *xbus)
+{
+	if (!xbus->ddev)
+		return;
+	if (xbus->ddev->devicetype)
+		kfree(xbus->ddev->devicetype);
+	xbus->ddev->devicetype = NULL;
+	xbus->ddev->location = NULL;
+	xbus->ddev->hardware_id = NULL;
+	dahdi_free_device(xbus->ddev);
+	xbus->ddev = NULL;
+}
+
 int xbus_register_dahdi_device(xbus_t *xbus)
 {
-	int	i;
-	int	offset = 0;
+	int i;
+	int offset = 0;
+	int ret;
 
 	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __func__);
 	if (xbus_is_registered(xbus)) {
 		XBUS_ERR(xbus, "Already registered to DAHDI\n");
 		WARN_ON(1);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err;
 	}
 	xbus->ddev = dahdi_create_device();
+	if (!xbus->ddev) {
+		ret = -ENOMEM;
+		goto err;
+	}
 	/*
 	 * This actually describe the dahdi_spaninfo version 3
 	 * A bunch of unrelated data exported via a modified ioctl()
@@ -926,8 +945,10 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 	 * OK, let's add to the kernel more useless info.
 	 */
 	xbus->ddev->devicetype = kasprintf(GFP_KERNEL, "Astribank2");
-	if (!xbus->ddev->devicetype)
-		return -ENOMEM;
+	if (!xbus->ddev->devicetype) {
+		ret = -ENOMEM;
+		goto err;
+	}
 
 	/*
 	 * location is the only usefull new data item.
@@ -952,7 +973,8 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 	}
 	if (dahdi_register_device(xbus->ddev, &xbus->astribank)) {
 		XBUS_ERR(xbus, "Failed to dahdi_register_device()\n");
-		return -ENODEV;
+		ret = -ENODEV;
+		goto err;
 	}
 	for (i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
@@ -962,6 +984,9 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 		}
 	}
 	return 0;
+err:
+	xbus_free_ddev(xbus);
+	return ret;
 }
 
 void xbus_unregister_dahdi_device(xbus_t *xbus)
@@ -976,12 +1001,7 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
 	if (xbus->ddev) {
 		dahdi_unregister_device(xbus->ddev);
 		XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n", __func__);
-		kfree(xbus->ddev->devicetype);
-		xbus->ddev->devicetype = NULL;
-		xbus->ddev->location = NULL;
-		xbus->ddev->hardware_id = NULL;
-		dahdi_free_device(xbus->ddev);
-		xbus->ddev = NULL;
+		xbus_free_ddev(xbus);
 	}
 	for(i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
