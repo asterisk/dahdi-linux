@@ -341,9 +341,10 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count,
 	}
 #if 1
 	if (SPAN_REGISTERED(xpd)) {
-		len +=
-		    sprintf(page + len,
-			    "\nPCM:\n            |         [readchunk]       |         [writechunk]      | W D");
+		len += sprintf(page + len,
+			"\nPCM:\n            |"
+			"         [readchunk]       |"
+			"         [writechunk]      | W D");
 		for_each_line(xpd, i) {
 			struct dahdi_chan *chan = XPD_CHAN(xpd, i);
 			__u8 rchunk[DAHDI_CHUNKSIZE];
@@ -444,8 +445,8 @@ bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 			goto badstate;
 		if (xpd->addr.subunit != 0) {
 			XPD_NOTICE(xpd,
-				   "%s: Moving to %s allowed only for subunit 0\n",
-				   __func__, xpd_statename(newstate));
+				"%s: Moving to %s allowed only for subunit 0\n",
+				__func__, xpd_statename(newstate));
 			goto badstate;
 		}
 		break;
@@ -531,9 +532,9 @@ err:
  * xpd_alloc - Allocator for new XPD's
  *
  */
-__must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype,
-			      int subunits, size_t privsize,
-			      const xproto_table_t *proto_table, int channels)
+__must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit,
+	int subtype, int subunits, size_t privsize,
+	const xproto_table_t *proto_table, int channels)
 {
 	xpd_t *xpd = NULL;
 	size_t alloc_size = sizeof(xpd_t) + privsize;
@@ -571,8 +572,9 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype,
 		    0x7F | PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).
 		    digital_inputs;
 		XBUS_NOTICE(xbus,
-			    "max xframe size = %d, disabling some PCM channels. no_pcm=0x%04X\n",
-			    MAX_SEND_SIZE(xbus), PHONEDEV(xpd).no_pcm);
+			"max xframe size = %d, disabling some PCM channels. "
+			"no_pcm=0x%04X\n",
+			MAX_SEND_SIZE(xbus), PHONEDEV(xpd).no_pcm);
 	}
 	if (phonedev_init(xpd, proto_table, channels, no_pcm) < 0)
 		goto err;
@@ -611,7 +613,11 @@ void update_xpd_status(xpd_t *xpd, int alarm_flag)
 	struct dahdi_span *span = &PHONEDEV(xpd).span;
 
 	if (!SPAN_REGISTERED(xpd)) {
-		// XPD_NOTICE(xpd, "%s: XPD is not registered. Skipping.\n", __func__);
+#if 0
+		XPD_NOTICE(xpd,
+			"%s: XPD is not registered. Skipping.\n",
+			__func__);
+#endif
 		return;
 	}
 	switch (alarm_flag) {
@@ -948,9 +954,10 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 
 EXPORT_SYMBOL(xpp_echocan_name);
 
-int xpp_echocan_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
-		       struct dahdi_echocanparam *p,
-		       struct dahdi_echocan_state **ec)
+int xpp_echocan_create(struct dahdi_chan *chan,
+	struct dahdi_echocanparams *ecp,
+	struct dahdi_echocanparam *p,
+	struct dahdi_echocan_state **ec)
 {
 	xpd_t *xpd;
 	xbus_t *xbus;
@@ -1044,7 +1051,7 @@ static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
 
 	span = &PHONEDEV(xpd).span;
-	span->deflaw = DAHDI_LAW_MULAW;	/* default, may be overriden by card_* drivers */
+	span->deflaw = DAHDI_LAW_MULAW;	/* card_* drivers may override */
 	span->channels = cn;
 	span->chans = PHONEDEV(xpd).chans;
 
@@ -1115,7 +1122,8 @@ int xpd_dahdi_postregister(xpd_t *xpd)
  * Try our best to make asterisk close all channels related to
  * this Astribank:
  *   - Set span state to DAHDI_ALARM_NOTOPEN in all relevant spans.
- *   - Notify dahdi afterwards about spans (so it can see all changes at once).
+ *   - Notify dahdi afterwards about spans
+ *     (so it can see all changes at once).
  *   - Also send DAHDI_EVENT_REMOVED on all channels.
  */
 void xpd_dahdi_preunregister(xpd_t *xpd)
@@ -1132,7 +1140,8 @@ void xpd_dahdi_preunregister(xpd_t *xpd)
 
 		dahdi_alarm_notify(&PHONEDEV(xpd).span);
 		XPD_DBG(DEVICES, xpd,
-			"Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
+			"Queuing DAHDI_EVENT_REMOVED on all channels "
+			"to ask user to release them\n");
 		for (j = 0; j < PHONEDEV(xpd).span.channels; j++) {
 			dahdi_qevent_lock(XPD_CHAN(xpd, j),
 					  DAHDI_EVENT_REMOVED);

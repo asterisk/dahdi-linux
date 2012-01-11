@@ -28,10 +28,10 @@ int main(int argc, char *argv[])
 		if (fxo_modes[i].ring_x)
 			snprintf(ring_x, BUFSIZ, "ring_x=%04X",
 				 fxo_modes[i].ring_x);
-		printf
-		    ("%-15s\treg16=%02X\treg26=%02X\treg30=%02X\treg31=%02X\t%s\t%s\n",
-		     fxo_modes[i].name, reg16, reg26, reg30, reg31, ring_osc,
-		     ring_x);
+		printf("%-15s\treg16=%02X\treg26=%02X\treg30=%02X\t"
+			"reg31=%02X\t%s\t%s\n",
+			fxo_modes[i].name, reg16, reg26, reg30, reg31,
+			ring_osc, ring_x);
 	}
 	return 0;
 }

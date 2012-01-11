@@ -123,11 +123,12 @@ static int ECHO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	}
 	spin_lock_irqsave(&xpd->lock, flags);
 	/* Update /proc info only if reply related to last reg read request */
-	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
-	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
-									do_subreg)
-	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
-								     subreg)) {
+	if (REG_FIELD(&xpd->requested_reply, regnum) ==
+			REG_FIELD(info, regnum)
+		&& REG_FIELD(&xpd->requested_reply, do_subreg) ==
+			REG_FIELD(info, do_subreg)
+		&& REG_FIELD(&xpd->requested_reply, subreg) ==
+			REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);
@@ -226,13 +227,13 @@ static void ECHO_ec_dump(xbus_t *xbus)
 	ts = xbus->echo_state.timeslots;
 	for (i = 0; i + 15 < ECHO_TIMESLOTS; i += 16) {
 		XBUS_DBG(GENERAL, xbus,
-			 "EC-DUMP[%03d]: "
-			 "0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X "
-			 "0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			 i, ts[i + 0], ts[i + 1], ts[i + 2], ts[i + 3],
-			 ts[i + 4], ts[i + 5], ts[i + 6], ts[i + 7], ts[i + 8],
-			 ts[i + 9], ts[i + 10], ts[i + 11], ts[i + 12],
-			 ts[i + 13], ts[i + 14], ts[i + 15]
+			"EC-DUMP[%03d]: "
+			"0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X "
+			"0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
+			i, ts[i + 0], ts[i + 1], ts[i + 2], ts[i + 3],
+			ts[i + 4], ts[i + 5], ts[i + 6], ts[i + 7], ts[i + 8],
+			ts[i + 9], ts[i + 10], ts[i + 11], ts[i + 12],
+			ts[i + 13], ts[i + 14], ts[i + 15]
 		    );
 	}
 }

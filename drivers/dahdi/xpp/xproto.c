@@ -44,7 +44,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr)
 	    && ((addr->unit & ~BITMASK(UNIT_BITS)) == 0);
 }
 
-/*---------------- General Protocol Management ----------------------------*/
+/*------ General Protocol Management ----------------------------*/
 
 const xproto_entry_t *xproto_card_entry(const xproto_table_t *table,
 					__u8 opcode)
@@ -87,9 +87,9 @@ const xproto_table_t *xproto_get(xpd_type_t cardtype)
 	if (!xtable) {		/* Try to load the relevant module */
 		int ret = request_module(XPD_TYPE_PREFIX "%d", cardtype);
 		if (ret != 0) {
-			NOTICE
-			    ("%s: Failed to load module for type=%d. exit status=%d.\n",
-			     __func__, cardtype, ret);
+			NOTICE("%s: Failed to load module for type=%d. "
+				"exit status=%d.\n",
+				__func__, cardtype, ret);
 			/* Drop through: we may be lucky... */
 		}
 		xtable = xprotocol_tables[cardtype];
@@ -120,7 +120,8 @@ void xproto_put(const xproto_table_t *xtable)
 	module_put(xtable->owner);
 }
 
-xproto_handler_t xproto_card_handler(const xproto_table_t *table, __u8 opcode)
+xproto_handler_t xproto_card_handler(const xproto_table_t *table,
+	__u8 opcode)
 {
 	const xproto_entry_t *xe;
 
@@ -169,9 +170,10 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 		if (!xpd) {
 			if (printk_ratelimit()) {
 				XBUS_NOTICE(xbus,
-					    "%s: from %d%d opcode=0x%02X: no such global command.\n",
-					    __func__, XPACKET_ADDR_UNIT(pack),
-					    XPACKET_ADDR_SUBUNIT(pack), op);
+					"%s: from %d%d opcode=0x%02X: "
+					"no such global command.\n",
+					__func__, XPACKET_ADDR_UNIT(pack),
+					XPACKET_ADDR_SUBUNIT(pack), op);
 				dump_packet
 				    ("packet_process -- no such global command",
 				     pack, 1);
@@ -190,10 +192,10 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 		if (!xe) {
 			if (printk_ratelimit()) {
 				XPD_NOTICE(xpd,
-					   "%s: bad command (type=%d,opcode=0x%x)\n",
-					   __func__, xpd->type, op);
+					"%s: bad command (type=%d,opcode=0x%x)\n",
+					__func__, xpd->type, op);
 				dump_packet("packet_process -- bad command",
-					    pack, 1);
+					pack, 1);
 			}
 			goto out;
 		}
@@ -239,9 +241,9 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 
 			if ((rate_limit++ % 1003) == 0) {
 				XBUS_DBG(GENERAL, xbus,
-					 "A PCM packet within a Non-PCM xframe\n");
-				dump_xframe("In Non-PCM xframe", xbus, xframe,
-					    debug);
+					"A PCM packet within a Non-PCM xframe\n");
+				dump_xframe("In Non-PCM xframe",
+					xbus, xframe, debug);
 			}
 			ret = -EPROTO;
 			goto out;
@@ -336,9 +338,14 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 
 			if (i >= sizeof(xpacket_t)) {
 				if (limiter < ERR_REPORT_LIMIT) {
-					ERR("%s: length overflow i=%d > sizeof(xpacket_t)=%lu\n", __func__, i + 1, (long)sizeof(xpacket_t));
+					ERR("%s: length overflow "
+						"i=%d > sizeof(xpacket_t)=%lu\n",
+						__func__, i + 1,
+						(long)sizeof(xpacket_t));
 				} else if (limiter == ERR_REPORT_LIMIT) {
-					ERR("%s: error packet #%d... squelsh reports.\n", __func__, limiter);
+					ERR("%s: error packet #%d... "
+						"squelsh reports.\n",
+						__func__, limiter);
 				}
 				limiter++;
 				break;
@@ -351,8 +358,8 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 	printk("\n");
 }
 
-void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, __u8 unit,
-		  xportno_t port, const reg_cmd_t *regcmd)
+void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
+	__u8 unit, xportno_t port, const reg_cmd_t *regcmd)
 {
 	char action;
 	char modifier;
@@ -360,7 +367,8 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, __u8 unit,
 	char reg_buf[MAX_PROC_WRITE];
 	char data_buf[MAX_PROC_WRITE];
 
-	if (regcmd->bytes > sizeof(*regcmd) - 1) {	/* The size byte is not included */
+	/* The size byte is not included */
+	if (regcmd->bytes > sizeof(*regcmd) - 1) {
 		PORT_NOTICE(xbus, unit, port,
 			    "%s: %s: Too long: regcmd->bytes = %d\n", __func__,
 			    msg, regcmd->bytes);
@@ -378,12 +386,14 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, __u8 unit,
 			n += snprintf(&buf[n], MAX_PROC_WRITE - n, "%02X ",
 				      p[i]);
 		PORT_DBG(REGS, xbus, unit, port,
-			 "UNIT-%d PORT-%d: Multibyte(eoframe=%d) %s[0..%zd]: %s%s\n",
-			 unit, port, regcmd->eoframe, msg, len - 1, buf,
-			 (n >= MAX_PROC_WRITE) ? "..." : "");
+			"UNIT-%d PORT-%d: Multibyte(eoframe=%d) "
+			"%s[0..%zd]: %s%s\n",
+			unit, port, regcmd->eoframe, msg, len - 1, buf,
+			(n >= MAX_PROC_WRITE) ? "..." : "");
 		return;
 	}
-	if (regcmd->bytes != sizeof(*regcmd) - 1) {	/* The size byte is not included */
+	/* The size byte is not included */
+	if (regcmd->bytes != sizeof(*regcmd) - 1) {
 		PORT_NOTICE(xbus, unit, port,
 			    "%s: %s: Wrong size: regcmd->bytes = %d\n",
 			    __func__, msg, regcmd->bytes);
@@ -429,13 +439,15 @@ const char *xproto_name(xpd_type_t xpd_type)
 
 #define	CHECK_XOP(xops, f)	\
 		if (!(xops)->f) { \
-			ERR("%s: missing xmethod %s [%s (%d)]\n", __func__, #f, name, type);	\
+			ERR("%s: missing xmethod %s [%s (%d)]\n", \
+				__func__, #f, name, type);	\
 			return -EINVAL;	\
 		}
 
 #define	CHECK_PHONEOP(phoneops, f)	\
 		if (!(phoneops)->f) { \
-			ERR("%s: missing phone method %s [%s (%d)]\n", __func__, #f, name, type);	\
+			ERR("%s: missing phone method %s [%s (%d)]\n", \
+				__func__, #f, name, type);	\
 			return -EINVAL;	\
 		}
 

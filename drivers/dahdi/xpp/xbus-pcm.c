@@ -60,18 +60,25 @@ static struct xpp_ticker dahdi_ticker;
 static struct xpp_ticker *ref_ticker;
 static DEFINE_SPINLOCK(ref_ticker_lock);
 static DEFINE_SPINLOCK(elect_syncer_lock);
-static bool force_dahdi_sync;	/* from /sys/bus/astribanks/drivers/xppdrv/sync */
+/* from /sys/bus/astribanks/drivers/xppdrv/sync */
+static bool force_dahdi_sync;
 static xbus_t *global_ticker;
 static struct xpp_ticker global_ticks_series;
 
 #define	PROC_SYNC		"sync"
-#define SYNC_CYCLE		500	/* Sampling cycle in usec */
-#define SYNC_CYCLE_SAMPLE	100	/* Samples from end of SYNC_CYCLE */
-#define SYNC_CONVERGE		10	/* Number of SYNC_CYCLE's to converge speed */
-#define SYNC_CENTER		500	/* Offset from ref_ticker to other AB's */
-#define SYNC_DELTA		40	/* If within +/-SYNC_DELTA, try to stay there */
+/* Sampling cycle in usec */
+#define SYNC_CYCLE		500
+/* Samples from end of SYNC_CYCLE */
+#define SYNC_CYCLE_SAMPLE	100
+/* Number of SYNC_CYCLE's to converge speed */
+#define SYNC_CONVERGE		10
+/* Offset from ref_ticker to other AB's */
+#define SYNC_CENTER		500
+/* If within +/-SYNC_DELTA, try to stay there */
+#define SYNC_DELTA		40
 #define	BIG_TICK_INTERVAL	1000
-#define	SYNC_ADJ_MAX		20	/* maximal firmware drift unit (hardware limit 63) */
+/* maximal firmware drift unit (hardware limit 63) */
+#define	SYNC_ADJ_MAX		20
 
 /*
  * The USB bulk endpoints have a large jitter in the timing of frames
@@ -120,7 +127,8 @@ static int xpp_ticker_step(struct xpp_ticker *ticker, const struct timeval *t)
 
 	spin_lock_irqsave(&ticker->lock, flags);
 	ticker->last_sample.tv = *t;
-	if ((ticker->count % ticker->cycle) == ticker->cycle - 1) {	/* rate adjust */
+	/* rate adjust */
+	if ((ticker->count % ticker->cycle) == ticker->cycle - 1) {
 		usec =
 		    (long)usec_diff(&ticker->last_sample.tv,
 				    &ticker->first_sample.tv);
@@ -277,12 +285,13 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 					di->offset_min = offset;
 
 				XBUS_DBG(SYNC, xbus,
-					 "offset: %d, min_speed=%d, max_speed=%d, usec_delta(last)=%ld\n",
-					 offset_prev, di->min_speed,
-					 di->max_speed, usec_delta);
+					"offset: %d, min_speed=%d, "
+					"max_speed=%d, usec_delta(last)=%ld\n",
+					offset_prev, di->min_speed,
+					di->max_speed, usec_delta);
 				XBUS_DBG(SYNC, xbus,
-					 "ADJ: speed=%d (best_speed=%d) fix=%d\n",
-					 speed, best_speed, fix);
+					"ADJ: speed=%d (best_speed=%d) fix=%d\n",
+					speed, best_speed, fix);
 				xbus->sync_adjustment_offset = speed;
 				if (xbus != syncer
 				    && xbus->sync_adjustment != speed)
@@ -354,8 +363,8 @@ static void xbus_command_timer(unsigned long param)
 	BUG_ON(!xbus);
 	do_gettimeofday(&now);
 	xbus_command_queue_tick(xbus);
-	if (!xbus->self_ticking)
-		mod_timer(&xbus->command_timer, jiffies + 1);	/* Must be 1KHz rate */
+	if (!xbus->self_ticking) /* Must be 1KHz rate */
+		mod_timer(&xbus->command_timer, jiffies + 1);
 }
 
 void xbus_set_command_timer(xbus_t *xbus, bool on)
@@ -531,7 +540,8 @@ void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 
 		if ((rate_limit++ % 10003) == 0)
 			XPD_NOTICE(xpd,
-				   "Is a DAHDI sync master: ignore sync from DAHDI\n");
+				"Is a DAHDI sync master: "
+				"ignore sync from DAHDI\n");
 		goto noop;
 	}
 	/* Now we know for sure someone else is dahdi sync master */
@@ -767,9 +777,11 @@ static void do_ec(xpd_t *xpd)
 	for (i = 0; i < PHONEDEV(xpd).span.channels; i++) {
 		struct dahdi_chan *chan = XPD_CHAN(xpd, i);
 
-		if (unlikely(IS_SET(PHONEDEV(xpd).digital_signalling, i)))	/* Don't echo cancel BRI D-chans */
+		/* Don't echo cancel BRI D-chans */
+		if (unlikely(IS_SET(PHONEDEV(xpd).digital_signalling, i)))
 			continue;
-		if (!IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))	/* No ec for unwanted PCM */
+		/* No ec for unwanted PCM */
+		if (!IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))
 			continue;
 		dahdi_ec_chunk(chan, chan->readchunk,
 			       PHONEDEV(xpd).ec_chunk2[i]);
@@ -826,7 +838,8 @@ static bool pcm_valid(xpd_t *xpd, xpacket_t *pack)
 		XPD_COUNTER(xpd, RECV_ERRORS)++;
 		if ((rate_limit++ % 1000) <= 10) {
 			XPD_ERR(xpd,
-				"BAD PCM REPLY: packet_len=%d (should be %d), count=%d\n",
+				"BAD PCM REPLY: packet_len=%d "
+				"(should be %d), count=%d\n",
 				XPACKET_LEN(pack), good_len, count);
 			dump_packet("BAD PCM REPLY", pack, 1);
 		}
@@ -856,8 +869,9 @@ static inline void pcm_frame_out(xbus_t *xbus, xframe_t *xframe)
 
 				if ((rate_limit++ % 5003) == 0)
 					XBUS_DBG(SYNC, xbus,
-						 "Bad PCM TX timing(%d): usec=%ld.\n",
-						 rate_limit, usec);
+						"Bad PCM TX timing(%d): "
+						"usec=%ld.\n",
+						rate_limit, usec);
 			}
 			if (usec > xbus->max_tx_sync)
 				xbus->max_tx_sync = usec;
@@ -952,8 +966,9 @@ void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 			memset((u_char *)r, 0x7F, DAHDI_CHUNKSIZE);
 			if (IS_SET(PHONEDEV(xpd).silence_pcm, i)) {
 				/*
-				 * This will clear the EC buffers until next tick
-				 * So we don't have noise residues from the past.
+				 * This will clear the EC buffers until next
+				 * tick so we don't have noise residues
+				 * from the past.
 				 */
 				memset(PHONEDEV(xpd).ec_chunk2[i], 0x7F,
 				       DAHDI_CHUNKSIZE);
@@ -1022,8 +1037,9 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 
 			if ((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
-					    "%s: Non-PCM packet within a PCM xframe. (%d)\n",
-					    __func__, rate_limit);
+					"%s: Non-PCM packet within "
+					"a PCM xframe. (%d)\n",
+					__func__, rate_limit);
 				dump_xframe("In PCM xframe", xbus, xframe,
 					    debug);
 			}
@@ -1035,8 +1051,8 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 
 			if ((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
-					    "%s: Invalid packet length %d. (%d)\n",
-					    __func__, len, rate_limit);
+					"%s: Invalid packet length %d. (%d)\n",
+					__func__, len, rate_limit);
 				dump_xframe("BAD LENGTH", xbus, xframe, debug);
 			}
 			goto out;
@@ -1102,8 +1118,8 @@ static void xbus_tick(xbus_t *xbus)
 			}
 #endif
 			/*
-			 * calls to dahdi_transmit should be out of spinlocks, as it may call back
-			 * our hook setting methods.
+			 * calls to dahdi_transmit should be out of spinlocks,
+			 * as it may call back our hook setting methods.
 			 */
 			dahdi_transmit(&PHONEDEV(xpd).span);
 		}
@@ -1121,7 +1137,10 @@ static void xbus_tick(xbus_t *xbus)
 
 			if (pcm_len && xpd->card_present) {
 				do {
-					// pack = NULL;         /* FORCE single packet frames */
+#if 0
+					/* FORCE single packet frames */
+					pack = NULL;
+#endif
 					if (xframe && !pack) {	/* FULL frame */
 						pcm_frame_out(xbus, xframe);
 						xframe = NULL;
@@ -1134,11 +1153,10 @@ static void xbus_tick(xbus_t *xbus)
 						if (!xframe) {
 							static int rate_limit;
 
-							if ((rate_limit++ %
-							     3001) == 0)
+							if ((rate_limit++ % 3001) == 0)
 								XBUS_ERR(xbus,
-									 "%s: failed to allocate new xframe\n",
-									 __func__);
+									"%s: failed to allocate new xframe\n",
+									__func__);
 							return;
 						}
 					}
@@ -1180,8 +1198,10 @@ static void xbus_tick(xbus_t *xbus)
 
 					if ((rate_limit++ % 5003) == 0)
 						XBUS_DBG(SYNC, xbus,
-							 "Bad PCM RX timing(%d): usec=%ld.\n",
-							 rate_limit, usec);
+							"Bad PCM RX "
+							"timing(%d): "
+							"usec=%ld.\n",
+							rate_limit, usec);
 				}
 				if (usec > xbus->max_rx_sync)
 					xbus->max_rx_sync = usec;
@@ -1199,7 +1219,8 @@ static void xbus_tick(xbus_t *xbus)
 				do_ec(xpd);
 				dahdi_receive(&PHONEDEV(xpd).span);
 			}
-			PHONEDEV(xpd).silence_pcm = 0;	/* silence was injected */
+			/* silence was injected */
+			PHONEDEV(xpd).silence_pcm = 0;
 		}
 		xpd->timer_count = xbus->global_counter;
 		/*

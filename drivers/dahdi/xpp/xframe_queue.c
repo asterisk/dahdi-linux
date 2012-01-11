@@ -7,8 +7,9 @@ extern int debug;
 static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags);
 static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe);
 
-void xframe_queue_init(struct xframe_queue *q, unsigned int steady_state_count,
-		       unsigned int max_count, const char *name, void *priv)
+void xframe_queue_init(struct xframe_queue *q,
+	unsigned int steady_state_count, unsigned int max_count,
+	const char *name, void *priv)
 {
 	memset(q, 0, sizeof(*q));
 	spin_lock_init(&q->lock);
@@ -57,8 +58,9 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	if (q->count >= q->max_count) {
 		q->overflows++;
 		if ((overflow_cnt++ % 1000) < 5) {
-			NOTICE
-			    ("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
+			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d "
+				"worst %3d, overflows %3d "
+				"worst_lag %02ld.%ld ms\n",
 			     q->name, q->steady_state_count, q->count,
 			     q->max_count, q->worst_count, q->overflows,
 			     q->worst_lag_usec / 1000,
@@ -163,15 +165,18 @@ static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 		return NULL;
 	}
 	spin_lock_irqsave(&xbus->transport.lock, flags);
-	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __func__, atomic_read(&xbus->transport.transport_refcount));
+#if 0
+	XBUS_INFO(xbus, "%s (transport_refcount=%d)\n",
+		__func__, atomic_read(&xbus->transport.transport_refcount));
+#endif
 	xframe = ops->alloc_xframe(xbus, gfp_flags);
 	if (!xframe) {
 		static int rate_limit;
 
 		if ((rate_limit++ % 3001) == 0)
 			XBUS_ERR(xbus,
-				 "Failed xframe allocation from transport (%d)\n",
-				 rate_limit);
+				"Failed xframe allocation from transport (%d)\n",
+				rate_limit);
 		transportops_put(xbus);
 		/* fall through */
 	}
@@ -188,7 +193,10 @@ static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe)
 	ops = xbus->transport.ops;
 	BUG_ON(!ops);
 	spin_lock_irqsave(&xbus->transport.lock, flags);
-	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __func__, atomic_read(&xbus->transport.transport_refcount));
+#if 0
+	XBUS_INFO(xbus, "%s (transport_refcount=%d)\n",
+		__func__, atomic_read(&xbus->transport.transport_refcount));
+#endif
 	ops->free_xframe(xbus, xframe);
 	transportops_put(xbus);
 	spin_unlock_irqrestore(&xbus->transport.lock, flags);

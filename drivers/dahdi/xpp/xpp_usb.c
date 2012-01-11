@@ -44,7 +44,8 @@
 
 static const char rcsid[] = "$Id$";
 
-static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");	/* must be before dahdi_debug.h */
+/* must be before dahdi_debug.h */
+static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static DEF_PARM(int, usb1, 0, 0644, "Allow using USB 1.1 interfaces");
 static DEF_PARM(uint, tx_sluggish, 2000, 0644, "A sluggish transmit (usec)");
 static DEF_PARM(uint, drop_pcm_after, 6, 0644,
@@ -54,13 +55,18 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644,
 
 #define	XUSB_PRINTK(level, xusb, fmt, ...)	\
 	printk(KERN_ ## level "%s-%s: xusb-%d (%s) [%s]: " fmt, #level,	\
-		THIS_MODULE->name, (xusb)->index, xusb->path, xusb->serial, ## __VA_ARGS__)
+		THIS_MODULE->name, (xusb)->index, xusb->path, \
+		xusb->serial, ## __VA_ARGS__)
 
 #define	XUSB_DBG(bits, xusb, fmt, ...)	\
-			((void)((debug & (DBG_ ## bits)) && XUSB_PRINTK(DEBUG, xusb, "%s: " fmt, __func__, ## __VA_ARGS__)))
-#define	XUSB_ERR(xusb, fmt, ...)		XUSB_PRINTK(ERR, xusb, fmt, ## __VA_ARGS__)
-#define	XUSB_NOTICE(xusb, fmt, ...)		XUSB_PRINTK(NOTICE, xusb, fmt, ## __VA_ARGS__)
-#define	XUSB_INFO(xusb, fmt, ...)		XUSB_PRINTK(INFO, xusb, fmt, ## __VA_ARGS__)
+	((void)((debug & (DBG_ ## bits)) && XUSB_PRINTK(DEBUG, \
+		xusb, "%s: " fmt, __func__, ## __VA_ARGS__)))
+#define	XUSB_ERR(xusb, fmt, ...) \
+	XUSB_PRINTK(ERR, xusb, fmt, ## __VA_ARGS__)
+#define	XUSB_NOTICE(xusb, fmt, ...) \
+	XUSB_PRINTK(NOTICE, xusb, fmt, ## __VA_ARGS__)
+#define	XUSB_INFO(xusb, fmt, ...) \
+	XUSB_PRINTK(INFO, xusb, fmt, ## __VA_ARGS__)
 
 /* FIXME: A flag that was deprecated at some point, and rather useless */
 /* anyway. Only used in the code or-ed to other flags                  */
@@ -95,7 +101,8 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644,
 	do {						\
 		if ((udev)->descriptor.field) {		\
 			char	tmp[USB_MAX_STRING];	\
-			if (usb_string((udev), (udev)->descriptor.field, tmp, sizeof(tmp)) > 0) \
+			if (usb_string((udev), (udev)->descriptor.field, \
+				tmp, sizeof(tmp)) > 0) \
 				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
 		}					\
 	} while (0);
@@ -103,7 +110,8 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644,
 	do {						\
 		if ((iface)->desc.iInterface) {		\
 			char	tmp[USB_MAX_STRING];	\
-			if (usb_string((udev), (iface)->desc.iInterface, tmp, sizeof(tmp)) > 0) \
+			if (usb_string((udev), (iface)->desc.iInterface, \
+				tmp, sizeof(tmp)) > 0) \
 				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
 		}					\
 	} while (0);
@@ -185,9 +193,12 @@ struct uframe {
 	xusb_t *xusb;
 };
 
-#define	urb_to_uframe(urb)		container_of(urb, struct uframe, urb)
-#define	xframe_to_uframe(xframe)	container_of(xframe, struct uframe, xframe)
-#define	xusb_of(xbus)			((xusb_t *)((xbus)->transport.priv))
+#define	urb_to_uframe(urb) \
+		container_of(urb, struct uframe, urb)
+#define	xframe_to_uframe(xframe) \
+		container_of(xframe, struct uframe, xframe)
+#define	xusb_of(xbus) \
+		((xusb_t *)((xbus)->transport.priv))
 
 #define	USEC_BUCKET		100	/* usec */
 #define	NUM_BUCKETS		15
@@ -199,7 +210,7 @@ struct uframe {
 struct xusb {
 	uint xbus_num;
 	struct usb_device *udev;	/* save off the usb device pointer */
-	struct usb_interface *interface;	/* the interface for this device */
+	struct usb_interface *interface; /* the interface for this device */
 	unsigned char minor;	/* the starting minor number for this device */
 	uint index;
 	char path[XBUS_DESCLEN];	/* a unique path */
@@ -305,8 +316,9 @@ static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 	if (!xusb->present) {
 		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb,
-				 "abort allocations during device disconnect (%d)\n",
-				 rate_limit);
+				"abort allocations during "
+				"device disconnect (%d)\n",
+				rate_limit);
 		return NULL;
 	}
 	size =
@@ -372,8 +384,9 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 
 		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb,
-				 "abort do_send_xframe during device disconnect (%d)\n",
-				 rate_limit);
+				"abort do_send_xframe during "
+				"device disconnect (%d)\n",
+				rate_limit);
 		ret = -ENODEV;
 		goto failure;
 	}
@@ -385,8 +398,9 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 
 		if ((rate_limit++ % 5000) == 0)
 			XUSB_ERR(xusb,
-				 "USB device is totaly stuck. Dropping packets (#%d).\n",
-				 rate_limit);
+				"USB device is totaly stuck. "
+				"Dropping packets (#%d).\n",
+				rate_limit);
 		ret = -ENODEV;
 		goto failure;
 	}
@@ -502,16 +516,23 @@ static const struct xusb_model_info {
 
 /* table of devices that work with this driver */
 static const struct usb_device_id xusb_table[] = {
-	{USB_DEVICE(0xE4E4, 0x1132),.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},	// FPGA_FXS
-	{USB_DEVICE(0xE4E4, 0x1142),.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},	// FPGA_1141
-	{USB_DEVICE(0xE4E4, 0x1152),.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},	// FPGA_1151
-	{USB_DEVICE(0xE4E4, 0x1162),.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},	// FPGA_1161
-	{}			/* Terminating entry */
+/* FPGA_FXS */	{USB_DEVICE(0xE4E4, 0x1132),
+		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+/* FPGA_1141 */	{USB_DEVICE(0xE4E4, 0x1142),
+		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+/* FPGA_1151 */	{USB_DEVICE(0xE4E4, 0x1152),
+		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+/* FPGA_1161 */	{USB_DEVICE(0xE4E4, 0x1162),
+		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+/* Terminate */	{}
 };
 
 MODULE_DEVICE_TABLE(usb, xusb_table);
 
-/* usb specific object needed to register this driver with the usb subsystem */
+/*
+ * USB specific object needed to register this driver
+ * with the usb subsystem
+ */
 static struct usb_driver xusb_driver = {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 16)
 	.owner = THIS_MODULE,
@@ -577,21 +598,25 @@ static int check_usb1(struct usb_endpoint_descriptor *endpoint)
 		return 1;
 
 	if (usb1) {
-		NOTICE
-		    ("USB1 endpoint detected: USB %s endpoint 0x%X support only wMaxPacketSize=%d.\n",
-		     msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
+		NOTICE("USB1 endpoint detected: "
+			"USB %s endpoint 0x%X support only wMaxPacketSize=%d\n",
+			msg,
+			endpoint->bEndpointAddress,
+			endpoint->wMaxPacketSize);
 		return 1;
 	}
-	NOTICE
-	    ("USB1 endpoint detected. Device disabled. To enable: usb1=1, and read docs. (%s, endpoint %d, size %d).\n",
-	     msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
+	NOTICE("USB1 endpoint detected: "
+		"Device disabled. To enable: usb1=1, and read docs. "
+		"(%s, endpoint %d, size %d)\n",
+		msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
 	return 0;
 }
 
 /*
  * set up the endpoint information
  * check out the endpoints
- * FIXME: Should be simplified (above 2.6.10) to use usb_dev->ep_in[0..16] and usb_dev->ep_out[0..16]
+ * FIXME: Should be simplified (above 2.6.10) to use
+ *        usb_dev->ep_in[0..16] and usb_dev->ep_out[0..16]
  */
 static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 			 struct xusb_model_info *model_info)
@@ -601,7 +626,9 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 	int ep_addr;
 	int i;
 
-#define	BULK_ENDPOINT(ep) (((ep)->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == USB_ENDPOINT_XFER_BULK)
+#define	BULK_ENDPOINT(ep) \
+	(((ep)->bmAttributes & USB_ENDPOINT_XFERTYPE_MASK) == \
+	USB_ENDPOINT_XFER_BULK)
 
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 		endpoint = &iface_desc->endpoint[i].desc;
@@ -646,7 +673,8 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 
 /*
  * The USB stack before 2.6.10 seems to be a bit shoddy. It seems that when
- * being called from the probe we may already have the lock to udev (the Usb DEVice).
+ * being called from the probe we may already have the lock to
+ * udev (the Usb DEVice).
  * Thus we call the internal __usb_reset_device instead.
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
@@ -769,7 +797,8 @@ static int xusb_probe(struct usb_interface *interface,
 		retval = -ENOMEM;
 		goto probe_failed;
 	}
-	usb_make_path(udev, xusb->path, XBUS_DESCLEN);	// May trunacte... ignore
+	/* May trunacte... ignore */
+	usb_make_path(udev, xusb->path, XBUS_DESCLEN);
 	snprintf(xbus->connector, XBUS_DESCLEN, "%s", xusb->path);
 	if (xusb->serial && xusb->serial[0])
 		snprintf(xbus->label, LABEL_SIZE, "usb:%s", xusb->serial);
@@ -899,7 +928,7 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 
 	if (!xbus) {
 		XUSB_ERR(xusb,
-			 "Sent URB does not belong to a valid xbus anymore...\n");
+			"Sent URB does not belong to a valid xbus...\n");
 		return;
 	}
 	//flip_parport_bit(6);
@@ -918,10 +947,12 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 		if (xusb->sluggish_debounce++ > drop_pcm_after) {
 			static int rate_limit;
 
-			if ((rate_limit++ % 1003) == 500)	/* skip first messages */
+			/* skip first messages */
+			if ((rate_limit++ % 1003) == 500)
 				XUSB_NOTICE(xusb,
-					    "Sluggish USB. Dropping next PCM frame (pending_writes=%d)\n",
-					    writes);
+					"Sluggish USB. Dropping next PCM frame "
+					"(pending_writes=%d)\n",
+					writes);
 			atomic_inc(&xusb->pcm_tx_drops);
 			xusb->drop_next_pcm = 1;
 			xusb->sluggish_debounce = 0;
@@ -934,8 +965,9 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 		static int rate_limit;
 		if ((rate_limit++ % 1000) < 10) {
 			XUSB_ERR(xusb,
-				 "nonzero write bulk status received: %d (pending_writes=%d)\n",
-				 urb->status, writes);
+				"nonzero write bulk status received: "
+				"%d (pending_writes=%d)\n",
+				urb->status, writes);
 			dump_xframe("usb-write-error", xbus, xframe, DBG_ANY);
 		}
 		XUSB_COUNTER(xusb, TX_ERRORS)++;
@@ -960,7 +992,7 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 	atomic_dec(&xusb->pending_reads);
 	if (!xbus) {
 		XUSB_ERR(xusb,
-			 "Received URB does not belong to a valid xbus anymore...\n");
+			"Received URB does not belong to a valid xbus...\n");
 		return;
 	}
 	if (!xusb->present) {

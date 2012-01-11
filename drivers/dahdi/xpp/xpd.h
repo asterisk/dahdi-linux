@@ -54,14 +54,14 @@ typedef unsigned gfp_t;		/* Added in 2.6.14 */
  * bool is now defined as a proper boolean type (gcc _Bool)
  * but the command line parsing framework handles it as int.
  */
-#define	DEF_PARM_BOOL(name, init, perm, desc)	\
-	int name = init;	\
-	module_param(name, bool, perm);		\
+#define	DEF_PARM_BOOL(name, init, perm, desc) \
+	int name = init; \
+	module_param(name, bool, perm); \
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
 
-#define	DEF_PARM(type, name, init, perm, desc)	\
-	type name = init;	\
-	module_param(name, type, perm);		\
+#define	DEF_PARM(type, name, init, perm, desc) \
+	type name = init; \
+	module_param(name, type, perm); \
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
 
 #if	LINUX_VERSION_CODE	< KERNEL_VERSION(2, 6, 10)
@@ -69,16 +69,16 @@ typedef unsigned gfp_t;		/* Added in 2.6.14 */
  * Old 2.6 kernels had module_param_array() macro that receive the counter
  * by value.
  */
-#define	DEF_ARRAY(type, name, count, init, desc)	\
-	unsigned int name ## _num_values;	\
-	type name[count] = { [0 ... ((count)-1)] = (init) };			\
-	module_param_array(name, type, name ## _num_values, 0644);	\
+#define	DEF_ARRAY(type, name, count, init, desc) \
+	unsigned int name ## _num_values; \
+	type name[count] = { [0 ... ((count)-1)] = (init) }; \
+	module_param_array(name, type, name ## _num_values, 0644); \
 	MODULE_PARM_DESC(name, desc " ( 1-" __MODULE_STRING(count) ")")
 #else
-#define	DEF_ARRAY(type, name, count, init, desc)	\
-	unsigned int name ## _num_values;	\
-	type name[count] = {[0 ... ((count)-1)] = init};			\
-	module_param_array(name, type, &name ## _num_values, 0644);	\
+#define	DEF_ARRAY(type, name, count, init, desc) \
+	unsigned int name ## _num_values; \
+	type name[count] = {[0 ... ((count)-1)] = init}; \
+	module_param_array(name, type, &name ## _num_values, 0644); \
 	MODULE_PARM_DESC(name, desc " ( 1-" __MODULE_STRING(count) ")")
 #endif
 #endif // __KERNEL__
@@ -150,8 +150,8 @@ struct phonedev {
 
 	int channels;
 	xpd_direction_t direction;	/* TO_PHONE, TO_PSTN */
-	xpp_line_t no_pcm;	/* Temporary: disable PCM (for USB-1) */
-	xpp_line_t offhook_state;	/* Actual chip state: 0 - ONHOOK, 1 - OFHOOK */
+	xpp_line_t no_pcm;		/* Temporary: disable PCM (for USB-1) */
+	xpp_line_t offhook_state;	/* chip state: 0 - ONHOOK, 1 - OFHOOK */
 	xpp_line_t oht_pcm_pass;	/* Transfer on-hook PCM */
 	/* Voice Mail Waiting Indication: */
 	unsigned int msg_waiting[CHANNELS_PERXPD];
@@ -225,7 +225,8 @@ struct xpd {
 	unsigned int timer_count;
 };
 
-#define	for_each_line(xpd, i)	for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
+#define	for_each_line(xpd, i) \
+		for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
 #define	IS_BRI(xpd)		((xpd)->type == XPD_TYPE_BRI)
 #define	TICK_TOLERANCE		500	/* usec */
 
@@ -249,7 +250,8 @@ struct xpd_driver {
 	xpd_type_t type;
 
 	struct device_driver driver;
-#define   driver_to_xpd_driver(driver) container_of(driver, struct xpd_driver, driver)
+#define	driver_to_xpd_driver(driver) \
+		container_of(driver, struct xpd_driver, driver)
 };
 
 int xpd_driver_register(struct device_driver *driver);

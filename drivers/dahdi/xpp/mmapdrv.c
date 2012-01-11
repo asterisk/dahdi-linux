@@ -51,9 +51,15 @@ static int rx_intr_counter;
 #define END_OF_FRAME	0x0001
 #define GET_LEN		0x0002
 #define START_RD_BURST	0x0008
-#define AS_BF_MODE	0x0010	//stand alone Astribank without USB (Asterisk BlackFin Mode)
-#define EC_BF_MODE	0x0020	//all data between Astribank and USB routed thru BF(EchoCanceler BlackFin Mode)
-#define NO_BF_MODE	0x0040	//Astribank worke with USB only (no BlackFin Mode)
+/* stand alone Astribank without USB (Asterisk BlackFin Mode) */
+#define AS_BF_MODE	0x0010
+/*
+ * all data between Astribank and USB routed
+ * thru BF(EchoCanceler BlackFin Mode)
+ */
+#define EC_BF_MODE	0x0020
+/* Astribank worke with USB only (no BlackFin Mode) */
+#define NO_BF_MODE	0x0040
 #define SET_XA_DIR	0x0080
 #define GET_XPD_STS	0x0100
 #define GET_CHECKSUM	0x0200
@@ -164,7 +170,10 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 #endif
 	if (rxcnt & 1)
 		buf[rxcnt - 1] = inw(FPGA_BASE_ADDR);
-	/* Sanity check: length of first packet in frame should be no more than the frame length */
+	/*
+	 * Sanity check: length of first packet in frame
+	 * should be no more than the frame length
+	 */
 	if (((buf[0] | (buf[1] << 8)) & 0x3FF) > rxcnt) {
 		if (printk_ratelimit()) {
 			ERR("Packet len=%d, frame len=%d\n",
@@ -263,7 +272,8 @@ static int xframe_send_common(xbus_t *xbus, xframe_t *xframe, bool pcm)
 			static int rate_limit;
 			if ((rate_limit++ % 1000) == 0)
 				XBUS_ERR(xbus,
-					 "Dropped PCM xframe (pcm_in_pool_count=%d).\n",
+					 "Dropped PCM xframe "
+					 "(pcm_in_pool_count=%d).\n",
 					 pcm_in_pool_count);
 			FREE_SEND_XFRAME(xbus, xframe);
 			pcm_dropped++;
@@ -273,7 +283,8 @@ static int xframe_send_common(xbus_t *xbus, xframe_t *xframe, bool pcm)
 				spin_unlock_irqrestore(&tx_ready_lock, flags);
 				if ((rate_limit++ % 1000) == 0)
 					XBUS_ERR(xbus,
-						 "Dropped xframe. Cannot enqueue.\n");
+						 "Dropped xframe. "
+						 "Cannot enqueue.\n");
 				FREE_SEND_XFRAME(xbus, xframe);
 				return -E2BIG;
 			}
@@ -327,12 +338,12 @@ static int fill_proc_queue(char *p, struct xframe_queue *q)
 {
 	int len;
 
-	len =
-	    sprintf(p,
-		    "%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
-		    q->name, q->steady_state_count, q->count, q->max_count,
-		    q->worst_count, q->overflows, q->worst_lag_usec / 1000,
-		    q->worst_lag_usec % 1000);
+	len = sprintf(p,
+		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d "
+		"worst_lag %02ld.%ld ms\n",
+		q->name, q->steady_state_count, q->count, q->max_count,
+		q->worst_count, q->overflows, q->worst_lag_usec / 1000,
+		q->worst_lag_usec % 1000);
 	xframe_queue_clearstats(q);
 	return len;
 }
@@ -421,29 +432,38 @@ static struct mmap_device astribank_dev = {
 static int __init xpp_mmap_load_fpga(u8 * data, size_t size)
 {
 	size_t i;
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DATA | NCONFIG | DCLK);	//set data, nconfig and dclk to port out
+	/* set data, nconfig and dclk to port out */
+	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DATA | NCONFIG | DCLK);
 	bfin_write_PORTG_FER(bfin_read_PORTG_FER() & ~(DATA | NCONFIG | DCLK));
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~(CONF_DONE | NSTATUS));	//set conf_done and nstatus to port in
-	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() &
-				~(DATA | NCONFIG | DCLK));
+	/* set conf_done and nstatus to port in */
+	bfin_write_PORTGIO_DIR(
+		bfin_read_PORTGIO_DIR() & ~(CONF_DONE | NSTATUS));
+	bfin_write_PORTGIO_INEN(
+		bfin_read_PORTGIO_INEN() & ~(DATA | NCONFIG | DCLK));
 	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() | CONF_DONE | NSTATUS);
 
-	bfin_write_PORTGIO_CLEAR(NCONFIG);	//reset fpga during configuration holds nCONFIG low
-	udelay(40);		//Tcfg ~40us delay
-	bfin_write_PORTGIO_SET(NCONFIG);	//transition nCONFIG to high - reset end.
-	udelay(40);		//Tcf2ck ~40us delay
+	/* reset fpga during configuration holds nCONFIG low */
+	bfin_write_PORTGIO_CLEAR(NCONFIG);
+	udelay(40);		/* Tcfg ~40us delay */
+	/* transition nCONFIG to high - reset end. */
+	bfin_write_PORTGIO_SET(NCONFIG);
+	udelay(40);		/* Tcf2ck ~40us delay */
 	if (!(bfin_read_PORTGIO() & NSTATUS))
-		return -EIO;	//report reset faill - Tcf2st1 pass
+		return -EIO;	/* report reset faill - Tcf2st1 pass */
 
 #if 0
 	if (!(bfin_read_PORTGIO() & CONF_DONE))
 		return -EIO;
 #endif
 	bfin_write_PORTGIO_CLEAR(DCLK);
-	for (i = 0; i < size; i++) {	// loop EP2OUT buffer data to FPGA
+	for (i = 0; i < size; i++) {	/* loop EP2OUT buffer data to FPGA */
 		int j;
 		u8 __u8 = data[i];
-		for (j = 0; j < 8; j++)	//send the configuration data through the DATA0 pin one bit at a time.
+		/*
+		 * Send the configuration data through the DATA0 pin
+		 * one bit at a time.
+		 */
+		for (j = 0; j < 8; j++)
 		{
 			if (__u8 &1)
 				bfin_write_PORTGIO_SET(DATA);
@@ -454,7 +474,7 @@ static int __init xpp_mmap_load_fpga(u8 * data, size_t size)
 			bfin_write_PORTGIO_CLEAR(DCLK);
 		}
 		if (!(bfin_read_PORTGIO() & NSTATUS))
-			return -EIO;	//check the nSTATUS
+			return -EIO;	/* check the nSTATUS */
 	}
 	bfin_write_PORTGIO_CLEAR(DATA);
 	udelay(1);
@@ -466,22 +486,29 @@ static int __init xpp_mmap_load_fpga(u8 * data, size_t size)
 	 * some pins that were used only during initialization
 	 * to be used for debugging from now on.
 	 */
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DEBUG_GPIO1 | DEBUG_GPIO2);	//set to port out
+	/* set to port out */
+	bfin_write_PORTGIO_DIR(
+		bfin_read_PORTGIO_DIR() | DEBUG_GPIO1 | DEBUG_GPIO2);
 	bfin_write_PORTG_FER(bfin_read_PORTG_FER() &
 			     ~(DEBUG_GPIO1 | DEBUG_GPIO2));
 	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() &
 				~(DEBUG_GPIO1 | DEBUG_GPIO2));
 #endif
-	udelay(40);		//tCD2UM - CONF_DONE high to user mode
+	udelay(40);		/* tCD2UM - CONF_DONE high to user mode */
 	return 0;
 }
 
 static void __exit xpp_mmap_unload_fpga(void)
 {
-	bfin_write_PORTGIO_CLEAR(NCONFIG);	//reset fpga during configuration holds nCONFIG low
-	udelay(40);		//Tcfg ~40us delay
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~(DATA | NCONFIG | DCLK));	//disable output pin
-	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~(CONF_DONE | NSTATUS));	//disable input buffer
+	/* reset fpga during configuration holds nCONFIG low */
+	bfin_write_PORTGIO_CLEAR(NCONFIG);
+	udelay(40);		/* Tcfg ~40us delay */
+	/* disable output pin */
+	bfin_write_PORTGIO_DIR(
+		bfin_read_PORTGIO_DIR() & ~(DATA | NCONFIG | DCLK));
+	/* disable input buffer */
+	bfin_write_PORTGIO_INEN(
+		bfin_read_PORTGIO_INEN() & ~(CONF_DONE | NSTATUS));
 	INFO("FPGA Firmware unloaded\n");
 }
 

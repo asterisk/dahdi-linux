@@ -35,7 +35,8 @@
 
 static const char rcsid[] = "$Id$";
 
-static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");	/* must be before dahdi_debug.h */
+/* must be before dahdi_debug.h */
+static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static DEF_PARM(uint, poll_interval, 500, 0644,
 		"Poll channel state interval in milliseconds (0 - disable)");
 
@@ -201,13 +202,18 @@ struct pri_leds {
 #define	REG_FRS1	0x4D	/* Framer Receive Status Register 1 */
 
 #define	REG_LIM0	0x36
-#define	REG_LIM0_MAS	BIT(0)	/* Master Mode, DCO-R circuitry is frequency synchronized to the clock supplied by SYNC */
-#define	REG_LIM0_RTRS	BIT(5)	/*
-				 * Receive Termination Resistance Selection:
-				 * integrated resistor to create 75 Ohm termination (100 || 300 = 75)
-				 * 0 = 100 Ohm
-				 * 1 = 75 Ohm
-				 */
+/*
+ * Master Mode, DCO-R circuitry is frequency synchronized
+ * to the clock supplied by SYNC
+ */
+#define	REG_LIM0_MAS	BIT(0)
+/*
+ * Receive Termination Resistance Selection:
+ * integrated resistor to create 75 Ohm termination (100 || 300 = 75)
+ * 0 = 100 Ohm
+ * 1 = 75 Ohm
+ */
+#define	REG_LIM0_RTRS	BIT(5)
 #define	REG_LIM0_LL	BIT(1)	/* LL (Local Loopback) */
 
 #define	REG_FMR0	0x1C
@@ -234,9 +240,12 @@ struct pri_leds {
 #define	REG_FMR2_E_PLB	BIT(2)	/* Payload Loop-Back */
 #define	REG_FMR2_E_RFS0	BIT(6)	/* Receive Framing Select - LSB */
 #define	REG_FMR2_E_RFS1	BIT(7)	/* Receive Framing Select - MSB */
-#define	REG_FMR2_T_SSP	BIT(5)	/* Select Synchronization/Resynchronization Procedure */
-#define	REG_FMR2_T_MCSP	BIT(6)	/* Multiple Candidates Synchronization Procedure */
-#define	REG_FMR2_T_AFRS	BIT(7)	/* Automatic Force Resynchronization */
+/* Select Synchronization/Resynchronization Procedure */
+#define	REG_FMR2_T_SSP	BIT(5)
+/* Multiple Candidates Synchronization Procedure */
+#define	REG_FMR2_T_MCSP	BIT(6)
+/* Automatic Force Resynchronization */
+#define	REG_FMR2_T_AFRS	BIT(7)
 
 #define	REG_FMR3	0x31
 #define	REG_FMR3_EXTIW	BIT(0)	/* Extended CRC4 to Non-CRC4 Interworking */
@@ -263,10 +272,13 @@ struct pri_leds {
 
 #define REG_XSP_E	0x21
 #define REG_FMR5_T	0x21
-#define	REG_XSP_E_XSIF	BIT(2)	/* Transmit Spare Bit For International Use (FAS Word)  */
+/* Transmit Spare Bit For International Use (FAS Word)  */
+#define	REG_XSP_E_XSIF	BIT(2)
 #define	REG_FMR5_T_XTM	BIT(2)	/* Transmit Transparent Mode  */
-#define	REG_XSP_E_AXS	BIT(3)	/* Automatic Transmission of Submultiframe Status  */
-#define	REG_XSP_E_EBP	BIT(4)	/* E-Bit Polarity, Si-bit position of every outgoing CRC multiframe  */
+/* Automatic Transmission of Submultiframe Status  */
+#define	REG_XSP_E_AXS	BIT(3)
+/* E-Bit Polarity, Si-bit position of every outgoing CRC multiframe  */
+#define	REG_XSP_E_EBP	BIT(4)
 #define	REG_XSP_E_CASEN	BIT(6)	/* CAS: Channel Associated Signaling Enable  */
 #define	REG_FMR5_T_EIBR	BIT(6)	/* CAS: Enable Internal Bit Robbing Access   */
 
@@ -384,14 +396,15 @@ static int write_subunit(xpd_t *xpd, __u8 regnum, __u8 val)
 {
 	XPD_DBG(REGS, xpd, "(%d%d): REG=0x%02X dataL=0x%02X\n", xpd->addr.unit,
 		xpd->addr.subunit, regnum, val);
-	return xpp_register_request(xpd->xbus, xpd, PRI_PORT(xpd),	/* portno       */
-				    1,	/* writing      */
-				    regnum, 0,	/* do_subreg    */
-				    0,	/* subreg       */
-				    val,	/* data_L       */
-				    0,	/* do_datah     */
-				    0,	/* data_H       */
-				    0	/* should_reply */
+	return xpp_register_request(xpd->xbus, xpd,
+			PRI_PORT(xpd),	/* portno       */
+			1,		/* writing      */
+			regnum, 0,	/* do_subreg    */
+			0,		/* subreg       */
+			val,		/* data_L       */
+			0,		/* do_datah     */
+			0,		/* data_H       */
+			0		/* should_reply */
 	    );
 }
 
@@ -635,7 +648,7 @@ static void dahdi_update_syncsrc(xpd_t *xpd)
 		if (priv->clock_source && priv->alarms == 0) {
 			if (best_spanno)
 				XPD_ERR(xpd,
-					"Duplicate XPD's with clock_source=1\n");
+					"Duplicate XPD with clock_source=1\n");
 			best_spanno = PHONEDEV(subxpd).span.spanno;
 		}
 	}
@@ -783,17 +796,15 @@ static const struct {
 	const int flags;
 } valid_spanconfigs[sizeof(unsigned int) * 8] = {
 	/* These apply to T1 */
-	VALID_CONFIG(4, DAHDI_CONFIG_D4, "D4"), VALID_CONFIG(5,
-							     DAHDI_CONFIG_ESF,
-							     "ESF"),
-	    VALID_CONFIG(6, DAHDI_CONFIG_AMI, "AMI"), VALID_CONFIG(7,
-								   DAHDI_CONFIG_B8ZS,
-								   "B8ZS"),
-	    /* These apply to E1 */
-VALID_CONFIG(8, DAHDI_CONFIG_CCS, "CCS"), VALID_CONFIG(9,
-								   DAHDI_CONFIG_HDB3,
-								   "HDB3"),
-	    VALID_CONFIG(10, DAHDI_CONFIG_CRC4, "CRC4"),};
+	VALID_CONFIG(4, DAHDI_CONFIG_D4, "D4"),
+	VALID_CONFIG(5, DAHDI_CONFIG_ESF, "ESF"),
+	VALID_CONFIG(6, DAHDI_CONFIG_AMI, "AMI"),
+	VALID_CONFIG(7, DAHDI_CONFIG_B8ZS, "B8ZS"),
+	/* These apply to E1 */
+	VALID_CONFIG(8, DAHDI_CONFIG_CCS, "CCS"),
+	VALID_CONFIG(9, DAHDI_CONFIG_HDB3, "HDB3"),
+	VALID_CONFIG(10, DAHDI_CONFIG_CRC4, "CRC4"),
+};
 
 /*
  * Mark the lines as CLEAR or RBS signalling.
@@ -842,12 +853,10 @@ static void set_rbslines(xpd_t *xpd, int channo)
 					bytenum += REG_CCB1_T;
 					XPD_DBG(DEVICES, xpd,
 						"RBS(%s): modified=0x%X rbslines=0x%X reg=0x%X clear_lines=0x%X\n",
-						pri_protocol_name(priv->
-								  pri_protocol),
+						pri_protocol_name(priv->pri_protocol),
 						modified_lines, new_rbslines,
 						bytenum, clear_lines);
-					write_subunit(xpd, bytenum,
-						      clear_lines);
+					write_subunit(xpd, bytenum, clear_lines);
 				}
 				clear_lines = 0;
 				reg_changed = 0;
@@ -911,7 +920,8 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 			} else {
 				/* we got real garbage */
 				XPD_ERR(xpd,
-					"Unknown config item 0x%lX for %s. Ignore\n",
+					"Unknown config item 0x%lX for %s. "
+					"Ignore.\n",
 					BIT(i),
 					pri_protocol_name(priv->pri_protocol));
 			}
@@ -990,9 +1000,11 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 		codingstr = "D4";
 	} else if (lineconfig & DAHDI_CONFIG_CCS) {
 		codingstr = "CCS";
-		set_mode_cas(xpd, 0);	/* In E1 we know right from the span statement. */
+		/* In E1 we know right from the span statement. */
+		set_mode_cas(xpd, 0);
 	} else {
-		codingstr = "CAS";	/* In E1 we know right from the span statement. */
+		/* In E1 we know right from the span statement. */
+		codingstr = "CAS";
 		force_cas = 1;
 		set_mode_cas(xpd, 1);
 	}
@@ -1135,7 +1147,9 @@ static int pri_chanconfig(struct file *file, struct dahdi_chan *chan,
 	 */
 	if (is_sigtype_dchan(sigtype)) {
 		if (VALID_DCHAN(priv) && DCHAN(priv) != chan->channo) {
-			ERR("channel %d (%s) marked DChan but also channel %d.\n", chan->channo, chan->name, DCHAN(priv));
+			ERR("channel %d (%s) marked DChan but "
+				"also channel %d.\n",
+				chan->channo, chan->name, DCHAN(priv));
 			return -EINVAL;
 		}
 		XPD_DBG(GENERAL, xpd, "channel %d (%s) marked as DChan\n",
@@ -1185,8 +1199,10 @@ static xpd_t *PRI_card_new(xbus_t *xbus, int unit, int subunit,
 	if (!xpd)
 		return NULL;
 	priv = xpd->priv;
-	priv->pri_protocol = PRI_PROTO_0;	/* Default, changes in set_pri_proto() */
-	priv->deflaw = DAHDI_LAW_DEFAULT;	/* Default, changes in set_pri_proto() */
+	/* Default, changes in set_pri_proto() */
+	priv->pri_protocol = PRI_PROTO_0;
+	/* Default, changes in set_pri_proto() */
+	priv->deflaw = DAHDI_LAW_DEFAULT;
 	xpd->type_name = type_name(priv->pri_protocol);
 	xbus->sync_mode_default = SYNC_MODE_AB;
 	return xpd;
@@ -1791,7 +1807,8 @@ static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 					} else if (chan->writechunk[0] == 0xFF)
 						dchan_state(xpd, 0);
 					else
-						chan->writechunk[0] = 0xFF;	/* Clobber for next tick */
+						/* Clobber for next tick */
+						chan->writechunk[0] = 0xFF;
 				}
 			} else
 				memset((u_char *)pcm, DAHDI_XLAW(0, chan),
@@ -1848,8 +1865,8 @@ static void PRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 			if (priv->dchan_rx_sample != pcm[0]) {
 				if (debug & DBG_PCM) {
 					XPD_INFO(xpd,
-						 "RX-D-Chan: prev=0x%X now=0x%X\n",
-						 priv->dchan_rx_sample, pcm[0]);
+						"RX-D-Chan: prev=0x%X now=0x%X\n",
+						priv->dchan_rx_sample, pcm[0]);
 					dump_packet("RX-D-Chan", pack, 1);
 				}
 				priv->dchan_rx_sample = pcm[0];
@@ -2134,9 +2151,10 @@ static void process_cas_dchan(xpd_t *xpd, __u8 regnum, __u8 data_low)
 				return;
 
 			XPD_NOTICE(xpd,
-				   "%s: received register 0x%X in protocol %s. Ignore\n",
-				   __func__, regnum,
-				   pri_protocol_name(priv->pri_protocol));
+				"%s: received register 0x%X in protocol %s. "
+				"Ignore.\n",
+				__func__, regnum,
+				pri_protocol_name(priv->pri_protocol));
 			return;
 		}
 		if (decode_cas_e1(xpd, regnum, data_low) < 0)
@@ -2144,8 +2162,9 @@ static void process_cas_dchan(xpd_t *xpd, __u8 regnum, __u8 data_low)
 	} else if (priv->pri_protocol == PRI_PROTO_T1) {
 		if (regnum > REG_RS12_E) {
 			XPD_NOTICE(xpd,
-				   "%s: received register 0x%X in protocol %s. Ignore\n",
-				   __func__, regnum,
+				"%s: received register 0x%X in protocol %s. "
+				"Ignore.\n",
+				__func__, regnum,
 				   pri_protocol_name(priv->pri_protocol));
 			return;
 		}
@@ -2199,12 +2218,16 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			process_cas_dchan(xpd, regnum, data_low);
 		}
 	}
-	/* Update /proc info only if reply relate to the last slic read request */
-	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
-	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
-									do_subreg)
-	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
-								     subreg)) {
+	/*
+	 * Update /proc info only if reply relate to the
+	 * last slic read request
+	 */
+	if (REG_FIELD(&xpd->requested_reply, regnum) ==
+			REG_FIELD(info, regnum)
+		&& REG_FIELD(&xpd->requested_reply, do_subreg) ==
+			REG_FIELD(info, do_subreg)
+		&& REG_FIELD(&xpd->requested_reply, subreg) ==
+			REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
 
@@ -2300,8 +2323,9 @@ static DEVICE_ATTR_WRITER(pri_protocol_store, dev, buf, count)
 	i = strcspn(buf, " \r\n");
 	if (i != 2) {
 		XPD_NOTICE(xpd,
-			   "Protocol name '%s' has %d characters (should be 2). Ignored.\n",
-			   buf, i);
+			"Protocol name '%s' has %d characters (should be 2). "
+			"Ignored.\n",
+			buf, i);
 		return -EINVAL;
 	}
 	if (strnicmp(buf, "E1", 2) == 0)
@@ -2312,8 +2336,9 @@ static DEVICE_ATTR_WRITER(pri_protocol_store, dev, buf, count)
 		new_protocol = PRI_PROTO_J1;
 	else {
 		XPD_NOTICE(xpd,
-			   "Unknown PRI protocol '%s' (should be E1|T1|J1). Ignored.\n",
-			   buf);
+			"Unknown PRI protocol '%s' (should be E1|T1|J1). "
+			"Ignored.\n",
+			buf);
 		return -EINVAL;
 	}
 	ret = set_pri_proto(xpd, new_protocol);
@@ -2356,8 +2381,8 @@ static DEVICE_ATTR_WRITER(pri_localloop_store, dev, buf, count)
 		return -ENODEV;
 	if ((i = strcspn(buf, " \r\n")) != 1) {
 		XPD_NOTICE(xpd,
-			   "Value '%s' has %d characters (should be 1). Ignored.\n",
-			   buf, i);
+			"Value '%s' has %d characters (should be 1). Ignored\n",
+			buf, i);
 		return -EINVAL;
 	}
 	if (strchr("1Yy", buf[0]) != NULL)
@@ -2366,8 +2391,8 @@ static DEVICE_ATTR_WRITER(pri_localloop_store, dev, buf, count)
 		ll = 0;
 	else {
 		XPD_NOTICE(xpd,
-			   "Unknown value '%s' (should be [1Yy]|[0Nn]). Ignored.\n",
-			   buf);
+			"Unknown value '%s' (should be [1Yy]|[0Nn]). Ignored\n",
+			buf);
 		return -EINVAL;
 	}
 	ret = set_localloop(xpd, ll);

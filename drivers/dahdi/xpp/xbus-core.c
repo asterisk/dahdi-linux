@@ -52,8 +52,8 @@ static const char rcsid[] = "$Id$";
 #ifdef	PROTOCOL_DEBUG
 #ifdef	CONFIG_PROC_FS
 #define	PROC_XBUS_COMMAND	"command"
-static int proc_xbus_command_write(struct file *file, const char __user *buffer,
-				   unsigned long count, void *data);
+static int proc_xbus_command_write(struct file *file,
+		const char __user *buffer, unsigned long count, void *data);
 #endif
 #endif
 
@@ -110,9 +110,10 @@ int xbus_check_unique(xbus_t *xbus)
 		xbus_old = xbus_byhwid(xbus->label);
 		if (xbus_old && xbus_old != xbus) {
 			XBUS_NOTICE(xbus_old,
-				    "Duplicate LABEL='%s'. Leave %s unused. refcount_xbus=%d\n",
-				    xbus_old->label, xbus->busname,
-				    refcount_xbus(xbus_old));
+				"Duplicate LABEL='%s'. Leave %s unused. "
+				"refcount_xbus=%d\n",
+				xbus_old->label, xbus->busname,
+				refcount_xbus(xbus_old));
 			return -EBUSY;
 		}
 	} else {
@@ -255,7 +256,10 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 	int newlen = XFRAME_LEN(frm);
 
 	newlen += len;
-//      DBG(GENERAL, "len=%d, newlen=%d, frm->frame_len=%d\n", len, newlen, XFRAME_LEN(frm));
+#if 0
+	DBG(GENERAL, "len=%d, newlen=%d,
+		frm->frame_len=%d\n", len, newlen, XFRAME_LEN(frm));
+#endif
 	if (newlen > XFRAME_DATASIZE) {
 		return NULL;
 	}
@@ -304,8 +308,9 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe,
 		if (pos > frm_len) {
 			if (printk_ratelimit()) {
 				XBUS_NOTICE(xbus,
-					    "%s: packet overflow pos=%d frame_len=%d\n",
-					    msg, pos, frm_len);
+					"%s: packet overflow pos=%d "
+					"frame_len=%d\n",
+					msg, pos, frm_len);
 				do_hexdump(msg, xframe->packets, frm_len);
 			}
 			break;
@@ -314,9 +319,9 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe,
 		if (XPACKET_LEN(pack) <= 0) {
 			if (printk_ratelimit()) {
 				XBUS_NOTICE(xbus,
-					    "%s: xframe -- bad packet_len=%d pos=%d frame_len=%d\n",
-					    msg, XPACKET_LEN(pack), pos,
-					    frm_len);
+					"%s: xframe -- bad packet_len=%d "
+					"pos=%d frame_len=%d\n",
+					msg, XPACKET_LEN(pack), pos, frm_len);
 				do_hexdump(msg, xframe->packets, frm_len);
 			}
 			break;
@@ -325,8 +330,9 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe,
 		if (nextpos > frm_len) {
 			if (printk_ratelimit()) {
 				XBUS_NOTICE(xbus,
-					    "%s: packet overflow nextpos=%d frame_len=%d\n",
-					    msg, nextpos, frm_len);
+					"%s: packet overflow nextpos=%d "
+					"frame_len=%d\n",
+					msg, nextpos, frm_len);
 				do_hexdump(msg, xframe->packets, frm_len);
 			}
 			break;
@@ -350,11 +356,12 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe,
 					 ? "(IS_PCM)" : "");
 			}
 			XBUS_DBG(ANY, xbus,
-				 "  %3d. DATALEN=%d pcm=%d slot=%d OP=0x%02X XPD-%d%d (pos=%d)\n",
-				 num, XPACKET_LEN(pack), XPACKET_IS_PCM(pack),
-				 XPACKET_PCMSLOT(pack), XPACKET_OP(pack),
-				 XPACKET_ADDR_UNIT(pack),
-				 XPACKET_ADDR_SUBUNIT(pack), pos);
+				"  %3d. DATALEN=%d pcm=%d slot=%d OP=0x%02X "
+				"XPD-%d%d (pos=%d)\n",
+				num, XPACKET_LEN(pack), XPACKET_IS_PCM(pack),
+				XPACKET_PCMSLOT(pack), XPACKET_OP(pack),
+				XPACKET_ADDR_UNIT(pack),
+				XPACKET_ADDR_SUBUNIT(pack), pos);
 			dump_packet("     ", pack, debug);
 		}
 		num++;
@@ -406,7 +413,8 @@ static int really_send_cmd_frame(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(xframe->xframe_magic != XFRAME_MAGIC);
 	if (!XBUS_FLAGS(xbus, CONNECTED)) {
 		XBUS_ERR(xbus,
-			 "Dropped command before sending -- hardware deactivated.\n");
+			"Dropped command before sending -- "
+			"hardware deactivated.\n");
 		dump_xframe("Dropped", xbus, xframe, DBG_ANY);
 		FREE_SEND_XFRAME(xbus, xframe);
 		return -ENODEV;
@@ -489,7 +497,8 @@ int send_cmd_frame(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(xframe->xframe_magic != XFRAME_MAGIC);
 	if (!XBUS_FLAGS(xbus, CONNECTED)) {
 		XBUS_ERR(xbus,
-			 "Dropped command before queueing -- hardware deactivated.\n");
+			"Dropped command before queueing -- "
+			"hardware deactivated.\n");
 		ret = -ENODEV;
 		goto err;
 	}
@@ -498,8 +507,8 @@ int send_cmd_frame(xbus_t *xbus, xframe_t *xframe)
 	if (!xframe_enqueue(&xbus->command_queue, xframe)) {
 		if ((rate_limit++ % 1003) == 0) {
 			XBUS_ERR(xbus,
-				 "Dropped command xframe. Cannot enqueue (%d)\n",
-				 rate_limit);
+				"Dropped command xframe. Cannot enqueue (%d)\n",
+				rate_limit);
 			dump_xframe(__func__, xbus, xframe, DBG_ANY);
 		}
 		xbus_setstate(xbus, XBUS_STATE_FAIL);
@@ -558,7 +567,8 @@ void xbus_receive_xframe(xbus_t *xbus, xframe_t *xframe)
 		if (likely(XBUS_FLAGS(xbus, CONNECTED)))
 			xframe_receive(xbus, xframe);
 		else
-			FREE_RECV_XFRAME(xbus, xframe);	/* return to receive_pool */
+			/* return to receive_pool */
+			FREE_RECV_XFRAME(xbus, xframe);
 	}
 }
 
@@ -657,8 +667,9 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 	proto_table = xproto_get(type);
 	if (!proto_table) {
 		XBUS_NOTICE(xbus,
-			    "CARD %d: missing protocol table for type %d. Ignored.\n",
-			    unit, type);
+			"CARD %d: missing protocol table for type %d. "
+			"Ignored.\n",
+			unit, type);
 		return -EINVAL;
 	}
 	echoops = proto_table->echoops;
@@ -666,8 +677,9 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 		XBUS_INFO(xbus, "Detected ECHO Canceler (%d)\n", unit);
 		if (ECHOOPS(xbus)) {
 			XBUS_NOTICE(xbus,
-				    "CARD %d: tryies to define echoops (type %d) but we already have one. Ignored.\n",
-				    unit, type);
+				"CARD %d: tryies to define echoops (type %d) "
+				"but we already have one. Ignored.\n",
+				unit, type);
 			return -EINVAL;
 		}
 		xbus->echo_state.echoops = echoops;
@@ -678,9 +690,10 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 	    (ports + proto_table->ports_per_subunit -
 	     1) / proto_table->ports_per_subunit;
 	XBUS_DBG(DEVICES, xbus,
-		 "CARD %d type=%d.%d ports=%d (%dx%d), %d subunits, port-dir=0x%02X\n",
-		 unit, type, subtype, ports, numchips, ports_per_chip, subunits,
-		 port_dir);
+		"CARD %d type=%d.%d ports=%d (%dx%d), "
+		"%d subunits, port-dir=0x%02X\n",
+		unit, type, subtype, ports, numchips, ports_per_chip, subunits,
+		port_dir);
 	if (type == XPD_TYPE_PRI || type == XPD_TYPE_BRI)
 		xbus->quirks.has_digital_span = 1;
 	if (type == XPD_TYPE_FXO)
@@ -694,8 +707,8 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 		remaining_ports -= proto_table->ports_per_subunit;
 		if (subunit_ports <= 0) {
 			XBUS_NOTICE(xbus,
-				    "Subunit XPD=%d%d without ports (%d of %d)\n",
-				    unit, i, subunit_ports, ports);
+				"Subunit XPD=%d%d without ports (%d of %d)\n",
+				unit, i, subunit_ports, ports);
 			ret = -ENODEV;
 			goto out;
 		}
@@ -782,7 +795,8 @@ static int xpd_initialize(xpd_t *xpd)
 		 * Asterisk will tell us when/if it's needed.
 		 */
 		CALL_PHONE_METHOD(echocancel_setmask, xpd, 0);
-		CALL_PHONE_METHOD(card_state, xpd, 1);	/* Turn on all channels */
+		/* Turn on all channels */
+		CALL_PHONE_METHOD(card_state, xpd, 1);
 	}
 	if (!xpd_setstate(xpd, XPD_STATE_READY)) {
 		goto out;
@@ -966,7 +980,8 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 	 * For our devices it was available for ages via:
 	 *  - The legacy "/proc/xpp/XBUS-??/summary" (CONNECTOR=...)
 	 *  - The same info in "/proc/xpp/xbuses"
-	 *  - The modern "/sys/bus/astribanks/devices/xbus-??/connector" attribute
+	 *  - The modern "/sys/bus/astribanks/devices/xbus-??/connector"
+	 *    attribute
 	 * So let's also export it via the newfangled "location" field.
 	 */
 	xbus->ddev->location = xbus->connector;
@@ -1067,14 +1082,15 @@ void xbus_populate(void *data)
 	spin_unlock_irqrestore(&worker->worker_lock, flags);
 	if (xbus_initialize(xbus) < 0) {
 		XBUS_NOTICE(xbus,
-			    "Initialization failed. Leave unused. refcount_xbus=%d\n",
-			    refcount_xbus(xbus));
+			"Initialization failed. Leave unused. "
+			"refcount_xbus=%d\n",
+			refcount_xbus(xbus));
 		goto failed;
 	}
 	if (!xbus_setstate(xbus, XBUS_STATE_READY)) {
 		XBUS_NOTICE(xbus,
-			    "Illegal transition. Leave unused. refcount_xbus=%d\n",
-			    refcount_xbus(xbus));
+			"Illegal transition. Leave unused. refcount_xbus=%d\n",
+			refcount_xbus(xbus));
 		goto failed;
 	}
 	worker->xpds_init_done = 1;
@@ -1321,7 +1337,8 @@ int xbus_activate(xbus_t *xbus)
 	xpp_drift_init(xbus);
 	xbus_set_command_timer(xbus, 1);
 	xframe_queue_disable(&xbus->command_queue, 0);
-	xbus_setstate(xbus, XBUS_STATE_IDLE);	/* must be done after transport is valid */
+	/* must be done after transport is valid */
+	xbus_setstate(xbus, XBUS_STATE_IDLE);
 	CALL_PROTO(GLOBAL, AB_REQUEST, xbus, NULL);
 	/*
 	 * Make sure Astribank knows not to send us ticks.
@@ -1648,12 +1665,12 @@ static int xbus_fill_proc_queue(char *p, struct xframe_queue *q)
 {
 	int len;
 
-	len =
-	    sprintf(p,
-		    "%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
-		    q->name, q->steady_state_count, q->count, q->max_count,
-		    q->worst_count, q->overflows, q->worst_lag_usec / 1000,
-		    q->worst_lag_usec % 1000);
+	len = sprintf(p,
+		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d "
+		"worst_lag %02ld.%ld ms\n",
+		q->name, q->steady_state_count, q->count, q->max_count,
+		q->worst_count, q->overflows, q->worst_lag_usec / 1000,
+		q->worst_lag_usec % 1000);
 	xframe_queue_clearstats(q);
 	return len;
 }
@@ -1739,8 +1756,8 @@ out:
 }
 
 #ifdef	PROTOCOL_DEBUG
-static int proc_xbus_command_write(struct file *file, const char __user *buffer,
-				   unsigned long count, void *data)
+static int proc_xbus_command_write(struct file *file,
+		const char __user *buffer, unsigned long count, void *data)
 {
 	char *buf;
 	xbus_t *xbus = data;
@@ -1783,8 +1800,9 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 			break;
 		if (!isxdigit(*p)) {
 			XBUS_ERR(xbus,
-				 "%s: bad hex value ASCII='0x%X' at position %ld\n",
-				 __func__, *p, (long)(p - buf));
+				"%s: bad hex value ASCII='0x%X' "
+				"at position %ld\n",
+				__func__, *p, (long)(p - buf));
 			count = -EINVAL;
 			goto out;
 		}

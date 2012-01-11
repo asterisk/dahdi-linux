@@ -39,7 +39,8 @@ static const char rcsid[] = "$Id$";
 #error Cannot build BRI without HARDHDLC supprt
 #endif
 
-static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");	/* must be before dahdi_debug.h */
+/* must be before dahdi_debug.h */
+static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static DEF_PARM(uint, poll_interval, 500, 0644,
 		"Poll channel state interval in milliseconds (0 - disable)");
 static DEF_PARM_BOOL(nt_keepalive, 1, 0644,
@@ -113,7 +114,7 @@ static const char *xhfc_state_name(bool is_nt, enum xhfc_states state)
 #define	HFC_TIMER_T3		8000	/* 8s activation timer T3 */
 #define	HFC_TIMER_OFF		-1	/* timer disabled */
 
-#define	A_SU_WR_STA		0x30	/* ST/Up state machine register         */
+#define	A_SU_WR_STA		0x30	/* ST/Up state machine register */
 #define		V_SU_LD_STA	0x10
 #define	V_SU_ACT	0x60	/* start activation/deactivation        */
 #define	STA_DEACTIVATE	0x40	/* start deactivation in A_SU_WR_STA */
@@ -232,8 +233,8 @@ DEF_RPACKET_DATA(BRI, SET_LED,	/* Set one of the LED's */
 static /* 0x33 */ DECLARE_CMD(BRI, SET_LED, enum bri_led_names which_led,
 			      enum led_state to_led_state);
 
-#define	DO_LED(xpd, which, tostate)	\
-			CALL_PROTO(BRI, SET_LED, (xpd)->xbus, (xpd), (which), (tostate))
+#define	DO_LED(xpd, which, tostate) \
+		CALL_PROTO(BRI, SET_LED, (xpd)->xbus, (xpd), (which), (tostate))
 
 #define DEBUG_BUF_SIZE (100)
 static void dump_hex_buf(xpd_t *xpd, char *msg, __u8 *buf, size_t len)
@@ -358,7 +359,8 @@ static void te_activation(xpd_t *xpd, bool on)
 		case ST_TE_SYNCED:	/* F6   */
 		case ST_TE_ACTIVATED:	/* F7   */
 			XPD_DBG(SIGNAL, xpd,
-				"HFC_L1_FORCE_DEACTIVATE_TE (state %d, ignored)\n",
+				"HFC_L1_FORCE_DEACTIVATE_TE "
+				"(state %d, ignored)\n",
 				curr_state);
 			break;
 		case ST_TE_SIGWAIT:	/* F4   */
@@ -489,9 +491,11 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	if ((ret = bri_check_stat(xpd, dchan, src, len)) < 0)
 		goto out;
 	/*
-	 * Tell Dahdi that we received len-1 bytes. They include the data and a 2-byte checksum.
-	 * The last byte (that we don't pass on) is 0 if the checksum is correct. If it were wrong,
-	 * we would drop the packet in the "if (src[len-1])" above.
+	 * Tell Dahdi that we received len-1 bytes.
+	 * They include the data and a 2-byte checksum.
+	 * The last byte (that we don't pass on) is 0 if the
+	 * checksum is correct. If it were wrong, we would drop the
+	 * packet in the "if (src[len-1])" above.
 	 */
 	dahdi_hdlc_finish(dchan);
 	priv->dchan_rx_counter++;
@@ -503,7 +507,10 @@ out:
 /*
  * D-Chan transmit
  */
-/* DAHDI calls this when it has data it wants to send to the HDLC controller */
+/*
+ * DAHDI calls this when it has data it wants to send to
+ * the HDLC controller
+ */
 static void bri_hdlc_hard_xmit(struct dahdi_chan *chan)
 {
 	xpd_t *xpd = chan->pvt;
@@ -551,8 +558,8 @@ static int send_dchan_frame(xpd_t *xpd, xframe_t *xframe, bool is_eof)
 /*
  * Fill a single multibyte REGISTER_REQUEST
  */
-static void fill_multibyte(xpd_t *xpd, xpacket_t *pack, bool eoframe, char *buf,
-			   int len)
+static void fill_multibyte(xpd_t *xpd, xpacket_t *pack,
+	bool eoframe, char *buf, int len)
 {
 	reg_cmd_t *reg_cmd;
 	char *p;
@@ -628,8 +635,8 @@ static int tx_dchan(xpd_t *xpd)
 			 */
 			if (printk_ratelimit())
 				XPD_ERR(xpd,
-					"%s: hdlc_pending, but nothing to transmit?\n",
-					__func__);
+					"%s: hdlc_pending, but nothing "
+					"to transmit?\n", __func__);
 			FREE_SEND_XFRAME(xpd->xbus, xframe);
 			return -EINVAL;
 		}
@@ -893,15 +900,19 @@ static void handle_bri_timers(xpd_t *xpd)
 				set_bri_timer(xpd, "T1", &priv->t1,
 					      HFC_TIMER_OFF);
 				if (!nt_keepalive) {
-					if (priv->state_register.bits.v_su_sta == ST_NT_ACTIVATING) {	/* G2 */
+					/* G2 */
+					if (priv->state_register.bits.v_su_sta == ST_NT_ACTIVATING) {
 						XPD_DBG(SIGNAL, xpd,
-							"T1 Expired. Deactivate NT\n");
+							"T1 Expired. "
+							"Deactivate NT\n");
 						clear_bit(HFC_L1_ACTIVATING,
 							  &priv->l1_flags);
-						nt_activation(xpd, 0);	/* Deactivate NT */
+						/* Deactivate NT */
+						nt_activation(xpd, 0);
 					} else
 						XPD_DBG(SIGNAL, xpd,
-							"T1 Expired. (state %d, ignored)\n",
+							"T1 Expired. "
+							"(state %d, ignored)\n",
 							priv->state_register.
 							bits.v_su_sta);
 				}
@@ -937,15 +948,16 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 	if (poll_interval != 0 && (priv->tick_counter % poll_interval) == 0) {
 		// XPD_DBG(GENERAL, xpd, "%d\n", priv->tick_counter);
 		priv->poll_counter++;
-		xpp_register_request(xbus, xpd, BRI_PORT(xpd),	/* portno       */
-				     0,	/* writing      */
-				     A_SU_RD_STA,	/* regnum       */
-				     0,	/* do_subreg    */
-				     0,	/* subreg       */
-				     0,	/* data_low     */
-				     0,	/* do_datah     */
-				     0,	/* data_high    */
-				     0	/* should_reply */
+		xpp_register_request(xbus, xpd,
+			BRI_PORT(xpd),	/* portno       */
+			0,		/* writing      */
+			A_SU_RD_STA,	/* regnum       */
+			0,		/* do_subreg    */
+			0,		/* subreg       */
+			0,		/* data_low     */
+			0,		/* do_datah     */
+			0,		/* data_high    */
+			0		/* should_reply */
 		    );
 
 		if (IS_NT(xpd) && nt_keepalive
@@ -1293,7 +1305,10 @@ static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 
 			if (IS_SET(tmp_mask, i)) {
 				r = XPD_CHAN(tmp_xpd, i)->readchunk;
-				// memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);  // DEBUG
+#if 0
+				/* DEBUG */
+				memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);
+#endif
 				memcpy((u_char *)r, pcm, DAHDI_CHUNKSIZE);
 				pcm += DAHDI_CHUNKSIZE;
 			}
@@ -1374,15 +1389,16 @@ static int write_state_register(xpd_t *xpd, __u8 value)
 	int ret;
 
 	XPD_DBG(REGS, xpd, "value = 0x%02X\n", value);
-	ret = xpp_register_request(xpd->xbus, xpd, BRI_PORT(xpd),	/* portno       */
-				   1,	/* writing      */
-				   A_SU_WR_STA,	/* regnum       */
-				   0,	/* do_subreg    */
-				   0,	/* subreg       */
-				   value,	/* data_low     */
-				   0,	/* do_datah     */
-				   0,	/* data_high    */
-				   0	/* should_reply */
+	ret = xpp_register_request(xpd->xbus, xpd,
+		BRI_PORT(xpd),	/* portno       */
+		1,		/* writing      */
+		A_SU_WR_STA,	/* regnum       */
+		0,		/* do_subreg    */
+		0,		/* subreg       */
+		value,		/* data_low     */
+		0,		/* do_datah     */
+		0,		/* data_high    */
+		0		/* should_reply */
 	    );
 	return ret;
 }
@@ -1537,11 +1553,12 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	}
 
 	/* Update /proc info only if reply relate to the last slic read request */
-	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
-	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
-									do_subreg)
-	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
-								     subreg)) {
+	if (REG_FIELD(&xpd->requested_reply, regnum) ==
+			REG_FIELD(info, regnum)
+		&& REG_FIELD(&xpd->requested_reply, do_subreg) ==
+			REG_FIELD(info, do_subreg)
+		&& REG_FIELD(&xpd->requested_reply, subreg) ==
+			REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
 

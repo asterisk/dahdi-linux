@@ -102,7 +102,8 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	if (argc < num_args) {
 		XPD_ERR(xpd, "Not enough arguments (%d)\n", argc);
 		XPD_ERR(xpd,
-			"Any Command is composed of at least %d words (got only %d)\n",
+			"Any Command is composed of at least %d words "
+			"(got only %d)\n",
 			num_args, argc);
 		goto out;
 	}
@@ -143,7 +144,8 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	switch (addr_mode) {
 	case 'I':
 		XPD_NOTICE(xpd,
-			   "'I' is deprecated in register commands. Use 'S' instead.\n");
+			"'I' is deprecated in register commands. "
+			"Use 'S' instead.\n");
 		/* fall through */
 	case 'S':
 		do_subreg = 1;
@@ -176,7 +178,8 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	}
 	if (argc < num_args) {
 		XPD_ERR(xpd,
-			"Command \"%s\" is composed of at least %d words (got only %d)\n",
+			"Command \"%s\" is composed of at least %d words "
+			"(got only %d)\n",
 			argv[argno], num_args, argc);
 		goto out;
 	}
@@ -259,14 +262,13 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	}
 #if 0
 	XPD_DBG(REGS, xpd,
-		"portno=%d writing=%d regnum=%d do_subreg=%d subreg=%d dataL=%d do_datah=%d dataH=%d\n",
-		portno,		/* portno	*/
-		writing,	/* writing	*/
-		regnum,
-		do_subreg,	/* use subreg	*/
-		subreg,	/* subreg	*/
-		data_low,
-		do_datah,	/* use data_high*/
+		"portno=%d writing=%d regnum=%d do_subreg=%d subreg=%d "
+		"dataL=%d do_datah=%d dataH=%d\n",
+		portno,			/* portno       */
+		writing,		/* writing      */
+		regnum, do_subreg,	/* use subreg   */
+		subreg,			/* subreg       */
+ 		data_low, do_datah,	/* use data_high */
 		data_high);
 #endif
 	ret = xpp_register_request(xpd->xbus, xpd, portno,
@@ -302,7 +304,8 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 		*p = '\0';
 	if ((p = strchr(buf, ';')) != NULL)	/* Truncate comments */
 		*p = '\0';
-	for (p = buf; *p && (*p == ' ' || *p == '\t'); p++)	/* Trim leading whitespace */
+	/* Trim leading whitespace */
+	for (p = buf; *p && (*p == ' ' || *p == '\t'); p++)
 		;
 	str = p;
 	for (i = 0; (p = strsep(&str, " \t")) != NULL && i < MAX_ARGS;) {
@@ -375,7 +378,8 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 		 (writing) ? 'W' : 'R', (do_subreg) ? 'S' : 'D', regnum, subreg,
 		 data_low, data_high);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
-	reg_cmd->bytes = sizeof(*reg_cmd) - 1;	// do not count the 'bytes' field
+	/* do not count the 'bytes' field */
+	reg_cmd->bytes = sizeof(*reg_cmd) - 1;
 	reg_cmd->is_multibyte = 0;
 	if (portno == PORT_BROADCAST) {
 		reg_cmd->portnum = 0;
@@ -525,11 +529,12 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)
 		card_desc->ports =
 		    card_desc->numchips * card_desc->ports_per_chip;
 		XBUS_INFO(xbus,
-			  "    CARD %d type=%d.%d ports=%d (%dx%d), port-dir=0x%02X\n",
-			  card_desc->xpd_addr.unit, card_desc->type,
-			  card_desc->subtype, card_desc->ports,
-			  card_desc->numchips, card_desc->ports_per_chip,
-			  card_desc->port_dir);
+			"    CARD %d type=%d.%d ports=%d (%dx%d), "
+			"port-dir=0x%02X\n",
+			card_desc->xpd_addr.unit, card_desc->type,
+			card_desc->subtype, card_desc->ports,
+			card_desc->numchips, card_desc->ports_per_chip,
+			card_desc->port_dir);
 		spin_lock_irqsave(&worker->worker_lock, flags);
 		worker->num_units++;
 		XBUS_COUNTER(xbus, UNITS)++;
@@ -565,7 +570,7 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 	}
 	if (!XMETHOD(card_register_reply, xpd)) {
 		XPD_ERR(xpd,
-			"REGISTER_REPLY: without card_register_reply() method\n");
+			"REGISTER_REPLY: missing card_register_reply()\n");
 		return -EINVAL;
 	}
 	return CALL_XMETHOD(card_register_reply, xpd, reg);
@@ -721,8 +726,9 @@ int run_initialize_registers(xpd_t *xpd)
 	    (init_card, MAX_PATH_STR, "%s/init_card_%d_%d", initdir, xpd->type,
 	     xbus->revision) > MAX_PATH_STR) {
 		XPD_NOTICE(xpd,
-			   "Cannot initialize. pathname is longer than %d characters.\n",
-			   MAX_PATH_STR);
+			"Cannot initialize. pathname is longer "
+			"than %d characters.\n",
+			MAX_PATH_STR);
 		ret = -E2BIG;
 		goto err;
 	}

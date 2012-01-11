@@ -33,7 +33,8 @@
 
 static const char rcsid[] = "$Id$";
 
-static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");	/* must be before dahdi_debug.h */
+/* must be before dahdi_debug.h */
+static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static DEF_PARM_BOOL(reversepolarity, 0, 0644, "Reverse Line Polarity");
 static DEF_PARM_BOOL(dtmf_detection, 1, 0644, "Do DTMF detection in hardware");
 #ifdef	POLL_DIGITAL_INPUTS
@@ -46,9 +47,11 @@ static DEF_PARM_BOOL(ring_trapez, 0, 0664, "Use trapezoid ring type");
 
 /* Signaling is opposite (fxo signalling for fxs card) */
 #if 1
-#define	FXS_DEFAULT_SIGCAP	(DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS)
+#define	FXS_DEFAULT_SIGCAP \
+		(DAHDI_SIG_FXOKS | DAHDI_SIG_FXOLS | DAHDI_SIG_FXOGS)
 #else
-#define	FXS_DEFAULT_SIGCAP	(DAHDI_SIG_SF | DAHDI_SIG_EM)
+#define	FXS_DEFAULT_SIGCAP \
+		(DAHDI_SIG_SF | DAHDI_SIG_EM)
 #endif
 
 #define	VMWI_TYPE(priv, pos, type)	\
@@ -70,11 +73,14 @@ enum fxs_leds {
 #define	SLIC_WRITE	1
 #define	SLIC_READ	0
 #define	SLIC_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
-	xpp_register_request((xbus), (xpd), (port), (writing), (reg), 0, 0, (dL), 0, 0, 0)
+	xpp_register_request((xbus), (xpd), (port), \
+	(writing), (reg), 0, 0, (dL), 0, 0, 0)
 #define	SLIC_INDIRECT_REQUEST(xbus, xpd, port, writing, reg, dL, dH)	\
-	xpp_register_request((xbus), (xpd), (port), (writing), 0x1E, 1, (reg), (dL), 1, (dH), 0)
+	xpp_register_request((xbus), (xpd), (port), \
+	(writing), 0x1E, 1, (reg), (dL), 1, (dH), 0)
 
-#define	VALID_PORT(port)	(((port) >= 0 && (port) <= 7) || (port) == PORT_BROADCAST)
+#define	VALID_PORT(port) \
+		(((port) >= 0 && (port) <= 7) || (port) == PORT_BROADCAST)
 
 #define	REG_DIGITAL_IOCTRL	0x06	/* LED and RELAY control */
 
@@ -90,8 +96,10 @@ enum fxs_state {
 	FXS_LINE_RING_OPEN = 0x07	/* RING open */
 };
 
-#define	FXS_LINE_POL_ACTIVE	((reversepolarity) ? FXS_LINE_REV_ACTIVE : FXS_LINE_ACTIVE)
-#define	FXS_LINE_POL_OHTRANS	((reversepolarity) ? FXS_LINE_REV_OHTRANS : FXS_LINE_OHTRANS)
+#define	FXS_LINE_POL_ACTIVE \
+		((reversepolarity) ? FXS_LINE_REV_ACTIVE : FXS_LINE_ACTIVE)
+#define	FXS_LINE_POL_OHTRANS \
+		((reversepolarity) ? FXS_LINE_REV_OHTRANS : FXS_LINE_OHTRANS)
 
 /*
  * DTMF detection
@@ -100,7 +108,8 @@ enum fxs_state {
 #define REG_BATTERY		0x42	/* 66 - Battery Feed Control */
 #define	REG_BATTERY_BATSL	BIT(1)	/* Battery Feed Select */
 
-#define	REG_LOOPCLOSURE		0x44	/* 68 -  Loop Closure/Ring Trip Detect Status */
+/* 68 -  Loop Closure/Ring Trip Detect Status */
+#define	REG_LOOPCLOSURE		0x44
 #define	REG_LOOPCLOSURE_ZERO	0xF8	/* Loop Closure zero bits. */
 #define	REG_LOOPCLOSURE_LCR	BIT(0)	/* Loop Closure Detect Indicator. */
 
@@ -112,8 +121,8 @@ static void fxs_packet_dump(const char *msg, xpacket_t *pack);
 static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 			      int *eof, void *data);
 #ifdef	WITH_METERING
-static int proc_xpd_metering_write(struct file *file, const char __user *buffer,
-				   unsigned long count, void *data);
+static int proc_xpd_metering_write(struct file *file,
+	const char __user *buffer, unsigned long count, void *data);
 #endif
 #endif
 static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos);
@@ -142,7 +151,8 @@ struct FXS_priv_data {
 	int led_counter[NUM_LEDS][CHANNELS_PERXPD];
 	int ohttimer[CHANNELS_PERXPD];
 #define OHT_TIMER		6000	/* How long after RING to retain OHT */
-	enum fxs_state idletxhookstate[CHANNELS_PERXPD];	/* IDLE changing hook state */
+	/* IDLE changing hook state */
+	enum fxs_state idletxhookstate[CHANNELS_PERXPD];
 	enum fxs_state lasttxhook[CHANNELS_PERXPD];
 	struct dahdi_vmwi_info vmwisetting[CHANNELS_PERXPD];
 };
@@ -153,9 +163,18 @@ struct FXS_priv_data {
  */
 #define	LED_COUNTER(priv, pos, color)	((priv)->led_counter[color][pos])
 #define	IS_BLINKING(priv, pos, color)	(LED_COUNTER(priv, pos, color) > 0)
-#define	MARK_BLINK(priv, pos, color, t)	((priv)->led_counter[color][pos] = (t))
-#define	MARK_OFF(priv, pos, color)	do { BIT_CLR((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
-#define	MARK_ON(priv, pos, color)		do { BIT_SET((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
+#define	MARK_BLINK(priv, pos, color, t) \
+		((priv)->led_counter[color][pos] = (t))
+#define	MARK_OFF(priv, pos, color) \
+	do { \
+		BIT_CLR((priv)->ledcontrol[color], (pos)); \
+		MARK_BLINK((priv), (pos), (color), 0); \
+	} while (0)
+#define	MARK_ON(priv, pos, color) \
+	do { \
+		BIT_SET((priv)->ledcontrol[color], (pos)); \
+		MARK_BLINK((priv), (pos), (color), 0); \
+	} while (0)
 
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 
@@ -200,24 +219,24 @@ static void vmwi_search(xpd_t *xpd, lineno_t pos, bool on)
 /*
  * LED and RELAY control is done via SLIC register 0x06:
  *         7     6     5     4     3     2     1     0
- *	+-----+-----+-----+-----+-----+-----+-----+-----+
- *	| M2  | M1  | M3  | C2  | O1  | O3  | C1  | C3  |
- *	+-----+-----+-----+-----+-----+-----+-----+-----+
+ *  +-----+-----+-----+-----+-----+-----+-----+-----+
+ *  | M2  | M1  | M3  | C2  | O1  | O3  | C1  | C3  |
+ *  +-----+-----+-----+-----+-----+-----+-----+-----+
  *
- *	Cn	- Control bit (control one digital line)
- *	On	- Output bit (program a digital line for output)
- *	Mn	- Mask bit (only the matching output control bit is affected)
+ *  Cn	- Control bit (control one digital line)
+ *  On	- Output bit (program a digital line for output)
+ *  Mn	- Mask bit (only the matching output control bit is affected)
  *
- *	C3	- OUTPUT RELAY (0 - OFF, 1 - ON)
- *	C1	- GREEN LED (0 - OFF, 1 - ON)
- *	O3	- Output RELAY (this line is output)
- *	O1	- Output GREEN (this line is output)
- *	C2	- RED LED (0 - OFF, 1 - ON)
- *	M3	- Mask RELAY. (1 - C3 effect the OUTPUT RELAY)
- *	M2	- Mask RED. (1 - C2 effect the RED LED)
- *	M1	- Mask GREEN. (1 - C1 effect the GREEN LED)
+ *  C3	- OUTPUT RELAY (0 - OFF, 1 - ON)
+ *  C1	- GREEN LED (0 - OFF, 1 - ON)
+ *  O3	- Output RELAY (this line is output)
+ *  O1	- Output GREEN (this line is output)
+ *  C2	- RED LED (0 - OFF, 1 - ON)
+ *  M3	- Mask RELAY. (1 - C3 effect the OUTPUT RELAY)
+ *  M2	- Mask RED. (1 - C2 effect the RED LED)
+ *  M1	- Mask GREEN. (1 - C1 effect the GREEN LED)
  *
- *	The OUTPUT RELAY (actually a relay out) is connected to line 0 and 4 only.
+ *  The OUTPUT RELAY (actually a relay out) is connected to line 0 and 4 only.
  */
 
 //                                              GREEN   RED     OUTPUT RELAY
@@ -283,12 +302,14 @@ static void handle_fxs_leds(xpd_t *xpd)
 			    (PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).
 			     digital_inputs, i))
 				continue;
-			if ((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {	// Blinking
+			/* Blinking? */
+			if ((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {
 				int mod_value = LED_COUNTER(priv, i, color);
 
 				if (!mod_value)
-					mod_value = DEFAULT_LED_PERIOD;	/* safety value */
-				// led state is toggled
+					/* safety value */
+					mod_value = DEFAULT_LED_PERIOD;
+				/* led state is toggled */
 				if ((timer_count % mod_value) == 0) {
 					LINE_DBG(LEDS, xpd, i, "ledstate=%s\n",
 						 (IS_SET
@@ -478,7 +499,9 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 	 * Setup ring timers
 	 */
 	/* Software controled ringing (for CID) */
-	ret = SLIC_DIRECT_REQUEST(xbus, xpd, PORT_BROADCAST, SLIC_WRITE, 0x22, 0x00);	/* Ringing Oscilator Control */
+	/* Ringing Oscilator Control */
+	ret = SLIC_DIRECT_REQUEST(xbus, xpd, PORT_BROADCAST, SLIC_WRITE,
+		0x22, 0x00);
 	if (ret < 0)
 		goto err;
 	for_each_line(xpd, i) {
@@ -678,30 +701,28 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER\n");
 		BIT_CLR(priv->neon_blinking, pos);
 
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16,
-					  0x00, 0x00);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15,
-					  0x77, 0x01);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x14,
-					  0xFD, 0x7E);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x16, 0x00, 0x00);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x15, 0x77, 0x01);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x14, 0xFD, 0x7E);
 
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x22, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x30, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x31, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x32, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x33, 0x00);
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x4A, 0x34);	/* High Vbat~ -82V[Dc] */
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x1D,
-					  0x00, 0x36);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x22, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x30, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x31, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x32, 0x00);
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x33, 0x00);
+		/* High Vbat~ -82V[Dc] */
+		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x4A, 0x34);
+		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+			0x1D, 0x00, 0x36);
 	}
 	return (ret ? -EPROTO : 0);
 }
@@ -988,7 +1009,10 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 		if (!dtmf_detection) {
 			spin_lock_irqsave(&xpd->lock, flags);
 			if (IS_SET(priv->want_dtmf_events, pos)) {
-				/* Detection mode changed: Disable DTMF interrupts */
+				/*
+				 * Detection mode changed:
+				 * Disable DTMF interrupts
+				 */
 				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
 						    0x17, 0);
 			}
@@ -1006,18 +1030,26 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 		spin_lock_irqsave(&xpd->lock, flags);
 		if (val & DAHDI_TONEDETECT_ON) {
 			if (!IS_SET(priv->want_dtmf_events, pos)) {
-				/* Detection mode changed: Enable DTMF interrupts */
+				/*
+				 * Detection mode changed:
+				 * Enable DTMF interrupts
+				 */
 				LINE_DBG(SIGNAL, xpd, pos,
-					 "DAHDI_TONEDETECT: Enable Hardware DTMF\n");
+					"DAHDI_TONEDETECT: "
+					"Enable Hardware DTMF\n");
 				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
 						    0x17, 1);
 			}
 			BIT_SET(priv->want_dtmf_events, pos);
 		} else {
 			if (IS_SET(priv->want_dtmf_events, pos)) {
-				/* Detection mode changed: Disable DTMF interrupts */
+				/*
+				 * Detection mode changed:
+				 * Disable DTMF interrupts
+				 */
 				LINE_DBG(SIGNAL, xpd, pos,
-					 "DAHDI_TONEDETECT: Disable Hardware DTMF\n");
+					"DAHDI_TONEDETECT: "
+					"Disable Hardware DTMF\n");
 				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
 						    0x17, 0);
 			}
@@ -1052,8 +1084,9 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 		if (priv->lasttxhook[pos] == FXS_LINE_RING
 		    || priv->lasttxhook[pos] == FXS_LINE_OPEN) {
 			LINE_DBG(SIGNAL, xpd, pos,
-				 "DAHDI_SETPOLARITY: %s Cannot change when lasttxhook=0x%X\n",
-				 (val) ? "ON" : "OFF", priv->lasttxhook[pos]);
+				"DAHDI_SETPOLARITY: %s Cannot change "
+				"when lasttxhook=0x%X\n",
+				(val) ? "ON" : "OFF", priv->lasttxhook[pos]);
 			return -EINVAL;
 		}
 		LINE_DBG(SIGNAL, xpd, pos, "DAHDI_SETPOLARITY: %s\n",
@@ -1076,7 +1109,9 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 
 			if (!notified++)
 				LINE_NOTICE(xpd, pos,
-					    "Got DAHDI_VMWI notification but vmwi_ioctl parameter is off. Ignoring.\n");
+					"Got DAHDI_VMWI notification "
+					"but vmwi_ioctl parameter is off. "
+					"Ignoring.\n");
 			return 0;
 		}
 		/* Digital inputs/outputs don't have VM leds */
@@ -1249,7 +1284,8 @@ static void detect_vmwi(xpd_t *xpd)
 		    (mem_equal
 		     (writechunk, FSK_COMMON_PATTERN, DAHDI_CHUNKSIZE))) {
 			LINE_DBG(SIGNAL, xpd, i,
-				 "Found common FSK pattern. Start looking for ON/OFF patterns.\n");
+				"Found common FSK pattern. "
+				"Start looking for ON/OFF patterns.\n");
 			BIT_SET(priv->found_fsk_pattern, i);
 		} else if (unlikely(IS_SET(priv->found_fsk_pattern, i))) {
 			BIT_CLR(priv->found_fsk_pattern, i);
@@ -1314,7 +1350,8 @@ static int FXS_card_tick(xbus_t *xbus, xpd_t *xpd)
 			    IS_OFFHOOK(xpd,
 				       i) ? DAHDI_RXSIG_OFFHOOK :
 			    DAHDI_RXSIG_ONHOOK;
-			notify_rxsig(xpd, i, rxsig);	/* Notify after open() */
+			/* Notify after open() */
+			notify_rxsig(xpd, i, rxsig);
 			BIT_CLR(priv->update_offhook_state, i);
 		}
 	}
@@ -1393,8 +1430,9 @@ HANDLER_DEF(FXS, SIG_CHANGED)
 		sig_toggles, sig_status);
 #if 0
 	Is this needed ? for_each_line(xpd, i) {
+		// Power down (prevent overheating!!!)
 		if (IS_SET(sig_toggles, i))
-			do_chan_power(xpd->xbus, xpd, BIT(i), 0);	// Power down (prevent overheating!!!)
+			do_chan_power(xpd->xbus, xpd, BIT(i), 0);
 	}
 #endif
 	spin_lock_irqsave(&xpd->lock, flags);
@@ -1425,11 +1463,12 @@ static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 			newchanno = PHONEDEV(xpd).channels - LINES_DIGI_INP + i;
 			BIT_CLR(lines, channo);
 			BIT_SET(lines, newchanno);
-			PHONEDEV(xpd).ringing[newchanno] = 0;	// Stop ringing. No leds for digital inputs.
-			if (offhook && !IS_OFFHOOK(xpd, newchanno)) {	// OFFHOOK
+			/* Stop ringing. No leds for digital inputs. */
+			PHONEDEV(xpd).ringing[newchanno] = 0;
+			if (offhook && !IS_OFFHOOK(xpd, newchanno)) {
 				LINE_DBG(SIGNAL, xpd, newchanno, "OFFHOOK\n");
 				hookstate_changed(xpd, newchanno, 1);
-			} else if (!offhook && IS_OFFHOOK(xpd, newchanno)) {	// ONHOOK
+			} else if (!offhook && IS_OFFHOOK(xpd, newchanno)) {
 				LINE_DBG(SIGNAL, xpd, newchanno, "ONHOOK\n");
 				hookstate_changed(xpd, newchanno, 0);
 			}
@@ -1477,10 +1516,11 @@ static void process_dtmf(xpd_t *xpd, uint portnum, __u8 val)
 		msec = usec_diff(&now, &priv->prev_key_time[portnum]) / 1000;
 	priv->prev_key_time[portnum] = now;
 	LINE_DBG(SIGNAL, xpd, portnum,
-		 "[%lu.%06lu] DTMF digit %-4s '%c' (val=%d, want_mute=%s want_event=%s, delta=%d msec)\n",
-		 now.tv_sec, now.tv_usec, (key_down) ? "DOWN" : "UP", digit,
-		 val, (want_mute) ? "yes" : "no", (want_event) ? "yes" : "no",
-		 msec);
+		"[%lu.%06lu] DTMF digit %-4s '%c' "
+		"(val=%d, want_mute=%s want_event=%s, delta=%d msec)\n",
+		now.tv_sec, now.tv_usec, (key_down) ? "DOWN" : "UP", digit,
+		val, (want_mute) ? "yes" : "no", (want_event) ? "yes" : "no",
+		msec);
 	/*
 	 * FIXME: we currently don't use the want_dtmf_mute until
 	 * we are sure about the logic in Asterisk native bridging.
@@ -1538,25 +1578,31 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		if ((val & REG_LOOPCLOSURE_ZERO) == 0) {
 			offhook = (val & REG_LOOPCLOSURE_LCR) ? mask : 0;
 			LINE_DBG(SIGNAL, xpd, info->portnum,
-				 "REG_LOOPCLOSURE: dataL=0x%X (offhook=0x%X mask=0x%X\n",
-				 val, offhook, mask);
+				"REG_LOOPCLOSURE: dataL=0x%X "
+				"(offhook=0x%X mask=0x%X)\n",
+				val, offhook, mask);
 			process_hookstate(xpd, offhook, mask);
 		}
 	} else {
 #if 0
 		XPD_NOTICE(xpd,
-			   "Spurious register reply(ignored): %s reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
-			   (indirect) ? "I" : "D", regnum, REG_FIELD(info,
-								     data_low),
-			   REG_FIELD(info, data_high));
+			"Spurious register reply(ignored): "
+			"%s reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
+			(indirect) ? "I" : "D",
+			regnum, REG_FIELD(info, data_low),
+			REG_FIELD(info, data_high));
 #endif
 	}
-	/* Update /proc info only if reply relate to the last slic read request */
-	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
-	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
-									do_subreg)
-	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
-								     subreg)) {
+	/*
+	 * Update /proc info only if reply relate to the last slic
+	 * read request
+	 */
+	if (REG_FIELD(&xpd->requested_reply, regnum) ==
+			REG_FIELD(info, regnum)
+		&& REG_FIELD(&xpd->requested_reply, do_subreg) ==
+			REG_FIELD(info, do_subreg)
+		&& REG_FIELD(&xpd->requested_reply, subreg) ==
+			REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);
@@ -1698,8 +1744,8 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 #endif
 
 #ifdef	WITH_METERING
-static int proc_xpd_metering_write(struct file *file, const char __user *buffer,
-				   unsigned long count, void *data)
+static int proc_xpd_metering_write(struct file *file, const char
+		__user *buffer, unsigned long count, void *data)
 {
 	xpd_t *xpd = data;
 	char buf[MAX_PROC_WRITE];

@@ -31,8 +31,9 @@ enum fxs_opcodes {
 	XPROTO_NAME(FXS, LED) = 0x0F,	/* Write to SLIC */
 };
 
-DEF_RPACKET_DATA(FXS, SIG_CHANGED, xpp_line_t sig_status;	/* channels: lsb=1, msb=8 */
-		 xpp_line_t sig_toggles;	/* channels: lsb=1, msb=8 */
-    );
+DEF_RPACKET_DATA(FXS, SIG_CHANGED,
+		xpp_line_t sig_status;	/* channels: lsb=1, msb=8 */
+		xpp_line_t sig_toggles;	/* channels: lsb=1, msb=8 */
+		);
 
 #endif /* CARD_FXS_H */

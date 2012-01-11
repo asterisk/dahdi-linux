@@ -64,7 +64,7 @@ struct list_head {
 #define	IS_SET(x, i)	(((x) & BIT(i)) != 0)
 #define	BITMASK(i)	(((u64)1 << (i)) - 1)
 
-#define	MAX_PROC_WRITE	100	/* Largest buffer we allow writing our /proc files */
+#define	MAX_PROC_WRITE	100	/* Longest write allowed to our /proc files */
 #define	CHANNELS_PERXPD	32	/* Depends on xpp_line_t and protocol fields */
 
 #define	MAX_SPANNAME	20	/* From dahdi/kernel.h */
@@ -80,7 +80,8 @@ struct list_head {
 #define	UNIT_BITS	3	/* Bit for Astribank unit number */
 #define	SUBUNIT_BITS	3	/* Bit for Astribank subunit number */
 
-#define	MAX_UNIT	(1 << UNIT_BITS)	/* 1 FXS + 3 FXS/FXO | 1 BRI + 3 FXS/FXO */
+/* 1 FXS + 3 FXS/FXO | 1 BRI + 3 FXS/FXO */
+#define	MAX_UNIT	(1 << UNIT_BITS)
 #define	MAX_SUBUNIT	(1 << SUBUNIT_BITS)	/* 8 port BRI */
 
 /*
@@ -112,10 +113,11 @@ typedef unsigned char byte;
 #endif
 
 #define	KZALLOC(size, gfp)	my_kzalloc(size, gfp)
-#define	KZFREE(p)		do {					\
-					memset((p), 0, sizeof(*(p)));	\
-					kfree(p);			\
-				} while (0);
+#define	KZFREE(p) \
+		do {					\
+			memset((p), 0, sizeof(*(p)));	\
+			kfree(p);			\
+		} while (0);
 
 /*
  * Hotplug replaced with uevent in 2.6.16
@@ -128,23 +130,29 @@ typedef unsigned char byte;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
-#define	DEVICE_ATTR_READER(name, dev, buf)	\
-		ssize_t name(struct device *dev, struct device_attribute *attr, char *buf)
-#define	DEVICE_ATTR_WRITER(name, dev, buf, count)	\
-		ssize_t name(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+#define	DEVICE_ATTR_READER(name, dev, buf) \
+		ssize_t name(struct device *dev, \
+		struct device_attribute *attr, char *buf)
+#define	DEVICE_ATTR_WRITER(name, dev, buf, count) \
+		ssize_t name(struct device *dev, \
+		struct device_attribute *attr, \
+		const char *buf, size_t count)
 #else
-#define	DEVICE_ATTR_READER(name, dev, buf)	\
+#define	DEVICE_ATTR_READER(name, dev, buf) \
 		ssize_t name(struct device *dev, char *buf)
-#define	DEVICE_ATTR_WRITER(name, dev, buf, count)	\
+#define	DEVICE_ATTR_WRITER(name, dev, buf, count) \
 		ssize_t name(struct device *dev, const char *buf, size_t count)
 #endif
-#define	DRIVER_ATTR_READER(name, drv, buf)	\
+#define	DRIVER_ATTR_READER(name, drv, buf) \
 		ssize_t name(struct device_driver *drv, char * buf)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
-#define	SET_PROC_DIRENTRY_OWNER(p)	do { (p)->owner = THIS_MODULE; } while (0);
+#define	SET_PROC_DIRENTRY_OWNER(p) \
+		do { \
+			(p)->owner = THIS_MODULE; \
+		} while (0);
 #else
-#define	SET_PROC_DIRENTRY_OWNER(p)	do { } while (0);
+#define	SET_PROC_DIRENTRY_OWNER(p) do { } while (0);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)

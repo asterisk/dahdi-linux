@@ -110,7 +110,8 @@ struct xbus_transport {
 #define	TRANSPORT_EXIST(xbus)	((xbus)->transport.ops != NULL)
 
 #define	XBUS_FLAG_CONNECTED	0
-#define	XBUS_FLAGS(xbus, flg)	test_bit(XBUS_FLAG_ ## flg, &((xbus)->transport.transport_flags))
+#define	XBUS_FLAGS(xbus, flg) \
+	test_bit(XBUS_FLAG_ ## flg, &((xbus)->transport.transport_flags))
 
 struct xbus_ops *transportops_get(xbus_t *xbus);
 void transportops_put(xbus_t *xbus);
@@ -139,10 +140,14 @@ struct xbus_workqueue {
 xframe_t *get_xframe(struct xframe_queue *q);
 void put_xframe(struct xframe_queue *q, xframe_t *xframe);
 
-#define	ALLOC_SEND_XFRAME(xbus)	get_xframe(&(xbus)->send_pool)
-#define	ALLOC_RECV_XFRAME(xbus)	get_xframe(&(xbus)->receive_pool)
-#define	FREE_SEND_XFRAME(xbus, xframe)	put_xframe(&(xbus)->send_pool, (xframe))
-#define	FREE_RECV_XFRAME(xbus, xframe)	put_xframe(&(xbus)->receive_pool, (xframe))
+#define	ALLOC_SEND_XFRAME(xbus) \
+		get_xframe(&(xbus)->send_pool)
+#define	ALLOC_RECV_XFRAME(xbus) \
+		get_xframe(&(xbus)->receive_pool)
+#define	FREE_SEND_XFRAME(xbus, xframe) \
+		put_xframe(&(xbus)->send_pool, (xframe))
+#define	FREE_RECV_XFRAME(xbus, xframe) \
+		put_xframe(&(xbus)->receive_pool, (xframe))
 
 xbus_t *xbus_num(uint num);
 xbus_t *get_xbus(const char *msg, uint num);

@@ -120,7 +120,8 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 		__VA_ARGS__			\
 	} PACKED
 #define	RPACKET_HEADERSIZE		sizeof(struct xpacket_header)
-#define	RPACKET_FIELD(p, card, op, field)	(((RPACKET_TYPE(card, op) *)(p))->field)
+#define	RPACKET_FIELD(p, card, op, field) \
+		(((RPACKET_TYPE(card, op) *)(p))->field)
 #define	RPACKET_SIZE(card, op)		sizeof(RPACKET_TYPE(card, op))
 
 #define	XENTRY(prototab, module, op)			\
@@ -162,7 +163,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 
 #endif
 
-/*--------------------------- register handling --------------------------------*/
+/*----------------- register handling --------------------------------*/
 
 #define	MULTIBYTE_MAX_LEN	5	/* FPGA firmware limitation */
 
@@ -195,7 +196,7 @@ typedef struct reg_cmd {
 #define	REG_XDATA(regptr)		((regptr)->alt.d.xdata)
 
 #ifdef __KERNEL__
-/*--------------------------- protocol tables ----------------------------------*/
+/*----------------- protocol tables ----------------------------------*/
 
 typedef struct xproto_entry xproto_entry_t;
 typedef struct xproto_table xproto_table_t;
@@ -207,7 +208,8 @@ const xproto_table_t *xproto_get(xpd_type_t cardtype);
 void xproto_put(const xproto_table_t *xtable);
 const xproto_entry_t *xproto_card_entry(const xproto_table_t *table,
 					__u8 opcode);
-xproto_handler_t xproto_card_handler(const xproto_table_t *table, __u8 opcode);
+xproto_handler_t xproto_card_handler(const xproto_table_t *table,
+	__u8 opcode);
 
 const xproto_entry_t *xproto_global_entry(__u8 opcode);
 xproto_handler_t xproto_global_handler(__u8 opcode);
@@ -301,8 +303,8 @@ struct xpacket {
 } PACKED;
 
 void dump_packet(const char *msg, const xpacket_t *packet, bool debug);
-void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, __u8 unit,
-		  xportno_t port, const reg_cmd_t *regcmd);
+void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
+	__u8 unit, xportno_t port, const reg_cmd_t *regcmd);
 int xframe_receive(xbus_t *xbus, xframe_t *xframe);
 void notify_bad_xpd(const char *funcname, xbus_t *xbus,
 		    const struct xpd_addr addr, const char *msg);

@@ -245,7 +245,9 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	seconds = seconds % 60;
 	hours = minutes / 60;
 	minutes = minutes % 60;
-#define	SHOW(ptr,item)	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n", #item, (ptr)->item)
+#define	SHOW(ptr,item) \
+	len += snprintf(buf + len, PAGE_SIZE - len, \
+	"%-15s: %8d\n", #item, (ptr)->item)
 	len +=
 	    snprintf(buf + len, PAGE_SIZE - len,
 		     "%-15s: %8d (was %d:%02d:%02d ago)\n", "lost_ticks",
@@ -518,9 +520,8 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	regs = &xpd->last_reply;
-	len +=
-	    sprintf(buf + len,
-		    "# Writing bad data into this file may damage your hardware!\n");
+	len += sprintf(buf + len,
+		"# Writing bad data to this file may damage your hardware!\n");
 	len += sprintf(buf + len, "# Consult firmware docs first\n");
 	len += sprintf(buf + len, "#\n");
 	do_datah = REG_FIELD(regs, do_datah) ? 1 : 0;
@@ -758,7 +759,8 @@ static int xpd_match(struct device *dev, struct device_driver *driver)
 	xpd = dev_to_xpd(dev);
 	if (xpd_driver->type != xpd->type) {
 		XPD_DBG(DEVICES, xpd,
-			"SYSFS match fail: xpd->type = %d, xpd_driver->type = %d\n",
+			"SYSFS match fail: xpd->type = %d, "
+			"xpd_driver->type = %d\n",
 			xpd->type, xpd_driver->type);
 		return 0;
 	}
@@ -911,7 +913,8 @@ static DEVICE_ATTR_WRITER(echocancel_store, dev, buf, count)
 	}
 	if (mask != 0 && __ffs(mask) > channels) {
 		XPD_ERR(xpd,
-			"Channel mask (0x%lX) larger than available channels (%d)\n",
+			"Channel mask (0x%lX) larger than "
+			"available channels (%d)\n",
 			mask, channels);
 		return -EINVAL;
 	}

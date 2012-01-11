@@ -87,7 +87,8 @@ enum fxo_leds {
 #define	DAA_WRITE	1
 #define	DAA_READ	0
 #define	DAA_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
-	xpp_register_request((xbus), (xpd), (port), (writing), (reg), 0, 0, (dL), 0, 0, 0)
+		xpp_register_request((xbus), (xpd), (port), \
+		(writing), (reg), 0, 0, (dL), 0, 0, 0)
 
 /*---------------- FXO Protocol Commands ----------------------------------*/
 
@@ -169,9 +170,18 @@ struct FXO_priv_data {
  */
 #define	LED_COUNTER(priv, pos, color)	((priv)->led_counter[color][pos])
 #define	IS_BLINKING(priv, pos, color)	(LED_COUNTER(priv, pos, color) > 0)
-#define	MARK_BLINK(priv, pos, color, t)	((priv)->led_counter[color][pos] = (t))
-#define	MARK_OFF(priv, pos, color)	do { BIT_CLR((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
-#define	MARK_ON(priv, pos, color)		do { BIT_SET((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
+#define	MARK_BLINK(priv, pos, color, t) \
+		((priv)->led_counter[color][pos] = (t))
+#define	MARK_OFF(priv, pos, color) \
+		do { \
+			BIT_CLR((priv)->ledcontrol[color], (pos)); \
+			MARK_BLINK((priv), (pos), (color), 0); \
+		} while (0)
+#define	MARK_ON(priv, pos, color) \
+		do { \
+			BIT_SET((priv)->ledcontrol[color], (pos)); \
+			MARK_BLINK((priv), (pos), (color), 0); \
+		} while (0)
 
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 
@@ -266,11 +276,13 @@ static void handle_fxo_leds(xpd_t *xpd)
 			if (IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    || IS_SET(PHONEDEV(xpd).digital_inputs, i))
 				continue;
-			if ((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {	// Blinking
+			/* Blinking? */
+			if ((xpd->blink_mode & BIT(i)) || IS_BLINKING(priv, i, color)) {
 				int mod_value = LED_COUNTER(priv, i, color);
 
 				if (!mod_value)
-					mod_value = DEFAULT_LED_PERIOD;	/* safety value */
+					/* safety value */
+					mod_value = DEFAULT_LED_PERIOD;
 				// led state is toggled
 				if ((timer_count % mod_value) == 0) {
 					LINE_DBG(LEDS, xpd, i, "ledstate=%s\n",
@@ -347,7 +359,8 @@ static int do_sethook(xpd_t *xpd, int pos, bool to_offhook)
 	__u8 value;
 
 	BUG_ON(!xpd);
-	BUG_ON(PHONEDEV(xpd).direction == TO_PHONE);	// We can SETHOOK state only on PSTN
+	/* We can SETHOOK state only on PSTN */
+	BUG_ON(PHONEDEV(xpd).direction == TO_PHONE);
 	xbus = xpd->xbus;
 	priv = xpd->priv;
 	BUG_ON(!priv);
@@ -378,7 +391,8 @@ static int do_sethook(xpd_t *xpd, int pos, bool to_offhook)
 	priv->metering_tone_state = 0L;
 	DAA_DIRECT_REQUEST(xbus, xpd, pos, DAA_WRITE, DAA_REG_METERING, 0x2D);
 #endif
-	reset_battery_readings(xpd, pos);	/* unstable during hook changes */
+	/* unstable during hook changes */
+	reset_battery_readings(xpd, pos);
 	if (to_offhook) {
 		priv->power_denial_safezone[pos] = power_denial_safezone;
 	} else {
@@ -460,8 +474,9 @@ static xpd_t *FXO_card_new(xbus_t *xbus, int unit, int subunit,
 
 	if (to_phone) {
 		XBUS_NOTICE(xbus,
-			    "XPD=%d%d: try to instanciate FXO with reverse direction\n",
-			    unit, subunit);
+			"XPD=%d%d: try to instanciate FXO with "
+			"reverse direction\n",
+			unit, subunit);
 		return NULL;
 	}
 	if (subtype == 2)
@@ -493,10 +508,13 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 	// Hanghup all lines
 	for_each_line(xpd, i) {
 		do_sethook(xpd, i, 0);
-		priv->polarity[i] = POL_UNKNOWN;	/* will be updated on next battery sample */
+		/* will be updated on next battery sample */
+		priv->polarity[i] = POL_UNKNOWN;
 		priv->polarity_debounce[i] = 0;
-		priv->battery[i] = BATTERY_UNKNOWN;	/* will be updated on next battery sample */
-		priv->power[i] = POWER_UNKNOWN;	/* will be updated on next battery sample */
+		/* will be updated on next battery sample */
+		priv->battery[i] = BATTERY_UNKNOWN;
+		/* will be updated on next battery sample */
+		priv->power[i] = POWER_UNKNOWN;
 		if (caller_id_style == CID_STYLE_ETSI_DTMF)
 			oht_pcm(xpd, i, 1);
 	}
@@ -696,7 +714,7 @@ static void handle_fxo_power_denial(xpd_t *xpd)
 		if (priv->power_denial_safezone[i] > 0) {
 			if (--priv->power_denial_safezone[i] == 0) {
 				/*
-				 * Poll current, previous answers are meaningless
+				 * Poll current, prev answers are meaningless
 				 */
 				DAA_DIRECT_REQUEST(xpd->xbus, xpd, i, DAA_READ,
 						   DAA_REG_CURRENT, 0);
@@ -707,9 +725,11 @@ static void handle_fxo_power_denial(xpd_t *xpd)
 			priv->power_denial_length[i]--;
 			if (priv->power_denial_length[i] <= 0) {
 				/*
-				 * But maybe the FXS started to ring (and the firmware haven't
-				 * detected it yet). This would cause false power denials.
-				 * So we just flag it and schedule more ticks to wait.
+				 * But maybe the FXS started to ring (and
+				 * the firmware haven't detected it yet).
+				 * This would cause false power denials so
+				 * we just flag it and schedule more ticks
+				 * to wait.
 				 */
 				LINE_DBG(SIGNAL, xpd, i,
 					 "Possible Power Denial Hangup\n");
@@ -850,8 +870,9 @@ static int FXO_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 					       echotune_data[i]);
 			if (ret < 0) {
 				LINE_NOTICE(xpd, pos,
-					    "Couldn't write %0x02X to register %0x02X\n",
-					    echotune_data[i], echotune_regs[i]);
+					"Couldn't write %0x02X to "
+					"register %0x02X\n",
+					echotune_data[i], echotune_regs[i]);
 				return ret;
 			}
 			msleep(1);
@@ -903,19 +924,20 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 		if (IS_SET(sig_toggles, i)) {
 			if (priv->battery[i] == BATTERY_OFF) {
 				/*
-				 * With poll_battery_interval==0 we cannot have BATTERY_OFF
-				 * so we won't get here
+				 * With poll_battery_interval==0 we cannot
+				 * have BATTERY_OFF so we won't get here
 				 */
 				LINE_NOTICE(xpd, i,
-					    "SIG_CHANGED while battery is off. Ignored.\n");
+					"SIG_CHANGED while battery is off. "
+					"Ignored.\n");
 				continue;
 			}
 			/* First report false ring alarms */
 			debounce = atomic_read(&priv->ring_debounce[i]);
 			if (debounce)
 				LINE_NOTICE(xpd, i,
-					    "debounced false ring (only %d ticks)\n",
-					    debounce);
+					"debounced false ring (only %d ticks)\n",
+					debounce);
 			/*
 			 * Now set a new ring alarm.
 			 * It will be checked in handle_fxo_ring()
@@ -930,7 +952,8 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	return 0;
 }
 
-static void update_battery_voltage(xpd_t *xpd, __u8 data_low, xportno_t portno)
+static void update_battery_voltage(xpd_t *xpd, __u8 data_low,
+	xportno_t portno)
 {
 	struct FXO_priv_data *priv;
 	enum polarity_state pol;
@@ -988,7 +1011,8 @@ static void update_battery_voltage(xpd_t *xpd, __u8 data_low, xportno_t portno)
 		MARK_OFF(priv, portno, LED_RED);
 #endif
 	if (priv->battery[portno] != BATTERY_ON) {
-		priv->polarity[portno] = POL_UNKNOWN;	/* What's the polarity ? */
+		/* What's the polarity ? */
+		priv->polarity[portno] = POL_UNKNOWN;
 		return;
 	}
 	/*
@@ -1028,11 +1052,12 @@ static void update_battery_voltage(xpd_t *xpd, __u8 data_low, xportno_t portno)
 			/*
 			 * Inform dahdi/Asterisk:
 			 * 1. Maybe used for hangup detection during offhook
-			 * 2. In some countries used to report caller-id during onhook
-			 *    but before first ring.
+			 * 2. In some countries used to report caller-id
+			 *    during onhook but before first ring.
 			 */
 			if (caller_id_style == CID_STYLE_ETSI_FSK)
-				oht_pcm(xpd, portno, 1);	/* will be cleared on ring/offhook */
+				/* will be cleared on ring/offhook */
+				oht_pcm(xpd, portno, 1);
 			if (SPAN_REGISTERED(xpd)) {
 				LINE_DBG(SIGNAL, xpd, portno,
 					 "Send DAHDI_EVENT_POLARITY: %s\n",
@@ -1048,10 +1073,12 @@ ignore_reading:
 	/*
 	 * Reset debounce counters to prevent false alarms
 	 */
-	reset_battery_readings(xpd, portno);	/* unstable during hook changes */
+	/* unstable during hook changes */
+	reset_battery_readings(xpd, portno);
 }
 
-static void update_battery_current(xpd_t *xpd, __u8 data_low, xportno_t portno)
+static void update_battery_current(xpd_t *xpd, __u8 data_low,
+	xportno_t portno)
 {
 	struct FXO_priv_data *priv;
 
@@ -1145,11 +1172,12 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		 ((info->bytes == 3) ? 'I' : 'D'), REG_FIELD(info, regnum),
 		 REG_FIELD(info, data_low), REG_FIELD(info, data_high));
 	/* Update /proc info only if reply relate to the last slic read request */
-	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
-	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
-									do_subreg)
-	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
-								     subreg)) {
+	if (REG_FIELD(&xpd->requested_reply, regnum) ==
+			REG_FIELD(info, regnum)
+		&& REG_FIELD(&xpd->requested_reply, do_subreg) ==
+			REG_FIELD(info, do_subreg)
+		&& REG_FIELD(&xpd->requested_reply, subreg) ==
+			REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
 	return 0;
