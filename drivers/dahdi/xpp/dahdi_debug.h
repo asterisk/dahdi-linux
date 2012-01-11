@@ -94,7 +94,7 @@ void dump_poll(int debug, const char *msg, int poll);
 
 static inline char *rxsig2str(enum dahdi_rxsig sig)
 {
-	switch(sig) {
+	switch (sig) {
 		case DAHDI_RXSIG_ONHOOK:	return "ONHOOK";
 		case DAHDI_RXSIG_OFFHOOK:	return "OFFHOOK";
 		case DAHDI_RXSIG_START:	return "START";
@@ -106,7 +106,7 @@ static inline char *rxsig2str(enum dahdi_rxsig sig)
 
 static inline char *txsig2str(enum dahdi_txsig sig)
 {
-	switch(sig) {
+	switch (sig) {
 		case DAHDI_TXSIG_ONHOOK:	return "TXSIG_ONHOOK";
 		case DAHDI_TXSIG_OFFHOOK:	return "TXSIG_OFFHOOK";
 		case DAHDI_TXSIG_START:	return "TXSIG_START";
@@ -118,7 +118,7 @@ static inline char *txsig2str(enum dahdi_txsig sig)
 
 static inline char *event2str(int event)
 {
-	switch(event) {
+	switch (event) {
 		case DAHDI_EVENT_NONE:		return "NONE";
 		case DAHDI_EVENT_ONHOOK:		return "ONHOOK";
 		case DAHDI_EVENT_RINGOFFHOOK:	return "RINGOFFHOOK";
@@ -143,7 +143,7 @@ static inline char *event2str(int event)
 
 static inline char *hookstate2str(int hookstate)
 {
-	switch(hookstate) {
+	switch (hookstate) {
 		case DAHDI_ONHOOK:		return "DAHDI_ONHOOK";
 		case DAHDI_START:		return "DAHDI_START";
 		case DAHDI_OFFHOOK:	return "DAHDI_OFFHOOK";
@@ -185,7 +185,7 @@ static inline char *sig2str(int sig)
 static inline char *alarmbit2str(int alarmbit)
 {
 	/* from dahdi/kernel.h */
-	switch(1 << alarmbit) {
+	switch (1 << alarmbit) {
 		case DAHDI_ALARM_NONE:	return "NONE";
 		case DAHDI_ALARM_RECOVER:	return "RECOVER";
 		case DAHDI_ALARM_LOOPBACK:	return "LOOPBACK";

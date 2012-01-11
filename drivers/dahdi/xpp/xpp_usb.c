@@ -93,20 +93,20 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 #  define USB_MAX_STRING	128
 #  define USB_GET_STRING(udev,field,buf)		\
 	do {						\
-		if((udev)->descriptor.field) {		\
+		if ((udev)->descriptor.field) {		\
 			char	tmp[USB_MAX_STRING];	\
-			if(usb_string((udev), (udev)->descriptor.field, tmp, sizeof(tmp)) > 0) \
+			if (usb_string((udev), (udev)->descriptor.field, tmp, sizeof(tmp)) > 0) \
 				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
 		}					\
-	} while(0);
+	} while (0);
 #  define USB_GET_IFACE_NAME(udev,iface,buf)		\
 	do {						\
-		if((iface)->desc.iInterface) {		\
+		if ((iface)->desc.iInterface) {		\
 			char	tmp[USB_MAX_STRING];	\
-			if(usb_string((udev), (iface)->desc.iInterface, tmp, sizeof(tmp)) > 0) \
+			if (usb_string((udev), (iface)->desc.iInterface, tmp, sizeof(tmp)) > 0) \
 				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
 		}					\
-	} while(0);
+	} while (0);
 #endif
 
 #ifdef	DEBUG_PCM_TIMING
@@ -303,23 +303,23 @@ static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 	BUG_ON(!xbus);
 	xusb = xusb_of(xbus);
 	BUG_ON(!xusb);
-	if(!xusb->present) {
-		if((rate_limit++ % 1003) == 0)
+	if (!xusb->present) {
+		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb,
 				"abort allocations during device disconnect (%d)\n", rate_limit);
 		return NULL;
 	}
 	size = min(xusb->endpoints[XUSB_SEND].max_size, xusb->endpoints[XUSB_RECV].max_size);
 	uframe = kmem_cache_alloc(xusb_cache, gfp_flags);
-	if(!uframe) {
-		if((rate_limit++ % 1003) == 0)
+	if (!uframe) {
+		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb, "frame allocation failed (%d)\n", rate_limit);
 		return NULL;
 	}
 	usb_init_urb(&uframe->urb);
 	p = usb_alloc_coherent(xusb->udev, size, gfp_flags, &uframe->urb.transfer_dma);
-	if(!p) {
-		if((rate_limit++ % 1003) == 0)
+	if (!p) {
+		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb, "buffer allocation failed (%d)\n", rate_limit);
 		kmem_cache_free(xusb_cache, uframe);
 		return NULL;
@@ -362,10 +362,10 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(xframe->xframe_magic != XFRAME_MAGIC);
 	xusb = xusb_of(xbus);
 	BUG_ON(!xusb);
-	if(!xusb->present) {
+	if (!xusb->present) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) == 0)
+		if ((rate_limit++ % 1003) == 0)
 			XUSB_ERR(xusb,
 				"abort do_send_xframe during device disconnect (%d)\n", rate_limit);
 		ret = -ENODEV;
@@ -374,10 +374,10 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 	/*
 	 * If something really bad happend, do not overflow the USB stack
 	 */
-	if(atomic_read(&xusb->pending_writes) > MAX_PENDING_WRITES) {
+	if (atomic_read(&xusb->pending_writes) > MAX_PENDING_WRITES) {
 		static	int rate_limit;
 
-		if((rate_limit++ % 5000) == 0)
+		if ((rate_limit++ % 5000) == 0)
 			XUSB_ERR(xusb,
 				"USB device is totaly stuck. Dropping packets (#%d).\n",
 				rate_limit);
@@ -394,10 +394,10 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 	urb->transfer_buffer_length = XFRAME_LEN(xframe);
 	do_gettimeofday(&xframe->tv_submitted);
 	ret = usb_submit_urb(urb, GFP_ATOMIC);
-	if(ret < 0) {
+	if (ret < 0) {
 		static int rate_limit;
 
-		if((rate_limit++ % 1000) == 0)
+		if ((rate_limit++ % 1000) == 0)
 			XBUS_ERR(xbus, "%s: usb_submit_urb failed: %d\n",
 				__func__, ret);
 		ret = -EBADF;
@@ -424,7 +424,7 @@ static int xframe_send_pcm(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(!xframe);
 	xusb = xusb_of(xbus);
 	BUG_ON(!xusb);
-	if(xusb->drop_next_pcm) {
+	if (xusb->drop_next_pcm) {
 		FREE_SEND_XFRAME(xbus, xframe);	/* return to pool */
 		xusb->drop_next_pcm = 0;
 		return -EIO;
@@ -455,17 +455,17 @@ static bool xusb_listen(xusb_t *xusb)
 
 	BUG_ON(!xbus);
 	xframe = ALLOC_RECV_XFRAME(xbus);
-	if(!xframe) {
+	if (!xframe) {
 		XBUS_ERR(xbus, "Empty receive_pool\n");
 		goto out;
 	}
 	uframe = xframe_to_uframe(xframe);
 	uframe_recompute(uframe, XUSB_RECV);
 	ret = usb_submit_urb(&uframe->urb, GFP_ATOMIC);
-	if(ret < 0) {
+	if (ret < 0) {
 		static int rate_limit;
 
-		if((rate_limit++ % 1000) == 0)
+		if ((rate_limit++ % 1000) == 0)
 			XBUS_ERR(xbus, "%s: usb_submit_urb failed: %d\n",
 				__func__, ret);
 		FREE_RECV_XFRAME(xbus, xframe);
@@ -570,10 +570,10 @@ static int check_usb1(struct usb_endpoint_descriptor *endpoint)
 {
 	const char *msg = (usb_pipein(endpoint->bEndpointAddress))?"input":"output";
 
-	if(endpoint->wMaxPacketSize >= sizeof(xpacket_t))
+	if (endpoint->wMaxPacketSize >= sizeof(xpacket_t))
 		return 1;
 
-	if(usb1) {
+	if (usb1) {
 		NOTICE("USB1 endpoint detected: USB %s endpoint 0x%X support only wMaxPacketSize=%d.\n",
 				msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
 		return 1;
@@ -601,13 +601,13 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc, st
 		endpoint = &iface_desc->endpoint[i].desc;
 		ep_addr = endpoint->bEndpointAddress;
 
-		if(!BULK_ENDPOINT(endpoint)) {
+		if (!BULK_ENDPOINT(endpoint)) {
 			DBG(DEVICES, "endpoint 0x%x is not bulk: mbAttributes=0x%X\n",
 					ep_addr, endpoint->bmAttributes);
 			continue;
 		}
-		if(usb_pipein(ep_addr)) {	// Input
-			if(ep_addr == model_info->in.ep_addr) {
+		if (usb_pipein(ep_addr)) {	// Input
+			if (ep_addr == model_info->in.ep_addr) {
 				if (!check_usb1(endpoint))
 					return 0;
 				xusb_ep = &xusb->endpoints[XUSB_RECV];
@@ -616,7 +616,7 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc, st
 				xusb_ep->callback = xpp_receive_callback;
 			}
 		} else {			// Output
-			if(ep_addr == model_info->out.ep_addr) {
+			if (ep_addr == model_info->out.ep_addr) {
 				if (!check_usb1(endpoint))
 					return 0;
 				xusb_ep = &xusb->endpoints[XUSB_SEND];
@@ -666,12 +666,12 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	int			i;
 
 	DBG(DEVICES, "New XUSB device MODEL=%s\n", model_info->desc);
-	if(iface_desc->desc.bInterfaceNumber != model_info->iface_num) {
+	if (iface_desc->desc.bInterfaceNumber != model_info->iface_num) {
 		DBG(DEVICES, "Skip interface #%d != #%d\n",
 			iface_desc->desc.bInterfaceNumber, model_info->iface_num);
 		return -ENODEV;
 	}
-	if((retval = DO_USB_RESET_DEVICE(udev)) < 0) {
+	if ((retval = DO_USB_RESET_DEVICE(udev)) < 0) {
 		ERR("usb_reset_device failed: %d\n", retval);
 		goto probe_failed;
 	}
@@ -698,7 +698,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	xusb->interface = interface;
 	xusb->model_info = model_info;
 
-	if(!set_endpoints(xusb, iface_desc, model_info)) {
+	if (!set_endpoints(xusb, iface_desc, model_info)) {
 		retval = -ENODEV;
 		goto probe_failed;
 	}
@@ -733,7 +733,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	/* let the user know what node this device is now attached to */
 	DBG(DEVICES, "USB XPP device now attached to minor %d\n", xusb->minor);
 	xbus = xbus_new(&xusb_ops, min(xusb->endpoints[XUSB_SEND].max_size, xusb->endpoints[XUSB_RECV].max_size), &udev->dev, xusb);
-	if(!xbus) {
+	if (!xbus) {
 		retval = -ENOMEM;
 		goto probe_failed;
 	}
@@ -744,19 +744,19 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 		udev->descriptor.idProduct,
 		udev->descriptor.bcdDevice);
 	spin_lock_irqsave(&xusb_lock, flags);
-	for(i = 0; i < MAX_BUSES; i++) {
-		if(xusb_array[i] == NULL)
+	for (i = 0; i < MAX_BUSES; i++) {
+		if (xusb_array[i] == NULL)
 			break;
 	}
 	spin_unlock_irqrestore(&xusb_lock, flags);
-	if(i >= MAX_BUSES) {
+	if (i >= MAX_BUSES) {
 		ERR("xpp_usb: Too many XPP USB buses\n");
 		retval = -ENOMEM;
 		goto probe_failed;
 	}
 	usb_make_path(udev, xusb->path, XBUS_DESCLEN);	// May trunacte... ignore
 	snprintf(xbus->connector, XBUS_DESCLEN, "%s", xusb->path);
-	if(xusb->serial && xusb->serial[0])
+	if (xusb->serial && xusb->serial[0])
 		snprintf(xbus->label, LABEL_SIZE, "usb:%s", xusb->serial);
 	xusb->index = i;
 	xusb_array[i] = xusb;
@@ -777,24 +777,24 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	bus_count++;
 	xusb->xbus_num = xbus->num;
 	/* prepare several pending frames for receive side */
-	for(i = 0; i < 10; i++)
+	for (i = 0; i < 10; i++)
 			xusb_listen(xusb);
 	xbus_connect(xbus);
 	return retval;
 probe_failed:
 	ERR("Failed to initialize xpp usb bus: %d\n", retval);
 	usb_set_intfdata(interface, NULL);
-	if(xusb) {
-		if(xusb->minor) {	// passed registration phase
+	if (xusb) {
+		if (xusb->minor) {	// passed registration phase
 			ERR("Calling usb_deregister_dev()\n");
 			usb_deregister_dev(interface, &xusb_class);
 		}
 		ERR("Removing failed xusb\n");
 		KZFREE(xusb);
 	}
-	if(xbus) {
+	if (xbus) {
 #ifdef CONFIG_PROC_FS
-		if(procsummary) {
+		if (procsummary) {
 			XBUS_DBG(PROC, xbus, "Remove proc_entry: " PROC_USBXPP_SUMMARY "\n");
 			remove_proc_entry(PROC_USBXPP_SUMMARY, xbus->proc_xbus_dir);
 			procsummary = NULL;
@@ -834,15 +834,15 @@ static void xusb_disconnect(struct usb_interface *interface)
 	xbus = xbus_num(xusb->xbus_num);
 
 	/* find our xusb */
-	for(i = 0; i < MAX_BUSES; i++) {
-		if(xusb_array[i] == xusb)
+	for (i = 0; i < MAX_BUSES; i++) {
+		if (xusb_array[i] == xusb)
 			break;
 	}
 	BUG_ON(i >= MAX_BUSES);
 	xusb_array[i] = NULL;
 
 #ifdef CONFIG_PROC_FS
-	if(xbus->proc_xbus_dir) {
+	if (xbus->proc_xbus_dir) {
 		XBUS_DBG(PROC, xbus, "Remove proc_entry: " PROC_USBXPP_SUMMARY "\n");
 		remove_proc_entry(PROC_USBXPP_SUMMARY, xbus->proc_xbus_dir);
 	}
@@ -873,7 +873,7 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 	int		writes = atomic_read(&xusb->pending_writes);
 	int		i;
 
-	if(!xbus) {
+	if (!xbus) {
 		XUSB_ERR(xusb, "Sent URB does not belong to a valid xbus anymore...\n");
 		return;
 	}
@@ -882,18 +882,18 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 	do_gettimeofday(&now);
 	xusb->last_tx = xframe->tv_submitted;
 	usec = usec_diff(&now, &xframe->tv_submitted);
-	if(usec > xusb->max_tx_delay)
+	if (usec > xusb->max_tx_delay)
 		xusb->max_tx_delay = usec;
 	i = usec / USEC_BUCKET;
-	if(i >= NUM_BUCKETS)
+	if (i >= NUM_BUCKETS)
 		i = NUM_BUCKETS - 1;
 	xusb->usb_tx_delay[i]++;
-	if(unlikely(usec > tx_sluggish)) {
+	if (unlikely(usec > tx_sluggish)) {
 		atomic_inc(&xusb->usb_sluggish_count);
-		if(xusb->sluggish_debounce++ > drop_pcm_after) {
+		if (xusb->sluggish_debounce++ > drop_pcm_after) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 500)	/* skip first messages */
+			if ((rate_limit++ % 1003) == 500)	/* skip first messages */
 				XUSB_NOTICE(xusb,
 					"Sluggish USB. Dropping next PCM frame (pending_writes=%d)\n",
 					writes);
@@ -906,7 +906,7 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 	/* sync/async unlink faults aren't errors */
 	if (urb->status && !(urb->status == -ENOENT || urb->status == -ECONNRESET)) {
 		static	int rate_limit;
-		if((rate_limit++ % 1000) < 10) {
+		if ((rate_limit++ % 1000) < 10) {
 			XUSB_ERR(xusb,
 				"nonzero write bulk status received: %d (pending_writes=%d)\n",
 				urb->status, writes);
@@ -916,7 +916,7 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 	} else
 		XUSB_COUNTER(xusb, TX_FRAMES)++;
 	FREE_SEND_XFRAME(xbus, xframe);
-	if(!xusb->present)
+	if (!xusb->present)
 		XUSB_ERR(xusb, "A urb from non-connected device?\n");
 }
 
@@ -932,11 +932,11 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 
 	do_gettimeofday(&now);
 	atomic_dec(&xusb->pending_reads);
-	if(!xbus) {
+	if (!xbus) {
 		XUSB_ERR(xusb, "Received URB does not belong to a valid xbus anymore...\n");
 		return;
 	}
-	if(!xusb->present) {
+	if (!xusb->present) {
 		do_resubmit = 0;
 		goto err;
 	}
@@ -946,10 +946,10 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 		goto err;
 	}
 	size = urb->actual_length;
-	if(size == 0) {
+	if (size == 0) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 5003) == 0)
+		if ((rate_limit++ % 5003) == 0)
 			XUSB_NOTICE(xusb, "Received a zero length URBs (%d)\n", rate_limit);
 		XUSB_COUNTER(xusb, RCV_ZERO_LEN)++;
 		goto err;
@@ -963,7 +963,7 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 	/* Send UP */
 	xbus_receive_xframe(xbus, xframe);
 end:
-	if(do_resubmit)
+	if (do_resubmit)
 		xusb_listen(xusb);
 	return;
 err:
@@ -976,7 +976,7 @@ err:
 
 static void xpp_usb_cleanup(void)
 {
-	if(xusb_cache) {
+	if (xusb_cache) {
 		kmem_cache_destroy(xusb_cache);
 		xusb_cache = NULL;
 	}
@@ -999,7 +999,7 @@ static int __init xpp_usb_init(void)
 			NULL,
 #endif
 			NULL);
-	if(!xusb_cache) {
+	if (!xusb_cache) {
 		ret = -ENOMEM;
 		goto failure;
 	}
@@ -1039,7 +1039,7 @@ static int xusb_read_proc(char *page, char **start, off_t off, int count, int *e
 	uint		usb_tx_delay[NUM_BUCKETS];
 	const int	mark_limit = tx_sluggish/USEC_BUCKET;
 
-	if(!xusb)
+	if (!xusb)
 		goto out;
 	// TODO: probably needs a per-xusb lock:
 	spin_lock_irqsave(&xusb_lock, flags);
@@ -1070,10 +1070,10 @@ static int xusb_read_proc(char *page, char **start, off_t off, int count, int *e
 	memcpy(usb_tx_delay, xusb->usb_tx_delay, sizeof(usb_tx_delay));
 	len += sprintf(page + len, "usb_tx_delay[%d,%d,%d]: ",
 		USEC_BUCKET, BUCKET_START, NUM_BUCKETS);
-	for(i = BUCKET_START; i < NUM_BUCKETS; i++) {
+	for (i = BUCKET_START; i < NUM_BUCKETS; i++) {
 		len += sprintf(page + len, "%6d ",
 			usb_tx_delay[i]);
-		if(i == mark_limit)
+		if (i == mark_limit)
 			len += sprintf(page + len, "| ");
 	}
 	len += sprintf(page + len, "\nPCM_TX_DROPS: %5d (sluggish: %d)\n",
@@ -1081,7 +1081,7 @@ static int xusb_read_proc(char *page, char **start, off_t off, int count, int *e
 		atomic_read(&xusb->usb_sluggish_count)
 		);
 	len += sprintf(page + len, "\nCOUNTERS:\n");
-	for(i = 0; i < XUSB_COUNTER_MAX; i++) {
+	for (i = 0; i < XUSB_COUNTER_MAX; i++) {
 		len += sprintf(page + len, "\t%-15s = %d\n", xusb_counters[i].name, xusb->counters[i]);
 	}
 #if 0

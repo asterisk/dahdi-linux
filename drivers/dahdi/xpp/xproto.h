@@ -45,7 +45,7 @@ struct xpd_addr {
 				(p)->unit = (u);	\
 				(p)->subunit = (s);	\
 				(p)->sync_master = 0;	\
-			} while(0)
+			} while (0)
 
 struct xpacket_header {
 	uint16_t	packet_len:10;
@@ -142,23 +142,23 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 			XPACKET_ADDR_SUBUNIT(p) = XBUS_SUBUNIT(to);	\
 			XPACKET_ADDR_SYNC(p) = 0;		\
 			XPACKET_ADDR_RESERVED(p) = 0;		\
-		} while(0)
+		} while (0)
 
 #define	XFRAME_NEW_CMD(frm, p, xbus, card, op, to)		\
 	do {							\
 		int		pack_len = RPACKET_SIZE(card,op);	\
 								\
-		if(!XBUS_FLAGS(xbus, CONNECTED))		\
+		if (!XBUS_FLAGS(xbus, CONNECTED))		\
 			return -ENODEV;				\
 		(frm) = ALLOC_SEND_XFRAME(xbus);		\
-		if(!(frm))					\
+		if (!(frm))					\
 			return -ENOMEM;				\
 		(p) = xframe_next_packet(frm, pack_len);	\
-		if(!(p))					\
+		if (!(p))					\
 			return -ENOMEM;				\
 		XPACKET_INIT(p, card, op, to, 0, 0);		\
 		(frm)->usec_towait = 0;				\
-	} while(0)
+	} while (0)
 
 #endif
 

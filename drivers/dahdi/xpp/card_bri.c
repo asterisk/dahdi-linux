@@ -84,7 +84,7 @@ static const char *xhfc_state_name(bool is_nt, enum xhfc_states state)
 		_E(NT_DEACTIVTING),
 	};
 #undef	_E
-	if(is_nt) {
+	if (is_nt) {
 		if (state > ST_NT_DEACTIVTING)
 			p = "NT ???";
 		else
@@ -242,7 +242,7 @@ static void dump_hex_buf(xpd_t *xpd, char *msg, byte *buf, size_t len)
 	int	n = 0;
 
 	debug_buf[0] = '\0';
-	for(i = 0; i < len && n < DEBUG_BUF_SIZE; i++)
+	for (i = 0; i < len && n < DEBUG_BUF_SIZE; i++)
 		n += snprintf(&debug_buf[n], DEBUG_BUF_SIZE - n, "%02X ", buf[i]);
 	XPD_NOTICE(xpd, "%s[0..%zd]: %s%s\n", msg, len-1, debug_buf,
 			(n >= DEBUG_BUF_SIZE)?"...":"");
@@ -258,19 +258,19 @@ static void dump_dchan_packet(xpd_t *xpd, bool transmit, byte *buf, int len)
 
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(transmit) {
+	if (transmit) {
 		direction = "TX";
 		frame_begin = priv->txframe_begin;
 	} else {
 		direction = "RX";
 		frame_begin = 1;
 	}
-	if(frame_begin) {	/* Packet start */
-		if(!IS_SET(buf[0], 7))
+	if (frame_begin) {	/* Packet start */
+		if (!IS_SET(buf[0], 7))
 			ftype = 'I';	/* Information */
-		else if(IS_SET(buf[0], 7) && !IS_SET(buf[0], 6))
+		else if (IS_SET(buf[0], 7) && !IS_SET(buf[0], 6))
 			ftype = 'S';	/* Supervisory */
-		else if(IS_SET(buf[0], 7) && IS_SET(buf[0], 6))
+		else if (IS_SET(buf[0], 7) && IS_SET(buf[0], 6))
 			ftype = 'U';	/* Unnumbered */
 		else
 			XPD_NOTICE(xpd, "Unknown frame type 0x%X\n", buf[0]);
@@ -284,7 +284,7 @@ static void dump_dchan_packet(xpd_t *xpd, bool transmit, byte *buf, int len)
 
 static void set_bri_timer(xpd_t *xpd, const char *name, int *bri_timer, int value)
 {
-	if(value == HFC_TIMER_OFF)
+	if (value == HFC_TIMER_OFF)
 		XPD_DBG(SIGNAL, xpd, "Timer %s DISABLE\n", name);
 	else
 		XPD_DBG(SIGNAL, xpd, "Timer %s: set to %d\n", name, value);
@@ -298,9 +298,9 @@ static void dchan_state(xpd_t *xpd, bool up)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(priv->dchan_alive == up)
+	if (priv->dchan_alive == up)
 		return;
-	if(up) {
+	if (up) {
 		XPD_DBG(SIGNAL, xpd, "STATE CHANGE: D-Channel RUNNING\n");
 		priv->dchan_alive = 1;
 	} else {
@@ -318,11 +318,11 @@ static void layer1_state(xpd_t *xpd, bool up)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(priv->layer1_up == up)
+	if (priv->layer1_up == up)
 		return;
 	priv->layer1_up = up;
 	XPD_DBG(SIGNAL, xpd, "STATE CHANGE: Layer1 %s\n", (up)?"UP":"DOWN");
-	if(!up)
+	if (!up)
 		dchan_state(xpd, 0);
 }
 
@@ -336,8 +336,8 @@ static void te_activation(xpd_t *xpd, bool on)
 	BUG_ON(!priv);
 	curr_state = priv->state_register.bits.v_su_sta;
 	XPD_DBG(SIGNAL, xpd, "%s\n", (on)?"ON":"OFF");
-	if(on) {
-		if(curr_state == ST_TE_DEACTIVATED) {
+	if (on) {
+		if (curr_state == ST_TE_DEACTIVATED) {
 			XPD_DBG(SIGNAL, xpd, "HFC_L1_ACTIVATE_TE\n");
 			set_bit(HFC_L1_ACTIVATING, &priv->l1_flags);
 			write_state_register(xpd, STA_ACTIVATE);
@@ -379,8 +379,8 @@ static void nt_activation(xpd_t *xpd, bool on)
 	BUG_ON(!priv);
 	curr_state = priv->state_register.bits.v_su_sta;
 	XPD_DBG(SIGNAL, xpd, "%s\n", (on)?"ON":"OFF");
-	if(on) {
-		switch(curr_state) {
+	if (on) {
+		switch (curr_state) {
 			case ST_RESET:			/* F/G 0 */
 			case ST_NT_DEACTIVATED:		/* G1 */
 			case ST_NT_DEACTIVTING:		/* G4 */
@@ -397,7 +397,7 @@ static void nt_activation(xpd_t *xpd, bool on)
 				break;
 		}
 	} else {
-		switch(curr_state) {
+		switch (curr_state) {
 			case ST_RESET:			/* F/G 0 */
 			case ST_NT_DEACTIVATED:		/* G1 */
 			case ST_NT_DEACTIVTING:		/* G4 */
@@ -428,16 +428,16 @@ static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int l
 
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(len <= 0) {
+	if (len <= 0) {
 		XPD_NOTICE(xpd, "D-Chan RX DROP: short frame (len=%d)\n", len);
 		dahdi_hdlc_abort(dchan, DAHDI_EVENT_ABORT);
 		return -EPROTO;
 	}
 	status = buf[len-1];
-	if(status) {
+	if (status) {
 		int	event = DAHDI_EVENT_ABORT;
 
-		if(status == 0xFF) {
+		if (status == 0xFF) {
 			XPD_NOTICE(xpd, "D-Chan RX DROP: ABORT: %d\n", status);
 		} else {
 			XPD_NOTICE(xpd, "D-Chan RX DROP: BADFCS: %d\n", status);
@@ -462,31 +462,31 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	src = REG_XDATA(regcmd);
 	len = regcmd->bytes;
 	eoframe = regcmd->eoframe;
-	if(len <= 0)
+	if (len <= 0)
 		return 0;
-	if(!SPAN_REGISTERED(xpd)) /* Nowhere to copy data */
+	if (!SPAN_REGISTERED(xpd)) /* Nowhere to copy data */
 		return 0;
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	dchan = XPD_CHAN(xpd, 2);
-	if(!IS_OFFHOOK(xpd, 2)) {	/* D-chan is used? */
+	if (!IS_OFFHOOK(xpd, 2)) {	/* D-chan is used? */
 		static int rate_limit;
 
-		if((rate_limit++ % 1000) == 0)
+		if ((rate_limit++ % 1000) == 0)
 			XPD_DBG(SIGNAL, xpd, "D-Chan unused\n");
 		goto out;
 	}
 	XPD_DBG(GENERAL, xpd, "D-Chan RX: eoframe=%d len=%d\n", eoframe, len);
 	dahdi_hdlc_putbuf(dchan, src, (eoframe) ? len - 1 : len);
-	if(!eoframe)
+	if (!eoframe)
 		goto out;
-	if((ret = bri_check_stat(xpd, dchan, src, len)) < 0)
+	if ((ret = bri_check_stat(xpd, dchan, src, len)) < 0)
 		goto out;
 	/*
 	 * Tell Dahdi that we received len-1 bytes. They include the data and a 2-byte checksum.
 	 * The last byte (that we don't pass on) is 0 if the checksum is correct. If it were wrong,
-	 * we would drop the packet in the "if(src[len-1])" above.
+	 * we would drop the packet in the "if (src[len-1])" above.
 	 */
 	dahdi_hdlc_finish(dchan);
 	priv->dchan_rx_counter++;
@@ -645,7 +645,7 @@ static void bri_proc_remove(xbus_t *xbus, xpd_t *xpd)
 	priv = xpd->priv;
 	XPD_DBG(PROC, xpd, "\n");
 #ifdef	CONFIG_PROC_FS
-	if(priv->bri_info) {
+	if (priv->bri_info) {
 		XPD_DBG(PROC, xpd, "Removing '%s'\n", PROC_BRI_INFO_FNAME);
 		remove_proc_entry(PROC_BRI_INFO_FNAME, xpd->proc_xpd_dir);
 	}
@@ -662,7 +662,7 @@ static int bri_proc_create(xbus_t *xbus, xpd_t *xpd)
 #ifdef	CONFIG_PROC_FS
 	XPD_DBG(PROC, xpd, "Creating '%s'\n", PROC_BRI_INFO_FNAME);
 	priv->bri_info = create_proc_read_entry(PROC_BRI_INFO_FNAME, 0444, xpd->proc_xpd_dir, proc_bri_info_read, xpd);
-	if(!priv->bri_info) {
+	if (!priv->bri_info) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n", PROC_BRI_INFO_FNAME);
 		bri_proc_remove(xbus, xpd);
 		return -EINVAL;
@@ -678,17 +678,17 @@ static xpd_t *BRI_card_new(xbus_t *xbus, int unit, int subunit, const xproto_tab
 	xpd_t		*xpd = NULL;
 	int		channels = min(3, CHANNELS_PERXPD);
 
-	if(subunit_ports != 1) {
+	if (subunit_ports != 1) {
 		XBUS_ERR(xbus, "Bad subunit_ports=%d\n", subunit_ports);
 		return NULL;
 	}
 	XBUS_DBG(GENERAL, xbus, "\n");
 	xpd = xpd_alloc(xbus, unit, subunit, subtype, subunits, sizeof(struct BRI_priv_data), proto_table, channels);
-	if(!xpd)
+	if (!xpd)
 		return NULL;
 	PHONEDEV(xpd).direction = (to_phone) ? TO_PHONE : TO_PSTN;
 	xpd->type_name = (to_phone) ? "BRI_NT" : "BRI_TE";
-	if(bri_proc_create(xbus, xpd) < 0)
+	if (bri_proc_create(xbus, xpd) < 0)
 		goto err;
 	return xpd;
 err:
@@ -753,7 +753,7 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	priv = xpd->priv;
 	BUG_ON(!xbus);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"on":"off");
-	if(!on) {
+	if (!on) {
 		/* Nothing to do yet */
 		return 0;
 	}
@@ -770,7 +770,7 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 				xpd->addr.unit, xpd->addr.subunit, i);
 		cur_chan->chanpos = i + 1;
 		cur_chan->pvt = xpd;
-		if(i == 2) {	/* D-CHAN */
+		if (i == 2) {	/* D-CHAN */
 			cur_chan->sigcap = BRI_DCHAN_SIGCAP;
 			clear_bit(DAHDI_FLAGBIT_HDLC, &cur_chan->flags);
 			priv->txframe_begin = 1;
@@ -816,7 +816,7 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 	int			mod;
 
 	BUG_ON(!xpd);
-	if(IS_NT(xpd)) {
+	if (IS_NT(xpd)) {
 		which_led = RED_LED;
 		other_led = GREEN_LED;
 	} else {
@@ -826,10 +826,10 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	timer_count = xpd->timer_count;
-	if(xpd->blink_mode) {
-		if((timer_count % DEFAULT_LED_PERIOD) == 0) {
+	if (xpd->blink_mode) {
+		if ((timer_count % DEFAULT_LED_PERIOD) == 0) {
 			// led state is toggled
-			if(priv->ledstate[which_led] == BRI_LED_OFF) {
+			if (priv->ledstate[which_led] == BRI_LED_OFF) {
 				DO_LED(xpd, which_led, BRI_LED_ON);
 				DO_LED(xpd, other_led, BRI_LED_ON);
 			} else {
@@ -839,11 +839,11 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 		}
 		return;
 	}
-	if(priv->ledstate[other_led] != BRI_LED_OFF)
+	if (priv->ledstate[other_led] != BRI_LED_OFF)
 		DO_LED(xpd, other_led, BRI_LED_OFF);
-	if(priv->dchan_alive) {
+	if (priv->dchan_alive) {
 		mod = timer_count % 1000;
-		switch(mod) {
+		switch (mod) {
 			case 0:
 				DO_LED(xpd, which_led, BRI_LED_ON);
 				break;
@@ -851,9 +851,9 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 				DO_LED(xpd, which_led, BRI_LED_OFF);
 				break;
 		}
-	} else if(priv->layer1_up) {
+	} else if (priv->layer1_up) {
 		mod = timer_count % 1000;
-		switch(mod) {
+		switch (mod) {
 			case 0:
 			case 100:
 				DO_LED(xpd, which_led, BRI_LED_ON);
@@ -864,7 +864,7 @@ static void handle_leds(xbus_t *xbus, xpd_t *xpd)
 				break;
 		}
 	} else {
-		if(priv->ledstate[which_led] != BRI_LED_ON)
+		if (priv->ledstate[which_led] != BRI_LED_ON)
 			DO_LED(xpd, which_led, BRI_LED_ON);
 	}
 }
@@ -876,12 +876,12 @@ static void handle_bri_timers(xpd_t *xpd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(IS_NT(xpd)) {
+	if (IS_NT(xpd)) {
 		if (priv->t1 > HFC_TIMER_OFF) {
 			if (--priv->t1 == 0) {
 				set_bri_timer(xpd, "T1", &priv->t1, HFC_TIMER_OFF);
-				if(!nt_keepalive) {
-					if(priv->state_register.bits.v_su_sta == ST_NT_ACTIVATING) {	/* G2 */
+				if (!nt_keepalive) {
+					if (priv->state_register.bits.v_su_sta == ST_NT_ACTIVATING) {	/* G2 */
 						XPD_DBG(SIGNAL, xpd, "T1 Expired. Deactivate NT\n");
 						clear_bit(HFC_L1_ACTIVATING, &priv->l1_flags);
 						nt_activation(xpd, 0);	/* Deactivate NT */
@@ -915,9 +915,9 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(!priv->initialized || !xbus->self_ticking)
+	if (!priv->initialized || !xbus->self_ticking)
 		return 0;
-	if(poll_interval != 0 && (priv->tick_counter % poll_interval) == 0) {
+	if (poll_interval != 0 && (priv->tick_counter % poll_interval) == 0) {
 		// XPD_DBG(GENERAL, xpd, "%d\n", priv->tick_counter);
 		priv->poll_counter++;
 		xpp_register_request(xbus, xpd,
@@ -932,7 +932,7 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 				0		/* should_reply	*/
 				);
 
-		if(IS_NT(xpd) && nt_keepalive &&
+		if (IS_NT(xpd) && nt_keepalive &&
 			!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags) &&
 			!test_bit(HFC_L1_ACTIVATING, &priv->l1_flags)) {
 			XPD_DBG(SIGNAL, xpd, "Kick NT D-Channel\n");
@@ -943,18 +943,18 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 	priv->dchan_notx_ticks++;
 	priv->dchan_norx_ticks++;
 	priv->dchan_alive_ticks++;
-	if(priv->dchan_alive && (priv->dchan_notx_ticks > DCHAN_LOST || priv->dchan_norx_ticks > DCHAN_LOST)) {
+	if (priv->dchan_alive && (priv->dchan_notx_ticks > DCHAN_LOST || priv->dchan_norx_ticks > DCHAN_LOST)) {
 		/*
 		 * No tx_dchan() or rx_dchan() for many ticks
 		 * This D-Channel is probabelly dead.
 		 */
 		dchan_state(xpd, 0);
-	} else if(priv->dchan_rx_counter > 1 &&  priv->dchan_tx_counter > 1) {
-		if(!priv->dchan_alive)
+	} else if (priv->dchan_rx_counter > 1 &&  priv->dchan_tx_counter > 1) {
+		if (!priv->dchan_alive)
 			dchan_state(xpd, 1);
 	}
 	/* Detect Layer1 disconnect */
-	if(priv->reg30_good && priv->reg30_ticks > poll_interval * REG30_LOST) {
+	if (priv->reg30_good && priv->reg30_ticks > poll_interval * REG30_LOST) {
 		/* No reply for 1/2 a second */
 		XPD_ERR(xpd, "Lost state tracking for %d ticks\n", priv->reg30_ticks);
 		priv->reg30_good = 0;
@@ -971,7 +971,7 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 static int BRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long arg)
 {
 	BUG_ON(!xpd);
-	if(!XBUS_IS(xpd->xbus, READY))
+	if (!XBUS_IS(xpd->xbus, READY))
 		return -ENODEV;
 	switch (cmd) {
 		case DAHDI_TONEDETECT:
@@ -991,7 +991,7 @@ static int BRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 {
 	BUG_ON(!xpd);
-	if(pos == 2) {
+	if (pos == 2) {
 		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK the whole span\n");
 		BIT_SET(PHONEDEV(xpd).offhook_state, 0);
 		BIT_SET(PHONEDEV(xpd).offhook_state, 1);
@@ -1004,7 +1004,7 @@ static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 static int BRI_card_close(xpd_t *xpd, lineno_t pos)
 {
 	/* Clear D-Channel pending data */
-	if(pos == 2) {
+	if (pos == 2) {
 		LINE_DBG(SIGNAL, xpd, pos, "ONHOOK the whole span\n");
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 0);
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 1);
@@ -1088,14 +1088,14 @@ static int bri_startup(struct file *file, struct dahdi_span *span)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(!XBUS_IS(xpd->xbus, READY)) {
+	if (!XBUS_IS(xpd->xbus, READY)) {
 		XPD_DBG(GENERAL, xpd, "Startup called by dahdi. No Hardware. Ignored\n");
 		return -ENODEV;
 	}
 	XPD_DBG(GENERAL, xpd, "STARTUP\n");
 	// Turn on all channels
 	CALL_PHONE_METHOD(card_state, xpd, 1);
-	if(SPAN_REGISTERED(xpd)) {
+	if (SPAN_REGISTERED(xpd)) {
 		dchan = XPD_CHAN(xpd, 2);
 		span->flags |= DAHDI_FLAG_RUNNING;
 		/*
@@ -1121,7 +1121,7 @@ static int bri_shutdown(struct dahdi_span *span)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(!XBUS_IS(xpd->xbus, READY)) {
+	if (!XBUS_IS(xpd->xbus, READY)) {
 		XPD_DBG(GENERAL, xpd, "Shutdown called by dahdi. No Hardware. Ignored\n");
 		return -ENODEV;
 	}
@@ -1143,7 +1143,7 @@ static void BRI_card_pcm_recompute(xpd_t *xpd,
 
 	BUG_ON(!xpd);
 	main_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, 0);
-	if(!main_xpd) {
+	if (!main_xpd) {
 		XPD_DBG(DEVICES, xpd, "Unit 0 is already gone. Ignore request\n");
 		return;
 	}
@@ -1154,19 +1154,19 @@ static void BRI_card_pcm_recompute(xpd_t *xpd,
 	spin_lock_irqsave(&PHONEDEV(main_xpd).lock_recompute_pcm, flags);
 	line_count = 0;
 	pcm_mask = 0;
-	for(i = 0; i < MAX_SUBUNIT; i++) {
+	for (i = 0; i < MAX_SUBUNIT; i++) {
 		xpd_t		*sub_xpd = xpd_byaddr(xpd->xbus, main_xpd->addr.unit, i);
 
-		if(sub_xpd) {
+		if (sub_xpd) {
 			xpp_line_t	lines =
 				PHONEDEV(sub_xpd).offhook_state & ~(PHONEDEV(sub_xpd).digital_signalling);
 
-			if(lines) {
+			if (lines) {
 				pcm_mask |= PCM_SHIFT(lines, i);
 				line_count += 2;
 			}
 			/* subunits have fake pcm_len and wanted_pcm_mask */
-			if(i > 0) {
+			if (i > 0) {
 				update_wanted_pcm_mask(sub_xpd, lines, 0);
 			}
 		}
@@ -1175,7 +1175,7 @@ static void BRI_card_pcm_recompute(xpd_t *xpd,
 	 * FIXME: Workaround a bug in sync code of the Astribank.
 	 *        Send dummy PCM for sync.
 	 */
-	if(main_xpd->addr.unit == 0 && line_count == 0) {
+	if (main_xpd->addr.unit == 0 && line_count == 0) {
 		pcm_mask = BIT(0);
 		line_count = 1;
 	}
@@ -1202,23 +1202,23 @@ static void BRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 	BUG_ON(!xpd);
 	BUG_ON(!pack);
 	pcm = RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, pcm);
-	for(subunit = 0; subunit < MAX_SUBUNIT; subunit++) {
+	for (subunit = 0; subunit < MAX_SUBUNIT; subunit++) {
 		xpd_t		*tmp_xpd;
 
 		tmp_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, subunit);
-		if(!tmp_xpd || !tmp_xpd->card_present)
+		if (!tmp_xpd || !tmp_xpd->card_present)
 			continue;
 		spin_lock_irqsave(&tmp_xpd->lock, flags);
 		wanted_lines = PHONEDEV(tmp_xpd).wanted_pcm_mask;
 		for_each_line(tmp_xpd, i) {
 			struct dahdi_chan	*chan = XPD_CHAN(tmp_xpd, i);
 
-			if(IS_SET(wanted_lines, i)) {
-				if(SPAN_REGISTERED(tmp_xpd)) {
+			if (IS_SET(wanted_lines, i)) {
+				if (SPAN_REGISTERED(tmp_xpd)) {
 #ifdef	DEBUG_PCMTX
 					int	channo = chan->channo;
 
-					if(pcmtx >= 0 && pcmtx_chan == channo)
+					if (pcmtx >= 0 && pcmtx_chan == channo)
 						memset((u_char *)pcm, pcmtx, DAHDI_CHUNKSIZE);
 					else
 #endif
@@ -1246,26 +1246,26 @@ static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 	/*
 	 * Subunit 0 handle all other subunits
 	 */
-	if(xpd->addr.subunit != 0)
+	if (xpd->addr.subunit != 0)
 		return;
-	if(!SPAN_REGISTERED(xpd))
+	if (!SPAN_REGISTERED(xpd))
 		return;
 	pcm = RPACKET_FIELD(pack, GLOBAL, PCM_READ, pcm);
 	pcm_mask = RPACKET_FIELD(pack, GLOBAL, PCM_WRITE, lines);
-	for(subunit = 0; subunit < MAX_SUBUNIT; subunit++, pcm_mask >>= SUBUNIT_PCM_SHIFT) {
+	for (subunit = 0; subunit < MAX_SUBUNIT; subunit++, pcm_mask >>= SUBUNIT_PCM_SHIFT) {
 		xpd_t		*tmp_xpd;
 
-		if(!pcm_mask)
+		if (!pcm_mask)
 			break;	/* optimize */
 		tmp_xpd = xpd_byaddr(xpd->xbus, xpd->addr.unit, subunit);
-		if(!tmp_xpd || !tmp_xpd->card_present || !SPAN_REGISTERED(tmp_xpd))
+		if (!tmp_xpd || !tmp_xpd->card_present || !SPAN_REGISTERED(tmp_xpd))
 			continue;
 		spin_lock_irqsave(&tmp_xpd->lock, flags);
 		for (i = 0; i < 2; i++) {
 			xpp_line_t	tmp_mask = pcm_mask & (BIT(0) | BIT(1));
 			volatile u_char	*r;
 
-			if(IS_SET(tmp_mask, i)) {
+			if (IS_SET(tmp_mask, i)) {
 				r = XPD_CHAN(tmp_xpd, i)->readchunk;
 				// memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);	// DEBUG
 				memcpy((u_char *)r, pcm, DAHDI_CHUNKSIZE);
@@ -1371,12 +1371,12 @@ static void su_new_state(xpd_t *xpd, byte reg_x30)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(!priv->initialized) {
+	if (!priv->initialized) {
 		XPD_ERR(xpd, "%s called on uninitialized AB\n", __func__);
 		return;
 	}
 	new_state.reg = reg_x30;
-	if(new_state.bits.v_su_t2_exp) {
+	if (new_state.bits.v_su_t2_exp) {
 		XPD_NOTICE(xpd, "T2 Expired\n");
 	}
 	priv->reg30_ticks = 0;
@@ -1389,7 +1389,7 @@ static void su_new_state(xpd_t *xpd, byte reg_x30)
 		new_state.bits.v_su_info0,
 		IS_NT(xpd)?"G":"F",
 		new_state.bits.v_su_sta);
-	if(!IS_NT(xpd)) {
+	if (!IS_NT(xpd)) {
 		switch (new_state.bits.v_su_sta) {
 			case ST_TE_DEACTIVATED:		/* F3 */
 				XPD_DBG(SIGNAL, xpd, "State ST_TE_DEACTIVATED (F3)\n");
@@ -1436,7 +1436,7 @@ static void su_new_state(xpd_t *xpd, byte reg_x30)
 			case ST_NT_ACTIVATING:		/* G2 */
 				XPD_DBG(SIGNAL, xpd, "State ST_NT_ACTIVATING (G2)\n");
 				layer1_state(xpd, 0);
-				if(!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags))
+				if (!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags))
 					nt_activation(xpd, 1);
 				break;
 			case ST_NT_ACTIVATED:		/* G3 */
@@ -1473,17 +1473,17 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	addr.unit = orig_xpd->addr.unit;
 	addr.subunit = info->portnum;
 	xpd = xpd_byaddr(xbus, addr.unit, addr.subunit);
-	if(!xpd) {
+	if (!xpd) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) < 5)
+		if ((rate_limit++ % 1003) < 5)
 			notify_bad_xpd(__func__, xbus, addr , orig_xpd->xpdname);
 		return -EPROTO;
 	}
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if(REG_FIELD(info, do_subreg)) {
+	if (REG_FIELD(info, do_subreg)) {
 		XPD_DBG(REGS, xpd, "RI %02X %02X %02X\n",
 				REG_FIELD(info, regnum), REG_FIELD(info, subreg), REG_FIELD(info, data_low));
 	} else {
@@ -1494,23 +1494,23 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			XPD_DBG(REGS, xpd, "Got SU_RD_STA=%02X\n",
 					REG_FIELD(info, data_low));
 	}
-	if(info->is_multibyte) {
+	if (info->is_multibyte) {
 		XPD_DBG(REGS, xpd, "Got Multibyte: %d bytes, eoframe: %d\n",
 				info->bytes, info->eoframe);
 		ret = rx_dchan(xpd, info);
 		if (ret < 0) {
 			priv->dchan_rx_drops++;
-			if(atomic_read(&PHONEDEV(xpd).open_counter) > 0)
+			if (atomic_read(&PHONEDEV(xpd).open_counter) > 0)
 				XPD_NOTICE(xpd, "Multibyte Drop: errno=%d\n", ret);
 		}
 		goto end;
 	}
-	if(REG_FIELD(info, regnum) == A_SU_RD_STA) {
+	if (REG_FIELD(info, regnum) == A_SU_RD_STA) {
 		su_new_state(xpd, REG_FIELD(info, data_low));
 	}
 
 	/* Update /proc info only if reply relate to the last slic read request */
-	if(
+	if (
 			REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum) &&
 			REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info, do_subreg) &&
 			REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info, subreg)) {
@@ -1529,14 +1529,14 @@ static int BRI_card_state(xpd_t *xpd, bool on)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	XPD_DBG(GENERAL, xpd, "%s\n", (on)?"ON":"OFF");
-	if(on) {
-		if(!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags)) {
-			if( ! IS_NT(xpd))
+	if (on) {
+		if (!test_bit(HFC_L1_ACTIVATED, &priv->l1_flags)) {
+			if ( ! IS_NT(xpd))
 				te_activation(xpd, 1);
 			else
 				nt_activation(xpd, 1);
 		}
-	} else if(IS_NT(xpd))
+	} else if (IS_NT(xpd))
 		nt_activation(xpd, 0);
 	return 0;
 }
@@ -1602,13 +1602,13 @@ static int proc_bri_info_read(char *page, char **start, off_t off, int count, in
 	struct BRI_priv_data	*priv;
 
 	DBG(PROC, "\n");
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	len += sprintf(page + len, "%05d Layer 1: ", priv->poll_counter);
-	if(priv->reg30_good) {
+	if (priv->reg30_good) {
 		len += sprintf(page + len, "%-5s ", (priv->layer1_up) ? "UP" : "DOWN");
 		len += sprintf(page + len, "%c%d %-15s -- fr_sync=%d t2_exp=%d info0=%d g2_g3=%d\n",
 					IS_NT(xpd)?'G':'F',
@@ -1620,7 +1620,7 @@ static int proc_bri_info_read(char *page, char **start, off_t off, int count, in
 					priv->state_register.bits.v_g2_g3);
 	} else
 		len += sprintf(page + len, "Unknown\n");
-	if(IS_NT(xpd)) {
+	if (IS_NT(xpd)) {
 		len += sprintf(page + len, "T1 Timer: %d\n", priv->t1);
 	} else {
 		len += sprintf(page + len, "T3 Timer: %d\n", priv->t3);
@@ -1630,7 +1630,7 @@ static int proc_bri_info_read(char *page, char **start, off_t off, int count, in
 	len += sprintf(page + len, "reg30_good=%d\n", priv->reg30_good);
 	len += sprintf(page + len, "D-Channel: TX=[%5d]    RX=[%5d]    BAD=[%5d] ",
 			priv->dchan_tx_counter, priv->dchan_rx_counter, priv->dchan_rx_drops);
-	if(priv->dchan_alive) {
+	if (priv->dchan_alive) {
 		len += sprintf(page + len, "(alive %d K-ticks)\n",
 			priv->dchan_alive_ticks/1000);
 	} else {
@@ -1661,7 +1661,7 @@ static int bri_xpd_probe(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if(xpd->type != XPD_TYPE_BRI) {
+	if (xpd->type != XPD_TYPE_BRI) {
 		XPD_ERR(xpd, "drop suggestion for %s (%d)\n",
 			dev_name(dev), xpd->type);
 		return -EINVAL;
@@ -1695,7 +1695,7 @@ static int __init card_bri_startup(void)
 {
 	int	ret;
 
-	if((ret = xpd_driver_register(&bri_driver.driver)) < 0)
+	if ((ret = xpd_driver_register(&bri_driver.driver)) < 0)
 		return ret;
 	INFO("revision %s\n", XPP_VERSION);
 	xproto_register(&PROTO_TABLE(BRI));

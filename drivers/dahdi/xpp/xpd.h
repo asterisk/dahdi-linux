@@ -228,7 +228,7 @@ struct xpd {
 	unsigned int	timer_count;
 };
 
-#define	for_each_line(xpd,i)	for((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
+#define	for_each_line(xpd,i)	for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
 #define	IS_BRI(xpd)		((xpd)->type == XPD_TYPE_BRI)
 #define	TICK_TOLERANCE		500 /* usec */
 
@@ -243,7 +243,7 @@ static inline void *my_kzalloc(size_t size, gfp_t flags)
 	void	*p;
 
 	p = kmalloc(size, flags);
-	if(p)
+	if (p)
 		memset(p, 0, size);
 	return p;
 }

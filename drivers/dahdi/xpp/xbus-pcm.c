@@ -92,9 +92,9 @@ static void ticker_set_cycle(struct xpp_ticker *ticker, int cycle)
 	unsigned long	flags;
 
 	spin_lock_irqsave(&ticker->lock, flags);
-	if(cycle < SYNC_ADJ_QUICK)
+	if (cycle < SYNC_ADJ_QUICK)
 		cycle = SYNC_ADJ_QUICK;
-	if(cycle > SYNC_ADJ_SLOW)
+	if (cycle > SYNC_ADJ_SLOW)
 		cycle = SYNC_ADJ_SLOW;
 	ticker->cycle = cycle;
 	spin_unlock_irqrestore(&ticker->lock, flags);
@@ -117,7 +117,7 @@ static int xpp_ticker_step(struct xpp_ticker *ticker, const struct timeval *t)
 
 	spin_lock_irqsave(&ticker->lock, flags);
 	ticker->last_sample.tv = *t;
-	if((ticker->count % ticker->cycle) == ticker->cycle - 1) {	/* rate adjust */
+	if ((ticker->count % ticker->cycle) == ticker->cycle - 1) {	/* rate adjust */
 		usec = (long)usec_diff(
 				&ticker->last_sample.tv,
 				&ticker->first_sample.tv);
@@ -156,9 +156,9 @@ void xpp_drift_init(xbus_t *xbus)
 #ifdef	SAMPLE_TICKS
 static void sample_tick(xbus_t *xbus, int sample)
 {
-	if(!xbus->sample_running)
+	if (!xbus->sample_running)
 		return;
-	if(xbus->sample_pos < SAMPLE_SIZE)
+	if (xbus->sample_pos < SAMPLE_SIZE)
 		xbus->sample_ticks[xbus->sample_pos++] = sample;
 	else {
 		xbus->sample_running = 0;
@@ -194,13 +194,13 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 	 * Do we need to be synchronized and is there an established reference
 	 * ticker (another Astribank or another DAHDI device) already?
 	 */
-	if(ref_ticker && ref_ticker != &xbus->ticker && syncer && xbus->sync_mode == SYNC_MODE_PLL) {
+	if (ref_ticker && ref_ticker != &xbus->ticker && syncer && xbus->sync_mode == SYNC_MODE_PLL) {
 		int	new_delta_tick = ticker->count - ref_ticker->count;
 		int	lost_ticks = new_delta_tick - di->delta_tick;
 		long	usec_delta;
 
 		di->delta_tick = new_delta_tick;
-		if(lost_ticks) {
+		if (lost_ticks) {
 			static int	rate_limit;
 
 			/*
@@ -209,7 +209,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 			 */
 			di->lost_ticks++;
 			di->lost_tick_count += abs(lost_ticks);
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				/* FIXME: This should be a NOTICE.
 				 * However we have several false ones at
 				 * startup.
@@ -218,7 +218,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 					lost_ticks,
 					(abs(lost_ticks) > 1) ? "s": "");
 			}
-			if(abs(lost_ticks) > 100) {
+			if (abs(lost_ticks) > 100) {
 				xbus_drift_clear(xbus);
 				ticker->count = ref_ticker->count;
 			}
@@ -231,7 +231,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 			if ((ticker->count % SYNC_CYCLE) > (SYNC_CYCLE - SYNC_CYCLE_SAMPLE))
 				di->delta_sum  += usec_delta;
 
-			if((ticker->count % SYNC_CYCLE) == 0) {
+			if ((ticker->count % SYNC_CYCLE) == 0) {
 				/*
 				 * Full sampling cycle passed. Let's calculate
 				 */
@@ -263,9 +263,9 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 					di->min_speed    = speed;
 				if (speed > di->max_speed)
 					di->max_speed    = speed;
-				if(offset > di->offset_max)
+				if (offset > di->offset_max)
 					di->offset_max = offset;
-				if(offset < di->offset_min)
+				if (offset < di->offset_min)
 					di->offset_min = offset;
 
 				XBUS_DBG(SYNC, xbus, "offset: %d, min_speed=%d, max_speed=%d, usec_delta(last)=%ld\n",
@@ -273,16 +273,16 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 				XBUS_DBG(SYNC, xbus, "ADJ: speed=%d (best_speed=%d) fix=%d\n",
 					speed, best_speed, fix);
 				xbus->sync_adjustment_offset = speed;
-				if(xbus != syncer && xbus->sync_adjustment != speed)
+				if (xbus != syncer && xbus->sync_adjustment != speed)
 					send_drift(xbus, speed);
 				di->sync_inaccuracy = abs(offset) + abs(di->offset_range) / 2;
-				if(ticker->count >= SYNC_CYCLE * SYNC_CONVERGE) {
+				if (ticker->count >= SYNC_CYCLE * SYNC_CONVERGE) {
 					di->offset_range = di->offset_max - di->offset_min;
 					di->offset_min = INT_MAX;
 					di->offset_max = -INT_MAX;
-					if(di->max_speed > best_speed)
+					if (di->max_speed > best_speed)
 						di->max_speed--;
-					if(di->min_speed < best_speed)
+					if (di->min_speed < best_speed)
 						di->min_speed++;
 				}
 				di->offset_prev = offset;
@@ -301,7 +301,7 @@ const char *sync_mode_name(enum sync_mode mode)
 		[SYNC_MODE_PLL]		= "PLL",
 		[SYNC_MODE_QUERY]	= "QUERY",
 	};
-	if(mode >= ARRAY_SIZE(sync_mode_names))
+	if (mode >= ARRAY_SIZE(sync_mode_names))
 		return NULL;
 	return sync_mode_names[mode];
 }
@@ -311,20 +311,20 @@ const char *sync_mode_name(enum sync_mode mode)
  */
 static void xpp_set_syncer(xbus_t *xbus, bool on)
 {
-	if(!xbus) {	/* Special case, no more syncers */
+	if (!xbus) {	/* Special case, no more syncers */
 		DBG(SYNC, "No more syncers\n");
 		syncer = NULL;
-		if(ref_ticker != &dahdi_ticker)
+		if (ref_ticker != &dahdi_ticker)
 			ref_ticker = NULL;
 		return;
 	}
-	if(syncer != xbus && on) {
+	if (syncer != xbus && on) {
 		XBUS_DBG(SYNC, xbus, "New syncer\n");
 		syncer = xbus;
-	} else if(syncer == xbus && !on) {
+	} else if (syncer == xbus && !on) {
 		XBUS_DBG(SYNC, xbus, "Lost syncer\n");
 		syncer = NULL;
-		if(ref_ticker != &dahdi_ticker)
+		if (ref_ticker != &dahdi_ticker)
 			ref_ticker = NULL;
 	} else
 		XBUS_DBG(SYNC, xbus, "ignore %s (current syncer: %s)\n",
@@ -340,22 +340,22 @@ static void xbus_command_timer(unsigned long param)
 	BUG_ON(!xbus);
 	do_gettimeofday(&now);
 	xbus_command_queue_tick(xbus);
-	if(!xbus->self_ticking)
+	if (!xbus->self_ticking)
 		mod_timer(&xbus->command_timer, jiffies + 1);	/* Must be 1KHz rate */
 }
 
 void xbus_set_command_timer(xbus_t *xbus, bool on)
 {
 	XBUS_DBG(SYNC, xbus, "%s\n", (on)?"ON":"OFF");
-	if(on) {
-		if(!timer_pending(&xbus->command_timer)) {
+	if (on) {
+		if (!timer_pending(&xbus->command_timer)) {
 			XBUS_DBG(SYNC, xbus, "add_timer\n");
 			xbus->command_timer.function = xbus_command_timer;
 			xbus->command_timer.data = (unsigned long)xbus;
 			xbus->command_timer.expires = jiffies + 1;
 			add_timer(&xbus->command_timer);
 		}
-	} else if(timer_pending(&xbus->command_timer)) {
+	} else if (timer_pending(&xbus->command_timer)) {
 		XBUS_DBG(SYNC, xbus, "del_timer\n");
 		del_timer(&xbus->command_timer);
 	}
@@ -373,14 +373,14 @@ void got_new_syncer(xbus_t *xbus, enum sync_mode mode, int drift)
 	spin_lock_irqsave(&xbus->lock, flags);
 	spin_lock_irqsave(&ref_ticker_lock, flags2);
 	xbus->sync_adjustment = (signed char)drift;
-	if(xbus->sync_mode == mode) {
+	if (xbus->sync_mode == mode) {
 		XBUS_DBG(SYNC, xbus, "Already in mode '%s'. Ignored\n",
 				sync_mode_name(mode));
 		goto out;
 	}
 	XBUS_DBG(SYNC, xbus, "Mode %s (%d), drift=%d (pcm_rx_counter=%d)\n",
 		sync_mode_name(mode), mode, drift, atomic_read(&xbus->pcm_rx_counter));
-	switch(mode) {
+	switch (mode) {
 	case SYNC_MODE_AB:
 		xbus->sync_mode = mode;
 		xbus_set_command_timer(xbus, 0);
@@ -415,7 +415,7 @@ void xbus_request_sync(xbus_t *xbus, enum sync_mode mode)
 	BUG_ON(!xbus);
 	XBUS_DBG(SYNC, xbus, "sent request (mode=%d)\n", mode);
 	CALL_PROTO(GLOBAL, SYNC_SOURCE, xbus, NULL, mode, 0);
-	if(mode == SYNC_MODE_NONE) {
+	if (mode == SYNC_MODE_NONE) {
 		/*
 		 * We must deselect the syncer *now* and not wait for the
 		 * reply from the AB. Otherwise, a disconnect of the syncing
@@ -439,7 +439,7 @@ static void reset_sync_counters(void)
 	int	i;
 
 	//DBG(SYNC, "%d\n", atomic_read(&xpp_tick_counter));
-	for(i = 0; i < MAX_BUSES; i++) {
+	for (i = 0; i < MAX_BUSES; i++) {
 		xbus_t	*xbus = get_xbus(__func__, i);
 
 		if (xbus == NULL)
@@ -450,8 +450,8 @@ static void reset_sync_counters(void)
 		 *  - Or maybe they didn't answer us in the first place
 		      (e.g: wrong firmware version, etc).
 		 */
-		if(xbus->self_ticking) {
-			if(!XBUS_FLAGS(xbus, CONNECTED)) {
+		if (xbus->self_ticking) {
+			if (!XBUS_FLAGS(xbus, CONNECTED)) {
 				XBUS_DBG(GENERAL, xbus,
 					"Dropped packet. Is shutting down.\n");
 			} else {
@@ -470,14 +470,14 @@ static void send_drift(xbus_t *xbus, int drift)
 
 	BUG_ON(abs(drift) > SYNC_ADJ_MAX);
 	do_gettimeofday(&now);
-	if(drift > xbus->sync_adjustment)
+	if (drift > xbus->sync_adjustment)
 		msg = "up";
 	else
 		msg = "down";
 	XBUS_DBG(SYNC, xbus, "%sDRIFT adjust %s (%d) (last update %ld seconds ago)\n",
 		(disable_pll_sync) ? "Fake " : "",
 		msg, drift, now.tv_sec - xbus->pll_updated_at);
-	if(!disable_pll_sync)
+	if (!disable_pll_sync)
 		CALL_PROTO(GLOBAL, SYNC_SOURCE, xbus, NULL, SYNC_MODE_PLL, drift);
 	xbus->pll_updated_at = now.tv_sec;
 }
@@ -488,7 +488,7 @@ static void global_tick(void)
 
 	do_gettimeofday(&now);
 	atomic_inc(&xpp_tick_counter);
-	if((atomic_read(&xpp_tick_counter) % BIG_TICK_INTERVAL) == 0)
+	if ((atomic_read(&xpp_tick_counter) % BIG_TICK_INTERVAL) == 0)
 		reset_sync_counters();
 	xpp_ticker_step(&global_ticks_series, &now);
 }
@@ -501,35 +501,35 @@ void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 	static int	redundant_ticks;	/* for extra spans */
 	struct timeval	now;
 
-	if(!force_dahdi_sync)
+	if (!force_dahdi_sync)
 		goto noop;
 	do_gettimeofday(&now);
 	BUG_ON(!xpd);
 	/*
 	 * Detect if any of our spans is dahdi sync master
 	 */
-	if(is_master) {
+	if (is_master) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 10003) == 0)
+		if ((rate_limit++ % 10003) == 0)
 			XPD_NOTICE(xpd, "Is a DAHDI sync master: ignore sync from DAHDI\n");
 		goto noop;
 	}
 	/* Now we know for sure someone else is dahdi sync master */
-	if(syncer) {
+	if (syncer) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 5003) == 0)
+		if ((rate_limit++ % 5003) == 0)
 			XBUS_DBG(SYNC, syncer,
 				"is a SYNCer: ignore sync from DAHDI\n");
 		goto noop;
 	}
 	/* ignore duplicate calls from all our registered spans */
-	if((redundant_ticks++ % total_registered_spans()) != 0) {
+	if ((redundant_ticks++ % total_registered_spans()) != 0) {
 #if 0
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) < 16)
+		if ((rate_limit++ % 1003) < 16)
 			XPD_NOTICE(xpd, "boop (%d)\n", dahdi_tick_count);
 #endif
 		goto noop;
@@ -571,9 +571,9 @@ static void update_sync_master(xbus_t *new_syncer, bool force_dahdi)
 	 *     they'll revert it to PLL instead of AB.
 	 */
 	spin_lock_irqsave(&ref_ticker_lock, flags);
-	if(syncer)
+	if (syncer)
 		xbus_drift_clear(syncer);	/* Clean old data */
-	if(new_syncer) {
+	if (new_syncer) {
 		XBUS_DBG(SYNC, new_syncer, "pcm_rx_counter=%d\n",
 			atomic_read(&new_syncer->pcm_rx_counter));
 		force_dahdi_sync = 0;
@@ -581,7 +581,7 @@ static void update_sync_master(xbus_t *new_syncer, bool force_dahdi)
 		xbus_drift_clear(new_syncer);	/* Clean new data */
 		xpp_set_syncer(new_syncer, 1);
 		xbus_request_sync(new_syncer, SYNC_MODE_AB);
-	} else if(force_dahdi_sync) {
+	} else if (force_dahdi_sync) {
 		ref_ticker = &dahdi_ticker;
 	} else {
 		ref_ticker = NULL;
@@ -589,12 +589,12 @@ static void update_sync_master(xbus_t *new_syncer, bool force_dahdi)
 	spin_unlock_irqrestore(&ref_ticker_lock, flags);
 	DBG(SYNC, "stop unwanted syncers\n");
 	/* Shut all down except the wanted sync master */
-	for(i = 0; i < MAX_BUSES; i++) {
+	for (i = 0; i < MAX_BUSES; i++) {
 		xbus_t	*xbus = get_xbus(__func__, i);
 		if (xbus == NULL)
 			continue;
-		if(XBUS_FLAGS(xbus, CONNECTED) && xbus != new_syncer) {
-			if(xbus->self_ticking)
+		if (XBUS_FLAGS(xbus, CONNECTED) && xbus != new_syncer) {
+			if (xbus->self_ticking)
 				xbus_request_sync(xbus,
 						xbus->sync_mode_default);
 			else
@@ -616,19 +616,19 @@ void elect_syncer(const char *msg)
 	spin_lock_irqsave(&elect_syncer_lock, flags);
 	DBG(SYNC, "%s: %s syncer=%s\n", __func__, msg,
 			(syncer) ? syncer->busname : "NULL");
-	for(i = 0; i < MAX_BUSES; i++) {
+	for (i = 0; i < MAX_BUSES; i++) {
 		xbus_t	*xbus = get_xbus(__func__, i);
 
 		if (xbus == NULL)
 			continue;
-		if(XBUS_IS(xbus, READY)) {
-			if(!the_xbus)
+		if (XBUS_IS(xbus, READY)) {
+			if (!the_xbus)
 				the_xbus = xbus;	/* First candidate */
-			for(j = 0; j < MAX_XPDS; j++) {
+			for (j = 0; j < MAX_XPDS; j++) {
 				xpd_t	*xpd = xpd_of(xbus, j);
 				int	prio;
 
-				if(!xpd || !xpd->card_present || !IS_PHONEDEV(xpd))
+				if (!xpd || !xpd->card_present || !IS_PHONEDEV(xpd))
 					continue;
 				prio = CALL_PHONE_METHOD(card_timing_priority, xpd);
 				if (prio < 0) {
@@ -644,10 +644,10 @@ void elect_syncer(const char *msg)
 		}
 		put_xbus(__func__, xbus);
 	}
-	if(best_xpd) {
+	if (best_xpd) {
 		the_xbus = best_xpd->xbus;
 		XPD_DBG(SYNC, best_xpd, "%s: elected with priority %d\n", msg, timing_priority);
-	} else if(the_xbus) {
+	} else if (the_xbus) {
 		XBUS_DBG(SYNC, the_xbus, "%s: elected\n", msg);
 	} else {
 		unsigned long	flags;
@@ -658,7 +658,7 @@ void elect_syncer(const char *msg)
 		spin_unlock_irqrestore(&ref_ticker_lock, flags);
 		the_xbus = NULL;
 	}
-	if(the_xbus != syncer)
+	if (the_xbus != syncer)
 		update_sync_master(the_xbus, force_dahdi_sync);
 	spin_unlock_irqrestore(&elect_syncer_lock, flags);
 }
@@ -694,13 +694,13 @@ void generic_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask)
 	pcm_mask &= ~(PHONEDEV(xpd).digital_inputs);
 	pcm_mask &= ~(PHONEDEV(xpd).digital_outputs);
 	for_each_line(xpd, i)
-		if(IS_SET(pcm_mask, i))
+		if (IS_SET(pcm_mask, i))
 			line_count++;
 	/*
 	 * FIXME: Workaround a bug in sync code of the Astribank.
 	 *        Send dummy PCM for sync.
 	 */
-	if(xpd->addr.unit == 0 && pcm_mask == 0) {
+	if (xpd->addr.unit == 0 && pcm_mask == 0) {
 		pcm_mask = BIT(0);
 		line_count = 1;
 	}
@@ -727,7 +727,7 @@ void fill_beep(u_char *buf, int num, int duration)
 	static u_char beep_alt[] = {
 		0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,	/* silence */
 	};
-	if(alternate) {
+	if (alternate) {
 		which = num % ARRAY_SIZE(beep_alt);
 		snd = &beep_alt[which];
 	} else {
@@ -744,9 +744,9 @@ static void do_ec(xpd_t *xpd)
 	for (i = 0;i < PHONEDEV(xpd).span.channels; i++) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
 
-		if(unlikely(IS_SET(PHONEDEV(xpd).digital_signalling, i)))	/* Don't echo cancel BRI D-chans */
+		if (unlikely(IS_SET(PHONEDEV(xpd).digital_signalling, i)))	/* Don't echo cancel BRI D-chans */
 			continue;
-		if(!IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))			/* No ec for unwanted PCM */
+		if (!IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))			/* No ec for unwanted PCM */
 			continue;
 		dahdi_ec_chunk(chan, chan->readchunk, PHONEDEV(xpd).ec_chunk2[i]);
 		memcpy(PHONEDEV(xpd).ec_chunk2[i], PHONEDEV(xpd).ec_chunk1[i], DAHDI_CHUNKSIZE);
@@ -790,15 +790,15 @@ static bool pcm_valid(xpd_t *xpd, xpacket_t *pack)
 	 * ignore the channels of the other xpd's in the same unit.
 	 */
 	for (i = 0; i < CHANNELS_PERXPD; i++)
-		if(IS_SET(lines, i))
+		if (IS_SET(lines, i))
 			count++;
 	/* FRAMES: include opcode in calculation */
 	good_len = RPACKET_HEADERSIZE + sizeof(xpp_line_t) + count * 8;
-	if(XPACKET_LEN(pack) != good_len) {
+	if (XPACKET_LEN(pack) != good_len) {
 		static int rate_limit;
 
 		XPD_COUNTER(xpd, RECV_ERRORS)++;
-		if((rate_limit++ % 1000) <= 10) {
+		if ((rate_limit++ % 1000) <= 10) {
 			XPD_ERR(xpd, "BAD PCM REPLY: packet_len=%d (should be %d), count=%d\n",
 					XPACKET_LEN(pack), good_len, count);
 			dump_packet("BAD PCM REPLY", pack, 1);
@@ -818,29 +818,29 @@ static inline void pcm_frame_out(xbus_t *xbus, xframe_t *xframe)
 
 	spin_lock_irqsave(&xbus->lock, flags);
 	do_gettimeofday(&now);
-	if(unlikely(disable_pcm || !XBUS_IS(xbus, READY)))
+	if (unlikely(disable_pcm || !XBUS_IS(xbus, READY)))
 		goto dropit;
-	if(XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
+	if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
 		usec = usec_diff(&now, &xbus->last_tx_sync);
 		xbus->last_tx_sync = now;
 		/* ignore startup statistics */
-		if(likely(atomic_read(&xbus->pcm_rx_counter) > BIG_TICK_INTERVAL)) {
-			if(abs(usec - 1000) > TICK_TOLERANCE) {
+		if (likely(atomic_read(&xbus->pcm_rx_counter) > BIG_TICK_INTERVAL)) {
+			if (abs(usec - 1000) > TICK_TOLERANCE) {
 				static int	rate_limit;
 
-				if((rate_limit++ % 5003) == 0)
+				if ((rate_limit++ % 5003) == 0)
 					XBUS_DBG(SYNC, xbus, "Bad PCM TX timing(%d): usec=%ld.\n",
 							rate_limit, usec);
 			}
-			if(usec > xbus->max_tx_sync)
+			if (usec > xbus->max_tx_sync)
 				xbus->max_tx_sync = usec;
-			if(usec < xbus->min_tx_sync)
+			if (usec < xbus->min_tx_sync)
 				xbus->min_tx_sync = usec;
 		}
 	}
 	spin_unlock_irqrestore(&xbus->lock, flags);
 	/* OK, really send it */
-	if(debug & DBG_PCM )
+	if (debug & DBG_PCM )
 		dump_xframe("TX_XFRAME_PCM", xbus, xframe, debug);
 	send_pcm_frame(xbus, xframe);
 	XBUS_COUNTER(xbus, TX_XFRAME_PCM)++;
@@ -870,12 +870,12 @@ void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
 
-		if(IS_SET(wanted_lines, i)) {
-			if(SPAN_REGISTERED(xpd)) {
+		if (IS_SET(wanted_lines, i)) {
+			if (SPAN_REGISTERED(xpd)) {
 #ifdef	DEBUG_PCMTX
 				int	channo = chan->channo;
 
-				if(pcmtx >= 0 && pcmtx_chan == channo)
+				if (pcmtx >= 0 && pcmtx_chan == channo)
 					memset((u_char *)pcm, pcmtx, DAHDI_CHUNKSIZE);
 				else
 #endif
@@ -905,20 +905,20 @@ void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 	 */
 	pcm_mute = ~(PHONEDEV(xpd).wanted_pcm_mask);
 	pcm_mute |= PHONEDEV(xpd).mute_dtmf | PHONEDEV(xpd).silence_pcm;
-	if(!SPAN_REGISTERED(xpd))
+	if (!SPAN_REGISTERED(xpd))
 		goto out;
 	for (i = 0; i < PHONEDEV(xpd).channels; i++) {
 		volatile u_char	*r = XPD_CHAN(xpd, i)->readchunk;
 		bool		got_data = IS_SET(pcm_mask, i);
 
-		if(got_data && !IS_SET(pcm_mute, i)) {
+		if (got_data && !IS_SET(pcm_mute, i)) {
 			/* We have and want real data */
 			// memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);	// DEBUG
 			memcpy((u_char *)r, pcm, DAHDI_CHUNKSIZE);
-		} else if(IS_SET(PHONEDEV(xpd).wanted_pcm_mask | PHONEDEV(xpd).silence_pcm, i)) {
+		} else if (IS_SET(PHONEDEV(xpd).wanted_pcm_mask | PHONEDEV(xpd).silence_pcm, i)) {
 			/* Inject SILENCE */
 			memset((u_char *)r, 0x7F, DAHDI_CHUNKSIZE);
-			if(IS_SET(PHONEDEV(xpd).silence_pcm, i)) {
+			if (IS_SET(PHONEDEV(xpd).silence_pcm, i)) {
 				/*
 				 * This will clear the EC buffers until next tick
 				 * So we don't have noise residues from the past.
@@ -927,7 +927,7 @@ void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 				memset(PHONEDEV(xpd).ec_chunk1[i], 0x7F, DAHDI_CHUNKSIZE);
 			}
 		}
-		if(got_data)
+		if (got_data)
 			pcm += DAHDI_CHUNKSIZE;
 	}
 out:
@@ -968,7 +968,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 	byte		*p;
 	int		ret = -EPROTO;	/* Assume error */
 
-	if(debug & DBG_PCM)
+	if (debug & DBG_PCM)
 		dump_xframe("RX_XFRAME_PCM", xbus, xframe, debug);
 	/* handle content */
 
@@ -981,10 +981,10 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 		pack = (xpacket_t *)p;
 		len = XPACKET_LEN(pack);
 		/* Sanity checks */
-		if(unlikely(XPACKET_OP(pack) != XPROTO_NAME(GLOBAL,PCM_READ))) {
+		if (unlikely(XPACKET_OP(pack) != XPROTO_NAME(GLOBAL,PCM_READ))) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
 					"%s: Non-PCM packet within a PCM xframe. (%d)\n",
 					__func__, rate_limit);
@@ -993,10 +993,10 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		}
 		p += len;
-		if(p > xframe_end || len < RPACKET_HEADERSIZE) {
+		if (p > xframe_end || len < RPACKET_HEADERSIZE) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
 					"%s: Invalid packet length %d. (%d)\n",
 					__func__, len, rate_limit);
@@ -1005,22 +1005,22 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		}
 		xpd = xpd_byaddr(xbus, XPACKET_ADDR_UNIT(pack), XPACKET_ADDR_SUBUNIT(pack));
-		if(unlikely(!xpd)) {
+		if (unlikely(!xpd)) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				notify_bad_xpd(__func__, xbus, XPACKET_ADDR(pack), "RECEIVE PCM");
 				dump_xframe("Unknown XPD addr", xbus, xframe, debug);
 			}
 			goto out;
 		}
-		if(!pcm_valid(xpd, pack))
+		if (!pcm_valid(xpd, pack))
 			goto out;
-		if(SPAN_REGISTERED(xpd)) {
+		if (SPAN_REGISTERED(xpd)) {
 			XBUS_COUNTER(xbus, RX_PACK_PCM)++;
 			CALL_PHONE_METHOD(card_pcm_tospan, xpd, pack);
 		}
-	} while(p < xframe_end);
+	} while (p < xframe_end);
 	ret = 0;	/* all good */
 	XBUS_COUNTER(xbus, RX_XFRAME_PCM)++;
 out:
@@ -1044,9 +1044,9 @@ static void xbus_tick(xbus_t *xbus)
 	/*
 	 * Update dahdi
 	 */
-	for(i = 0; i < MAX_XPDS; i++) {
+	for (i = 0; i < MAX_XPDS; i++) {
 		xpd = xpd_of(xbus, i);
-		if(xpd && SPAN_REGISTERED(xpd)) {
+		if (xpd && SPAN_REGISTERED(xpd)) {
 #ifdef	OPTIMIZE_CHANMUTE
 			int		j;
 			xpp_line_t	xmit_mask = PHONEDEV(xpd).wanted_pcm_mask;
@@ -1069,28 +1069,28 @@ static void xbus_tick(xbus_t *xbus)
 	/*
 	 * Fill xframes
 	 */
-	for(i = 0; i < MAX_XPDS; i++) {
-		if((xpd = xpd_of(xbus, i)) == NULL)
+	for (i = 0; i < MAX_XPDS; i++) {
+		if ((xpd = xpd_of(xbus, i)) == NULL)
 			continue;
 		if (!IS_PHONEDEV(xpd))
 			continue;
-		if(SPAN_REGISTERED(xpd)) {
+		if (SPAN_REGISTERED(xpd)) {
 			size_t	pcm_len = PHONEDEV(xpd).pcm_len;
 
-			if(pcm_len && xpd->card_present) {
+			if (pcm_len && xpd->card_present) {
 				do {
 					// pack = NULL;		/* FORCE single packet frames */
-					if(xframe && !pack) {	/* FULL frame */
+					if (xframe && !pack) {	/* FULL frame */
 						pcm_frame_out(xbus, xframe);
 						xframe = NULL;
 						XBUS_COUNTER(xbus, TX_PCM_FRAG)++;
 					}
-					if(!xframe) {		/* Alloc frame */
+					if (!xframe) {		/* Alloc frame */
 						xframe = ALLOC_SEND_XFRAME(xbus);
 						if (!xframe) {
 							static int rate_limit;
 
-							if((rate_limit++ % 3001) == 0)
+							if ((rate_limit++ % 3001) == 0)
 								XBUS_ERR(xbus,
 									"%s: failed to allocate new xframe\n",
 									__func__);
@@ -1098,10 +1098,10 @@ static void xbus_tick(xbus_t *xbus)
 						}
 					}
 					pack = xframe_next_packet(xframe, pcm_len);
-				} while(!pack);
+				} while (!pack);
 				XPACKET_INIT(pack, GLOBAL, PCM_WRITE, xpd->xbus_idx, 1, 0);
 				XPACKET_LEN(pack) = pcm_len;
-				if(!sent_sync_bit) {
+				if (!sent_sync_bit) {
 					XPACKET_ADDR_SYNC(pack) = 1;
 					sent_sync_bit = 1;
 				}
@@ -1110,14 +1110,14 @@ static void xbus_tick(xbus_t *xbus)
 			}
 		}
 	}
-	if(xframe)	/* clean any leftovers */
+	if (xframe)	/* clean any leftovers */
 		pcm_frame_out(xbus, xframe);
 	/*
 	 * Receive PCM
 	 */
-	while((xframe = xframe_dequeue(&xbus->pcm_tospan)) != NULL) {
+	while ((xframe = xframe_dequeue(&xbus->pcm_tospan)) != NULL) {
 		copy_pcm_tospan(xbus, xframe);
-		if(XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
+		if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
 			struct timeval	now;
 			unsigned long	usec;
 
@@ -1125,27 +1125,27 @@ static void xbus_tick(xbus_t *xbus)
 			usec = usec_diff(&now, &xbus->last_rx_sync);
 			xbus->last_rx_sync = now;
 			/* ignore startup statistics */
-			if(likely(atomic_read(&xbus->pcm_rx_counter) > BIG_TICK_INTERVAL)) {
-				if(abs(usec - 1000) > TICK_TOLERANCE) {
+			if (likely(atomic_read(&xbus->pcm_rx_counter) > BIG_TICK_INTERVAL)) {
+				if (abs(usec - 1000) > TICK_TOLERANCE) {
 					static int	rate_limit;
 
-					if((rate_limit++ % 5003) == 0)
+					if ((rate_limit++ % 5003) == 0)
 						XBUS_DBG(SYNC, xbus, "Bad PCM RX timing(%d): usec=%ld.\n",
 								rate_limit, usec);
 				}
-				if(usec > xbus->max_rx_sync)
+				if (usec > xbus->max_rx_sync)
 					xbus->max_rx_sync = usec;
-				if(usec < xbus->min_rx_sync)
+				if (usec < xbus->min_rx_sync)
 					xbus->min_rx_sync = usec;
 			}
 		}
 	}
-	for(i = 0; i < MAX_XPDS; i++) {
+	for (i = 0; i < MAX_XPDS; i++) {
 		xpd = xpd_of(xbus, i);
-		if(!xpd || !xpd->card_present)
+		if (!xpd || !xpd->card_present)
 			continue;
 		if (IS_PHONEDEV(xpd)) {
-			if(SPAN_REGISTERED(xpd)) {
+			if (SPAN_REGISTERED(xpd)) {
 				do_ec(xpd);
 				dahdi_receive(&PHONEDEV(xpd).span);
 			}
@@ -1166,22 +1166,22 @@ static void do_tick(xbus_t *xbus, const struct timeval *tv_received)
 	unsigned long	flags;
 
 	xbus_command_queue_tick(xbus);
-	if(global_ticker == xbus)
+	if (global_ticker == xbus)
 		global_tick();	/* called from here or dahdi_sync_tick() */
 	spin_lock_irqsave(&ref_ticker_lock, flags);
 	xpp_drift_step(xbus, tv_received);
 	spin_unlock_irqrestore(&ref_ticker_lock, flags);
-	if(likely(xbus->self_ticking))
+	if (likely(xbus->self_ticking))
 		xbus_tick(xbus);
 	xbus->global_counter = counter;
 }
 
 void xframe_receive_pcm(xbus_t *xbus, xframe_t *xframe)
 {
-	if(!xframe_enqueue(&xbus->pcm_tospan, xframe)) {
+	if (!xframe_enqueue(&xbus->pcm_tospan, xframe)) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) == 0)
+		if ((rate_limit++ % 1003) == 0)
 			XBUS_DBG(SYNC, xbus,
 					"Failed to enqueue received pcm frame. (%d)\n",
 					rate_limit);
@@ -1192,7 +1192,7 @@ void xframe_receive_pcm(xbus_t *xbus, xframe_t *xframe)
 	 * of the frame, regardless of the XPD that is sync master.
 	 * FIXME: what about PRI split?
 	 */
-	if(XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
+	if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
 		do_tick(xbus, &xframe->tv_received);
 		atomic_inc(&xbus->pcm_rx_counter);
 	} else
@@ -1205,10 +1205,10 @@ int exec_sync_command(const char *buf, size_t count)
 	int	xbusno;
 	xbus_t	*xbus;
 
-	if(strncmp("DAHDI", buf, 6) == 0) {	/* Ignore the newline */
+	if (strncmp("DAHDI", buf, 6) == 0) {	/* Ignore the newline */
 		DBG(SYNC, "DAHDI");
 		update_sync_master(NULL, 1);
-	} else if(sscanf(buf, "SYNC=%d", &xbusno) == 1) {
+	} else if (sscanf(buf, "SYNC=%d", &xbusno) == 1) {
 		DBG(SYNC, "SYNC=%d\n", xbusno);
 		xbus = get_xbus(__func__, xbusno);
 		if (xbus == NULL) {
@@ -1217,7 +1217,7 @@ int exec_sync_command(const char *buf, size_t count)
 		}
 		update_sync_master(xbus, 0);
 		put_xbus(__func__, xbus);
-	} else if(sscanf(buf, "QUERY=%d", &xbusno) == 1) {
+	} else if (sscanf(buf, "QUERY=%d", &xbusno) == 1) {
 		DBG(SYNC, "QUERY=%d\n", xbusno);
 		xbus = get_xbus(__func__, xbusno);
 		if (xbus == NULL) {
@@ -1237,7 +1237,7 @@ int fill_sync_string(char *buf, size_t count)
 {
 	int	len = 0;
 
-	if(!syncer) {
+	if (!syncer) {
 		len += snprintf(buf, count, "%s\n",
 			(force_dahdi_sync) ? "DAHDI" : "NO-SYNC");
 	} else

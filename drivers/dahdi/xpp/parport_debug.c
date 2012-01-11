@@ -41,8 +41,8 @@ void flip_parport_bit(unsigned char bitnum)
 	unsigned char	mask;
 	unsigned char	value;
 
-	if(!debug_sync_parport) {
-		if(printk_ratelimit()) {
+	if (!debug_sync_parport) {
+		if (printk_ratelimit()) {
 			printk(KERN_NOTICE "%s: no debug parallel port\n",
 				THIS_MODULE->name);
 		}
@@ -52,7 +52,7 @@ void flip_parport_bit(unsigned char bitnum)
 	mask = 1 << bitnum;
 	spin_lock_irqsave(&lock, flags);
 	value = last_value & ~mask;
-	if(parport_toggles[bitnum] % 2)	/* square wave */
+	if (parport_toggles[bitnum] % 2)	/* square wave */
 		value |= mask;
 	last_value = value;
 	parport_toggles[bitnum]++;
@@ -64,7 +64,7 @@ EXPORT_SYMBOL(flip_parport_bit);
 static void parport_attach(struct parport *port)
 {
 	printk(KERN_INFO "%s: Using %s for debugging\n", THIS_MODULE->name, port->name);
-	if(debug_sync_parport) {
+	if (debug_sync_parport) {
 		printk(KERN_ERR "%s: Using %s, ignore new attachment %s\n",
 			THIS_MODULE->name, debug_sync_parport->name, port->name);
 		return;
@@ -76,7 +76,7 @@ static void parport_attach(struct parport *port)
 static void parport_detach(struct parport *port)
 {
 	printk(KERN_INFO "%s: Releasing %s\n", THIS_MODULE->name, port->name);
-	if(debug_sync_parport != port) {
+	if (debug_sync_parport != port) {
 		printk(KERN_ERR "%s: Using %s, ignore new detachment %s\n",
 			THIS_MODULE->name, debug_sync_parport->name, port->name);
 		return;

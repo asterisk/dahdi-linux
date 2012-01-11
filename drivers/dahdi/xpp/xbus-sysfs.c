@@ -82,9 +82,9 @@ static DEVICE_ATTR_WRITER(xbus_state_store, dev, buf, count)
 
 	xbus = dev_to_xbus(dev);
 	XBUS_DBG(GENERAL, xbus, "%s\n", buf);
-	if(strncmp(buf, "stop", 4) == 0)
+	if (strncmp(buf, "stop", 4) == 0)
 		xbus_deactivate(xbus);
-	else if(XBUS_IS(xbus, IDLE) && strncmp(buf, "start", 5) == 0)
+	else if (XBUS_IS(xbus, IDLE) && strncmp(buf, "start", 5) == 0)
 		xbus_activate(xbus);
 	else {
 		XBUS_NOTICE(xbus, "%s: Illegal action %s in state %s. Ignored.\n",
@@ -116,7 +116,7 @@ static DEVICE_ATTR_READER(timing_show, dev, buf)
 	xbus = dev_to_xbus(dev);
 	driftinfo = &xbus->drift;
 	len += snprintf(buf + len, PAGE_SIZE - len, "%-3s", sync_mode_name(xbus->sync_mode));
-	if(xbus->sync_mode == SYNC_MODE_PLL) {
+	if (xbus->sync_mode == SYNC_MODE_PLL) {
 		len += snprintf(buf + len, PAGE_SIZE - len,
 				" %5d: lost (%4d,%4d) : ",
 					xbus->ticker.cycle,
@@ -146,10 +146,10 @@ static DEVICE_ATTR_READER(samples_show, dev, buf)
 	int			i;
 
 	xbus = dev_to_xbus(dev);
-	if(xbus->sample_running)
+	if (xbus->sample_running)
 		return -EBUSY;
-	for(i = 0; i < SAMPLE_SIZE; i++) {
-		if(len > PAGE_SIZE - 20)
+	for (i = 0; i < SAMPLE_SIZE; i++) {
+		if (len > PAGE_SIZE - 20)
 			break;
 		len += snprintf(buf + len, PAGE_SIZE - len, "%d\n", xbus->sample_ticks[i]);
 	}
@@ -161,7 +161,7 @@ static DEVICE_ATTR_WRITER(samples_store, dev, buf, count)
 	xbus_t			*xbus;
 
 	xbus = dev_to_xbus(dev);
-	if(xbus->sample_running)
+	if (xbus->sample_running)
 		return -EBUSY;
 	memset(xbus->sample_ticks, 0, sizeof(*xbus->sample_ticks));
 	xbus->sample_pos = 0;
@@ -245,10 +245,10 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	uframes_inaccuracy = di->sync_inaccuracy / 125;
 	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d ",
 		"instability", speed_range + uframes_inaccuracy);
-	if(xbus->sync_mode == SYNC_MODE_AB) {
+	if (xbus->sync_mode == SYNC_MODE_AB) {
 		buf[len++] = '-';
 	} else {
-		for(i = 0; len < PAGE_SIZE - 1 && i < speed_range + uframes_inaccuracy; i++)
+		for (i = 0; len < PAGE_SIZE - 1 && i < speed_range + uframes_inaccuracy; i++)
 			buf[len++] = '#';
 	}
 	buf[len++] = '\n';
@@ -321,11 +321,11 @@ static int astribank_hotplug(struct device *dev, char **envp, int envnum, char *
 {
 	xbus_t	*xbus;
 
-	if(!dev)
+	if (!dev)
 		return -ENODEV;
 	xbus = dev_to_xbus(dev);
 	envp[0] = buff;
-	if(snprintf(buff, bufsize, "XBUS_NAME=%s", xbus->busname) >= bufsize)
+	if (snprintf(buff, bufsize, "XBUS_NAME=%s", xbus->busname) >= bufsize)
 		return -ENOMEM;
 	envp[1] = NULL;
 	return 0;
@@ -337,7 +337,7 @@ static int astribank_hotplug(struct device *dev, char **envp, int envnum, char *
 		XBUS_ADD_UEVENT_VAR("XPP_INIT_DIR=%s", initdir);	\
 		XBUS_ADD_UEVENT_VAR("XBUS_NUM=%02d", xbus->num);	\
 		XBUS_ADD_UEVENT_VAR("XBUS_NAME=%s", xbus->busname);	\
-	} while(0)
+	} while (0)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
 #define XBUS_ADD_UEVENT_VAR(fmt, val...)			\
@@ -356,7 +356,7 @@ static int astribank_uevent(struct device *dev, char **envp, int num_envp, char 
 	int		len = 0;
 	extern char	*initdir;
 
-	if(!dev)
+	if (!dev)
 		return -ENODEV;
 	xbus = dev_to_xbus(dev);
 	DBG(GENERAL, "SYFS bus_id=%s xbus=%s\n", dev_name(dev), xbus->busname);
@@ -378,7 +378,7 @@ static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 	xbus_t		*xbus;
 	extern char	*initdir;
 
-	if(!dev)
+	if (!dev)
 		return -ENODEV;
 	xbus = dev_to_xbus(dev);
 	DBG(GENERAL, "SYFS bus_id=%s xbus=%s\n", dev_name(dev), xbus->busname);
@@ -425,11 +425,11 @@ static void astribank_release(struct device *dev)
 
 	BUG_ON(!dev);
 	xbus = dev_to_xbus(dev);
-	if(XBUS_FLAGS(xbus, CONNECTED)) {
+	if (XBUS_FLAGS(xbus, CONNECTED)) {
 		XBUS_ERR(xbus, "Try to release CONNECTED device.\n");
 		BUG();
 	}
-	if(!XBUS_IS(xbus, IDLE) && !XBUS_IS(xbus, FAIL) && !XBUS_IS(xbus, DEACTIVATED)) {
+	if (!XBUS_IS(xbus, IDLE) && !XBUS_IS(xbus, FAIL) && !XBUS_IS(xbus, DEACTIVATED)) {
 		XBUS_ERR(xbus, "Try to release in state %s\n",
 			xbus_statename(XBUS_STATE(xbus)));
 		BUG();
@@ -491,7 +491,7 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	regs = &xpd->last_reply;
@@ -499,12 +499,12 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 	len += sprintf(buf + len, "# Consult firmware docs first\n");
 	len += sprintf(buf + len, "#\n");
 	do_datah = REG_FIELD(regs, do_datah) ? 1 : 0;
-	if(do_datah) {
+	if (do_datah) {
 		snprintf(datah_str, ARRAY_SIZE(datah_str), "\t%02X",
 			REG_FIELD(regs, data_high));
 	} else
 		datah_str[0] = '\0';
-	if(REG_FIELD(regs, do_subreg)) {
+	if (REG_FIELD(regs, do_subreg)) {
 		len += sprintf(buf + len, "#CH\tOP\tReg.\tSub\tDL%s\n",
 				(do_datah) ? "\tDH" : "");
 		len += sprintf(buf + len, "%2d\tRS\t%02X\t%02X\t%02X%s\n",
@@ -534,27 +534,27 @@ static DEVICE_ATTR_WRITER(chipregs_store, dev, buf, count)
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
 	//XPD_DBG(GENERAL, xpd, "%s\n", buf);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	p = buf;
-	while((p - buf) < count) {
+	while ((p - buf) < count) {
 		i = strcspn(p, "\r\n");
-		if(i > 0) {
-			if(i >= MAX_PROC_WRITE) {
+		if (i > 0) {
+			if (i >= MAX_PROC_WRITE) {
 				XPD_NOTICE(xpd, "Command too long (%d chars)\n", i);
 				return -E2BIG;
 			}
 			memcpy(tmp, p, i);
 			tmp[i] = '\0';
 			ret = parse_chip_command(xpd, tmp);
-			if(ret < 0) {
+			if (ret < 0) {
 				XPD_NOTICE(xpd, "Failed writing command: '%s'\n", tmp);
 				return ret;
 			}
 		}
 		p += i + 1;
 		/* Don't flood command_queue */
-		if(xframe_queue_count(&xpd->xbus->command_queue) > 5)
+		if (xframe_queue_count(&xpd->xbus->command_queue) > 5)
 			msleep(6);
 	}
 	return count;
@@ -568,7 +568,7 @@ static DEVICE_ATTR_READER(blink_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	len += sprintf(buf, "0x%lX\n", xpd->blink_mode);
@@ -585,12 +585,12 @@ static DEVICE_ATTR_WRITER(blink_store, dev, buf, count)
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
 	//XPD_DBG(GENERAL, xpd, "%s\n", buf);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	blink = simple_strtoul(buf, &endp, 0);
-	if(*endp != '\0' && *endp != '\n' && *endp != '\r')
+	if (*endp != '\0' && *endp != '\n' && *endp != '\r')
 		return -EINVAL;
-	if(blink > 0xFFFF)
+	if (blink > 0xFFFF)
 		return -EINVAL;
 	XPD_DBG(GENERAL, xpd, "BLINK channels: 0x%lX\n", blink);
 	xpd->blink_mode = blink;
@@ -605,7 +605,7 @@ static DEVICE_ATTR_READER(span_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	len += sprintf(buf, "%d\n", SPAN_REGISTERED(xpd) ? PHONEDEV(xpd).span.spanno : 0);
@@ -662,7 +662,7 @@ static DEVICE_ATTR_READER(type_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	len += sprintf(buf, "%s\n", xpd->type_name);
 	return len;
@@ -676,12 +676,12 @@ static DEVICE_ATTR_READER(offhook_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	for_each_line(xpd, i) {
 		len += sprintf(buf + len, "%d ", IS_OFFHOOK(xpd, i));
 	}
-	if(len) {
+	if (len) {
 		len--;	/* backout last space */
 	}
 	len += sprintf(buf + len, "\n");
@@ -696,7 +696,7 @@ static DEVICE_ATTR_READER(timing_priority_show, dev, buf)
 
 	BUG_ON(!dev);
 	xpd = dev_to_xpd(dev);
-	if(!xpd)
+	if (!xpd)
 		return -ENODEV;
 	spin_lock_irqsave(&xpd->lock, flags);
 	len += sprintf(buf + len, "%d\n", PHONEDEV(xpd).timing_priority);
@@ -724,7 +724,7 @@ static int xpd_match(struct device *dev, struct device_driver *driver)
 
 	xpd_driver = driver_to_xpd_driver(driver);
 	xpd = dev_to_xpd(dev);
-	if(xpd_driver->type != xpd->type) {
+	if (xpd_driver->type != xpd->type) {
 		XPD_DBG(DEVICES, xpd, "SYSFS match fail: xpd->type = %d, xpd_driver->type = %d\n",
 			xpd->type,  xpd_driver->type);
 		return 0;
@@ -757,7 +757,7 @@ int xpd_driver_register(struct device_driver *driver)
 
 	DBG(DEVICES, "%s\n", driver->name);
 	driver->bus = &xpd_type;
-	if((ret = driver_register(driver)) < 0) {
+	if ((ret = driver_register(driver)) < 0) {
 		ERR("%s: driver_register(%s) failed. Error number %d",
 			__func__, driver->name, ret);
 	}
@@ -793,7 +793,7 @@ int xpd_device_register(xbus_t *xbus, xpd_t *xpd)
 	dev_set_drvdata(dev, xpd);
 	dev->release = xpd_release;
 	ret = device_register(dev);
-	if(ret) {
+	if (ret) {
 		XPD_ERR(xpd, "%s: device_register failed: %d\n", __func__, ret);
 		return ret;
 	}
@@ -809,7 +809,7 @@ void xpd_device_unregister(xpd_t *xpd)
 	BUG_ON(!xbus);
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
 	dev = &xpd->xpd_dev;
-	if(!dev_get_drvdata(dev))
+	if (!dev_get_drvdata(dev))
 		return;
 	BUG_ON(dev_get_drvdata(dev) != xpd);
 	device_unregister(dev);
@@ -957,7 +957,7 @@ void xbus_sysfs_remove(xbus_t *xbus)
 	BUG_ON(!xbus);
 	XBUS_DBG(DEVICES, xbus, "\n");
 	astribank = &xbus->astribank;
-	if(!dev_get_drvdata(astribank))
+	if (!dev_get_drvdata(astribank))
 		return;
 	BUG_ON(dev_get_drvdata(astribank) != xbus);
 	device_unregister(astribank);
@@ -978,7 +978,7 @@ int xbus_sysfs_create(xbus_t *xbus)
 	dev_set_drvdata(astribank, xbus);
 	astribank->release = astribank_release;
 	ret = device_register(astribank);
-	if(ret) {
+	if (ret) {
 		XBUS_ERR(xbus, "%s: device_register failed: %d\n", __func__, ret);
 		dev_set_drvdata(astribank, NULL);
 	}
@@ -990,17 +990,17 @@ int __init xpp_driver_init(void)
 	int	ret;
 
 	DBG(DEVICES, "SYSFS\n");
-	if((ret = bus_register(&toplevel_bus_type)) < 0) {
+	if ((ret = bus_register(&toplevel_bus_type)) < 0) {
 		ERR("%s: bus_register(%s) failed. Error number %d",
 			__func__, toplevel_bus_type.name, ret);
 		goto failed_toplevel;
 	}
-	if((ret = driver_register(&xpp_driver)) < 0) {
+	if ((ret = driver_register(&xpp_driver)) < 0) {
 		ERR("%s: driver_register(%s) failed. Error number %d",
 			__func__, xpp_driver.name, ret);
 		goto failed_xpp_driver;
 	}
-	if((ret = bus_register(&xpd_type)) < 0) {
+	if ((ret = bus_register(&xpd_type)) < 0) {
 		ERR("%s: bus_register(%s) failed. Error number %d",
 			__func__, xpd_type.name, ret);
 		goto failed_xpd_bus;

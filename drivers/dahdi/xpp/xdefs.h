@@ -112,7 +112,7 @@ typedef unsigned char		byte;
 #define	KZFREE(p)		do {					\
 					memset((p), 0, sizeof(*(p)));	\
 					kfree(p);			\
-				} while(0);
+				} while (0);
 
 /*
  * Hotplug replaced with uevent in 2.6.16
@@ -139,9 +139,9 @@ typedef unsigned char		byte;
 		ssize_t name(struct device_driver *drv, char * buf)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
-#define	SET_PROC_DIRENTRY_OWNER(p)	do { (p)->owner = THIS_MODULE; } while(0);
+#define	SET_PROC_DIRENTRY_OWNER(p)	do { (p)->owner = THIS_MODULE; } while (0);
 #else
-#define	SET_PROC_DIRENTRY_OWNER(p)	do { } while(0);
+#define	SET_PROC_DIRENTRY_OWNER(p)	do { } while (0);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)

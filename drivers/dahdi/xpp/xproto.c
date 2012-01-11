@@ -70,7 +70,7 @@ xproto_handler_t xproto_global_handler(byte opcode)
 
 static const xproto_table_t *xproto_table(xpd_type_t cardtype)
 {
-	if(cardtype >= XPD_TYPE_NOMODULE)
+	if (cardtype >= XPD_TYPE_NOMODULE)
 		return NULL;
 	return xprotocol_tables[cardtype];
 }
@@ -79,24 +79,24 @@ const xproto_table_t *xproto_get(xpd_type_t cardtype)
 {
 	const xproto_table_t *xtable;
 
-	if(cardtype >= XPD_TYPE_NOMODULE)
+	if (cardtype >= XPD_TYPE_NOMODULE)
 		return NULL;
 	xtable = xprotocol_tables[cardtype];
-	if(!xtable) {	/* Try to load the relevant module */
+	if (!xtable) {	/* Try to load the relevant module */
 		int ret = request_module(XPD_TYPE_PREFIX "%d", cardtype);
-		if(ret != 0) {
+		if (ret != 0) {
 			NOTICE("%s: Failed to load module for type=%d. exit status=%d.\n",
 					__func__, cardtype, ret);
 			/* Drop through: we may be lucky... */
 		}
 		xtable = xprotocol_tables[cardtype];
 	}
-	if(xtable) {
+	if (xtable) {
 		BUG_ON(!xtable->owner);
 #ifdef CONFIG_MODULE_UNLOAD
 		DBG(GENERAL, "%s refcount was %d\n", xtable->name, module_refcount(xtable->owner));
 #endif
-		if(!try_module_get(xtable->owner)) {
+		if (!try_module_get(xtable->owner)) {
 			ERR("%s: try_module_get for %s failed.\n", __func__, xtable->name);
 			return NULL;
 		}
@@ -139,8 +139,8 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 	int			ret = -EPROTO;
 
 	BUG_ON(!pack);
-	if(!valid_xpd_addr(&XPACKET_ADDR(pack))) {
-		if(printk_ratelimit()) {
+	if (!valid_xpd_addr(&XPACKET_ADDR(pack))) {
+		if (printk_ratelimit()) {
 			XBUS_NOTICE(xbus, "%s: from %d%d: bad address.\n",
 					__func__,
 					XPACKET_ADDR_UNIT(pack), XPACKET_ADDR_SUBUNIT(pack));
@@ -153,11 +153,11 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 	/* XPD may be NULL (e.g: during bus polling */
 	xe = xproto_global_entry(op);
 	/*-------- Validations -----------*/
-	if(!xe) {
+	if (!xe) {
 		const xproto_table_t *xtable;
 
-		if(!xpd) {
-			if(printk_ratelimit()) {
+		if (!xpd) {
+			if (printk_ratelimit()) {
 				XBUS_NOTICE(xbus, "%s: from %d%d opcode=0x%02X: no such global command.\n",
 						__func__,
 						XPACKET_ADDR_UNIT(pack), XPACKET_ADDR_SUBUNIT(pack), op);
@@ -166,16 +166,16 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 			goto out;
 		}
 		xtable = xproto_table(xpd->type);
-		if(!xtable) {
-			if(printk_ratelimit())
+		if (!xtable) {
+			if (printk_ratelimit())
 				XPD_ERR(xpd, "%s: no protocol table (type=%d)\n",
 					__func__,
 					xpd->type);
 			goto out;
 		}
 		xe = xproto_card_entry(xtable, op);
-		if(!xe) {
-			if(printk_ratelimit()) {
+		if (!xe) {
+			if (printk_ratelimit()) {
 				XPD_NOTICE(xpd, "%s: bad command (type=%d,opcode=0x%x)\n",
 					__func__,
 					xpd->type, op);
@@ -186,8 +186,8 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 	}
 	table = xe->table;
 	BUG_ON(!table);
-	if(!table->packet_is_valid(pack)) {
-		if(printk_ratelimit()) {
+	if (!table->packet_is_valid(pack)) {
+		if (printk_ratelimit()) {
 			ERR("xpp: %s: wrong size %d for opcode=0x%02X\n",
 					__func__, XPACKET_LEN(pack), op);
 			dump_packet("packet_process -- wrong size", pack, debug);
@@ -211,7 +211,7 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 	int		len;
 	int		ret;
 
-	if(debug & DBG_COMMANDS)
+	if (debug & DBG_COMMANDS)
 		dump_xframe("RX-CMD", xbus, xframe, DBG_ANY);
 	p = xframe->packets;
 	xframe_end = p + XFRAME_LEN(xframe);
@@ -219,10 +219,10 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 		pack = (xpacket_t *)p;
 		len = XPACKET_LEN(pack);
 		/* Sanity checks */
-		if(unlikely(XPACKET_OP(pack) == XPROTO_NAME(GLOBAL,PCM_READ))) {
+		if (unlikely(XPACKET_OP(pack) == XPROTO_NAME(GLOBAL,PCM_READ))) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				XBUS_DBG(GENERAL, xbus, "A PCM packet within a Non-PCM xframe\n");
 				dump_xframe("In Non-PCM xframe", xbus, xframe, debug);
 			}
@@ -230,10 +230,10 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		}
 		p += len;
-		if(p > xframe_end || len < RPACKET_HEADERSIZE) {
+		if (p > xframe_end || len < RPACKET_HEADERSIZE) {
 			static int	rate_limit;
 
-			if((rate_limit++ % 1003) == 0) {
+			if ((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus, "Invalid packet length %d\n", len);
 				dump_xframe("BAD LENGTH", xbus, xframe, debug);
 			}
@@ -241,9 +241,9 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 			goto out;
 		}
 		ret = packet_process(xbus, pack);
-		if(unlikely(ret < 0))
+		if (unlikely(ret < 0))
 			break;
-	} while(p < xframe_end);
+	} while (p < xframe_end);
 out:
 	FREE_RECV_XFRAME(xbus, xframe);
 	return ret;
@@ -256,17 +256,17 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 	struct timeval	tv_received;
 	int		usec;
 
-	if(XFRAME_LEN(xframe) < RPACKET_HEADERSIZE) {
+	if (XFRAME_LEN(xframe) < RPACKET_HEADERSIZE) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) == 0) {
+		if ((rate_limit++ % 1003) == 0) {
 			XBUS_NOTICE(xbus, "short xframe\n");
 			dump_xframe("short xframe", xbus, xframe, debug);
 		}
 		FREE_RECV_XFRAME(xbus, xframe);
 		return -EPROTO;
 	}
-	if(!XBUS_FLAGS(xbus, CONNECTED)) {
+	if (!XBUS_FLAGS(xbus, CONNECTED)) {
 		XBUS_DBG(GENERAL, xbus, "Dropped xframe. Is shutting down.\n");
 		return -ENODEV;
 	}
@@ -274,8 +274,8 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 	/*
 	 * We want to check that xframes do not mix PCM and other commands
 	 */
-	if(XPACKET_IS_PCM((xpacket_t *)xframe->packets)) {
-		if(!XBUS_IS(xbus, READY))
+	if (XPACKET_IS_PCM((xpacket_t *)xframe->packets)) {
+		if (!XBUS_IS(xbus, READY))
 			FREE_RECV_XFRAME(xbus, xframe);
 		else
 			xframe_receive_pcm(xbus, xframe);
@@ -287,7 +287,7 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 	do_gettimeofday(&now);
 	usec = (now.tv_sec - tv_received.tv_sec) * 1000000 +
 		now.tv_usec - tv_received.tv_usec;
-	if(usec > xbus->max_rx_process)
+	if (usec > xbus->max_rx_process)
 		xbus->max_rx_process = usec;
 	return ret;
 }
@@ -300,7 +300,7 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 	byte	op = XPACKET_OP(packet);
 	byte	*addr = (byte *)&XPACKET_ADDR(packet);
 
-	if(!debug)
+	if (!debug)
 		return;
 	printk(KERN_DEBUG "%s: XPD=%1X-%1X%c (0x%X) OP=0x%02X LEN=%d",
 			msg,
@@ -316,14 +316,14 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 		byte	*p = (byte *)packet;
 
 		printk(" BYTES: ");
-		for(i = 0; i < XPACKET_LEN(packet); i++) {
+		for (i = 0; i < XPACKET_LEN(packet); i++) {
 			static int limiter;
 
-			if(i >= sizeof(xpacket_t)) {
-				if(limiter < ERR_REPORT_LIMIT) {
+			if (i >= sizeof(xpacket_t)) {
+				if (limiter < ERR_REPORT_LIMIT) {
 					ERR("%s: length overflow i=%d > sizeof(xpacket_t)=%lu\n",
 						__func__, i+1, (long)sizeof(xpacket_t));
-				} else if(limiter == ERR_REPORT_LIMIT) {
+				} else if (limiter == ERR_REPORT_LIMIT) {
 					ERR("%s: error packet #%d... squelsh reports.\n",
 						__func__, limiter);
 				}
@@ -347,12 +347,12 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 	char		reg_buf[MAX_PROC_WRITE];
 	char		data_buf[MAX_PROC_WRITE];
 
-	if(regcmd->bytes > sizeof(*regcmd) - 1) {	/* The size byte is not included */
+	if (regcmd->bytes > sizeof(*regcmd) - 1) {	/* The size byte is not included */
 		PORT_NOTICE(xbus, unit, port, "%s: %s: Too long: regcmd->bytes = %d\n",
 			__func__, msg, regcmd->bytes);
 		return;
 	}
-	if(regcmd->is_multibyte) {
+	if (regcmd->is_multibyte) {
 		char		buf[MAX_PROC_WRITE + 1];
 		int		i;
 		int		n = 0;
@@ -360,7 +360,7 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 		const byte	*p = REG_XDATA(regcmd);
 
 		buf[0] = '\0';
-		for(i = 0; i < len && n < MAX_PROC_WRITE; i++)
+		for (i = 0; i < len && n < MAX_PROC_WRITE; i++)
 			n += snprintf(&buf[n], MAX_PROC_WRITE - n, "%02X ", p[i]);
 		PORT_DBG(REGS, xbus, unit, port,
 			"UNIT-%d PORT-%d: Multibyte(eoframe=%d) %s[0..%zd]: %s%s\n",
@@ -368,7 +368,7 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 			msg, len-1, buf, (n >= MAX_PROC_WRITE)?"...":"");
 		return;
 	}
-	if(regcmd->bytes != sizeof(*regcmd) - 1) {	/* The size byte is not included */
+	if (regcmd->bytes != sizeof(*regcmd) - 1) {	/* The size byte is not included */
 		PORT_NOTICE(xbus, unit, port, "%s: %s: Wrong size: regcmd->bytes = %d\n",
 			__func__, msg, regcmd->bytes);
 		return;
@@ -378,7 +378,7 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 			(REG_FIELD(regcmd, all_ports_broadcast)) ? "*" : "");
 	action = (REG_FIELD(regcmd, read_request)) ? 'R' : 'W';
 	modifier = 'D';
-	if(REG_FIELD(regcmd, do_subreg)) {
+	if (REG_FIELD(regcmd, do_subreg)) {
 		snprintf(reg_buf, MAX_PROC_WRITE, "%02X %02X",
 			REG_FIELD(regcmd, regnum),
 			REG_FIELD(regcmd, subreg));
@@ -387,9 +387,9 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 		snprintf(reg_buf, MAX_PROC_WRITE, "%02X",
 			REG_FIELD(regcmd, regnum));
 	}
-	if(REG_FIELD(regcmd, read_request)) {
+	if (REG_FIELD(regcmd, read_request)) {
 		data_buf[0] = '\0';
-	} else if(REG_FIELD(regcmd, do_datah)) {
+	} else if (REG_FIELD(regcmd, do_datah)) {
 		snprintf(data_buf, MAX_PROC_WRITE, "%02X %02X",
 			REG_FIELD(regcmd, data_low),
 			REG_FIELD(regcmd, data_high));
@@ -409,19 +409,19 @@ const char *xproto_name(xpd_type_t xpd_type)
 
 	BUG_ON(xpd_type >= XPD_TYPE_NOMODULE);
 	proto_table = xprotocol_tables[xpd_type];
-	if(!proto_table)
+	if (!proto_table)
 		return NULL;
 	return proto_table->name;
 }
 
 #define	CHECK_XOP(xops, f)	\
-		if(!(xops)->f) { \
+		if (!(xops)->f) { \
 			ERR("%s: missing xmethod %s [%s (%d)]\n", __func__, #f, name, type);	\
 			return -EINVAL;	\
 		}
 
 #define	CHECK_PHONEOP(phoneops, f)	\
-		if(!(phoneops)->f) { \
+		if (!(phoneops)->f) { \
 			ERR("%s: missing phone method %s [%s (%d)]\n", __func__, #f, name, type);	\
 			return -EINVAL;	\
 		}
@@ -436,12 +436,12 @@ int xproto_register(const xproto_table_t *proto_table)
 	BUG_ON(!proto_table);
 	type = proto_table->type;
 	name = proto_table->name;
-	if(type >= XPD_TYPE_NOMODULE) {
+	if (type >= XPD_TYPE_NOMODULE) {
 		NOTICE("%s: Bad xproto type %d\n", __func__, type);
 		return -EINVAL;
 	}
 	DBG(GENERAL, "%s (%d)\n", name, type);
-	if(xprotocol_tables[type])
+	if (xprotocol_tables[type])
 		NOTICE("%s: overriding registration of %s (%d)\n", __func__, name, type);
 	xops = proto_table->xops;
 	CHECK_XOP(xops, card_new);
@@ -476,11 +476,11 @@ void xproto_unregister(const xproto_table_t *proto_table)
 	type = proto_table->type;
 	name = proto_table->name;
 	DBG(GENERAL, "%s (%d)\n", name, type);
-	if(type >= XPD_TYPE_NOMODULE) {
+	if (type >= XPD_TYPE_NOMODULE) {
 		NOTICE("%s: Bad xproto type %s (%d)\n", __func__, name, type);
 		return;
 	}
-	if(!xprotocol_tables[type])
+	if (!xprotocol_tables[type])
 		NOTICE("%s: xproto type %s (%d) is already unregistered\n", __func__, name, type);
 	xprotocol_tables[type] = NULL;
 }

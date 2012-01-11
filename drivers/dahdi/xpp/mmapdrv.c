@@ -115,7 +115,7 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 
 	xbus = xbus_num(global_xbus->num);
 	BUG_ON(!xbus);
-	if(!XBUS_GET(xbus)) {
+	if (!XBUS_GET(xbus)) {
 		if (printk_ratelimit())
 			XBUS_ERR(xbus, "Dropping packet. Is shutting down.\n");
 		goto out;
@@ -129,7 +129,7 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 			NOTICE("Got %d bytes\n", rxcnt);
 		goto out;
 	}
-	if(rxcnt >= XFRAME_DATASIZE) {
+	if (rxcnt >= XFRAME_DATASIZE) {
 		if (printk_ratelimit())
 			ERR("Bad rxcnt=%d\n", rxcnt);
 		goto out;
@@ -520,7 +520,7 @@ static int __init xpp_mmap_init(void)
 			NULL,
 #endif
 			NULL);
-	if(!xframe_cache) {
+	if (!xframe_cache) {
 		ret = -ENOMEM;
 		goto fail_cache;
 	}

@@ -58,8 +58,8 @@ void dump_poll(int debug, const char *msg, int poll)
 {
 	int	i;
 
-	for(i = 0; i < ARRAY_SIZE(poll_names); i++) {
-		if(poll & poll_names[i].value)
+	for (i = 0; i < ARRAY_SIZE(poll_names); i++) {
+		if (poll & poll_names[i].value)
 			DBG(GENERAL, "%s: %s\n", msg, poll_names[i].name);
 	}
 }
@@ -71,19 +71,19 @@ void alarm2str(int alarm, char *buf, int buflen)
 	int	i;
 	int	n;
 
-	if(!alarm) {
+	if (!alarm) {
 		snprintf(buf, buflen, "NONE");
 		return;
 	}
 	memset(buf, 0, buflen);
-	for(i = 0; i < 8; i++) {
-		if(left && (alarm & BIT(i))) {
+	for (i = 0; i < 8; i++) {
+		if (left && (alarm & BIT(i))) {
 			n = snprintf(p, left, "%s,", alarmbit2str(i));
 			p += n;
 			left -= n;
 		}
 	}
-	if(p > buf)	/* kill last comma */
+	if (p > buf)	/* kill last comma */
 		*(p - 1) = '\0';
 }
 

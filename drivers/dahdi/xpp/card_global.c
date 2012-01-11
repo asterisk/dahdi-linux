@@ -76,7 +76,7 @@ static int parse_hexbyte(const char *buf)
 	unsigned	val;
 
 	val = simple_strtoul(buf, &endp, 16);
-	if(*endp != '\0' || val > 0xFF)
+	if (*endp != '\0' || val > 0xFF)
 		return -EBADR;
 	return (byte)val;
 }
@@ -98,7 +98,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	int			ret = -EBADR;
 
 	num_args = 2;	/* port + operation */
-	if(argc < num_args) {
+	if (argc < num_args) {
 		XPD_ERR(xpd, "Not enough arguments (%d)\n", argc);
 		XPD_ERR(xpd,
 				"Any Command is composed of at least %d words (got only %d)\n",
@@ -107,24 +107,24 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	}
 	/* Process the arguments */
 	argno = 0;
-	if(strcmp(argv[argno], "*") == 0) {
+	if (strcmp(argv[argno], "*") == 0) {
 		portno = PORT_BROADCAST;
 		//XPD_DBG(REGS, xpd, "Port broadcast\n");
 	} else {
 		portno = parse_hexbyte(argv[argno]);
-		if(portno < 0 || portno >= 8) {
+		if (portno < 0 || portno >= 8) {
 			XPD_ERR(xpd, "Illegal port number '%s'\n", argv[argno]);
 			goto out;
 		}
 		//XPD_DBG(REGS, xpd, "Port is %d\n", portno);
 	}
 	argno++;
-	if(strlen(argv[argno]) != 2) {
+	if (strlen(argv[argno]) != 2) {
 		XPD_ERR(xpd, "Wrong operation codes '%s'\n", argv[argno]);
 		goto out;
 	}
 	op = argv[argno][0];
-	switch(op) {
+	switch (op) {
 		case 'W':
 			writing = 1;
 			num_args++;	/* data low */
@@ -139,7 +139,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			goto out;
 	}
 	addr_mode = argv[argno][1];
-	switch(addr_mode) {
+	switch (addr_mode) {
 		case 'I':
 			XPD_NOTICE(xpd, "'I' is deprecated in register commands. Use 'S' instead.\n");
 			/* fall through */
@@ -155,7 +155,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			break;
 		case 'M':
 		case 'm':
-			if(op != 'W') {
+			if (op != 'W') {
 				XPD_ERR(xpd,
 						"Can use Multibyte (%c) only with op 'W'\n", addr_mode);
 				goto out;
@@ -167,19 +167,19 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			XPD_ERR(xpd, "Unknown addressing type '%c'\n", addr_mode);
 			goto out;
 	}
-	if(argv[argno][2] != '\0') {
+	if (argv[argno][2] != '\0') {
 		XPD_ERR(xpd, "Bad operation field '%s'\n", argv[argno]);
 		goto out;
 	}
-	if(argc < num_args) {
+	if (argc < num_args) {
 		XPD_ERR(xpd,
 				"Command \"%s\" is composed of at least %d words (got only %d)\n",
 				argv[argno], num_args, argc);
 		goto out;
 	}
 	argno++;
-	if(addr_mode == 'M' || addr_mode == 'm') {
-		if(argno < argc) {
+	if (addr_mode == 'M' || addr_mode == 'm') {
+		if (argno < argc) {
 			XPD_ERR(xpd,
 					"Magic-Multibyte(%c) with %d extra arguments\n",
 					addr_mode, argc - argno);
@@ -191,24 +191,24 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	}
 	/* Normal (non-Magic) register commands */
 	do_datah = 0;
-	if(argno >= argc) {
+	if (argno >= argc) {
 		XPD_ERR(xpd, "Missing register number\n");
 		goto out;
 	}
 	regnum = parse_hexbyte(argv[argno]);
-	if(regnum < 0) {
+	if (regnum < 0) {
 		XPD_ERR(xpd, "Illegal register number '%s'\n", argv[argno]);
 		goto out;
 	}
 	//XPD_DBG(REGS, xpd, "Register is %X\n", regnum);
 	argno++;
-	if(do_subreg) {
-		if(argno >= argc) {
+	if (do_subreg) {
+		if (argno >= argc) {
 			XPD_ERR(xpd, "Missing subregister number\n");
 			goto out;
 		}
 		subreg = parse_hexbyte(argv[argno]);
-		if(subreg < 0) {
+		if (subreg < 0) {
 			XPD_ERR(xpd, "Illegal subregister number '%s'\n", argv[argno]);
 			goto out;
 		}
@@ -216,13 +216,13 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		argno++;
 	} else
 		subreg = 0;
-	if(writing) {
-		if(argno >= argc) {
+	if (writing) {
+		if (argno >= argc) {
 			XPD_ERR(xpd, "Missing data low number\n");
 			goto out;
 		}
 		data_low = parse_hexbyte(argv[argno]);
-		if(data_low < 0) {
+		if (data_low < 0) {
 			XPD_ERR(xpd, "Illegal data_low number '%s'\n", argv[argno]);
 			goto out;
 		}
@@ -230,14 +230,14 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		argno++;
 	} else
 		data_low = 0;
-	if(argno < argc) {
+	if (argno < argc) {
 		do_datah = 1;
-		if(!argv[argno]) {
+		if (!argv[argno]) {
 			XPD_ERR(xpd, "Missing data high number\n");
 			goto out;
 		}
 		data_high = parse_hexbyte(argv[argno]);
-		if(data_high < 0) {
+		if (data_high < 0) {
 			XPD_ERR(xpd, "Illegal data_high number '%s'\n", argv[argno]);
 			goto out;
 		}
@@ -245,7 +245,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		argno++;
 	} else
 		data_high = 0;
-	if(argno < argc) {
+	if (argno < argc) {
 		XPD_ERR(xpd,
 				"Command contains an extra %d argument\n",
 				argc - argno);
@@ -284,22 +284,22 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
-	if(!XBUS_FLAGS(xbus, CONNECTED)) {
+	if (!XBUS_FLAGS(xbus, CONNECTED)) {
 		XBUS_DBG(GENERAL, xbus, "Dropped packet. Disconnected.\n");
 		return -EBUSY;
 	}
 	strlcpy(buf, cmdline, MAX_PROC_WRITE);	/* Save a copy */
-	if(buf[0] == '#' || buf[0] == ';')
+	if (buf[0] == '#' || buf[0] == ';')
 		XPD_DBG(REGS, xpd, "Note: '%s'\n", buf);
-	if((p = strchr(buf, '#')) != NULL)	/* Truncate comments */
+	if ((p = strchr(buf, '#')) != NULL)	/* Truncate comments */
 		*p = '\0';
-	if((p = strchr(buf, ';')) != NULL)	/* Truncate comments */
+	if ((p = strchr(buf, ';')) != NULL)	/* Truncate comments */
 		*p = '\0';
-	for(p = buf; *p && (*p == ' ' || *p == '\t'); p++) /* Trim leading whitespace */
+	for (p = buf; *p && (*p == ' ' || *p == '\t'); p++) /* Trim leading whitespace */
 		;
 	str = p;
-	for(i = 0; (p = strsep(&str, " \t")) != NULL && i < MAX_ARGS; ) {
-		if(*p != '\0') {
+	for (i = 0; (p = strsep(&str, " \t")) != NULL && i < MAX_ARGS; ) {
+		if (*p != '\0') {
 			argv[i] = p;
 			// XPD_DBG(REGS, xpd, "ARG %d = '%s'\n", i, p);
 			i++;
@@ -307,11 +307,11 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 	}
 	argv[i] = NULL;
 	argc = i;
-	if(p) {
+	if (p) {
 		XPD_ERR(xpd, "Too many words (%d) to process. Last was '%s'\n", i, p);
 		goto out;
 	}
-	if(argc)
+	if (argc)
 		ret = execute_chip_command(xpd, argc, argv);
 	else
 		ret = 0;	/* empty command - no op */
@@ -332,7 +332,7 @@ static void global_packet_dump(const char *msg, xpacket_t *pack);
 	xframe_t	*xframe;
 	xpacket_t	*pack;
 
-	if(!xbus) {
+	if (!xbus) {
 		DBG(DEVICES, "NO XBUS\n");
 		return -EINVAL;
 	}
@@ -342,7 +342,7 @@ static void global_packet_dump(const char *msg, xpacket_t *pack);
 	RPACKET_FIELD(pack, GLOBAL, AB_REQUEST, rev) = XPP_PROTOCOL_VERSION;
 	RPACKET_FIELD(pack, GLOBAL, AB_REQUEST, reserved) = 0;
 	XBUS_DBG(DEVICES, xbus, "Protocol Version %d\n", XPP_PROTOCOL_VERSION);
-	if(xbus_setstate(xbus, XBUS_STATE_SENT_REQUEST))
+	if (xbus_setstate(xbus, XBUS_STATE_SENT_REQUEST))
 		ret = send_cmd_frame(xbus, xframe);
 	return ret;
 }
@@ -356,7 +356,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	xpacket_t	*pack;
 	reg_cmd_t	*reg_cmd;
 
-	if(!xbus) {
+	if (!xbus) {
 		DBG(REGS, "NO XBUS\n");
 		return -EINVAL;
 	}
@@ -368,7 +368,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
 	reg_cmd->bytes = sizeof(*reg_cmd) - 1;	// do not count the 'bytes' field
 	reg_cmd->is_multibyte = 0;
-	if(portno == PORT_BROADCAST) {
+	if (portno == PORT_BROADCAST) {
 		reg_cmd->portnum = 0;
 		REG_FIELD(reg_cmd, all_ports_broadcast) = 1;
 	} else {
@@ -384,14 +384,14 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	REG_FIELD(reg_cmd, do_datah) = do_datah;
 	REG_FIELD(reg_cmd, data_low) = data_low;
 	REG_FIELD(reg_cmd, data_high) = data_high;
-	if(should_reply)
+	if (should_reply)
 		xpd->requested_reply = *reg_cmd;
-	if(debug & DBG_REGS) {
+	if (debug & DBG_REGS) {
 		dump_reg_cmd("REG_REQ", 1, xbus, xpd->addr.unit, reg_cmd->portnum, reg_cmd);
 		dump_packet("REG_REQ", pack, 1);
 	}
-	if(!xframe->usec_towait) {	/* default processing time of SPI */
-		if(subreg)
+	if (!xframe->usec_towait) {	/* default processing time of SPI */
+		if (subreg)
 			xframe->usec_towait = 2000;
 		else
 			xframe->usec_towait = 1000;
@@ -410,7 +410,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	const char	*mode_name;
 
 	BUG_ON(!xbus);
-	if((mode_name = sync_mode_name(mode)) == NULL) {
+	if ((mode_name = sync_mode_name(mode)) == NULL) {
 		XBUS_ERR(xbus, "SYNC_SOURCE: bad sync_mode=0x%X\n", mode);
 		return -EINVAL;
 	}
@@ -460,25 +460,25 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)	/* 0x08 */
 	units = RPACKET_FIELD(pack, GLOBAL, AB_DESCRIPTION, unit_descriptor);
 	count_units = XPACKET_LEN(pack) - ((byte *)units - (byte *)pack);
 	count_units /= sizeof(*units);
-	if(rev != XPP_PROTOCOL_VERSION) {
+	if (rev != XPP_PROTOCOL_VERSION) {
 		XBUS_NOTICE(xbus, "Bad protocol version %d (should be %d)\n",
 			rev, XPP_PROTOCOL_VERSION);
 		ret = -EPROTO;
 		goto proto_err;
 	}
-	if(count_units > NUM_UNITS) {
+	if (count_units > NUM_UNITS) {
 		XBUS_NOTICE(xbus, "Too many units %d (should be %d)\n",
 			count_units, NUM_UNITS);
 		ret = -EPROTO;
 		goto proto_err;
 	}
-	if(count_units <= 0) {
+	if (count_units <= 0) {
 		XBUS_NOTICE(xbus, "Empty astribank? (%d units)\n",
 			count_units);
 		ret = -EPROTO;
 		goto proto_err;
 	}
-	if(!xbus_setstate(xbus, XBUS_STATE_RECVD_DESC)) {
+	if (!xbus_setstate(xbus, XBUS_STATE_RECVD_DESC)) {
 		ret = -EPROTO;
 		goto proto_err;
 	}
@@ -492,12 +492,12 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)	/* 0x08 */
 		ret = -ENODEV;
 		goto out;
 	}
-	for(i = 0; i < count_units; i++) {
+	for (i = 0; i < count_units; i++) {
 		struct unit_descriptor	*this_unit = &units[i];
 		struct card_desc_struct	*card_desc;
 		unsigned long		flags;
 
-		if((card_desc = KZALLOC(sizeof(struct card_desc_struct), GFP_ATOMIC)) == NULL) {
+		if ((card_desc = KZALLOC(sizeof(struct card_desc_struct), GFP_ATOMIC)) == NULL) {
 			XBUS_ERR(xbus, "Card description allocation failed.\n");
 			ret = -ENOMEM;
 			goto out;
@@ -541,14 +541,14 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 {
 	reg_cmd_t		*reg = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REPLY, regcmd);
 
-	if(!xpd) {
+	if (!xpd) {
 		static int	rate_limit;
 
-		if((rate_limit++ % 1003) < 5)
+		if ((rate_limit++ % 1003) < 5)
 			notify_bad_xpd(__func__, xbus, XPACKET_ADDR(pack), "");
 		return -EPROTO;
 	}
-	if(debug & DBG_REGS) {
+	if (debug & DBG_REGS) {
 		dump_reg_cmd("REG_REPLY", 0, xbus, xpd->addr.unit, reg->portnum, reg);
 		dump_packet("REG_REPLY", pack, 1);
 	}
@@ -566,7 +566,7 @@ HANDLER_DEF(GLOBAL, SYNC_REPLY)
 	const char	*mode_name;
 
 	BUG_ON(!xbus);
-	if((mode_name = sync_mode_name(mode)) == NULL) {
+	if ((mode_name = sync_mode_name(mode)) == NULL) {
 		XBUS_ERR(xbus, "SYNC_REPLY: bad sync_mode=0x%X\n", mode);
 		return -EINVAL;
 	}
@@ -586,11 +586,11 @@ HANDLER_DEF(GLOBAL, ERROR_CODE)
 	byte			errorbits;
 
 	BUG_ON(!xbus);
-	if((rate_limit++ % 5003) > 200)
+	if ((rate_limit++ % 5003) > 200)
 		return 0;
 	category_code = RPACKET_FIELD(pack, GLOBAL, ERROR_CODE, category_code);
 	errorbits = RPACKET_FIELD(pack, GLOBAL, ERROR_CODE, errorbits);
-	if(!xpd) {
+	if (!xpd) {
 		snprintf(tmp_name, TMP_NAME_LEN, "%s(%1d%1d)", xbus->busname,
 			XPACKET_ADDR_UNIT(pack), XPACKET_ADDR_SUBUNIT(pack));
 	} else {
@@ -673,20 +673,20 @@ int run_initialize_registers(xpd_t *xpd)
 
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
-	if(!initdir || !initdir[0]) {
+	if (!initdir || !initdir[0]) {
 		XPD_NOTICE(xpd, "Missing initdir parameter\n");
 		ret = -EINVAL;
 		goto err;
 	}
-	if(!xpd_setstate(xpd, XPD_STATE_INIT_REGS)) {
+	if (!xpd_setstate(xpd, XPD_STATE_INIT_REGS)) {
 		ret = -EINVAL;
 		goto err;
 	}
 	direction_mask = 0;
-	for(i = 0; i < xpd->subunits; i++) {
+	for (i = 0; i < xpd->subunits; i++) {
 		xpd_t	*su = xpd_byaddr(xbus, xpd->addr.unit, i);
 
-		if(!su) {
+		if (!su) {
 			XPD_ERR(xpd,
 				"Have %d subunits, but not subunit #%d\n",
 				xpd->subunits, i);
@@ -704,13 +704,13 @@ int run_initialize_registers(xpd_t *xpd)
 	snprintf(revstr, MAX_ENV_STR, "XBUS_REVISION=%d", xbus->revision);
 	snprintf(connectorstr, MAX_ENV_STR, "XBUS_CONNECTOR=%s", xbus->connector);
 	snprintf(xbuslabel, MAX_ENV_STR, "XBUS_LABEL=%s", xbus->label);
-	if(snprintf(init_card, MAX_PATH_STR, "%s/init_card_%d_%d",
+	if (snprintf(init_card, MAX_PATH_STR, "%s/init_card_%d_%d",
 				initdir, xpd->type, xbus->revision) > MAX_PATH_STR) {
 		XPD_NOTICE(xpd, "Cannot initialize. pathname is longer than %d characters.\n", MAX_PATH_STR);
 		ret = -E2BIG;
 		goto err;
 	}
-	if(!XBUS_IS(xbus, RECVD_DESC)) {
+	if (!XBUS_IS(xbus, RECVD_DESC)) {
 		XBUS_ERR(xbus, "Skipped register initialization. In state %s.\n",
 			xbus_statename(XBUS_STATE(xbus)));
 		ret = -ENODEV;
@@ -722,15 +722,15 @@ int run_initialize_registers(xpd_t *xpd)
 	/*
 	 * Carefully report results
 	 */
-	if(ret == 0)
+	if (ret == 0)
 		XPD_DBG(DEVICES, xpd, "'%s' finished OK\n", init_card);
-	else if(ret < 0) {
+	else if (ret < 0) {
 		XPD_ERR(xpd, "Failed running '%s' (errno %d)\n", init_card, ret);
 	} else {
 		byte	exitval = ((unsigned)ret >> 8) & 0xFF;
 		byte	sigval = ret & 0xFF;
 
-		if(!exitval) {
+		if (!exitval) {
 			XPD_ERR(xpd, "'%s' killed by signal %d\n", init_card, sigval);
 		} else {
 			XPD_ERR(xpd, "'%s' aborted with exitval %d\n", init_card, exitval);
