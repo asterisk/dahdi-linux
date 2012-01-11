@@ -258,20 +258,25 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		goto out;
 	}
 #if 0
-	XPD_DBG(REGS, xpd, "portno=%d writing=%d regnum=%d do_subreg=%d subreg=%d dataL=%d do_datah=%d dataH=%d\n", portno,	/* portno       */
-		writing,	/* writing      */
-		regnum, do_subreg,	/* use subreg   */
-		subreg,		/* subreg       */
-		data_low, do_datah,	/* use data_high */
+	XPD_DBG(REGS, xpd,
+		"portno=%d writing=%d regnum=%d do_subreg=%d subreg=%d dataL=%d do_datah=%d dataH=%d\n",
+		portno,		/* portno	*/
+		writing,	/* writing	*/
+		regnum,
+		do_subreg,	/* use subreg	*/
+		subreg,	/* subreg	*/
+		data_low,
+		do_datah,	/* use data_high*/
 		data_high);
 #endif
-	ret =
-	    xpp_register_request(xpd->xbus, xpd, portno, writing, regnum,
-				 do_subreg, subreg, data_low, do_datah,
-				 data_high, 1);
+	ret = xpp_register_request(xpd->xbus, xpd, portno,
+		writing, regnum, do_subreg, subreg,
+		data_low, do_datah, data_high, 1);
 out:
 	return ret;
 }
+
+#define	MAX_ARGS	10
 
 int parse_chip_command(xpd_t *xpd, char *cmdline)
 {
@@ -280,7 +285,6 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 	__u8 buf[MAX_PROC_WRITE];
 	char *str;
 	char *p;
-	static const int MAX_ARGS = 10;
 	char *argv[MAX_ARGS + 1];
 	int argc;
 	int i;

@@ -1315,7 +1315,7 @@ static int BRI_timing_priority(xpd_t *xpd)
 	return -ENOENT;
 }
 
-int BRI_echocancel_timeslot(xpd_t *xpd, int pos)
+static int BRI_echocancel_timeslot(xpd_t *xpd, int pos)
 {
 	return xpd->addr.subunit * 4 + pos;
 }

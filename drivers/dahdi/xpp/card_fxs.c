@@ -27,7 +27,7 @@
 #include "xpd.h"
 #include "xproto.h"
 #include "xpp_dahdi.h"
-#include "card_fxo.h"
+#include "card_fxs.h"
 #include "dahdi_debug.h"
 #include "xbus-core.h"
 
@@ -1221,10 +1221,11 @@ static void detect_vmwi(xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	ignore_mask =
-	    PHONEDEV(xpd).offhook_state | ~(PHONEDEV(xpd).
-					    oht_pcm_pass) | ~(priv->
-							      search_fsk_pattern)
-	    | PHONEDEV(xpd).digital_inputs | PHONEDEV(xpd).digital_outputs;
+		PHONEDEV(xpd).offhook_state |
+		~(PHONEDEV(xpd).oht_pcm_pass) |
+		~(priv->search_fsk_pattern) |
+		PHONEDEV(xpd).digital_inputs |
+		PHONEDEV(xpd).digital_outputs;
 	for_each_line(xpd, i) {
 		struct dahdi_chan *chan = XPD_CHAN(xpd, i);
 		__u8 *writechunk = chan->writechunk;
@@ -1235,7 +1236,7 @@ static void detect_vmwi(xpd_t *xpd)
 		if (writechunk[0] != 0x7F && writechunk[0] != 0) {
 			int j;
 
-			LINE_DBG(GENERAL, xpd, pos, "MSG:");
+			LINE_DBG(GENERAL, xpd, i, "MSG:");
 			for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
 				if (debug)
 					printk(" %02X", writechunk[j]);
