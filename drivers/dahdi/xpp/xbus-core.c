@@ -260,8 +260,8 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 
 	newlen += len;
 #if 0
-	DBG(GENERAL, "len=%d, newlen=%d,
-		frm->frame_len=%d\n", len, newlen, XFRAME_LEN(frm));
+	DBG(GENERAL, "len=%d, newlen=%d, frm->frame_len=%d\n",
+			len, newlen, XFRAME_LEN(frm));
 #endif
 	if (newlen > XFRAME_DATASIZE) {
 		return NULL;
