@@ -706,7 +706,7 @@ static void handle_fxo_power_denial(xpd_t *xpd)
  *   - The chan_dahdi.conf should have cidstart=polarity
  *   - Based on an idea in http://bugs.digium.com/view.php?id=9096
  */
-static void check_etsi_dtmf(xpd_t *xpd) 
+static void check_etsi_dtmf(xpd_t *xpd)
 {
 	struct FXO_priv_data	*priv;
 	int			portno;

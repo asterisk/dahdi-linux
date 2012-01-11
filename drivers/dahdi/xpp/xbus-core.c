@@ -269,7 +269,7 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, i
 	int 		num = 1;
 	bool		do_print;
 	unsigned long	flags;
-	
+
 	if(xframe->xframe_magic != XFRAME_MAGIC) {
 		XBUS_ERR(xbus, "%s: bad xframe_magic %lX\n",
 			__FUNCTION__, xframe->xframe_magic);
@@ -372,7 +372,7 @@ int send_pcm_frame(xbus_t *xbus, xframe_t *xframe)
 		XBUS_COUNTER(xbus, TX_BYTES) += XFRAME_LEN(xframe);
 	return ret;
 
-error:	
+error:
 	FREE_SEND_XFRAME(xbus, xframe);
 	return ret;
 }
@@ -1468,7 +1468,7 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size, struct device *tran
 	atomic_set(&xbus->pcm_rx_counter, 0);
 	xbus->min_tx_sync = INT_MAX;
 	xbus->min_rx_sync = INT_MAX;
-	
+
 	kref_init(&xbus->kref);
 	worker_init(xbus);
 	atomic_set(&xbus->num_xpds, 0);

@@ -173,7 +173,7 @@ typedef	struct xusb	xusb_t;
 
 /*
  * A uframe is our low level representation of a frame.
- * 
+ *
  * It contains the metadata for the usb stack (a urb)
  * and the metadata for the xbus-core (an xframe)
  * as well as pointing to the data (transfer_buffer, transfer_buffer_length)
@@ -309,7 +309,7 @@ static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 				"abort allocations during device disconnect (%d)\n", rate_limit);
 		return NULL;
 	}
-	size = min(xusb->endpoints[XUSB_SEND].max_size, xusb->endpoints[XUSB_RECV].max_size); 
+	size = min(xusb->endpoints[XUSB_SEND].max_size, xusb->endpoints[XUSB_RECV].max_size);
 	uframe = kmem_cache_alloc(xusb_cache, gfp_flags);
 	if(!uframe) {
 		if((rate_limit++ % 1003) == 0)
@@ -542,7 +542,7 @@ static struct file_operations xusb_fops = {
 	.owner =	THIS_MODULE,
 };
 
-/* 
+/*
  * usb class driver info in order to get a minor number from the usb core,
  * and to have the device registered with devfs and the driver core
  */
@@ -558,7 +558,7 @@ static struct usb_class_driver xusb_class = {
 
 /*
  * Check that an endpoint's wMaxPacketSize attribute is 512. This
- * indicates that it is a USB2's high speed end point. 
+ * indicates that it is a USB2's high speed end point.
  *
  * If it is 64, it means we have a USB1 controller. By default we do not
  * support it and just fail the probe of the device. However if the user
@@ -574,11 +574,11 @@ static int check_usb1(struct usb_endpoint_descriptor *endpoint)
 		return 1;
 
 	if(usb1) {
-		NOTICE("USB1 endpoint detected: USB %s endpoint 0x%X support only wMaxPacketSize=%d.\n", 
+		NOTICE("USB1 endpoint detected: USB %s endpoint 0x%X support only wMaxPacketSize=%d.\n",
 				msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
 		return 1;
 	}
-	NOTICE("USB1 endpoint detected. Device disabled. To enable: usb1=1, and read docs. (%s, endpoint %d, size %d).\n", 
+	NOTICE("USB1 endpoint detected. Device disabled. To enable: usb1=1, and read docs. (%s, endpoint %d, size %d).\n",
 			msg, endpoint->bEndpointAddress, endpoint->wMaxPacketSize);
 	return 0;
 }
@@ -600,7 +600,7 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc, st
 	for (i = 0; i < iface_desc->desc.bNumEndpoints; ++i) {
 		endpoint = &iface_desc->endpoint[i].desc;
 		ep_addr = endpoint->bEndpointAddress;
-		
+
 		if(!BULK_ENDPOINT(endpoint)) {
 			DBG(DEVICES, "endpoint 0x%x is not bulk: mbAttributes=0x%X\n",
 					ep_addr, endpoint->bmAttributes);
@@ -664,7 +664,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	unsigned long		flags;
 	int			retval = -ENOMEM;
 	int			i;
-	
+
 	DBG(DEVICES, "New XUSB device MODEL=%s\n", model_info->desc);
 	if(iface_desc->desc.bInterfaceNumber != model_info->iface_num) {
 		DBG(DEVICES, "Skip interface #%d != #%d\n",
@@ -676,7 +676,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 		goto probe_failed;
 	}
 	if (!model_info) {
-		ERR("Missing endpoint setup for this device %d:%d\n", 
+		ERR("Missing endpoint setup for this device %d:%d\n",
 				udev->descriptor.idVendor,udev->descriptor.idProduct);
 		retval = -ENODEV;
 		goto probe_failed;
@@ -996,7 +996,7 @@ static int __init xpp_usb_init(void)
 			0, 0,
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-			NULL, 
+			NULL,
 #endif
 			NULL);
 	if(!xusb_cache) {

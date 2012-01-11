@@ -102,11 +102,11 @@ typedef unsigned char		byte;
 #ifdef __KERNEL__
 
 /* Kernel versions... */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20) 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define	KMEM_CACHE_T	kmem_cache_t
-#else 
+#else
 #define	KMEM_CACHE_T	struct kmem_cache
-#endif 
+#endif
 
 #define	KZALLOC(size, gfp)	my_kzalloc(size, gfp)
 #define	KZFREE(p)		do {					\
@@ -145,7 +145,7 @@ typedef unsigned char		byte;
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-/* Also don't define this for later RHEL >= 5.2 . hex_asc is from the 
+/* Also don't define this for later RHEL >= 5.2 . hex_asc is from the
  * same linux-2.6-net-infrastructure-updates-to-mac80211-iwl4965.patch
  * as is the bool typedef. */
 #if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)  || !  defined(hex_asc)

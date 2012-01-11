@@ -33,7 +33,7 @@ typedef char sizeof_xframe_t_should_be_divisible_by_4[((sizeof(xframe_t) % 4) ==
 
 #ifdef	DEBUG_VIA_GPIO
 /*
- * For debugging we can use the following two pins. 
+ * For debugging we can use the following two pins.
  * These two pins are not used *after initialization*
  */
 #define	DEBUG_GPIO1	CONF_DONE
@@ -51,7 +51,7 @@ static int	rx_intr_counter;
 #define START_RD_BURST	0x0008
 #define AS_BF_MODE	0x0010 //stand alone Astribank without USB (Asterisk BlackFin Mode)
 #define EC_BF_MODE	0x0020 //all data between Astribank and USB routed thru BF(EchoCanceler BlackFin Mode)
-#define NO_BF_MODE	0x0040 //Astribank worke with USB only (no BlackFin Mode) 
+#define NO_BF_MODE	0x0040 //Astribank worke with USB only (no BlackFin Mode)
 #define SET_XA_DIR	0x0080
 #define GET_XPD_STS	0x0100
 #define GET_CHECKSUM	0x0200
@@ -159,7 +159,7 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 		buf[count+1] = v >> 8;
 	}
 #endif
-	if (rxcnt & 1) 
+	if (rxcnt & 1)
 		buf[rxcnt-1] = inw(FPGA_BASE_ADDR);
 	/* Sanity check: length of first packet in frame should be no more than the frame length */
 	if (((buf[0] | (buf[1]<<8)) & 0x3FF) > rxcnt) {
@@ -466,7 +466,7 @@ static int __init xpp_mmap_load_fpga(u8 *data, size_t size)
 static void __exit xpp_mmap_unload_fpga(void)
 {
         bfin_write_PORTGIO_CLEAR(NCONFIG);       //reset fpga during configuration holds nCONFIG low
-	udelay(40);                            //Tcfg ~40us delay	
+	udelay(40);                            //Tcfg ~40us delay
 	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~( DATA | NCONFIG | DCLK));	//disable output pin
 	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~( CONF_DONE | NSTATUS));//disable input buffer
 	INFO("FPGA Firmware unloaded\n");
@@ -498,7 +498,7 @@ static int __init xpp_mmap_init(void)
 		ERR("xpp_mmap_load_firmware() failed, errno=%d\n", ret);
 		goto fail_fw;
 	}
-	
+
 	if ((ret = request_irq(FPGA_RX_IRQ, xpp_mmap_rx_irq, IRQF_TRIGGER_RISING, "xpp_mmap_rx", NULL)) < 0) {
 		ERR("Unable to attach to RX interrupt %d\n", FPGA_RX_IRQ);
 		goto fail_irq_rx;
@@ -511,13 +511,13 @@ static int __init xpp_mmap_init(void)
 		ERR("Unable to request memory region at %p\n", FPGA_BASE_ADDR);
 		goto fail_region;
 	}
-	outw(AS_BF_MODE, FPGA_BASE_ADDR + 4);	
+	outw(AS_BF_MODE, FPGA_BASE_ADDR + 4);
 
 	xframe_cache = kmem_cache_create("xframe_cache",
 			sizeof(xframe_t) + XFRAME_DATASIZE,
 			0, 0,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
-			NULL, 
+			NULL,
 #endif
 			NULL);
 	if(!xframe_cache) {
@@ -532,7 +532,7 @@ static int __init xpp_mmap_init(void)
 	}
 	strncpy(global_xbus->connector, "mmap", XBUS_DESCLEN);
 	strncpy(global_xbus->label, "mmap:0", LABEL_SIZE);
-	
+
 	xframe_queue_init(&txpool, 10, 200, "mmap_txpool", global_xbus);
 	if (!(proc_entry = create_proc_entry("xpp_mmap", 0, global_xbus->proc_xbus_dir))) {
 		ERR("create_proc_entry() failed\n");

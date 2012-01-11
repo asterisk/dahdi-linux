@@ -824,7 +824,7 @@ int xpp_maint(struct dahdi_span *span, int cmd)
 			ret = -EINVAL;
 			break;
 	}
-	if (span->mainttimer || span->maintstat) 
+	if (span->mainttimer || span->maintstat)
 		update_xpd_status(xpd, DAHDI_ALARM_LOOPBACK);
 	return ret;
 }

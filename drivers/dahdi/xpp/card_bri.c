@@ -483,7 +483,7 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 		goto out;
 	if((ret = bri_check_stat(xpd, dchan, src, len)) < 0)
 		goto out;
-	/* 
+	/*
 	 * Tell Dahdi that we received len-1 bytes. They include the data and a 2-byte checksum.
 	 * The last byte (that we don't pass on) is 0 if the checksum is correct. If it were wrong,
 	 * we would drop the packet in the "if(src[len-1])" above.
@@ -747,7 +747,7 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	xbus_t			*xbus;
 	struct BRI_priv_data	*priv;
 	int			i;
-	
+
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
 	priv = xpd->priv;
@@ -787,7 +787,7 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 static int BRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
 {
 	xbus_t			*xbus;
-	
+
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
 	BUG_ON(!xbus);
@@ -1502,7 +1502,7 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			priv->dchan_rx_drops++;
 			if(atomic_read(&PHONEDEV(xpd).open_counter) > 0)
 				XPD_NOTICE(xpd, "Multibyte Drop: errno=%d\n", ret);
-		} 
+		}
 		goto end;
 	}
 	if(REG_FIELD(info, regnum) == A_SU_RD_STA) {
@@ -1516,7 +1516,7 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
-	
+
 end:
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	return 0;

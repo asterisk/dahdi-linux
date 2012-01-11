@@ -629,7 +629,7 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16, 0x00, 0x00);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15, 0x77, 0x01);
 		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x14, 0xFD, 0x7E);
- 
+
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x22, 0x00);
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x30, 0x00);
 		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x31, 0x00);
@@ -875,7 +875,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 			pos, __FUNCTION__, cmd);
 		return -EINVAL;
 	}
-	
+
 	switch (cmd) {
 		case DAHDI_ONHOOKTRANSFER:
 			if (get_user(val, (int __user *)arg))

@@ -688,7 +688,7 @@ static void set_clocking(xpd_t *xpd)
 	for(i = 0; i < MAX_SLAVES; i++) {
 		struct PRI_priv_data	*priv;
 		xpd_t			*subxpd;
-		
+
 		subxpd = xpd_byaddr(xbus, xpd->addr.unit, i);
 		if(!subxpd)
 			continue;
@@ -1271,7 +1271,7 @@ static int apply_pri_protocol(xpd_t *xpd)
 	xbus_t			*xbus;
 	struct PRI_priv_data	*priv;
 	int			i;
-	
+
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
 	priv = xpd->priv;
@@ -1328,7 +1328,7 @@ static int PRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 static int PRI_card_dahdi_postregistration(xpd_t *xpd, bool on)
 {
 	xbus_t			*xbus;
-	
+
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
 	BUG_ON(!xbus);
@@ -1686,7 +1686,7 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 	}
 	if (chan->sig == DAHDI_SIG_NONE) {
 		LINE_DBG(SIGNAL, xpd, pos,
-				"RBS: TX: sigtyp=%s. , bits=0x%X. Ignore.\n", 
+				"RBS: TX: sigtyp=%s. , bits=0x%X. Ignore.\n",
 				sig2str(chan->sig), bits);
 		return 0;
 	}
@@ -1710,7 +1710,7 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 /*! Copy PCM chunks from the buffers of the xpd to a new packet
  * \param xbus	xbus of source xpd.
  * \param xpd	source xpd.
- * \param lines	a bitmask of the active channels that need to be copied. 
+ * \param lines	a bitmask of the active channels that need to be copied.
  * \param pack	packet to be filled.
  *
  * On PRI this function is should also shift the lines mask one bit, as
@@ -1787,7 +1787,7 @@ static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
  * \param pack	Source packet.
  *
  * On PRI this function is should also shift the lines back mask one bit, as
- * channel 0 on the wire is an internal chip control channel. 
+ * channel 0 on the wire is an internal chip control channel.
  *
  * \see PRI_card_pcm_fromspan
  */
@@ -2178,7 +2178,7 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info, subreg)) {
 		xpd->last_reply = *info;
 	}
-	
+
 end:
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	return 0;

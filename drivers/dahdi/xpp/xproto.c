@@ -155,7 +155,7 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 	/*-------- Validations -----------*/
 	if(!xe) {
 		const xproto_table_t *xtable;
-		
+
 		if(!xpd) {
 			if(printk_ratelimit()) {
 				XBUS_NOTICE(xbus, "%s: from %d%d opcode=0x%02X: no such global command.\n",
@@ -379,23 +379,23 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 	action = (REG_FIELD(regcmd, read_request)) ? 'R' : 'W';
 	modifier = 'D';
 	if(REG_FIELD(regcmd, do_subreg)) {
-		snprintf(reg_buf, MAX_PROC_WRITE, "%02X %02X", 
+		snprintf(reg_buf, MAX_PROC_WRITE, "%02X %02X",
 			REG_FIELD(regcmd, regnum),
 			REG_FIELD(regcmd, subreg));
 		modifier = 'S';
 	} else {
-		snprintf(reg_buf, MAX_PROC_WRITE, "%02X", 
+		snprintf(reg_buf, MAX_PROC_WRITE, "%02X",
 			REG_FIELD(regcmd, regnum));
 	}
 	if(REG_FIELD(regcmd, read_request)) {
 		data_buf[0] = '\0';
 	} else if(REG_FIELD(regcmd, do_datah)) {
-		snprintf(data_buf, MAX_PROC_WRITE, "%02X %02X", 
+		snprintf(data_buf, MAX_PROC_WRITE, "%02X %02X",
 			REG_FIELD(regcmd, data_low),
 			REG_FIELD(regcmd, data_high));
 		modifier = 'I';
 	} else {
-		snprintf(data_buf, MAX_PROC_WRITE, "%02X", 
+		snprintf(data_buf, MAX_PROC_WRITE, "%02X",
 			REG_FIELD(regcmd, data_low));
 	}
 	PORT_DBG(REGS, xbus, unit, port, "%s: %s %c%c %s %s\n",
@@ -432,7 +432,7 @@ int xproto_register(const xproto_table_t *proto_table)
 	const char		*name;
 	const struct xops	*xops;
 	const struct phoneops	*phoneops;
-	
+
 	BUG_ON(!proto_table);
 	type = proto_table->type;
 	name = proto_table->name;
@@ -471,7 +471,7 @@ void xproto_unregister(const xproto_table_t *proto_table)
 {
 	int		type;
 	const char	*name;
-	
+
 	BUG_ON(!proto_table);
 	type = proto_table->type;
 	name = proto_table->name;

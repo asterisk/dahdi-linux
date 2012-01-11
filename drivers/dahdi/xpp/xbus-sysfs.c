@@ -188,7 +188,7 @@ static DEVICE_ATTR_WRITER(cls_store, dev, buf, count)
 	xbus->max_rx_sync = 0;
 #ifdef	SAMPLE_TICKS
 	memset(xbus->sample_ticks, 0, sizeof(*xbus->sample_ticks));
-#endif 
+#endif
 	return count;
 }
 
@@ -788,7 +788,7 @@ int xpd_device_register(xbus_t *xbus, xpd_t *xpd)
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
 	dev->bus = &xpd_type;
 	dev->parent = &xbus->astribank;
-	dev_set_name(dev, "%02d:%1x:%1x", xbus->num, xpd->addr.unit, 
+	dev_set_name(dev, "%02d:%1x:%1x", xbus->num, xpd->addr.unit,
 			xpd->addr.subunit);
 	dev_set_drvdata(dev, xpd);
 	dev->release = xpd_release;

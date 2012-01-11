@@ -230,7 +230,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 			sample_tick(xbus, usec_delta);
 			if ((ticker->count % SYNC_CYCLE) > (SYNC_CYCLE - SYNC_CYCLE_SAMPLE))
 				di->delta_sum  += usec_delta;
-					
+
 			if((ticker->count % SYNC_CYCLE) == 0) {
 				/*
 				 * Full sampling cycle passed. Let's calculate
@@ -247,10 +247,10 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 					speed = best_speed + 1;
 				} else {
 					if (offset > 0) {
-						if (offset > offset_prev) 
+						if (offset > offset_prev)
 							fix--;
 					} else {
-						if (offset < offset_prev) 
+						if (offset < offset_prev)
 							fix++;
 					}
 					speed += fix;
@@ -270,7 +270,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 
 				XBUS_DBG(SYNC, xbus, "offset: %d, min_speed=%d, max_speed=%d, usec_delta(last)=%ld\n",
 					 offset_prev, di->min_speed, di->max_speed, usec_delta);
-				XBUS_DBG(SYNC, xbus, "ADJ: speed=%d (best_speed=%d) fix=%d\n", 
+				XBUS_DBG(SYNC, xbus, "ADJ: speed=%d (best_speed=%d) fix=%d\n",
 					speed, best_speed, fix);
 				xbus->sync_adjustment_offset = speed;
 				if(xbus != syncer && xbus->sync_adjustment != speed)
@@ -758,7 +758,7 @@ static void do_ec(xpd_t *xpd)
 /* Okay, now we get to the signalling.  You have several options: */
 
 /* Option 1: If you're a T1 like interface, you can just provide a
-   rbsbits function and we'll assert robbed bits for you.  Be sure to 
+   rbsbits function and we'll assert robbed bits for you.  Be sure to
    set the DAHDI_FLAG_RBS in this case.  */
 
 /* Opt: If the span uses A/B bits, set them here */
@@ -1050,7 +1050,7 @@ static void xbus_tick(xbus_t *xbus)
 #ifdef	OPTIMIZE_CHANMUTE
 			int		j;
 			xpp_line_t	xmit_mask = PHONEDEV(xpd).wanted_pcm_mask;
-			
+
 			xmit_mask |= PHONEDEV(xpd).silence_pcm;
 			xmit_mask |= PHONEDEV(xpd).digital_signalling;
 			for_each_line(xpd, j) {

@@ -104,7 +104,7 @@ static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 	--q->count;
 	frm = list_entry(h, xframe_t, frame_list);
 	do_gettimeofday(&now);
-	usec_lag =	
+	usec_lag =
 		(now.tv_sec - frm->tv_queued.tv_sec)*1000*1000 +
 		(now.tv_usec - frm->tv_queued.tv_usec);
 	if(q->worst_lag_usec < usec_lag)
