@@ -121,13 +121,13 @@ static const char *xhfc_state_name(bool is_nt, enum xhfc_states state)
 #define	A_SU_RD_STA		0x30
 typedef union {
 	struct {
-		byte	v_su_sta:4;
-		byte	v_su_fr_sync:1;
-		byte	v_su_t2_exp:1;
-		byte	v_su_info0:1;
-		byte	v_g2_g3:1;
+		__u8	v_su_sta:4;
+		__u8	v_su_fr_sync:1;
+		__u8	v_su_t2_exp:1;
+		__u8	v_su_info0:1;
+		__u8	v_g2_g3:1;
 	} bits;
-	byte	reg;
+	__u8	reg;
 } su_rd_sta_t;
 
 #define	REG30_LOST	3	/* in polls */
@@ -145,7 +145,7 @@ typedef union {
 
 /*---------------- BRI Protocol Commands ----------------------------------*/
 
-static int write_state_register(xpd_t *xpd, byte value);
+static int write_state_register(xpd_t *xpd, __u8 value);
 static bool bri_packet_is_valid(xpacket_t *pack);
 static void bri_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef	CONFIG_PROC_FS
@@ -182,9 +182,9 @@ enum bri_led_names {
 
 
 struct bri_leds {
-	byte	state:2;
-	byte	led_sel:1;	/* 0 - GREEN, 1 - RED */
-	byte	reserved:5;
+	__u8	state:2;
+	__u8	led_sel:1;	/* 0 - GREEN, 1 - RED */
+	__u8	reserved:5;
 };
 
 #ifndef MAX_DFRAME_LEN_L1
@@ -235,7 +235,7 @@ static /* 0x33 */ DECLARE_CMD(BRI, SET_LED, enum bri_led_names which_led, enum l
 			CALL_PROTO(BRI, SET_LED, (xpd)->xbus, (xpd), (which), (tostate))
 
 #define DEBUG_BUF_SIZE (100)
-static void dump_hex_buf(xpd_t *xpd, char *msg, byte *buf, size_t len)
+static void dump_hex_buf(xpd_t *xpd, char *msg, __u8 *buf, size_t len)
 {
 	char	debug_buf[DEBUG_BUF_SIZE + 1];
 	int	i;
@@ -248,7 +248,7 @@ static void dump_hex_buf(xpd_t *xpd, char *msg, byte *buf, size_t len)
 			(n >= DEBUG_BUF_SIZE)?"...":"");
 }
 
-static void dump_dchan_packet(xpd_t *xpd, bool transmit, byte *buf, int len)
+static void dump_dchan_packet(xpd_t *xpd, bool transmit, __u8 *buf, int len)
 {
 	struct BRI_priv_data	*priv;
 	char	msgbuf[MAX_PROC_WRITE];
@@ -329,7 +329,7 @@ static void layer1_state(xpd_t *xpd, bool up)
 static void te_activation(xpd_t *xpd, bool on)
 {
 	struct BRI_priv_data	*priv;
-	byte			curr_state;
+	__u8			curr_state;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
@@ -372,7 +372,7 @@ static void te_activation(xpd_t *xpd, bool on)
 static void nt_activation(xpd_t *xpd, bool on)
 {
 	struct BRI_priv_data	*priv;
-	byte			curr_state;
+	__u8			curr_state;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
@@ -421,10 +421,10 @@ static void nt_activation(xpd_t *xpd, bool on)
 /*
  * D-Chan receive
  */
-static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int len)
+static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, __u8 *buf, int len)
 {
 	struct BRI_priv_data	*priv;
-	byte			status;
+	__u8			status;
 
 	priv = xpd->priv;
 	BUG_ON(!priv);
@@ -453,7 +453,7 @@ static int bri_check_stat(xpd_t *xpd, struct dahdi_chan *dchan, byte *buf, int l
 static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 {
 	struct BRI_priv_data	*priv;
-	byte			*src;
+	__u8			*src;
 	struct dahdi_chan	*dchan;
 	uint			len;
 	bool			eoframe;
@@ -673,7 +673,7 @@ static int bri_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *BRI_card_new(xbus_t *xbus, int unit, int subunit, const xproto_table_t *proto_table,
-	byte subtype, int subunits, int subunit_ports, bool to_phone)
+	__u8 subtype, int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t		*xpd = NULL;
 	int		channels = min(3, CHANNELS_PERXPD);
@@ -1191,7 +1191,7 @@ static void BRI_card_pcm_recompute(xpd_t *xpd,
 
 static void BRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
-	byte		*pcm;
+	__u8		*pcm;
 	unsigned long	flags;
 	int		i;
 	int		subunit;
@@ -1237,7 +1237,7 @@ static void BRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 
 static void BRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
-	byte		*pcm;
+	__u8		*pcm;
 	xpp_line_t	pcm_mask;
 	unsigned long	flags;
 	int		subunit;
@@ -1343,7 +1343,7 @@ static /* 0x33 */ HOSTCMD(BRI, SET_LED, enum bri_led_names which_led, enum led_s
 	return ret;
 }
 
-static int write_state_register(xpd_t *xpd, byte value)
+static int write_state_register(xpd_t *xpd, __u8 value)
 {
 	int	ret;
 
@@ -1363,7 +1363,7 @@ static int write_state_register(xpd_t *xpd, byte value)
 }
 
 /*---------------- BRI: Astribank Reply Handlers --------------------------*/
-static void su_new_state(xpd_t *xpd, byte reg_x30)
+static void su_new_state(xpd_t *xpd, __u8 reg_x30)
 {
 	struct BRI_priv_data	*priv;
 	su_rd_sta_t		new_state;

@@ -224,7 +224,7 @@ static const int	led_register_vals[] = {	BIT(4),	BIT(1),	BIT(0) };
  *	- A line number
  *	- ALL_LINES. This is not valid anymore since 8-Jan-2007.
  */
-static int do_led(xpd_t *xpd, lineno_t chan, byte which, bool on)
+static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 {
 	int			ret = 0;
 	struct FXS_priv_data	*priv;
@@ -314,7 +314,7 @@ static void restore_leds(xpd_t *xpd)
 #ifdef	WITH_METERING
 static int metering_gen(xpd_t *xpd, lineno_t chan, bool on)
 {
-	byte	value = (on) ? 0x94 : 0x00;
+	__u8	value = (on) ? 0x94 : 0x00;
 
 	LINE_DBG(SIGNAL, xpd, chan, "METERING Generate: %s\n", (on)?"ON":"OFF");
 	return SLIC_DIRECT_REQUEST(xpd->xbus, xpd, chan, SLIC_WRITE, 0x23, value);
@@ -380,7 +380,7 @@ static int fxs_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit, const xproto_table_t *proto_table,
-	byte subtype, int subunits, int subunit_ports, bool to_phone)
+	__u8 subtype, int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t			*xpd = NULL;
 	int			channels;
@@ -1052,7 +1052,7 @@ static void poll_inputs(xpd_t *xpd)
 
 	BUG_ON(xpd->xbus_idx != 0);	// Only unit #0 has digital inputs
 	for (i = 0; i < ARRAY_SIZE(input_channels); i++) {
-		byte	pos = input_channels[i];
+		__u8	pos = input_channels[i];
 
 		SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_READ, 0x06, 0);
 	}
@@ -1112,9 +1112,9 @@ static void detect_vmwi(xpd_t *xpd)
 {
 	struct FXS_priv_data	*priv;
 	xbus_t			*xbus;
-	static const byte	FSK_COMMON_PATTERN[] = { 0xA8, 0x49, 0x22, 0x3B, 0x9F, 0xFF, 0x1F, 0xBB };
-	static const byte	FSK_ON_PATTERN[] = { 0xA2, 0x2C, 0x1F, 0x2C, 0xBB, 0xA1, 0xA5, 0xFF };
-	static const byte	FSK_OFF_PATTERN[] = { 0xA2, 0x2C, 0x28, 0xA5, 0xB1, 0x21, 0x49, 0x9F };
+	static const __u8	FSK_COMMON_PATTERN[] = { 0xA8, 0x49, 0x22, 0x3B, 0x9F, 0xFF, 0x1F, 0xBB };
+	static const __u8	FSK_ON_PATTERN[] = { 0xA2, 0x2C, 0x1F, 0x2C, 0xBB, 0xA1, 0xA5, 0xFF };
+	static const __u8	FSK_OFF_PATTERN[] = { 0xA2, 0x2C, 0x28, 0xA5, 0xB1, 0x21, 0x49, 0x9F };
 	int			i;
 	xpp_line_t		ignore_mask;
 
@@ -1130,7 +1130,7 @@ static void detect_vmwi(xpd_t *xpd)
 		PHONEDEV(xpd).digital_outputs;
 	for_each_line(xpd, i) {
 		struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
-		byte		*writechunk = chan->writechunk;
+		__u8		*writechunk = chan->writechunk;
 
 		if (IS_SET(ignore_mask, i))
 			continue;
@@ -1331,9 +1331,9 @@ static const char dtmf_digits[] = {
 /*
  * This function is called with spinlocked XPD
  */
-static void process_dtmf(xpd_t *xpd, uint portnum, byte val)
+static void process_dtmf(xpd_t *xpd, uint portnum, __u8 val)
 {
-	byte			digit;
+	__u8			digit;
 	bool			key_down = val & 0x10;
 	bool			want_mute;
 	bool			want_event;
@@ -1388,7 +1388,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 {
 	unsigned long		flags;
 	struct FXS_priv_data	*priv;
-	byte			regnum;
+	__u8			regnum;
 	bool			indirect;
 
 	spin_lock_irqsave(&xpd->lock, flags);
@@ -1400,7 +1400,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			(indirect)?"I":"D",
 			regnum, REG_FIELD(info, data_low), REG_FIELD(info, data_high));
 	if (!indirect && regnum == REG_DTMF_DECODE) {
-		byte		val = REG_FIELD(info, data_low);
+		__u8		val = REG_FIELD(info, data_low);
 
 		process_dtmf(xpd, info->portnum, val);
 	}
@@ -1413,7 +1413,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	}
 #endif
 	else if (!indirect && regnum == REG_LOOPCLOSURE) {	/* OFFHOOK ? */
-		byte		val = REG_FIELD(info, data_low);
+		__u8		val = REG_FIELD(info, data_low);
 		xpp_line_t	mask = BIT(info->portnum);
 		xpp_line_t	offhook;
 

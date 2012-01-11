@@ -88,13 +88,13 @@ typedef	unsigned gfp_t;		/* Added in 2.6.14 */
 struct	card_desc_struct {
 	struct list_head	card_list;
 	u32			magic;
-	byte			type;		/* LSB: 1 - to_phone, 0 - to_line */
-	byte			subtype;
+	__u8			type;		/* LSB: 1 - to_phone, 0 - to_line */
+	__u8			subtype;
 	struct xpd_addr		xpd_addr;
-	byte			numchips;
-	byte			ports_per_chip;
-	byte			ports;
-	byte			port_dir;
+	__u8			numchips;
+	__u8			ports_per_chip;
+	__u8			ports;
+	__u8			port_dir;
 	struct xpd_addr		ec_addr;	/* echo canceler address */
 };
 
@@ -191,7 +191,7 @@ struct xpd {
 	const struct xops	*xops;
 	xpd_type_t	type;
 	const char	*type_name;
-	byte		subtype;
+	__u8		subtype;
 	int		subunits;		/* all siblings */
 	enum xpd_state	xpd_state;
 	struct device	xpd_dev;

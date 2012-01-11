@@ -202,12 +202,12 @@ static const int	led_register_mask[] = {	BIT(7),	BIT(6),	BIT(5) };
 /*
  * LED control is done via DAA register 0x20
  */
-static int do_led(xpd_t *xpd, lineno_t chan, byte which, bool on)
+static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 {
 	int			ret = 0;
 	struct FXO_priv_data	*priv;
 	xbus_t			*xbus;
-	byte			value;
+	__u8			value;
 
 	BUG_ON(!xpd);
 	xbus = xpd->xbus;
@@ -324,7 +324,7 @@ static int do_sethook(xpd_t *xpd, int pos, bool to_offhook)
 	xbus_t			*xbus;
 	struct FXO_priv_data	*priv;
 	int			ret = 0;
-	byte			value;
+	__u8			value;
 
 	BUG_ON(!xpd);
 	BUG_ON(PHONEDEV(xpd).direction == TO_PHONE);		// We can SETHOOK state only on PSTN
@@ -423,7 +423,7 @@ static int fxo_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *FXO_card_new(xbus_t *xbus, int unit, int subunit, const xproto_table_t *proto_table,
-	byte subtype, int subunits, int subunit_ports, bool to_phone)
+	__u8 subtype, int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t		*xpd = NULL;
 	int		channels;
@@ -870,7 +870,7 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	return 0;
 }
 
-static void update_battery_voltage(xpd_t *xpd, byte data_low, xportno_t portno)
+static void update_battery_voltage(xpd_t *xpd, __u8 data_low, xportno_t portno)
 {
 	struct FXO_priv_data	*priv;
 	enum polarity_state	pol;
@@ -986,7 +986,7 @@ ignore_reading:
 	reset_battery_readings(xpd, portno);	/* unstable during hook changes */
 }
 
-static void update_battery_current(xpd_t *xpd, byte data_low, xportno_t portno)
+static void update_battery_current(xpd_t *xpd, __u8 data_low, xportno_t portno)
 {
 	struct FXO_priv_data	*priv;
 
@@ -1028,7 +1028,7 @@ ignore_it:
 #ifdef	WITH_METERING
 #define	BTD_BIT	BIT(0)
 
-static void update_metering_state(xpd_t *xpd, byte data_low, lineno_t portno)
+static void update_metering_state(xpd_t *xpd, __u8 data_low, lineno_t portno)
 {
 	struct FXO_priv_data	*priv;
 	bool			metering_tone = data_low & BTD_BIT;

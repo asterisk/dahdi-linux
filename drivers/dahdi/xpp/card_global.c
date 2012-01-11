@@ -78,7 +78,7 @@ static int parse_hexbyte(const char *buf)
 	val = simple_strtoul(buf, &endp, 16);
 	if (*endp != '\0' || val > 0xFF)
 		return -EBADR;
-	return (byte)val;
+	return (__u8)val;
 }
 
 static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
@@ -274,7 +274,7 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 {
 	xbus_t			*xbus;
 	int			ret = -EBADR;
-	byte			buf[MAX_PROC_WRITE];
+	__u8			buf[MAX_PROC_WRITE];
 	char			*str;
 	char			*p;
 	static const int	MAX_ARGS = 10;
@@ -348,8 +348,8 @@ static void global_packet_dump(const char *msg, xpacket_t *pack);
 }
 
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
-	bool writing, byte regnum, bool do_subreg, byte subreg,
-	byte data_low, bool do_datah, byte data_high, bool should_reply)
+	bool writing, __u8 regnum, bool do_subreg, __u8 subreg,
+	__u8 data_low, bool do_datah, __u8 data_high, bool should_reply)
 {
 	int		ret = 0;
 	xframe_t	*xframe;
@@ -446,7 +446,7 @@ HANDLER_DEF(GLOBAL, NULL_REPLY)
 HANDLER_DEF(GLOBAL, AB_DESCRIPTION)	/* 0x08 */
 {
 	struct xbus_workqueue	*worker;
-	byte			rev;
+	__u8			rev;
 	struct unit_descriptor	*units;
 	int			count_units;
 	int			i;
@@ -458,7 +458,7 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)	/* 0x08 */
 	}
 	rev = RPACKET_FIELD(pack, GLOBAL, AB_DESCRIPTION, rev);
 	units = RPACKET_FIELD(pack, GLOBAL, AB_DESCRIPTION, unit_descriptor);
-	count_units = XPACKET_LEN(pack) - ((byte *)units - (byte *)pack);
+	count_units = XPACKET_LEN(pack) - ((__u8 *)units - (__u8 *)pack);
 	count_units /= sizeof(*units);
 	if (rev != XPP_PROTOCOL_VERSION) {
 		XBUS_NOTICE(xbus, "Bad protocol version %d (should be %d)\n",
@@ -561,8 +561,8 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 
 HANDLER_DEF(GLOBAL, SYNC_REPLY)
 {
-	byte		mode = RPACKET_FIELD(pack, GLOBAL, SYNC_REPLY, sync_mode);
-	byte		drift = RPACKET_FIELD(pack, GLOBAL, SYNC_REPLY, drift);
+	__u8		mode = RPACKET_FIELD(pack, GLOBAL, SYNC_REPLY, sync_mode);
+	__u8		drift = RPACKET_FIELD(pack, GLOBAL, SYNC_REPLY, drift);
 	const char	*mode_name;
 
 	BUG_ON(!xbus);
@@ -582,8 +582,8 @@ HANDLER_DEF(GLOBAL, ERROR_CODE)
 {
 	char			tmp_name[TMP_NAME_LEN];
 	static long		rate_limit;
-	byte			category_code;
-	byte			errorbits;
+	__u8			category_code;
+	__u8			errorbits;
 
 	BUG_ON(!xbus);
 	if ((rate_limit++ % 5003) > 200)
@@ -651,7 +651,7 @@ int run_initialize_registers(xpd_t *xpd)
 	char	connectorstr[MAX_ENV_STR];
 	char	xbuslabel[MAX_ENV_STR];
 	char	init_card[MAX_PATH_STR];
-	byte	direction_mask;
+	__u8	direction_mask;
 	int	i;
 	char	*argv[] = {
 		init_card,
@@ -727,8 +727,8 @@ int run_initialize_registers(xpd_t *xpd)
 	else if (ret < 0) {
 		XPD_ERR(xpd, "Failed running '%s' (errno %d)\n", init_card, ret);
 	} else {
-		byte	exitval = ((unsigned)ret >> 8) & 0xFF;
-		byte	sigval = ret & 0xFF;
+		__u8	exitval = ((unsigned)ret >> 8) & 0xFF;
+		__u8	sigval = ret & 0xFF;
 
 		if (!exitval) {
 			XPD_ERR(xpd, "'%s' killed by signal %d\n", init_card, sigval);

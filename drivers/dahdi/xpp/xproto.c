@@ -45,7 +45,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr)
 
 /*---------------- General Protocol Management ----------------------------*/
 
-const xproto_entry_t *xproto_card_entry(const xproto_table_t *table, byte opcode)
+const xproto_entry_t *xproto_card_entry(const xproto_table_t *table, __u8 opcode)
 {
 	const xproto_entry_t *xe;
 
@@ -54,7 +54,7 @@ const xproto_entry_t *xproto_card_entry(const xproto_table_t *table, byte opcode
 	return (xe->handler != NULL) ? xe : NULL;
 }
 
-const xproto_entry_t *xproto_global_entry(byte opcode)
+const xproto_entry_t *xproto_global_entry(__u8 opcode)
 {
 	const xproto_entry_t *xe;
 
@@ -63,7 +63,7 @@ const xproto_entry_t *xproto_global_entry(byte opcode)
 	return xe;
 }
 
-xproto_handler_t xproto_global_handler(byte opcode)
+xproto_handler_t xproto_global_handler(__u8 opcode)
 {
 	return xproto_card_handler(&PROTO_TABLE(GLOBAL), opcode);
 }
@@ -114,7 +114,7 @@ void xproto_put(const xproto_table_t *xtable)
 	module_put(xtable->owner);
 }
 
-xproto_handler_t xproto_card_handler(const xproto_table_t *table, byte opcode)
+xproto_handler_t xproto_card_handler(const xproto_table_t *table, __u8 opcode)
 {
 	const xproto_entry_t *xe;
 
@@ -131,7 +131,7 @@ void notify_bad_xpd(const char *funcname, xbus_t *xbus, const struct xpd_addr ad
 
 static int packet_process(xbus_t *xbus, xpacket_t *pack)
 {
-	byte			op;
+	__u8			op;
 	const xproto_entry_t	*xe;
 	xproto_handler_t	handler;
 	xproto_table_t		*table;
@@ -205,9 +205,9 @@ out:
 
 static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 {
-	byte		*xframe_end;
+	__u8		*xframe_end;
 	xpacket_t	*pack;
-	byte		*p;
+	__u8		*p;
 	int		len;
 	int		ret;
 
@@ -297,8 +297,8 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 
 void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 {
-	byte	op = XPACKET_OP(packet);
-	byte	*addr = (byte *)&XPACKET_ADDR(packet);
+	__u8	op = XPACKET_OP(packet);
+	__u8	*addr = (__u8 *)&XPACKET_ADDR(packet);
 
 	if (!debug)
 		return;
@@ -313,7 +313,7 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 #if VERBOSE_DEBUG
 	{
 		int i;
-		byte	*p = (byte *)packet;
+		__u8	*p = (__u8 *)packet;
 
 		printk(" BYTES: ");
 		for (i = 0; i < XPACKET_LEN(packet); i++) {
@@ -339,7 +339,7 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 }
 
 void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
-		byte unit, xportno_t port, const reg_cmd_t *regcmd)
+		__u8 unit, xportno_t port, const reg_cmd_t *regcmd)
 {
 	char		action;
 	char		modifier;
@@ -357,7 +357,7 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 		int		i;
 		int		n = 0;
 		size_t		len = regcmd->bytes;
-		const byte	*p = REG_XDATA(regcmd);
+		const __u8	*p = REG_XDATA(regcmd);
 
 		buf[0] = '\0';
 		for (i = 0; i < len && n < MAX_PROC_WRITE; i++)

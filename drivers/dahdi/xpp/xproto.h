@@ -168,24 +168,24 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 
 typedef struct reg_cmd {
 	byte		bytes:3;		/* Length (for Multibyte)	*/
-	byte		eoframe:1;		/* For BRI -- end of frame	*/
-	byte		portnum:3;		/* For port specific registers	*/
-	byte		is_multibyte:1;
+	__u8		eoframe:1;		/* For BRI -- end of frame	*/
+	__u8		portnum:3;		/* For port specific registers	*/
+	__u8		is_multibyte:1;
 	union {
 		struct {
-			byte		reserved:4;
-			byte		do_datah:1;
-			byte		do_subreg:1;
-			byte		read_request:1;
-			byte		all_ports_broadcast:1;
-			byte		regnum;
-			byte		subreg;
-			byte		data_low;
-			byte		data_high;
+			__u8		reserved:4;
+			__u8		do_datah:1;
+			__u8		do_subreg:1;
+			__u8		read_request:1;
+			__u8		all_ports_broadcast:1;
+			__u8		regnum;
+			__u8		subreg;
+			__u8		data_low;
+			__u8		data_high;
 		} PACKED r;
 		/* For Write-Multibyte commands in BRI */
 		struct {
-			byte	xdata[MULTIBYTE_MAX_LEN];
+			__u8	xdata[MULTIBYTE_MAX_LEN];
 		} PACKED d;
 	} PACKED alt;
 } PACKED reg_cmd_t;
@@ -208,11 +208,11 @@ typedef int (*xproto_handler_t)(
 
 const xproto_table_t *xproto_get(xpd_type_t cardtype);
 void xproto_put(const xproto_table_t *xtable);
-const xproto_entry_t *xproto_card_entry(const xproto_table_t *table, byte opcode);
-xproto_handler_t xproto_card_handler(const xproto_table_t *table, byte opcode);
+const xproto_entry_t *xproto_card_entry(const xproto_table_t *table, __u8 opcode);
+xproto_handler_t xproto_card_handler(const xproto_table_t *table, __u8 opcode);
 
-const xproto_entry_t *xproto_global_entry(byte opcode);
-xproto_handler_t xproto_global_handler(byte opcode);
+const xproto_entry_t *xproto_global_entry(__u8 opcode);
+xproto_handler_t xproto_global_handler(__u8 opcode);
 
 /*
  * XMETHOD() resolve to method pointer (NULL for optional methods)
@@ -248,7 +248,7 @@ struct phoneops {
 
 struct xops {
 	 xpd_t *(*card_new)(xbus_t *xbus, int unit, int subunit,
-		const xproto_table_t *proto_table, byte subtype,
+		const xproto_table_t *proto_table, __u8 subtype,
 		int subunits, int subunit_ports, bool to_phone);
 	int (*card_init)(xbus_t *xbus, xpd_t *xpd);
 	int (*card_remove)(xbus_t *xbus, xpd_t *xpd);
@@ -270,7 +270,7 @@ struct xproto_table {
 	const struct phoneops	*phoneops;	/* DAHDI operations */
 	const struct echoops	*echoops;	/* Echo Canceller operations */
 	xpd_type_t	type;
-	byte		ports_per_subunit;
+	__u8		ports_per_subunit;
 	const char	*name;
 	bool (*packet_is_valid)(xpacket_t *pack);
 	void (*packet_dump)(const char *msg, xpacket_t *pack);
@@ -297,18 +297,18 @@ struct xpacket {
 		MEMBER(FXS, SIG_CHANGED);
 		MEMBER(FXO, SIG_CHANGED);
 
-		byte	data[0];
+		__u8	data[0];
 	};
 	/* Last byte is chksum */
 } PACKED;
 
 void dump_packet(const char *msg, const xpacket_t *packet, bool debug);
-void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, byte unit, xportno_t port, const reg_cmd_t *regcmd);
+void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus, __u8 unit, xportno_t port, const reg_cmd_t *regcmd);
 int xframe_receive(xbus_t *xbus, xframe_t *xframe);
 void notify_bad_xpd(const char *funcname, xbus_t *xbus, const struct xpd_addr addr, const char *msg);
 int xproto_register(const xproto_table_t *proto_table);
 void xproto_unregister(const xproto_table_t *proto_table);
-const xproto_entry_t *xproto_global_entry(byte opcode);
+const xproto_entry_t *xproto_global_entry(__u8 opcode);
 const char *xproto_name(xpd_type_t xpd_type);
 
 #endif	/* __KERNEL__ */

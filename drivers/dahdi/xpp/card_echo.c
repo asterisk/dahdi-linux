@@ -43,12 +43,12 @@ static bool echo_packet_is_valid(xpacket_t *pack);
 static void echo_packet_dump(const char *msg, xpacket_t *pack);
 
 DEF_RPACKET_DATA(ECHO, SET,
-	byte timeslots[ECHO_TIMESLOTS];
+	__u8 timeslots[ECHO_TIMESLOTS];
 	);
 
 DEF_RPACKET_DATA(ECHO, SET_REPLY,
-	byte status;
-	byte reserved;
+	__u8 status;
+	__u8 reserved;
 	);
 
 struct ECHO_priv_data {
@@ -59,7 +59,7 @@ static xproto_table_t	PROTO_TABLE(ECHO);
 /*---------------- ECHO: Methods -------------------------------------------*/
 
 static xpd_t *ECHO_card_new(xbus_t *xbus, int unit, int subunit,
-		const xproto_table_t *proto_table, byte subtype,
+		const xproto_table_t *proto_table, __u8 subtype,
 		int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t *xpd = NULL;
@@ -146,7 +146,7 @@ static int ECHO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 static /* 0x39 */ HOSTCMD(ECHO, SET)
 {
 	struct xbus_echo_state *es;
-	byte *ts;
+	__u8 *ts;
 	xframe_t *xframe;
 	xpacket_t *pack;
 	int ret;
@@ -172,7 +172,7 @@ static int ECHO_ec_set(xpd_t *xpd, int pos, bool on)
 {
 	int ts_number;
 	int ts_mask;
-	byte *ts;
+	__u8 *ts;
 
 	ts = xpd->xbus->echo_state.timeslots;
 	/*
@@ -207,7 +207,7 @@ static int ECHO_ec_get(xpd_t *xpd, int pos)
 	int ts_number;
 	int ts_mask;
 	int is_on;
-	byte *ts;
+	__u8 *ts;
 
 	ts = xpd->xbus->echo_state.timeslots;
 	ts_mask = (xpd->addr.unit == 0) ? 0x1 : 0x2;	/* Which bit? */
@@ -227,7 +227,7 @@ static int ECHO_ec_get(xpd_t *xpd, int pos)
 
 static void ECHO_ec_dump(xbus_t *xbus)
 {
-	byte *ts;
+	__u8 *ts;
 	int i;
 
 	ts = xbus->echo_state.timeslots;
@@ -255,7 +255,7 @@ static int ECHO_ec_update(xbus_t *xbus)
 /*---------------- ECHO: Astribank Reply Handlers --------------------------*/
 HANDLER_DEF(ECHO, SET_REPLY)
 {
-	byte	status;
+	__u8	status;
 
 	BUG_ON(!xpd);
 	status = RPACKET_FIELD(pack, ECHO, SET_REPLY, status);

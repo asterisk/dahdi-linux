@@ -44,12 +44,12 @@ enum global_opcodes {
 
 struct unit_descriptor {
 	struct xpd_addr	addr;
-	byte		subtype:4;
-	byte		type:4;
-	byte		numchips;
-	byte		ports_per_chip;
-	byte		port_dir;	/* bitmask: 0 - PSTN, 1 - PHONE */
-	byte		reserved[2];
+	__u8		subtype:4;
+	__u8		type:4;
+	__u8		numchips;
+	__u8		ports_per_chip;
+	__u8		port_dir;	/* bitmask: 0 - PSTN, 1 - PHONE */
+	__u8		reserved[2];
 	struct xpd_addr	ec_addr;
 };
 
@@ -57,12 +57,12 @@ struct unit_descriptor {
 
 DEF_RPACKET_DATA(GLOBAL, NULL_REPLY);
 DEF_RPACKET_DATA(GLOBAL, AB_REQUEST,
-	byte		rev;
-	byte		reserved;
+	__u8		rev;
+	__u8		reserved;
 	);
 DEF_RPACKET_DATA(GLOBAL, AB_DESCRIPTION,
-	byte			rev;
-	byte			reserved[3];
+	__u8			rev;
+	__u8			reserved[3];
 	struct unit_descriptor	unit_descriptor[NUM_UNITS];
 	);
 DEF_RPACKET_DATA(GLOBAL, REGISTER_REQUEST,
@@ -70,30 +70,30 @@ DEF_RPACKET_DATA(GLOBAL, REGISTER_REQUEST,
 	);
 DEF_RPACKET_DATA(GLOBAL, PCM_WRITE,
 	xpp_line_t	lines;
-	byte		pcm[PCM_CHUNKSIZE];
+	__u8		pcm[PCM_CHUNKSIZE];
 	);
 DEF_RPACKET_DATA(GLOBAL, PCM_READ,
 	xpp_line_t	lines;
-	byte		pcm[PCM_CHUNKSIZE];
+	__u8		pcm[PCM_CHUNKSIZE];
 	);
 DEF_RPACKET_DATA(GLOBAL, SYNC_SOURCE,
-	byte		sync_mode;
-	byte		drift;
+	__u8		sync_mode;
+	__u8		drift;
 	);
 DEF_RPACKET_DATA(GLOBAL, SYNC_REPLY,
-	byte		sync_mode;
-	byte		drift;
+	__u8		sync_mode;
+	__u8		drift;
 	);
 DEF_RPACKET_DATA(GLOBAL, REGISTER_REPLY,
 	reg_cmd_t	regcmd;
 	);
 DEF_RPACKET_DATA(GLOBAL, RESET_SYNC_COUNTERS,
-	byte		mask;
+	__u8		mask;
 	);
 DEF_RPACKET_DATA(GLOBAL, ERROR_CODE,
-	byte		category_code;
-	byte		errorbits;
-	byte		bad_packet[0];
+	__u8		category_code;
+	__u8		errorbits;
+	__u8		bad_packet[0];
 	);
 
 /* 0x07 */ DECLARE_CMD(GLOBAL, AB_REQUEST);
@@ -101,10 +101,10 @@ DEF_RPACKET_DATA(GLOBAL, ERROR_CODE,
 /* 0x23 */ DECLARE_CMD(GLOBAL, RESET_SYNC_COUNTERS);
 
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
-	bool writing, byte regnum, bool do_subreg, byte subreg,
-	byte data_low, bool do_datah, byte data_high, bool should_reply);
+	bool writing, __u8 regnum, bool do_subreg, __u8 subreg,
+	__u8 data_low, bool do_datah, __u8 data_high, bool should_reply);
 int send_multibyte_request(xbus_t *xbus, unsigned unit, xportno_t portno,
-	bool eoftx, byte *buf, unsigned len);
+	bool eoftx, __u8 *buf, unsigned len);
 extern xproto_table_t PROTO_TABLE(GLOBAL);
 int run_initialize_registers(xpd_t *xpd);
 int parse_chip_command(xpd_t *xpd, char *cmdline);

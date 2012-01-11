@@ -171,7 +171,7 @@ struct echoops {
 
 struct xbus_echo_state {
 	const struct echoops	*echoops;
-	byte			timeslots[ECHO_TIMESLOTS];
+	__u8			timeslots[ECHO_TIMESLOTS];
 	int			xpd_idx;
 	struct device_attribute	*da[MAX_XPDS];
 };
@@ -188,7 +188,7 @@ struct xbus {
 	/* low-level bus drivers set these 2 fields */
 	char			connector[XBUS_DESCLEN];
 	char			label[LABEL_SIZE];
-	byte			revision;		/* Protocol revision */
+	__u8			revision;		/* Protocol revision */
 	struct xbus_transport	transport;
 	struct dahdi_device	*ddev;
 
@@ -288,8 +288,8 @@ struct xframe {
 	struct timeval		tv_received;
 	/* filled by transport layer */
 	size_t			frame_maxlen;
-	byte			*packets;	/* max XFRAME_DATASIZE */
-	byte			*first_free;
+	__u8			*packets;	/* max XFRAME_DATASIZE */
+	__u8			*first_free;
 	int			usec_towait;	/* prevent overflowing AB */
 	void			*priv;
 };

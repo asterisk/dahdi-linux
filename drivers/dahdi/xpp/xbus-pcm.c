@@ -856,7 +856,7 @@ dropit:
  */
 void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
-	byte		*pcm;
+	__u8		*pcm;
 	unsigned long	flags;
 	xpp_line_t	wanted_lines;
 	int		i;
@@ -891,7 +891,7 @@ void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 
 void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
-	byte		*pcm;
+	__u8		*pcm;
 	xpp_line_t	pcm_mask;
 	xpp_line_t	pcm_mute;
 	unsigned long	flags;
@@ -963,9 +963,9 @@ EXPORT_SYMBOL(generic_echocancel_setmask);
 
 static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 {
-	byte		*xframe_end;
+	__u8		*xframe_end;
 	xpacket_t	*pack;
-	byte		*p;
+	__u8		*p;
 	int		ret = -EPROTO;	/* Assume error */
 
 	if (debug & DBG_PCM)

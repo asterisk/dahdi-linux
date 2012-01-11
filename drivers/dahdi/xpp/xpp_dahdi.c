@@ -220,11 +220,11 @@ void xpd_free(xpd_t *xpd)
 int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
 		int unit,
 		int subunit,
-		byte type,
-		byte subtype,
+		__u8 type,
+		__u8 subtype,
 		int subunits,
 		int subunit_ports,
-		byte port_dir)
+		__u8 port_dir)
 {
 	xpd_t			*xpd = NULL;
 	bool			to_phone;
@@ -326,10 +326,10 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 		len += sprintf(page + len, "\nPCM:\n            |         [readchunk]       |         [writechunk]      | W D");
 		for_each_line(xpd, i) {
 			struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
-			byte	rchunk[DAHDI_CHUNKSIZE];
-			byte	wchunk[DAHDI_CHUNKSIZE];
-			byte	*rp;
-			byte	*wp;
+			__u8	rchunk[DAHDI_CHUNKSIZE];
+			__u8	wchunk[DAHDI_CHUNKSIZE];
+			__u8	*rp;
+			__u8	*wp;
 			int j;
 
 			if (IS_SET(PHONEDEV(xpd).digital_outputs, i))
@@ -522,7 +522,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 			__func__, type);
 		goto err;
 	}
-	xpd->priv = (byte *)xpd + sizeof(xpd_t);
+	xpd->priv = (__u8 *)xpd + sizeof(xpd_t);
 	spin_lock_init(&xpd->lock);
 	xpd->card_present = 0;
 	xpd->type = proto_table->type;

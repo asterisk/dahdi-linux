@@ -251,7 +251,7 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 
 static DEFINE_SPINLOCK(serialize_dump_xframe);
 
-static void do_hexdump(const char msg[], byte *data, uint16_t len)
+static void do_hexdump(const char msg[], __u8 *data, uint16_t len)
 {
 	int	i;
 	int	debug = DBG_ANY;	/* mask global debug */
@@ -620,12 +620,12 @@ int xbus_xpd_unbind(xbus_t *xbus, xpd_t *xpd)
 
 static int new_card(xbus_t *xbus,
 		int unit,
-		byte type,
-		byte subtype,
-		byte numchips,
-		byte ports_per_chip,
-		byte ports,
-		byte port_dir)
+		__u8 type,
+		__u8 subtype,
+		__u8 numchips,
+		__u8 ports_per_chip,
+		__u8 ports,
+		__u8 port_dir)
 {
 	const xproto_table_t	*proto_table;
 	int			i;
@@ -1720,8 +1720,8 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 	char			*buf;
 	xbus_t			*xbus = data;
 	char			*p;
-	byte			*pack_start;
-	byte			*q;
+	__u8			*pack_start;
+	__u8			*q;
 	xframe_t		*xframe;
 	size_t			len;
 	const size_t		max_len = xbus->transport.max_send_size;

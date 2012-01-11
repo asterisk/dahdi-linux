@@ -183,9 +183,9 @@ enum pri_led_selectors {
 #define	NUM_LEDS	4
 
 struct pri_leds {
-	byte	state:2;	/* enum pri_led_state */
-	byte	led_sel:2;	/* enum pri_led_selectors */
-	byte	reserved:4;
+	__u8	state:2;	/* enum pri_led_state */
+	__u8	led_sel:2;	/* enum pri_led_selectors */
+	__u8	reserved:4;
 };
 
 #define	REG_CCB1_T	0x2F	/* Clear Channel Register 1 */
@@ -333,19 +333,19 @@ struct PRI_priv_data {
 #define	VALID_DCHAN(p)	(DCHAN(p) != NO_DCHAN)
 #define	SET_DCHAN(p, d)	do { DCHAN(p) = (d); } while (0);
 
-	byte				cas_rs_e[NUM_CAS_RS_E];
-	byte				cas_ts_e[NUM_CAS_RS_E];
+	__u8				cas_rs_e[NUM_CAS_RS_E];
+	__u8				cas_ts_e[NUM_CAS_RS_E];
 	uint				cas_replies;
 	bool				is_esf;
 	bool				local_loopback;
 	uint				poll_noreplies;
 	uint				layer1_replies;
-	byte				reg_frs0;
-	byte				reg_frs1;
+	__u8				reg_frs0;
+	__u8				reg_frs1;
 	bool				layer1_up;
 	int				alarms;
-	byte				dchan_tx_sample;
-	byte				dchan_rx_sample;
+	__u8				dchan_tx_sample;
+	__u8				dchan_rx_sample;
 	uint				dchan_tx_counter;
 	uint				dchan_rx_counter;
 	bool				dchan_alive;
@@ -367,7 +367,7 @@ static /* 0x33 */ DECLARE_CMD(PRI, SET_LED, enum pri_led_selectors led_sel, enum
 
 /*---------------- PRI: Methods -------------------------------------------*/
 
-static int query_subunit(xpd_t *xpd, byte regnum)
+static int query_subunit(xpd_t *xpd, __u8 regnum)
 {
 	XPD_DBG(REGS, xpd, "(%d%d): REG=0x%02X\n",
 		xpd->addr.unit, xpd->addr.subunit,
@@ -387,7 +387,7 @@ static int query_subunit(xpd_t *xpd, byte regnum)
 }
 
 
-static int write_subunit(xpd_t *xpd, byte regnum, byte val)
+static int write_subunit(xpd_t *xpd, __u8 regnum, __u8 val)
 {
 	XPD_DBG(REGS, xpd, "(%d%d): REG=0x%02X dataL=0x%02X\n",
 		xpd->addr.unit, xpd->addr.subunit,
@@ -406,7 +406,7 @@ static int write_subunit(xpd_t *xpd, byte regnum, byte val)
 			);
 }
 
-static int pri_write_reg(xpd_t *xpd, int regnum, byte val)
+static int pri_write_reg(xpd_t *xpd, int regnum, __u8 val)
 {
 	XPD_DBG(REGS, xpd, "(%d%d): REG=0x%02X dataL=0x%02X\n",
 		xpd->addr.unit, xpd->addr.subunit,
@@ -465,7 +465,7 @@ static int cas_numregs(xpd_t *xpd)
 	return 0;
 }
 
-static int write_cas_reg(xpd_t *xpd, int rsnum, byte val)
+static int write_cas_reg(xpd_t *xpd, int rsnum, __u8 val)
 {
 	struct PRI_priv_data	*priv;
 	int			regbase = cas_regbase(xpd);
@@ -703,10 +703,10 @@ static void set_clocking(xpd_t *xpd)
 	}
 	/* Now set it */
 	if (best_xpd && ((struct PRI_priv_data *)(best_xpd->priv))->clock_source == 0) {
-		byte	reg_pc_init[] = { VAL_PC_GPI, VAL_PC_GPI, VAL_PC_GPI };
+		__u8	reg_pc_init[] = { VAL_PC_GPI, VAL_PC_GPI, VAL_PC_GPI };
 
 		for (i = 0; i < ARRAY_SIZE(reg_pc_init); i++) {
-			byte	reg_pc = reg_pc_init[i];
+			__u8	reg_pc = reg_pc_init[i];
 
 			reg_pc |= (best_subunit & (1 << i)) ? VAL_PC_GPOH : VAL_PC_GPOL;
 			XPD_DBG(SYNC, best_xpd,
@@ -735,7 +735,7 @@ static void set_reg_lim0(const char *msg, xpd_t *xpd)
 	struct PRI_priv_data	*priv;
 	bool			is_master_mode;
 	bool			localloop;
-	byte			lim0 = 0;
+	__u8			lim0 = 0;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
@@ -832,7 +832,7 @@ static void set_rbslines(xpd_t *xpd, int channo)
 	XPD_DBG(DEVICES, xpd, "RBSLINES-%d(%s): 0x%X\n",
 		channo, pri_protocol_name(priv->pri_protocol), new_rbslines);
 	if ((priv->pri_protocol == PRI_PROTO_T1) || (priv->pri_protocol == PRI_PROTO_J1)) {
-		byte	clear_lines = 0;	/* Mark clear lines */
+		__u8	clear_lines = 0;	/* Mark clear lines */
 		bool	reg_changed = 0;
 
 		for_each_line(xpd, i) {
@@ -882,15 +882,15 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 	const char		*codingstr = "";
 	const char		*crcstr = "";
 #ifdef JAPANEZE_SUPPORT
-	byte			rc0 = 0;	/* FIXME: PCM offsets */
+	__u8			rc0 = 0;	/* FIXME: PCM offsets */
 #endif
-	byte			fmr0 = 0;
-	byte			fmr1 = REG_FMR1_ECM;
-	byte			fmr2 = 0;
-	byte			fmr3 = 0;	/* write only for CRC4 */
-	byte			fmr4 = 0;
-	byte                    cmdr = REG_CMDR_RRES | REG_CMDR_XRES;
-	byte			xsp  = 0;
+	__u8			fmr0 = 0;
+	__u8			fmr1 = REG_FMR1_ECM;
+	__u8			fmr2 = 0;
+	__u8			fmr3 = 0;	/* write only for CRC4 */
+	__u8			fmr4 = 0;
+	__u8                    cmdr = REG_CMDR_RRES | REG_CMDR_XRES;
+	__u8			xsp  = 0;
 	unsigned int		bad_bits;
 	bool			force_cas = 0;
 	int			i;
@@ -1153,7 +1153,7 @@ static int pri_chanconfig(struct file *file, struct dahdi_chan *chan,
 }
 
 static xpd_t *PRI_card_new(xbus_t *xbus, int unit, int subunit, const xproto_table_t *proto_table,
-	byte subtype, int subunits, int subunit_ports, bool to_phone)
+	__u8 subtype, int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t			*xpd = NULL;
 	struct PRI_priv_data	*priv;
@@ -1358,11 +1358,11 @@ static void dchan_state(xpd_t *xpd, bool up)
 		int	d = PRI_DCHAN_IDX(priv);
 
 		if (SPAN_REGISTERED(xpd) && d >= 0 && d < PHONEDEV(xpd).channels) {
-			byte	*pcm;
+			__u8	*pcm;
 
-			pcm = (byte *)XPD_CHAN(xpd, d)->readchunk;
+			pcm = (__u8 *)XPD_CHAN(xpd, d)->readchunk;
 			pcm[0] = 0x00;
-			pcm = (byte *)XPD_CHAN(xpd, d)->writechunk;
+			pcm = (__u8 *)XPD_CHAN(xpd, d)->writechunk;
 			pcm[0] = 0x00;
 		}
 		XPD_DBG(SIGNAL, xpd, "STATE CHANGE: D-Channel STOPPED\n");
@@ -1566,7 +1566,7 @@ static int pri_shutdown(struct dahdi_span *span)
 static int encode_rbsbits_e1(xpd_t *xpd, int pos, int bits)
 {
 	struct PRI_priv_data	*priv;
-	byte			val;
+	__u8			val;
 	int			rsnum;
 
 	BUG_ON(!xpd);
@@ -1602,7 +1602,7 @@ static int encode_rbsbits_t1(xpd_t *xpd, int pos, int bits)
 	int			width;
 	uint			tx_bits = bits;
 	uint			mask;
-	byte			val;
+	__u8			val;
 
 	BUG_ON(!xpd);
 	priv = xpd->priv;
@@ -1637,7 +1637,7 @@ static int encode_rbsbits_t1(xpd_t *xpd, int pos, int bits)
 static void send_idlebits(xpd_t *xpd, bool saveold)
 {
 	struct PRI_priv_data	*priv;
-	byte			save_rs[NUM_CAS_RS_E];
+	__u8			save_rs[NUM_CAS_RS_E];
 	int			i;
 
 	if (!SPAN_REGISTERED(xpd))
@@ -1721,7 +1721,7 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 {
 	struct PRI_priv_data	*priv;
-	byte			*pcm;
+	__u8			*pcm;
 	unsigned long		flags;
 	int			i;
 	xpp_line_t		wanted_lines;
@@ -1794,7 +1794,7 @@ static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 static void PRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
 	struct PRI_priv_data	*priv;
-	byte			*pcm;
+	__u8			*pcm;
 	xpp_line_t		physical_mask;
 	unsigned long		flags;
 	int			i;
@@ -1916,7 +1916,7 @@ static /* 0x33 */ HOSTCMD(PRI, SET_LED, enum pri_led_selectors led_sel, enum pri
 }
 
 /*---------------- PRI: Astribank Reply Handlers --------------------------*/
-static void layer1_state(xpd_t *xpd, byte data_low)
+static void layer1_state(xpd_t *xpd, __u8 data_low)
 {
 	struct PRI_priv_data	*priv;
 	int			alarms = DAHDI_ALARM_NONE;
@@ -1981,7 +1981,7 @@ static void layer1_state(xpd_t *xpd, byte data_low)
 	XPD_DBG(REGS, xpd, "subunit=%d data_low=0x%02X\n", xpd->addr.subunit, data_low);
 }
 
-static int decode_cas_e1(xpd_t *xpd, byte regnum, byte data_low)
+static int decode_cas_e1(xpd_t *xpd, __u8 regnum, __u8 data_low)
 {
 	struct PRI_priv_data	*priv;
 	uint			pos = regnum - REG_RS2_E;
@@ -2024,7 +2024,7 @@ static int decode_cas_e1(xpd_t *xpd, byte regnum, byte data_low)
 	return 0;
 }
 
-static int decode_cas_t1(xpd_t *xpd, byte regnum, byte data_low)
+static int decode_cas_t1(xpd_t *xpd, __u8 regnum, __u8 data_low)
 {
 	struct PRI_priv_data	*priv;
 	uint			rsnum;
@@ -2075,7 +2075,7 @@ static int decode_cas_t1(xpd_t *xpd, byte regnum, byte data_low)
 	return 0;
 }
 
-static void process_cas_dchan(xpd_t *xpd, byte regnum, byte data_low)
+static void process_cas_dchan(xpd_t *xpd, __u8 regnum, __u8 data_low)
 {
 	struct PRI_priv_data	*priv;
 
@@ -2137,8 +2137,8 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	struct PRI_priv_data	*priv;
 	struct xpd_addr		addr;
 	xpd_t			*orig_xpd;
-	byte			regnum;
-	byte			data_low;
+	__u8			regnum;
+	__u8			data_low;
 
 	/* Map UNIT + PORTNUM to XPD */
 	orig_xpd = xpd;
@@ -2385,7 +2385,7 @@ static DEVICE_ATTR_READER(pri_alarms_show, dev, buf)
 	unsigned long		flags;
 	int			len = 0;
 	static const struct {
-		byte		bits;
+		__u8		bits;
 		const char	*name;
 	} alarm_types[] = {
 		{ REG_FRS0_LOS, "RED" },

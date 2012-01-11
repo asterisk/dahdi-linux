@@ -105,7 +105,7 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 	unsigned short rxcnt;
 	xbus_t *xbus;
 	xframe_t *xframe;
-	byte *buf;
+	__u8 *buf;
 	bool in_use = 0;
 	struct timeval tv1;
 
@@ -287,7 +287,7 @@ static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 			XBUS_ERR(xbus, "frame allocation failed (%d)\n", rate_limit);
 		return NULL;
 	}
-	xframe_init(xbus, xframe, ((byte*)xframe) + sizeof(xframe_t), XFRAME_DATASIZE, xbus);
+	xframe_init(xbus, xframe, ((__u8*)xframe) + sizeof(xframe_t), XFRAME_DATASIZE, xbus);
 	return xframe;
 }
 
@@ -431,14 +431,14 @@ static int __init xpp_mmap_load_fpga(u8 *data, size_t size)
 	bfin_write_PORTGIO_CLEAR(DCLK);
 	for (i=0; i<size; i++) { // loop EP2OUT buffer data to FPGA
 		int j;
-		u8 byte = data[i];
+		u8 __u8 = data[i];
 		for (j=0; j<8; j++)         //send the configuration data through the DATA0 pin one bit at a time.
 		{
-			if (byte & 1)
+			if (__u8 & 1)
 				bfin_write_PORTGIO_SET(DATA);
 			else
 				bfin_write_PORTGIO_CLEAR(DATA);
-			byte >>= 1;
+			__u8 >>= 1;
 			bfin_write_PORTGIO_SET(DCLK);
 			bfin_write_PORTGIO_CLEAR(DCLK);
 		}
