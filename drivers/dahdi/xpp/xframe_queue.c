@@ -7,7 +7,8 @@ extern int debug;
 static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags);
 static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe);
 
-void xframe_queue_init(struct xframe_queue *q, unsigned int steady_state_count, unsigned int max_count, const char *name, void *priv)
+void xframe_queue_init(struct xframe_queue *q, unsigned int steady_state_count,
+		       unsigned int max_count, const char *name, void *priv)
 {
 	memset(q, 0, sizeof(*q));
 	spin_lock_init(&q->lock);
@@ -21,34 +22,33 @@ void xframe_queue_init(struct xframe_queue *q, unsigned int steady_state_count, 
 void xframe_queue_clearstats(struct xframe_queue *q)
 {
 	q->worst_count = 0;
-	//q->overflows = 0;	/* Never clear overflows */
+	//q->overflows = 0;     /* Never clear overflows */
 	q->worst_lag_usec = 0L;
 }
 
 static void __xframe_dump_queue(struct xframe_queue *q)
 {
-	xframe_t	*xframe;
-	int		i = 0;
-	char		prefix[30];
-	struct timeval	now;
+	xframe_t *xframe;
+	int i = 0;
+	char prefix[30];
+	struct timeval now;
 
 	do_gettimeofday(&now);
 	printk(KERN_DEBUG "%s: dump queue '%s' (first packet in each frame)\n",
-		THIS_MODULE->name,
-		q->name);
+	       THIS_MODULE->name, q->name);
 	list_for_each_entry_reverse(xframe, &q->head, frame_list) {
-		xpacket_t	*pack = (xpacket_t *)&xframe->packets[0];
-		long		usec = usec_diff(&now, &xframe->tv_queued);
+		xpacket_t *pack = (xpacket_t *)&xframe->packets[0];
+		long usec = usec_diff(&now, &xframe->tv_queued);
 		snprintf(prefix, ARRAY_SIZE(prefix), "  %3d> %5ld.%03ld msec",
-			i++, usec / 1000, usec % 1000);
+			 i++, usec / 1000, usec % 1000);
 		dump_packet(prefix, pack, 1);
 	}
 }
 
 static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 {
-	int			ret = 1;
-	static int		overflow_cnt;
+	int ret = 1;
+	static int overflow_cnt;
 
 	if (unlikely(q->disabled)) {
 		ret = 0;
@@ -57,15 +57,12 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	if (q->count >= q->max_count) {
 		q->overflows++;
 		if ((overflow_cnt++ % 1000) < 5) {
-			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
-				q->name,
-				q->steady_state_count,
-				q->count,
-				q->max_count,
-				q->worst_count,
-				q->overflows,
-				q->worst_lag_usec / 1000,
-				q->worst_lag_usec % 1000);
+			NOTICE
+			    ("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
+			     q->name, q->steady_state_count, q->count,
+			     q->max_count, q->worst_count, q->overflows,
+			     q->worst_lag_usec / 1000,
+			     q->worst_lag_usec % 1000);
 			__xframe_dump_queue(q);
 		}
 		ret = 0;
@@ -81,8 +78,8 @@ out:
 
 bool xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 {
-	unsigned long	flags;
-	int		ret;
+	unsigned long flags;
+	int ret;
 
 	spin_lock_irqsave(&q->lock, flags);
 	ret = __xframe_enqueue(q, xframe);
@@ -92,10 +89,10 @@ bool xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 
 static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 {
-	xframe_t		*frm = NULL;
-	struct list_head	*h;
-	struct timeval		now;
-	unsigned long		usec_lag;
+	xframe_t *frm = NULL;
+	struct list_head *h;
+	struct timeval now;
+	unsigned long usec_lag;
 
 	if (list_empty(&q->head))
 		goto out;
@@ -105,8 +102,10 @@ static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 	frm = list_entry(h, xframe_t, frame_list);
 	do_gettimeofday(&now);
 	usec_lag =
-		(now.tv_sec - frm->tv_queued.tv_sec)*1000*1000 +
-		(now.tv_usec - frm->tv_queued.tv_usec);
+	    (now.tv_sec - frm->tv_queued.tv_sec) * 1000 * 1000 + (now.tv_usec -
+								  frm->
+								  tv_queued.
+								  tv_usec);
 	if (q->worst_lag_usec < usec_lag)
 		q->worst_lag_usec = usec_lag;
 out:
@@ -115,14 +114,15 @@ out:
 
 xframe_t *xframe_dequeue(struct xframe_queue *q)
 {
-	unsigned long	flags;
-	xframe_t	*frm;
+	unsigned long flags;
+	xframe_t *frm;
 
 	spin_lock_irqsave(&q->lock, flags);
 	frm = __xframe_dequeue(q);
 	spin_unlock_irqrestore(&q->lock, flags);
 	return frm;
 }
+
 void xframe_queue_disable(struct xframe_queue *q, bool disabled)
 {
 	q->disabled = disabled;
@@ -130,16 +130,17 @@ void xframe_queue_disable(struct xframe_queue *q, bool disabled)
 
 void xframe_queue_clear(struct xframe_queue *q)
 {
-	xframe_t	*xframe;
-	xbus_t		*xbus = q->priv;
-	int		i = 0;
+	xframe_t *xframe;
+	xbus_t *xbus = q->priv;
+	int i = 0;
 
 	xframe_queue_disable(q, 1);
 	while ((xframe = xframe_dequeue(q)) != NULL) {
 		transport_free_xframe(xbus, xframe);
 		i++;
 	}
-	XBUS_DBG(DEVICES, xbus, "%s: finished queue clear (%d items)\n", q->name, i);
+	XBUS_DBG(DEVICES, xbus, "%s: finished queue clear (%d items)\n",
+		 q->name, i);
 }
 
 uint xframe_queue_count(struct xframe_queue *q)
@@ -151,9 +152,9 @@ uint xframe_queue_count(struct xframe_queue *q)
 
 static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 {
-	struct xbus_ops	*ops;
-	xframe_t	*xframe;
-	unsigned long	flags;
+	struct xbus_ops *ops;
+	xframe_t *xframe;
+	unsigned long flags;
 
 	BUG_ON(!xbus);
 	ops = transportops_get(xbus);
@@ -169,8 +170,8 @@ static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 
 		if ((rate_limit++ % 3001) == 0)
 			XBUS_ERR(xbus,
-				"Failed xframe allocation from transport (%d)\n",
-				rate_limit);
+				 "Failed xframe allocation from transport (%d)\n",
+				 rate_limit);
 		transportops_put(xbus);
 		/* fall through */
 	}
@@ -180,8 +181,8 @@ static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 
 static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe)
 {
-	struct xbus_ops	*ops;
-	unsigned long	flags;
+	struct xbus_ops *ops;
+	unsigned long flags;
 
 	BUG_ON(!xbus);
 	ops = xbus->transport.ops;
@@ -195,11 +196,11 @@ static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe)
 
 static bool xframe_queue_adjust(struct xframe_queue *q)
 {
-	xbus_t		*xbus;
-	xframe_t	*xframe;
-	int		delta;
-	unsigned long	flags;
-	int		ret = 0;
+	xbus_t *xbus;
+	xframe_t *xframe;
+	int delta;
+	unsigned long flags;
+	int ret = 0;
 
 	BUG_ON(!q);
 	xbus = q->priv;
@@ -214,14 +215,16 @@ static bool xframe_queue_adjust(struct xframe_queue *q)
 			static int rate_limit;
 
 			if ((rate_limit++ % 3001) == 0)
-				XBUS_ERR(xbus, "%s: failed frame allocation\n", q->name);
+				XBUS_ERR(xbus, "%s: failed frame allocation\n",
+					 q->name);
 			goto out;
 		}
 		if (!__xframe_enqueue(q, xframe)) {
 			static int rate_limit;
 
 			if ((rate_limit++ % 3001) == 0)
-				XBUS_ERR(xbus, "%s: failed enqueueing frame\n", q->name);
+				XBUS_ERR(xbus, "%s: failed enqueueing frame\n",
+					 q->name);
 			transport_free_xframe(xbus, xframe);
 			goto out;
 		}
@@ -233,7 +236,8 @@ static bool xframe_queue_adjust(struct xframe_queue *q)
 			static int rate_limit;
 
 			if ((rate_limit++ % 3001) == 0)
-				XBUS_ERR(xbus, "%s: failed dequeueing frame\n", q->name);
+				XBUS_ERR(xbus, "%s: failed dequeueing frame\n",
+					 q->name);
 			goto out;
 		}
 		transport_free_xframe(xbus, xframe);
@@ -246,8 +250,8 @@ out:
 
 xframe_t *get_xframe(struct xframe_queue *q)
 {
-	xframe_t	*xframe;
-	xbus_t		*xbus;
+	xframe_t *xframe;
+	xbus_t *xbus;
 
 	BUG_ON(!q);
 	xbus = (xbus_t *)q->priv;
@@ -258,7 +262,8 @@ xframe_t *get_xframe(struct xframe_queue *q)
 		static int rate_limit;
 
 		if ((rate_limit++ % 3001) == 0)
-			XBUS_ERR(xbus, "%s STILL EMPTY (%d)\n", q->name, rate_limit);
+			XBUS_ERR(xbus, "%s STILL EMPTY (%d)\n", q->name,
+				 rate_limit);
 		return NULL;
 	}
 	BUG_ON(xframe->xframe_magic != XFRAME_MAGIC);
@@ -279,7 +284,7 @@ xframe_t *get_xframe(struct xframe_queue *q)
 
 void put_xframe(struct xframe_queue *q, xframe_t *xframe)
 {
-	xbus_t		*xbus;
+	xbus_t *xbus;
 
 	BUG_ON(!q);
 	xbus = (xbus_t *)q->priv;
@@ -293,7 +298,6 @@ void put_xframe(struct xframe_queue *q, xframe_t *xframe)
 	}
 	xframe_queue_adjust(q);
 }
-
 
 EXPORT_SYMBOL(xframe_queue_init);
 EXPORT_SYMBOL(xframe_queue_clearstats);

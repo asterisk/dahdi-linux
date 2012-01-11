@@ -34,7 +34,7 @@
 /* This is to enable user-space programs to include this. */
 
 #include <stdint.h>
-typedef uint8_t  __u8;
+typedef uint8_t __u8;
 typedef uint32_t __u32;
 
 #include <stdio.h>
@@ -45,7 +45,10 @@ typedef uint32_t __u32;
 #define	ERR(fmt, ...)		printf("ERR: " fmt, ## __VA_ARGS__)
 #define	__user
 
-struct list_head { struct list_head *next; struct list_head *prev; };
+struct list_head {
+	struct list_head *next;
+	struct list_head *prev;
+};
 
 #endif
 
@@ -53,7 +56,7 @@ struct list_head { struct list_head *next; struct list_head *prev; };
 
 #define	ALL_LINES		((lineno_t)-1)
 
-#ifndef	BIT	/* added in 2.6.24 */
+#ifndef	BIT			/* added in 2.6.24 */
 #define	BIT(i)		(1UL << (i))
 #endif
 #define	BIT_SET(x, i)	((x) |= BIT(i))
@@ -95,10 +98,10 @@ struct list_head { struct list_head *next; struct list_head *prev; };
 
 #define	VALID_XPD_NUM(x)	((x) < MAX_XPDS && (x) >= 0)
 
-#define	CHAN_BITS		5       /* 0-31 for E1 */
+#define	CHAN_BITS		5	/* 0-31 for E1 */
 
-typedef char			*charp;
-typedef unsigned char		byte;
+typedef char *charp;
+typedef unsigned char byte;
 #ifdef __KERNEL__
 
 /* Kernel versions... */
@@ -121,7 +124,7 @@ typedef unsigned char		byte;
 #define	OLD_HOTPLUG_SUPPORT	// for older kernels
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-#define	OLD_HOTPLUG_SUPPORT_269// for way older kernels
+#define	OLD_HOTPLUG_SUPPORT_269	// for way older kernels
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
@@ -149,20 +152,20 @@ typedef unsigned char		byte;
  * same linux-2.6-net-infrastructure-updates-to-mac80211-iwl4965.patch
  * as is the bool typedef. */
 #if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 18)  || !  defined(hex_asc)
-typedef int			bool;
+typedef int bool;
 #endif
 #endif
 #else
-typedef int			bool;
+typedef int bool;
 #endif
-typedef struct xbus		xbus_t;
-typedef	struct xpd		xpd_t;
-typedef	struct xframe		xframe_t;
-typedef	struct xpacket		xpacket_t;
-typedef	__u32			xpp_line_t;	/* at most 31 lines for E1 */
-typedef	byte			lineno_t;
-typedef byte			xportno_t;
+typedef struct xbus xbus_t;
+typedef struct xpd xpd_t;
+typedef struct xframe xframe_t;
+typedef struct xpacket xpacket_t;
+typedef __u32 xpp_line_t;	/* at most 31 lines for E1 */
+typedef byte lineno_t;
+typedef byte xportno_t;
 
 #define	PORT_BROADCAST		255
 
-#endif	/* XDEFS_H */
+#endif /* XDEFS_H */

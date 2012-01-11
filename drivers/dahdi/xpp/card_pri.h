@@ -25,8 +25,7 @@
 #include "xpd.h"
 
 enum pri_opcodes {
-	XPROTO_NAME(PRI, SET_LED)			= 0x33,
+	XPROTO_NAME(PRI, SET_LED) = 0x33,
 };
 
-
-#endif	/* CARD_PRI_H */
+#endif /* CARD_PRI_H */

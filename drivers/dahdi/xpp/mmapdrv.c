@@ -19,11 +19,13 @@
 #include "xframe_queue.h"
 
 /* Check at compile time that sizeof(xframe_t) is a multiple of 4 */
-typedef char sizeof_xframe_t_should_be_divisible_by_4[((sizeof(xframe_t) % 4) == 0) * 2 - 1];
+typedef char
+    sizeof_xframe_t_should_be_divisible_by_4[((sizeof(xframe_t) % 4) ==
+					      0) * 2 - 1];
 
 #define ssync()			__builtin_bfin_ssync()
 
-//#define AB_IN_BUF	PF5
+//#define AB_IN_BUF     PF5
 /* firmware pins */
 #define DATA            PG8
 #define NCONFIG         PG9
@@ -39,7 +41,7 @@ typedef char sizeof_xframe_t_should_be_divisible_by_4[((sizeof(xframe_t) % 4) ==
 #define	DEBUG_GPIO1	CONF_DONE
 #define	DEBUG_GPIO2	NSTATUS
 
-static int	rx_intr_counter;
+static int rx_intr_counter;
 #endif
 
 #define FPGA_RX_IRQ	IRQ_PF7
@@ -49,9 +51,9 @@ static int	rx_intr_counter;
 #define END_OF_FRAME	0x0001
 #define GET_LEN		0x0002
 #define START_RD_BURST	0x0008
-#define AS_BF_MODE	0x0010 //stand alone Astribank without USB (Asterisk BlackFin Mode)
-#define EC_BF_MODE	0x0020 //all data between Astribank and USB routed thru BF(EchoCanceler BlackFin Mode)
-#define NO_BF_MODE	0x0040 //Astribank worke with USB only (no BlackFin Mode)
+#define AS_BF_MODE	0x0010	//stand alone Astribank without USB (Asterisk BlackFin Mode)
+#define EC_BF_MODE	0x0020	//all data between Astribank and USB routed thru BF(EchoCanceler BlackFin Mode)
+#define NO_BF_MODE	0x0040	//Astribank worke with USB only (no BlackFin Mode)
 #define SET_XA_DIR	0x0080
 #define GET_XPD_STS	0x0100
 #define GET_CHECKSUM	0x0200
@@ -96,7 +98,8 @@ static void update_counter(struct counter *c, struct timeval *tv1)
 		c->intr_min = diff;
 	if (c->intr_max < diff)
 		c->intr_max = diff;
-	c->intr_avg = (c->intr_avg*c->intr_count + diff) / (c->intr_count+1);
+	c->intr_avg =
+	    (c->intr_avg * c->intr_count + diff) / (c->intr_count + 1);
 	c->intr_count++;
 }
 
@@ -153,18 +156,19 @@ static irqreturn_t xpp_mmap_rx_irq(int irq, void *dev_id)
 	outw(START_RD_BURST, FPGA_BASE_ADDR + 4);
 	insw((unsigned long)FPGA_BASE_ADDR, buf, rxcnt / 2);
 #if 0
-	for (count = 0; count < rxcnt; count+=2) {
+	for (count = 0; count < rxcnt; count += 2) {
 		unsigned short v = inw(FPGA_BASE_ADDR);
 		buf[count] = v & 0xFF;
-		buf[count+1] = v >> 8;
+		buf[count + 1] = v >> 8;
 	}
 #endif
 	if (rxcnt & 1)
-		buf[rxcnt-1] = inw(FPGA_BASE_ADDR);
+		buf[rxcnt - 1] = inw(FPGA_BASE_ADDR);
 	/* Sanity check: length of first packet in frame should be no more than the frame length */
-	if (((buf[0] | (buf[1]<<8)) & 0x3FF) > rxcnt) {
+	if (((buf[0] | (buf[1] << 8)) & 0x3FF) > rxcnt) {
 		if (printk_ratelimit()) {
-			ERR("Packet len=%d, frame len=%d\n", (buf[0] | (buf[1]<<8)) & 0x3FF, rxcnt);
+			ERR("Packet len=%d, frame len=%d\n",
+			    (buf[0] | (buf[1] << 8)) & 0x3FF, rxcnt);
 			print_buffer("16 bytes of packet: ", buf, 16);
 		}
 		goto free;
@@ -199,7 +203,7 @@ static void send_buffer(unsigned char *buf, unsigned long len)
 		print_buffer("Sent: ", buf, len);
 	outsw((unsigned long)FPGA_BASE_ADDR, buf, len / 2);
 	if (len & 1)
-		outw((unsigned short)buf[len-1], FPGA_BASE_ADDR);
+		outw((unsigned short)buf[len - 1], FPGA_BASE_ADDR);
 	outw(END_OF_FRAME, FPGA_BASE_ADDR + 4);
 }
 
@@ -258,7 +262,9 @@ static int xframe_send_common(xbus_t *xbus, xframe_t *xframe, bool pcm)
 		if (pcm && pcm_in_pool_count >= 1) {
 			static int rate_limit;
 			if ((rate_limit++ % 1000) == 0)
-				XBUS_ERR(xbus, "Dropped PCM xframe (pcm_in_pool_count=%d).\n", pcm_in_pool_count);
+				XBUS_ERR(xbus,
+					 "Dropped PCM xframe (pcm_in_pool_count=%d).\n",
+					 pcm_in_pool_count);
 			FREE_SEND_XFRAME(xbus, xframe);
 			pcm_dropped++;
 		} else {
@@ -266,7 +272,8 @@ static int xframe_send_common(xbus_t *xbus, xframe_t *xframe, bool pcm)
 				static int rate_limit;
 				spin_unlock_irqrestore(&tx_ready_lock, flags);
 				if ((rate_limit++ % 1000) == 0)
-					XBUS_ERR(xbus, "Dropped xframe. Cannot enqueue.\n");
+					XBUS_ERR(xbus,
+						 "Dropped xframe. Cannot enqueue.\n");
 				FREE_SEND_XFRAME(xbus, xframe);
 				return -E2BIG;
 			}
@@ -284,10 +291,12 @@ static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 	if (!xframe) {
 		static int rate_limit;
 		if ((rate_limit++ % 1000) < 5)
-			XBUS_ERR(xbus, "frame allocation failed (%d)\n", rate_limit);
+			XBUS_ERR(xbus, "frame allocation failed (%d)\n",
+				 rate_limit);
 		return NULL;
 	}
-	xframe_init(xbus, xframe, ((__u8*)xframe) + sizeof(xframe_t), XFRAME_DATASIZE, xbus);
+	xframe_init(xbus, xframe, ((__u8 *)xframe) + sizeof(xframe_t),
+		    XFRAME_DATASIZE, xbus);
 	return xframe;
 }
 
@@ -316,28 +325,26 @@ static struct xbus_ops xmmap_ops = {
 
 static int fill_proc_queue(char *p, struct xframe_queue *q)
 {
-	int	len;
+	int len;
 
-	len = sprintf(p,
-			"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
-				q->name,
-				q->steady_state_count,
-				q->count,
-				q->max_count,
-				q->worst_count,
-				q->overflows,
-				q->worst_lag_usec / 1000,
-				q->worst_lag_usec % 1000);
+	len =
+	    sprintf(p,
+		    "%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02ld.%ld ms\n",
+		    q->name, q->steady_state_count, q->count, q->max_count,
+		    q->worst_count, q->overflows, q->worst_lag_usec / 1000,
+		    q->worst_lag_usec % 1000);
 	xframe_queue_clearstats(q);
 	return len;
 }
 
 static int fill_proc_counter(char *p, struct counter *c)
 {
-	return sprintf(p, "min=%ld\nmax=%ld\navg=%ld\ncount=%ld\n", c->intr_min, c->intr_max, c->intr_avg, c->intr_count);
+	return sprintf(p, "min=%ld\nmax=%ld\navg=%ld\ncount=%ld\n", c->intr_min,
+		       c->intr_max, c->intr_avg, c->intr_count);
 }
 
-static int xpp_mmap_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
+static int xpp_mmap_proc_read(char *page, char **start, off_t off, int count,
+			      int *eof, void *data)
 {
 	int len = 0;
 	len += fill_proc_queue(page + len, &txpool);
@@ -347,7 +354,7 @@ static int xpp_mmap_proc_read(char *page, char **start, off_t off, int count, in
 	len += fill_proc_counter(page + len, &rx_counter);
 	len += sprintf(page + len, "\ntx_counter:\n");
 	len += fill_proc_counter(page + len, &tx_counter);
-	if (len <= off+count) {
+	if (len <= off + count) {
 		*eof = 1;
 		tx_counter.intr_min = rx_counter.intr_min = INT_MAX;
 		tx_counter.intr_max = rx_counter.intr_max = 0;
@@ -363,14 +370,15 @@ static int xpp_mmap_proc_read(char *page, char **start, off_t off, int count, in
 	return len;
 }
 
-static int xpp_mmap_proc_write(struct file *file, const char __user *buffer, unsigned long count, void *data)
+static int xpp_mmap_proc_write(struct file *file, const char __user *buffer,
+			       unsigned long count, void *data)
 {
 	int i = 0;
 	char *txchunk, *p, *endp;
 
-	if (count >= XFRAME_DATASIZE*3+10)
+	if (count >= XFRAME_DATASIZE * 3 + 10)
 		return -EINVAL;
-	p = txchunk = kmalloc(count+1, GFP_KERNEL);
+	p = txchunk = kmalloc(count + 1, GFP_KERNEL);
 	if (copy_from_user(txchunk, buffer, count)) {
 		count = -EFAULT;
 		goto out;
@@ -379,13 +387,15 @@ static int xpp_mmap_proc_write(struct file *file, const char __user *buffer, uns
 
 	while (*p) {
 		unsigned long value;
-		while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r') p++;
-		if (*p == '\0') break;
+		while (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')
+			p++;
+		if (*p == '\0')
+			break;
 		value = simple_strtoul(p, &endp, 16);
 		if (endp == p || value > 0xFF) {
-		    INFO("%s: Bad input\n", __func__);
-		    count = -EINVAL;
-		    goto out;
+			INFO("%s: Bad input\n", __func__);
+			count = -EINVAL;
+			goto out;
 		}
 		p = endp;
 		txchunk[i++] = (char)value;
@@ -399,8 +409,8 @@ out:
 static struct mmap_driver astribank_driver = {
 	.module = THIS_MODULE,
 	.driver = {
-		.name = "xpp_mmap",
-	},
+		   .name = "xpp_mmap",
+		   },
 };
 
 static struct mmap_device astribank_dev = {
@@ -408,42 +418,43 @@ static struct mmap_device astribank_dev = {
 	.driver = &astribank_driver,
 };
 
-static int __init xpp_mmap_load_fpga(u8 *data, size_t size)
+static int __init xpp_mmap_load_fpga(u8 * data, size_t size)
 {
 	size_t i;
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DATA | NCONFIG | DCLK); //set data, nconfig and dclk to port out
+	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DATA | NCONFIG | DCLK);	//set data, nconfig and dclk to port out
 	bfin_write_PORTG_FER(bfin_read_PORTG_FER() & ~(DATA | NCONFIG | DCLK));
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~(CONF_DONE | NSTATUS));//set conf_done and nstatus to port in
-	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~(DATA | NCONFIG | DCLK));
+	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~(CONF_DONE | NSTATUS));	//set conf_done and nstatus to port in
+	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() &
+				~(DATA | NCONFIG | DCLK));
 	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() | CONF_DONE | NSTATUS);
 
-	bfin_write_PORTGIO_CLEAR(NCONFIG);       //reset fpga during configuration holds nCONFIG low
-	udelay(40);                            //Tcfg ~40us delay
-	bfin_write_PORTGIO_SET(NCONFIG);        //transition nCONFIG to high - reset end.
-	udelay(40);                            //Tcf2ck ~40us delay
+	bfin_write_PORTGIO_CLEAR(NCONFIG);	//reset fpga during configuration holds nCONFIG low
+	udelay(40);		//Tcfg ~40us delay
+	bfin_write_PORTGIO_SET(NCONFIG);	//transition nCONFIG to high - reset end.
+	udelay(40);		//Tcf2ck ~40us delay
 	if (!(bfin_read_PORTGIO() & NSTATUS))
-		return -EIO;                           //report reset faill - Tcf2st1 pass
+		return -EIO;	//report reset faill - Tcf2st1 pass
 
 #if 0
 	if (!(bfin_read_PORTGIO() & CONF_DONE))
 		return -EIO;
 #endif
 	bfin_write_PORTGIO_CLEAR(DCLK);
-	for (i=0; i<size; i++) { // loop EP2OUT buffer data to FPGA
+	for (i = 0; i < size; i++) {	// loop EP2OUT buffer data to FPGA
 		int j;
 		u8 __u8 = data[i];
-		for (j=0; j<8; j++)         //send the configuration data through the DATA0 pin one bit at a time.
+		for (j = 0; j < 8; j++)	//send the configuration data through the DATA0 pin one bit at a time.
 		{
-			if (__u8 & 1)
+			if (__u8 &1)
 				bfin_write_PORTGIO_SET(DATA);
 			else
 				bfin_write_PORTGIO_CLEAR(DATA);
-			__u8 >>= 1;
+			__u8 >>=1;
 			bfin_write_PORTGIO_SET(DCLK);
 			bfin_write_PORTGIO_CLEAR(DCLK);
 		}
 		if (!(bfin_read_PORTGIO() & NSTATUS))
-			return -EIO;                                   //check the nSTATUS
+			return -EIO;	//check the nSTATUS
 	}
 	bfin_write_PORTGIO_CLEAR(DATA);
 	udelay(1);
@@ -455,20 +466,22 @@ static int __init xpp_mmap_load_fpga(u8 *data, size_t size)
 	 * some pins that were used only during initialization
 	 * to be used for debugging from now on.
 	 */
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DEBUG_GPIO1 | DEBUG_GPIO2); //set to port out
-	bfin_write_PORTG_FER(bfin_read_PORTG_FER() & ~(DEBUG_GPIO1 | DEBUG_GPIO2));
-	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~(DEBUG_GPIO1 | DEBUG_GPIO2));
+	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() | DEBUG_GPIO1 | DEBUG_GPIO2);	//set to port out
+	bfin_write_PORTG_FER(bfin_read_PORTG_FER() &
+			     ~(DEBUG_GPIO1 | DEBUG_GPIO2));
+	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() &
+				~(DEBUG_GPIO1 | DEBUG_GPIO2));
 #endif
-	udelay(40); //tCD2UM - CONF_DONE high to user mode
+	udelay(40);		//tCD2UM - CONF_DONE high to user mode
 	return 0;
 }
 
 static void __exit xpp_mmap_unload_fpga(void)
 {
-        bfin_write_PORTGIO_CLEAR(NCONFIG);       //reset fpga during configuration holds nCONFIG low
-	udelay(40);                            //Tcfg ~40us delay
-	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~( DATA | NCONFIG | DCLK));	//disable output pin
-	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~( CONF_DONE | NSTATUS));//disable input buffer
+	bfin_write_PORTGIO_CLEAR(NCONFIG);	//reset fpga during configuration holds nCONFIG low
+	udelay(40);		//Tcfg ~40us delay
+	bfin_write_PORTGIO_DIR(bfin_read_PORTGIO_DIR() & ~(DATA | NCONFIG | DCLK));	//disable output pin
+	bfin_write_PORTGIO_INEN(bfin_read_PORTGIO_INEN() & ~(CONF_DONE | NSTATUS));	//disable input buffer
 	INFO("FPGA Firmware unloaded\n");
 }
 
@@ -476,7 +489,8 @@ static int __init xpp_mmap_load_firmware(void)
 {
 	const struct firmware *fw;
 	int ret;
-	if ((ret = request_firmware(&fw, "astribank.bin", &astribank_dev.dev)) < 0)
+	if ((ret =
+	     request_firmware(&fw, "astribank.bin", &astribank_dev.dev)) < 0)
 		return ret;
 	xpp_mmap_load_fpga(fw->data, fw->size);
 	release_firmware(fw);
@@ -499,27 +513,31 @@ static int __init xpp_mmap_init(void)
 		goto fail_fw;
 	}
 
-	if ((ret = request_irq(FPGA_RX_IRQ, xpp_mmap_rx_irq, IRQF_TRIGGER_RISING, "xpp_mmap_rx", NULL)) < 0) {
+	if ((ret =
+	     request_irq(FPGA_RX_IRQ, xpp_mmap_rx_irq, IRQF_TRIGGER_RISING,
+			 "xpp_mmap_rx", NULL)) < 0) {
 		ERR("Unable to attach to RX interrupt %d\n", FPGA_RX_IRQ);
 		goto fail_irq_rx;
 	}
-	if ((ret = request_irq(FPGA_TX_IRQ, xpp_mmap_tx_irq, IRQF_TRIGGER_RISING, "xpp_mmap_tx", NULL)) < 0) {
+	if ((ret =
+	     request_irq(FPGA_TX_IRQ, xpp_mmap_tx_irq, IRQF_TRIGGER_RISING,
+			 "xpp_mmap_tx", NULL)) < 0) {
 		ERR("Unable to attach to TX interrupt %d\n", FPGA_TX_IRQ);
 		goto fail_irq_tx;
 	}
-	if (!request_region((resource_size_t)FPGA_BASE_ADDR, 8, "xpp_mmap")) {
+	if (!request_region((resource_size_t) FPGA_BASE_ADDR, 8, "xpp_mmap")) {
 		ERR("Unable to request memory region at %p\n", FPGA_BASE_ADDR);
 		goto fail_region;
 	}
 	outw(AS_BF_MODE, FPGA_BASE_ADDR + 4);
 
-	xframe_cache = kmem_cache_create("xframe_cache",
-			sizeof(xframe_t) + XFRAME_DATASIZE,
-			0, 0,
+	xframe_cache =
+	    kmem_cache_create("xframe_cache",
+			      sizeof(xframe_t) + XFRAME_DATASIZE, 0, 0,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 23)
-			NULL,
+			      NULL,
 #endif
-			NULL);
+			      NULL);
 	if (!xframe_cache) {
 		ret = -ENOMEM;
 		goto fail_cache;
@@ -534,7 +552,9 @@ static int __init xpp_mmap_init(void)
 	strncpy(global_xbus->label, "mmap:0", LABEL_SIZE);
 
 	xframe_queue_init(&txpool, 10, 200, "mmap_txpool", global_xbus);
-	if (!(proc_entry = create_proc_entry("xpp_mmap", 0, global_xbus->proc_xbus_dir))) {
+	if (!
+	    (proc_entry =
+	     create_proc_entry("xpp_mmap", 0, global_xbus->proc_xbus_dir))) {
 		ERR("create_proc_entry() failed\n");
 		ret = -EINVAL;
 		goto fail_proc;
@@ -552,7 +572,7 @@ fail_proc:
 fail_xbus:
 	kmem_cache_destroy(xframe_cache);
 fail_cache:
-	release_region((resource_size_t)FPGA_BASE_ADDR, 8);
+	release_region((resource_size_t) FPGA_BASE_ADDR, 8);
 fail_region:
 	free_irq(FPGA_TX_IRQ, NULL);
 fail_irq_tx:
@@ -579,7 +599,7 @@ static void __exit xpp_mmap_exit(void)
 	xbus_disconnect(xbus);
 	kmem_cache_destroy(xframe_cache);
 
-	release_region((resource_size_t)FPGA_BASE_ADDR, 8);
+	release_region((resource_size_t) FPGA_BASE_ADDR, 8);
 	free_irq(FPGA_RX_IRQ, NULL);
 	free_irq(FPGA_TX_IRQ, NULL);
 

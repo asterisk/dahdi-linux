@@ -27,7 +27,7 @@
 #include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#  warning "This module is tested only with 2.6 kernels"
+#warning "This module is tested only with 2.6 kernels"
 #endif
 
 #include <linux/kernel.h>
@@ -57,7 +57,8 @@ struct proc_dir_entry *xpp_proc_toplevel = NULL;
 #define	DELAY_UNTIL_DIALTONE	3000
 
 DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
-static DEF_PARM_BOOL(prefmaster, 0, 0644, "Do we want to be dahdi preferred sync master");
+static DEF_PARM_BOOL(prefmaster, 0, 0644,
+		     "Do we want to be dahdi preferred sync master");
 // DEF_ARRAY(int, pcmtx, 4, 0, "Forced PCM values to transmit");
 
 #include "dahdi_debug.h"
@@ -75,6 +76,7 @@ static void phonedev_cleanup(xpd_t *xpd);
  *                    echo "3,5" > /sys/module/xpp/parameters/parport_xbuses
  */
 static int parport_xbuses[2] = { 0, 1 };
+
 unsigned int parport_xbuses_num_values;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 9)
 module_param_array(parport_xbuses, int, &parport_xbuses_num_values, 0577);
@@ -90,13 +92,14 @@ MODULE_PARM_DESC(parport_xbuses, "Id's of xbuses to sample (1-2)");
  */
 void xbus_flip_bit(xbus_t *xbus, unsigned int bitnum0, unsigned int bitnum1)
 {
-	int		num = xbus->num;
+	int num = xbus->num;
 
 	if (num == parport_xbuses[0])
 		flip_parport_bit(bitnum0);
 	if (num == parport_xbuses[1])
 		flip_parport_bit(bitnum1);
 }
+
 EXPORT_SYMBOL(xbus_flip_bit);
 #endif
 
@@ -108,7 +111,8 @@ int total_registered_spans(void)
 }
 
 #ifdef	CONFIG_PROC_FS
-static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data);
+static int xpd_read_proc(char *page, char **start, off_t off, int count,
+			 int *eof, void *data);
 #endif
 
 /*------------------------- XPD Management -------------------------*/
@@ -118,7 +122,7 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
  */
 static void xpd_destroy(struct kref *kref)
 {
-	xpd_t	*xpd;
+	xpd_t *xpd;
 
 	xpd = kref_to_xpd(kref);
 	XPD_DBG(DEVICES, xpd, "%s\n", __func__);
@@ -134,16 +138,14 @@ int refcount_xpd(xpd_t *xpd)
 
 xpd_t *get_xpd(const char *msg, xpd_t *xpd)
 {
-	XPD_DBG(DEVICES, xpd, "%s: refcount_xpd=%d\n",
-		msg, refcount_xpd(xpd));
+	XPD_DBG(DEVICES, xpd, "%s: refcount_xpd=%d\n", msg, refcount_xpd(xpd));
 	kref_get(&xpd->kref);
 	return xpd;
 }
 
 void put_xpd(const char *msg, xpd_t *xpd)
 {
-	XPD_DBG(DEVICES, xpd, "%s: refcount_xpd=%d\n",
-		msg, refcount_xpd(xpd));
+	XPD_DBG(DEVICES, xpd, "%s: refcount_xpd=%d\n", msg, refcount_xpd(xpd));
 	kref_put(&xpd->kref, xpd_destroy);
 }
 
@@ -152,12 +154,13 @@ static void xpd_proc_remove(xbus_t *xbus, xpd_t *xpd)
 #ifdef CONFIG_PROC_FS
 	if (xpd->proc_xpd_dir) {
 		if (xpd->proc_xpd_summary) {
-			XPD_DBG(PROC, xpd, "Removing proc '%s'\n", PROC_XPD_SUMMARY);
+			XPD_DBG(PROC, xpd, "Removing proc '%s'\n",
+				PROC_XPD_SUMMARY);
 			remove_proc_entry(PROC_XPD_SUMMARY, xpd->proc_xpd_dir);
 			xpd->proc_xpd_summary = NULL;
 		}
 		XPD_DBG(PROC, xpd, "Removing %s/%s proc directory\n",
-				xbus->busname, xpd->xpdname);
+			xbus->busname, xpd->xpdname);
 		remove_proc_entry(xpd->xpdname, xbus->proc_xbus_dir);
 		xpd->proc_xpd_dir = NULL;
 	}
@@ -173,10 +176,12 @@ static int xpd_proc_create(xbus_t *xbus, xpd_t *xpd)
 		XPD_ERR(xpd, "Failed to create proc directory\n");
 		goto err;
 	}
-	xpd->proc_xpd_summary = create_proc_read_entry(PROC_XPD_SUMMARY, 0444, xpd->proc_xpd_dir,
-			xpd_read_proc, xpd);
+	xpd->proc_xpd_summary =
+	    create_proc_read_entry(PROC_XPD_SUMMARY, 0444, xpd->proc_xpd_dir,
+				   xpd_read_proc, xpd);
 	if (!xpd->proc_xpd_summary) {
-		XPD_ERR(xpd, "Failed to create proc file '%s'\n", PROC_XPD_SUMMARY);
+		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
+			PROC_XPD_SUMMARY);
 		goto err;
 	}
 	SET_PROC_DIRENTRY_OWNER(xpd->proc_xpd_summary);
@@ -191,7 +196,7 @@ err:
 
 void xpd_free(xpd_t *xpd)
 {
-	xbus_t		*xbus = NULL;
+	xbus_t *xbus = NULL;
 
 	if (!xpd)
 		return;
@@ -210,43 +215,41 @@ void xpd_free(xpd_t *xpd)
 	/*
 	 * This must be last, so the xbus cannot be released before the xpd
 	 */
-	put_xbus(__func__, xbus);		/* was taken in xpd_alloc() */
+	put_xbus(__func__, xbus);	/* was taken in xpd_alloc() */
 }
 
 /*
  * Synchronous part of XPD detection.
  * Called from new_card()
  */
-int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
-		int unit,
-		int subunit,
-		__u8 type,
-		__u8 subtype,
-		int subunits,
-		int subunit_ports,
-		__u8 port_dir)
+int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table, int unit,
+	       int subunit, __u8 type, __u8 subtype, int subunits,
+	       int subunit_ports, __u8 port_dir)
 {
-	xpd_t			*xpd = NULL;
-	bool			to_phone;
+	xpd_t *xpd = NULL;
+	bool to_phone;
 
 	BUG_ON(type == XPD_TYPE_NOMODULE);
 	to_phone = BIT(subunit) & port_dir;
 	BUG_ON(!xbus);
 	xpd = xpd_byaddr(xbus, unit, subunit);
 	if (xpd) {
-		XPD_NOTICE(xpd, "XPD at %d%d already exists\n",
-			unit, subunit);
+		XPD_NOTICE(xpd, "XPD at %d%d already exists\n", unit, subunit);
 		return 0;
 	}
 	if (subunit_ports <= 0 || subunit_ports > CHANNELS_PERXPD) {
 		XBUS_NOTICE(xbus, "Illegal number of ports %d for XPD %d%d\n",
-			subunit_ports, unit, subunit);
+			    subunit_ports, unit, subunit);
 		return 0;
 	}
-	xpd = proto_table->xops->card_new(xbus, unit, subunit, proto_table, subtype, subunits, subunit_ports, to_phone);
+	xpd =
+	    proto_table->xops->card_new(xbus, unit, subunit, proto_table,
+					subtype, subunits, subunit_ports,
+					to_phone);
 	if (!xpd) {
 		XBUS_NOTICE(xbus, "card_new(%d,%d,%d,%d,%d) failed. Ignored.\n",
-			unit, subunit, proto_table->type, subtype, to_phone);
+			    unit, subunit, proto_table->type, subtype,
+			    to_phone);
 		return -EINVAL;
 	}
 	return 0;
@@ -263,43 +266,55 @@ int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
  * @eof TODO: figure out procfs
  * @data an xbus_t pointer with the bus data.
  */
-static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
+static int xpd_read_proc(char *page, char **start, off_t off, int count,
+			 int *eof, void *data)
 {
-	int		len = 0;
-	xpd_t		*xpd = data;
-	int		i;
+	int len = 0;
+	xpd_t *xpd = data;
+	int i;
 
 	if (!xpd)
 		goto out;
 
-	len += sprintf(page + len, "%s (%s, card %s, span %d)\n"
-			"timing_priority: %d\n"
-			"timer_count: %d span->mainttimer=%d\n"
-			,
-			xpd->xpdname, xpd->type_name,
-			(xpd->card_present) ? "present" : "missing",
-			(SPAN_REGISTERED(xpd)) ? PHONEDEV(xpd).span.spanno : 0,
-			PHONEDEV(xpd).timing_priority,
-			xpd->timer_count, PHONEDEV(xpd).span.mainttimer
-			);
-	len += sprintf(page + len, "xpd_state: %s (%d)\n",
-		xpd_statename(xpd->xpd_state), xpd->xpd_state);
-	len += sprintf(page + len, "open_counter=%d refcount=%d\n",
-		atomic_read(&PHONEDEV(xpd).open_counter), refcount_xpd(xpd));
-	len += sprintf(page + len, "Address: U=%d S=%d\n", xpd->addr.unit, xpd->addr.subunit);
+	len +=
+	    sprintf(page + len,
+		    "%s (%s, card %s, span %d)\n" "timing_priority: %d\n"
+		    "timer_count: %d span->mainttimer=%d\n", xpd->xpdname,
+		    xpd->type_name, (xpd->card_present) ? "present" : "missing",
+		    (SPAN_REGISTERED(xpd)) ? PHONEDEV(xpd).span.spanno : 0,
+		    PHONEDEV(xpd).timing_priority, xpd->timer_count,
+		    PHONEDEV(xpd).span.mainttimer);
+	len +=
+	    sprintf(page + len, "xpd_state: %s (%d)\n",
+		    xpd_statename(xpd->xpd_state), xpd->xpd_state);
+	len +=
+	    sprintf(page + len, "open_counter=%d refcount=%d\n",
+		    atomic_read(&PHONEDEV(xpd).open_counter),
+		    refcount_xpd(xpd));
+	len +=
+	    sprintf(page + len, "Address: U=%d S=%d\n", xpd->addr.unit,
+		    xpd->addr.subunit);
 	len += sprintf(page + len, "Subunits: %d\n", xpd->subunits);
 	len += sprintf(page + len, "Type: %d.%d\n\n", xpd->type, xpd->subtype);
 	len += sprintf(page + len, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
-	len += sprintf(page + len, "wanted_pcm_mask=0x%04X\n\n", PHONEDEV(xpd).wanted_pcm_mask);
-	len += sprintf(page + len, "mute_dtmf=0x%04X\n\n", PHONEDEV(xpd).mute_dtmf);
+	len +=
+	    sprintf(page + len, "wanted_pcm_mask=0x%04X\n\n",
+		    PHONEDEV(xpd).wanted_pcm_mask);
+	len +=
+	    sprintf(page + len, "mute_dtmf=0x%04X\n\n",
+		    PHONEDEV(xpd).mute_dtmf);
 	len += sprintf(page + len, "STATES:");
 	len += sprintf(page + len, "\n\t%-17s: ", "output_relays");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).digital_outputs, i));
+		len +=
+		    sprintf(page + len, "%d ",
+			    IS_SET(PHONEDEV(xpd).digital_outputs, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "input_relays");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).digital_inputs, i));
+		len +=
+		    sprintf(page + len, "%d ",
+			    IS_SET(PHONEDEV(xpd).digital_inputs, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "offhook");
 	for_each_line(xpd, i) {
@@ -307,7 +322,9 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "oht_pcm_pass");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).oht_pcm_pass, i));
+		len +=
+		    sprintf(page + len, "%d ",
+			    IS_SET(PHONEDEV(xpd).oht_pcm_pass, i));
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "msg_waiting");
 	for_each_line(xpd, i) {
@@ -319,17 +336,20 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 	}
 	len += sprintf(page + len, "\n\t%-17s: ", "no_pcm");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).no_pcm, i));
+		len +=
+		    sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).no_pcm, i));
 	}
 #if 1
 	if (SPAN_REGISTERED(xpd)) {
-		len += sprintf(page + len, "\nPCM:\n            |         [readchunk]       |         [writechunk]      | W D");
+		len +=
+		    sprintf(page + len,
+			    "\nPCM:\n            |         [readchunk]       |         [writechunk]      | W D");
 		for_each_line(xpd, i) {
-			struct dahdi_chan	*chan = XPD_CHAN(xpd, i);
-			__u8	rchunk[DAHDI_CHUNKSIZE];
-			__u8	wchunk[DAHDI_CHUNKSIZE];
-			__u8	*rp;
-			__u8	*wp;
+			struct dahdi_chan *chan = XPD_CHAN(xpd, i);
+			__u8 rchunk[DAHDI_CHUNKSIZE];
+			__u8 wchunk[DAHDI_CHUNKSIZE];
+			__u8 *rp;
+			__u8 *wp;
 			int j;
 
 			if (IS_SET(PHONEDEV(xpd).digital_outputs, i))
@@ -350,10 +370,14 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 			for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
 				len += sprintf(page + len, "%02X ", wchunk[j]);
 			}
-			len += sprintf(page + len, " | %c",
-				(IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))?'+':' ');
-			len += sprintf(page + len, " %c",
-				(IS_SET(PHONEDEV(xpd).mute_dtmf, i))?'-':' ');
+			len +=
+			    sprintf(page + len, " | %c",
+				    (IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i)) ?
+				    '+' : ' ');
+			len +=
+			    sprintf(page + len, " %c",
+				    (IS_SET(PHONEDEV(xpd).mute_dtmf, i)) ? '-' :
+				    ' ');
 		}
 	}
 #endif
@@ -362,18 +386,22 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count, int *eo
 		len += sprintf(page + len, "\nSignalling:\n");
 		for_each_line(xpd, i) {
 			struct dahdi_chan *chan = XPD_CHAN(xpd, i);
-			len += sprintf(page + len, "\t%2d> sigcap=0x%04X sig=0x%04X\n", i, chan->sigcap, chan->sig);
+			len +=
+			    sprintf(page + len,
+				    "\t%2d> sigcap=0x%04X sig=0x%04X\n", i,
+				    chan->sigcap, chan->sig);
 		}
 	}
 #endif
 	len += sprintf(page + len, "\nCOUNTERS:\n");
 	for (i = 0; i < XPD_COUNTER_MAX; i++) {
-		len += sprintf(page + len, "\t\t%-20s = %d\n",
-				xpd_counters[i].name, xpd->counters[i]);
+		len +=
+		    sprintf(page + len, "\t\t%-20s = %d\n",
+			    xpd_counters[i].name, xpd->counters[i]);
 	}
 	len += sprintf(page + len, "<-- len=%d\n", len);
 out:
-	if (len <= off+count)
+	if (len <= off + count)
 		*eof = 1;
 	*start = page + off;
 	len -= off;
@@ -390,10 +418,14 @@ out:
 const char *xpd_statename(enum xpd_state st)
 {
 	switch (st) {
-		case XPD_STATE_START:		return "START";
-		case XPD_STATE_INIT_REGS:		return "INIT_REGS";
-		case XPD_STATE_READY:		return "READY";
-		case XPD_STATE_NOHW:		return "NOHW";
+	case XPD_STATE_START:
+		return "START";
+	case XPD_STATE_INIT_REGS:
+		return "INIT_REGS";
+	case XPD_STATE_READY:
+		return "READY";
+	case XPD_STATE_NOHW:
+		return "NOHW";
 	}
 	return NULL;
 }
@@ -412,8 +444,8 @@ bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 			goto badstate;
 		if (xpd->addr.subunit != 0) {
 			XPD_NOTICE(xpd,
-				"%s: Moving to %s allowed only for subunit 0\n",
-				__func__, xpd_statename(newstate));
+				   "%s: Moving to %s allowed only for subunit 0\n",
+				   __func__, xpd_statename(newstate));
 			goto badstate;
 		}
 		break;
@@ -435,21 +467,19 @@ bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 	xpd->xpd_state = newstate;
 	return 1;
 badstate:
-	XPD_NOTICE(xpd, "%s: cannot transition: %s (%d) -> %s (%d)\n",
-		__func__,
-		xpd_statename(xpd->xpd_state), xpd->xpd_state,
-		xpd_statename(newstate), newstate);
+	XPD_NOTICE(xpd, "%s: cannot transition: %s (%d) -> %s (%d)\n", __func__,
+		   xpd_statename(xpd->xpd_state), xpd->xpd_state,
+		   xpd_statename(newstate), newstate);
 	return 0;
 }
-
 
 /*
  * Cleanup/initialize phonedev
  */
 static void phonedev_cleanup(xpd_t *xpd)
 {
-	struct phonedev	*phonedev = &PHONEDEV(xpd);
-	unsigned int	x;
+	struct phonedev *phonedev = &PHONEDEV(xpd);
+	unsigned int x;
 
 	for (x = 0; x < phonedev->channels; x++) {
 		if (phonedev->chans[x]) {
@@ -460,11 +490,12 @@ static void phonedev_cleanup(xpd_t *xpd)
 	}
 }
 
-__must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_table,
-	int channels, xpp_line_t no_pcm)
+__must_check static int phonedev_init(xpd_t *xpd,
+				      const xproto_table_t *proto_table,
+				      int channels, xpp_line_t no_pcm)
 {
-	struct phonedev	*phonedev = &PHONEDEV(xpd);
-	unsigned int	x;
+	struct phonedev *phonedev = &PHONEDEV(xpd);
+	unsigned int x;
 
 	spin_lock_init(&phonedev->lock_recompute_pcm);
 	phonedev->channels = channels;
@@ -476,15 +507,17 @@ __must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_ta
 	atomic_set(&phonedev->dahdi_registered, 0);
 	atomic_set(&phonedev->open_counter, 0);
 	for (x = 0; x < phonedev->channels; x++) {
-		if (!(phonedev->chans[x] = KZALLOC(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
+		if (!
+		    (phonedev->chans[x] =
+		     KZALLOC(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
 			ERR("%s: Unable to allocate channel %d\n", __func__, x);
 			goto err;
 		}
-		phonedev->ec[x] = KZALLOC(sizeof(*(phonedev->ec[x])),
-				GFP_KERNEL);
+		phonedev->ec[x] =
+		    KZALLOC(sizeof(*(phonedev->ec[x])), GFP_KERNEL);
 		if (!phonedev->ec[x]) {
 			ERR("%s: Unable to allocate ec state %d\n", __func__,
-					x);
+			    x);
 			goto err;
 		}
 	}
@@ -498,28 +531,27 @@ err:
  * xpd_alloc - Allocator for new XPD's
  *
  */
-__must_check xpd_t *xpd_alloc(xbus_t *xbus,
-	int unit, int subunit,
-	int subtype, int subunits,
-	size_t privsize, const xproto_table_t *proto_table, int channels)
+__must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype,
+			      int subunits, size_t privsize,
+			      const xproto_table_t *proto_table, int channels)
 {
-	xpd_t		*xpd = NULL;
-	size_t		alloc_size = sizeof(xpd_t) + privsize;
-	int		type = proto_table->type;
-	xpp_line_t	no_pcm = 0;
+	xpd_t *xpd = NULL;
+	size_t alloc_size = sizeof(xpd_t) + privsize;
+	int type = proto_table->type;
+	xpp_line_t no_pcm = 0;
 
 	BUG_ON(!proto_table);
-	XBUS_DBG(DEVICES, xbus, "type=%d channels=%d (alloc_size=%zd)\n",
-		type, channels, alloc_size);
+	XBUS_DBG(DEVICES, xbus, "type=%d channels=%d (alloc_size=%zd)\n", type,
+		 channels, alloc_size);
 	if (channels > CHANNELS_PERXPD) {
-		XBUS_ERR(xbus, "%s: type=%d: too many channels %d\n",
-			__func__, type, channels);
+		XBUS_ERR(xbus, "%s: type=%d: too many channels %d\n", __func__,
+			 type, channels);
 		goto err;
 	}
 
 	if ((xpd = KZALLOC(alloc_size, GFP_KERNEL)) == NULL) {
 		XBUS_ERR(xbus, "%s: type=%d: Unable to allocate memory\n",
-			__func__, type);
+			 __func__, type);
 		goto err;
 	}
 	xpd->priv = (__u8 *)xpd + sizeof(xpd_t);
@@ -535,9 +567,12 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 
 	/* For USB-1 disable some channels */
 	if (MAX_SEND_SIZE(xbus) < RPACKET_SIZE(GLOBAL, PCM_WRITE)) {
-		no_pcm = 0x7F | PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).digital_inputs;
-		XBUS_NOTICE(xbus, "max xframe size = %d, disabling some PCM channels. no_pcm=0x%04X\n",
-				MAX_SEND_SIZE(xbus), PHONEDEV(xpd).no_pcm);
+		no_pcm =
+		    0x7F | PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).
+		    digital_inputs;
+		XBUS_NOTICE(xbus,
+			    "max xframe size = %d, disabling some PCM channels. no_pcm=0x%04X\n",
+			    MAX_SEND_SIZE(xbus), PHONEDEV(xpd).no_pcm);
 	}
 	if (phonedev_init(xpd, proto_table, channels, no_pcm) < 0)
 		goto err;
@@ -549,7 +584,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 	 * is removed in xpd_free()
 	 */
 	xbus = get_xbus(__func__, xbus->num);	/* returned in xpd_free() */
-	xproto_get(type);		/* will be returned in xpd_free() */
+	xproto_get(type);	/* will be returned in xpd_free() */
 	return xpd;
 err:
 	if (xpd) {
@@ -580,16 +615,17 @@ void update_xpd_status(xpd_t *xpd, int alarm_flag)
 		return;
 	}
 	switch (alarm_flag) {
-		case DAHDI_ALARM_NONE:
-			xpd->last_response = jiffies;
-			break;
-		default:
-			// Nothing
-			break;
+	case DAHDI_ALARM_NONE:
+		xpd->last_response = jiffies;
+		break;
+	default:
+		// Nothing
+		break;
 	}
 	if (span->alarms == alarm_flag)
 		return;
-	XPD_DBG(GENERAL, xpd, "Update XPD alarms: %s -> %02X\n", PHONEDEV(xpd).span.name, alarm_flag);
+	XPD_DBG(GENERAL, xpd, "Update XPD alarms: %s -> %02X\n",
+		PHONEDEV(xpd).span.name, alarm_flag);
 	span->alarms = alarm_flag;
 	dahdi_alarm_notify(span);
 }
@@ -661,13 +697,13 @@ void hookstate_changed(xpd_t *xpd, int pos, bool to_offhook)
 		 */
 		BIT_SET(PHONEDEV(xpd).silence_pcm, pos);
 	}
-	notify_rxsig(xpd, pos, (to_offhook) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
+	notify_rxsig(xpd, pos,
+		     (to_offhook) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
 }
 
 #define	XPP_MAX_LEN	512
 
 /*------------------------- Dahdi Interfaces -----------------------*/
-
 
 /*
  * Called from dahdi with spinlock held on chan. Must not call back
@@ -675,10 +711,10 @@ void hookstate_changed(xpd_t *xpd, int pos, bool to_offhook)
  */
 int xpp_open(struct dahdi_chan *chan)
 {
-	xpd_t		*xpd;
-	xbus_t		*xbus;
-	int		pos;
-	unsigned long	flags;
+	xpd_t *xpd;
+	xbus_t *xbus;
+	int pos;
+	unsigned long flags;
 
 	if (!chan) {
 		NOTICE("open called on a null chan\n");
@@ -701,9 +737,8 @@ int xpp_open(struct dahdi_chan *chan)
 	}
 	spin_lock_irqsave(&xbus->lock, flags);
 	atomic_inc(&PHONEDEV(xpd).open_counter);
-	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n",
-		current->comm, current->pid,
-		atomic_read(&PHONEDEV(xpd).open_counter));
+	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n", current->comm,
+		 current->pid, atomic_read(&PHONEDEV(xpd).open_counter));
 	spin_unlock_irqrestore(&xbus->lock, flags);
 	if (PHONE_METHOD(card_open, xpd))
 		CALL_PHONE_METHOD(card_open, xpd, pos);
@@ -712,25 +747,24 @@ int xpp_open(struct dahdi_chan *chan)
 
 int xpp_close(struct dahdi_chan *chan)
 {
-	xpd_t		*xpd = chan->pvt;
-	xbus_t		*xbus = xpd->xbus;
-	int		pos = chan->chanpos - 1;
-	unsigned long	flags;
+	xpd_t *xpd = chan->pvt;
+	xbus_t *xbus = xpd->xbus;
+	int pos = chan->chanpos - 1;
+	unsigned long flags;
 
 	spin_lock_irqsave(&xbus->lock, flags);
 	spin_unlock_irqrestore(&xbus->lock, flags);
 	if (PHONE_METHOD(card_close, xpd))
 		CALL_PHONE_METHOD(card_close, xpd, pos);
-	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n",
-		current->comm, current->pid,
-		atomic_read(&PHONEDEV(xpd).open_counter));
-	atomic_dec(&PHONEDEV(xpd).open_counter);		/* from xpp_open() */
+	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n", current->comm,
+		 current->pid, atomic_read(&PHONEDEV(xpd).open_counter));
+	atomic_dec(&PHONEDEV(xpd).open_counter);	/* from xpp_open() */
 	return 0;
 }
 
 void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd)
 {
-	char	*extra_msg = "";
+	char *extra_msg = "";
 
 	if (_IOC_TYPE(cmd) == 'J')
 		extra_msg = " (for old ZAPTEL)";
@@ -744,48 +778,51 @@ void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd)
 
 int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 {
-	xpd_t	*xpd = chan->pvt;
-	int	pos = chan->chanpos - 1;
+	xpd_t *xpd = chan->pvt;
+	int pos = chan->chanpos - 1;
 
 	if (!xpd) {
 		ERR("%s: channel in pos %d, was already closed. Ignore.\n",
-			__func__, pos);
+		    __func__, pos);
 		return -ENODEV;
 	}
 	switch (cmd) {
-		default:
-			/* Some span-specific commands before we give up: */
-			if (PHONE_METHOD(card_ioctl, xpd)) {
-				return CALL_PHONE_METHOD(card_ioctl, xpd, pos, cmd, arg);
-			}
-			report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
-			return -ENOTTY;
+	default:
+		/* Some span-specific commands before we give up: */
+		if (PHONE_METHOD(card_ioctl, xpd)) {
+			return CALL_PHONE_METHOD(card_ioctl, xpd, pos, cmd,
+						 arg);
+		}
+		report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
+		return -ENOTTY;
 	}
 	return 0;
 }
 
 int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 {
-	xpd_t	*xpd = chan->pvt;
-	xbus_t	*xbus;
+	xpd_t *xpd = chan->pvt;
+	xbus_t *xbus;
 	int pos = chan->chanpos - 1;
 
 	if (!xpd) {
 		ERR("%s: channel in pos %d, was already closed. Ignore.\n",
-			__func__, pos);
+		    __func__, pos);
 		return -ENODEV;
 	}
 	if (!PHONE_METHOD(card_hooksig, xpd)) {
 		LINE_ERR(xpd, pos,
-			"%s: No hooksig method for this channel. Ignore.\n",
-			__func__);
+			 "%s: No hooksig method for this channel. Ignore.\n",
+			 __func__);
 		return -ENODEV;
 	}
 	xbus = xpd->xbus;
 	BUG_ON(!xbus);
-	DBG(SIGNAL, "Setting %s to %s (%d)\n", chan->name, txsig2str(txsig), txsig);
+	DBG(SIGNAL, "Setting %s to %s (%d)\n", chan->name, txsig2str(txsig),
+	    txsig);
 	return CALL_PHONE_METHOD(card_hooksig, xpd, pos, txsig);
 }
+
 EXPORT_SYMBOL(xpp_hooksig);
 
 /* Req: Set the requested chunk size.  This is the unit in which you must
@@ -795,34 +832,34 @@ int xpp_setchunksize(struct dahdi_span *span, int chunksize);
 /* Enable maintenance modes */
 int xpp_maint(struct dahdi_span *span, int cmd)
 {
-	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
-	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
-	int		ret = 0;
+	struct phonedev *phonedev = container_of(span, struct phonedev, span);
+	xpd_t *xpd = container_of(phonedev, struct xpd, phonedev);
+	int ret = 0;
 #if 0
-	char		loopback_data[] = "THE-QUICK-BROWN-FOX-JUMPED-OVER-THE-LAZY-DOG";
+	char loopback_data[] = "THE-QUICK-BROWN-FOX-JUMPED-OVER-THE-LAZY-DOG";
 #endif
 
 	DBG(GENERAL, "span->mainttimer=%d\n", span->mainttimer);
 	switch (cmd) {
-		case DAHDI_MAINT_NONE:
-			INFO("XXX Turn off local and remote loops XXX\n");
-			break;
-		case DAHDI_MAINT_LOCALLOOP:
-			INFO("XXX Turn on local loopback XXX\n");
-			break;
-		case DAHDI_MAINT_REMOTELOOP:
-			INFO("XXX Turn on remote loopback XXX\n");
-			break;
-		case DAHDI_MAINT_LOOPUP:
-			INFO("XXX Send loopup code XXX\n");
-			break;
-		case DAHDI_MAINT_LOOPDOWN:
-			INFO("XXX Send loopdown code XXX\n");
-			break;
-		default:
-			ERR("XPP: Unknown maint command: %d\n", cmd);
-			ret = -EINVAL;
-			break;
+	case DAHDI_MAINT_NONE:
+		INFO("XXX Turn off local and remote loops XXX\n");
+		break;
+	case DAHDI_MAINT_LOCALLOOP:
+		INFO("XXX Turn on local loopback XXX\n");
+		break;
+	case DAHDI_MAINT_REMOTELOOP:
+		INFO("XXX Turn on remote loopback XXX\n");
+		break;
+	case DAHDI_MAINT_LOOPUP:
+		INFO("XXX Send loopup code XXX\n");
+		break;
+	case DAHDI_MAINT_LOOPDOWN:
+		INFO("XXX Send loopdown code XXX\n");
+		break;
+	default:
+		ERR("XPP: Unknown maint command: %d\n", cmd);
+		ret = -EINVAL;
+		break;
 	}
 	if (span->mainttimer || span->maintstat)
 		update_xpd_status(xpd, DAHDI_ALARM_LOOPBACK);
@@ -836,7 +873,7 @@ int xpp_maint(struct dahdi_span *span, int cmd)
  */
 static int xpp_watchdog(struct dahdi_span *span, int cause)
 {
-	static	int rate_limit;
+	static int rate_limit;
 
 	if ((rate_limit++ % 1000) == 0)
 		DBG(GENERAL, "\n");
@@ -848,12 +885,12 @@ static int xpp_watchdog(struct dahdi_span *span, int cause)
  * Hardware Echo Canceller management
  */
 static void echocan_free(struct dahdi_chan *chan,
-		struct dahdi_echocan_state *ec)
+			 struct dahdi_echocan_state *ec)
 {
-	xpd_t			*xpd;
-	xbus_t			*xbus;
-	int			pos = chan->chanpos - 1;
-	const struct echoops	*echoops;
+	xpd_t *xpd;
+	xbus_t *xbus;
+	int pos = chan->chanpos - 1;
+	const struct echoops *echoops;
 
 	xpd = chan->pvt;
 	xbus = xpd->xbus;
@@ -875,9 +912,9 @@ static const struct dahdi_echocan_ops xpp_ec_ops = {
 
 const char *xpp_echocan_name(const struct dahdi_chan *chan)
 {
-	xpd_t	*xpd;
-	xbus_t	*xbus;
-	int	pos;
+	xpd_t *xpd;
+	xbus_t *xbus;
+	int pos;
 
 	if (!chan) {
 		NOTICE("%s(NULL)\n", __func__);
@@ -893,37 +930,34 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 	 * quirks and limitations
 	 */
 	if (xbus->quirks.has_fxo) {
-		if (
-			xbus->quirks.has_digital_span &&
-			xpd->type == XPD_TYPE_FXO) {
+		if (xbus->quirks.has_digital_span && xpd->type == XPD_TYPE_FXO) {
 			LINE_NOTICE(xpd, pos,
-				"quirk: give up HWEC on FXO: "
-				"AB has digital span\n");
+				    "quirk: give up HWEC on FXO: "
+				    "AB has digital span\n");
 			return NULL;
-		} else if (
-			xbus->sync_mode != SYNC_MODE_AB &&
-			xpd->type == XPD_TYPE_FXS) {
+		} else if (xbus->sync_mode != SYNC_MODE_AB
+			   && xpd->type == XPD_TYPE_FXS) {
 			LINE_NOTICE(xpd, pos,
-				"quirk: give up HWEC on FXS: "
-				"AB has FXO and is sync slave\n");
+				    "quirk: give up HWEC on FXS: "
+				    "AB has FXO and is sync slave\n");
 			return NULL;
 		}
 	}
 	return "XPP";
 }
+
 EXPORT_SYMBOL(xpp_echocan_name);
 
-int xpp_echocan_create(struct dahdi_chan *chan,
-				struct dahdi_echocanparams *ecp,
-				struct dahdi_echocanparam *p,
-				struct dahdi_echocan_state **ec)
+int xpp_echocan_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
+		       struct dahdi_echocanparam *p,
+		       struct dahdi_echocan_state **ec)
 {
-	xpd_t			*xpd;
-	xbus_t			*xbus;
-	int			pos;
-	struct phonedev		*phonedev;
-	const struct echoops	*echoops;
-	int			ret;
+	xpd_t *xpd;
+	xbus_t *xbus;
+	int pos;
+	struct phonedev *phonedev;
+	const struct echoops *echoops;
+	int ret;
 
 	xpd = chan->pvt;
 	xbus = xpd->xbus;
@@ -937,17 +971,18 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 	(*ec)->features = xpp_ec_features;
 	xpd = get_xpd(__func__, xpd);	/* Returned in echocan_free() */
 	LINE_DBG(GENERAL, xpd, pos, "(tap=%d, param_count=%d)\n",
-		ecp->tap_length, ecp->param_count);
+		 ecp->tap_length, ecp->param_count);
 	ret = CALL_EC_METHOD(ec_set, xbus, xpd, pos, 1);
 	CALL_EC_METHOD(ec_update, xbus, xbus);
 	return ret;
 }
+
 EXPORT_SYMBOL(xpp_echocan_create);
 
 void xpp_span_assigned(struct dahdi_span *span)
 {
-	struct phonedev	*phonedev = container_of(span, struct phonedev, span);
-	xpd_t		*xpd = container_of(phonedev, struct xpd, phonedev);
+	struct phonedev *phonedev = container_of(span, struct phonedev, span);
+	xpd_t *xpd = container_of(phonedev, struct xpd, phonedev);
 
 	XPD_INFO(xpd, "Span assigned: %d\n", span->spanno);
 	if (xpd->card_present) {
@@ -955,6 +990,7 @@ void xpp_span_assigned(struct dahdi_span *span)
 		dahdi_alarm_notify(&phonedev->span);
 	}
 }
+
 EXPORT_SYMBOL(xpp_span_assigned);
 
 static const struct dahdi_span_ops xpp_span_ops = {
@@ -984,7 +1020,8 @@ void xpd_set_spanname(xpd_t *xpd)
 {
 	struct dahdi_span *span = &PHONEDEV(xpd).span;
 
-	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname, xpd->xpdname);
+	snprintf(span->name, MAX_SPANNAME, "%s/%s", xpd->xbus->busname,
+		 xpd->xpdname);
 	/*
 	 * The "Xorcom XPD" is a prefix in one of the regexes we
 	 * use in our dahdi_genconf to match for PRI cards.
@@ -992,14 +1029,15 @@ void xpd_set_spanname(xpd_t *xpd)
 	 * this horseshit.
 	 */
 	snprintf(span->desc, MAX_SPANDESC, "Xorcom XPD [%s].%d: %s",
-			xpd->xbus->label, span->offset + 1, xpd->type_name);
+		 xpd->xbus->label, span->offset + 1, xpd->type_name);
 }
+
 EXPORT_SYMBOL(xpd_set_spanname);
 
 static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 {
-	struct dahdi_span	*span;
-	int			i;
+	struct dahdi_span *span;
+	int i;
 
 	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
 	for (i = 0; i < cn; i++)
@@ -1022,9 +1060,9 @@ static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 
 int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset)
 {
-	xbus_t		*xbus;
-	int		cn;
-	struct phonedev	*phonedev;
+	xbus_t *xbus;
+	int cn;
+	struct phonedev *phonedev;
 
 	BUG_ON(!xpd);
 
@@ -1052,7 +1090,7 @@ int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset)
 
 int xpd_dahdi_postregister(xpd_t *xpd)
 {
-	int	cn;
+	int cn;
 
 	atomic_inc(&num_registered_spans);
 	atomic_inc(&PHONEDEV(xpd).dahdi_registered);
@@ -1093,9 +1131,11 @@ void xpd_dahdi_preunregister(xpd_t *xpd)
 		int j;
 
 		dahdi_alarm_notify(&PHONEDEV(xpd).span);
-		XPD_DBG(DEVICES, xpd, "Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
-		for (j=0; j<PHONEDEV(xpd).span.channels; j++) {
-			dahdi_qevent_lock(XPD_CHAN(xpd, j), DAHDI_EVENT_REMOVED);
+		XPD_DBG(DEVICES, xpd,
+			"Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
+		for (j = 0; j < PHONEDEV(xpd).span.channels; j++) {
+			dahdi_qevent_lock(XPD_CHAN(xpd, j),
+					  DAHDI_EVENT_REMOVED);
 		}
 	}
 }
@@ -1125,11 +1165,11 @@ static void do_cleanup(void)
 
 static int __init xpp_dahdi_init(void)
 {
-	int	ret = 0;
-	void	*top = NULL;
+	int ret = 0;
+	void *top = NULL;
 
-	INFO("revision %s MAX_XPDS=%d (%d*%d)\n", XPP_VERSION,
-			MAX_XPDS, MAX_UNIT, MAX_SUBUNIT);
+	INFO("revision %s MAX_XPDS=%d (%d*%d)\n", XPP_VERSION, MAX_XPDS,
+	     MAX_UNIT, MAX_SUBUNIT);
 #ifdef CONFIG_PROC_FS
 	xpp_proc_toplevel = proc_mkdir(PROC_DIR, NULL);
 	if (!xpp_proc_toplevel) {

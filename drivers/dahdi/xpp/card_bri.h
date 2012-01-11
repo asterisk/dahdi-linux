@@ -25,7 +25,7 @@
 #include "xpd.h"
 
 enum bri_opcodes {
-	XPROTO_NAME(BRI, SET_LED)			= 0x33,
+	XPROTO_NAME(BRI, SET_LED) = 0x33,
 };
 
-#endif	/* CARD_BRI_H */
+#endif /* CARD_BRI_H */

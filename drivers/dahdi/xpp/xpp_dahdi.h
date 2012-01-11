@@ -30,17 +30,19 @@ int xpd_dahdi_preregister(xpd_t *xpd, unsigned offset);
 int xpd_dahdi_postregister(xpd_t *xpd);
 void xpd_dahdi_preunregister(xpd_t *xpd);
 void xpd_dahdi_postunregister(xpd_t *xpd);
-int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
-		int unit, int subunit, __u8 type, __u8 subtype, int subunits, int subunit_ports, __u8 port_dir);
-xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype, int subunits, size_t privsize, const xproto_table_t *proto_table, int channels);
+int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table, int unit,
+	       int subunit, __u8 type, __u8 subtype, int subunits,
+	       int subunit_ports, __u8 port_dir);
+xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype, int subunits,
+		 size_t privsize, const xproto_table_t *proto_table,
+		 int channels);
 void xpd_free(xpd_t *xpd);
 void xpd_remove(xpd_t *xpd);
 void update_xpd_status(xpd_t *xpd, int alarm_flag);
 const char *xpp_echocan_name(const struct dahdi_chan *chan);
-int xpp_echocan_create(struct dahdi_chan *chan,
-				struct dahdi_echocanparams *ecp,
-				struct dahdi_echocanparam *p,
-				struct dahdi_echocan_state **ec);
+int xpp_echocan_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
+		       struct dahdi_echocanparam *p,
+		       struct dahdi_echocan_state **ec);
 void hookstate_changed(xpd_t *xpd, int pos, bool good);
 int xpp_open(struct dahdi_chan *chan);
 int xpp_close(struct dahdi_chan *chan);
@@ -58,9 +60,9 @@ void notify_rxsig(xpd_t *xpd, int pos, enum dahdi_rxsig rxsig);
 #ifdef CONFIG_PROC_FS
 #include <linux/proc_fs.h>
 
-extern struct proc_dir_entry	*xpp_proc_toplevel;
+extern struct proc_dir_entry *xpp_proc_toplevel;
 #endif
 
 #define	SPAN_REGISTERED(xpd)	atomic_read(&PHONEDEV(xpd).dahdi_registered)
 
-#endif	/* XPP_DAHDI_H */
+#endif /* XPP_DAHDI_H */

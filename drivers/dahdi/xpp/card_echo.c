@@ -42,25 +42,20 @@ static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static bool echo_packet_is_valid(xpacket_t *pack);
 static void echo_packet_dump(const char *msg, xpacket_t *pack);
 
-DEF_RPACKET_DATA(ECHO, SET,
-	__u8 timeslots[ECHO_TIMESLOTS];
-	);
+DEF_RPACKET_DATA(ECHO, SET, __u8 timeslots[ECHO_TIMESLOTS];);
 
-DEF_RPACKET_DATA(ECHO, SET_REPLY,
-	__u8 status;
-	__u8 reserved;
-	);
+DEF_RPACKET_DATA(ECHO, SET_REPLY, __u8 status; __u8 reserved;);
 
 struct ECHO_priv_data {
 };
 
-static xproto_table_t	PROTO_TABLE(ECHO);
+static xproto_table_t PROTO_TABLE(ECHO);
 
 /*---------------- ECHO: Methods -------------------------------------------*/
 
 static xpd_t *ECHO_card_new(xbus_t *xbus, int unit, int subunit,
-		const xproto_table_t *proto_table, __u8 subtype,
-		int subunits, int subunit_ports, bool to_phone)
+			    const xproto_table_t *proto_table, __u8 subtype,
+			    int subunits, int subunit_ports, bool to_phone)
 {
 	xpd_t *xpd = NULL;
 	int channels = 0;
@@ -70,8 +65,9 @@ static xpd_t *ECHO_card_new(xbus_t *xbus, int unit, int subunit,
 		return NULL;
 	}
 	XBUS_DBG(GENERAL, xbus, "\n");
-	xpd = xpd_alloc(xbus, unit, subunit, subtype, subunits,
-		sizeof(struct ECHO_priv_data), proto_table, channels);
+	xpd =
+	    xpd_alloc(xbus, unit, subunit, subtype, subunits,
+		      sizeof(struct ECHO_priv_data), proto_table, channels);
 	if (!xpd)
 		return NULL;
 	xpd->type_name = "ECHO";
@@ -122,19 +118,16 @@ static int ECHO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		static int rate_limit;
 
 		if ((rate_limit++ % 1003) < 5)
-			notify_bad_xpd(__func__, xbus, addr,
-					orig_xpd->xpdname);
+			notify_bad_xpd(__func__, xbus, addr, orig_xpd->xpdname);
 		return -EPROTO;
 	}
 	spin_lock_irqsave(&xpd->lock, flags);
 	/* Update /proc info only if reply related to last reg read request */
-	if (
-			REG_FIELD(&xpd->requested_reply, regnum) ==
-				REG_FIELD(info, regnum) &&
-			REG_FIELD(&xpd->requested_reply, do_subreg) ==
-				REG_FIELD(info, do_subreg) &&
-			REG_FIELD(&xpd->requested_reply, subreg) ==
-				REG_FIELD(info, subreg)) {
+	if (REG_FIELD(&xpd->requested_reply, regnum) == REG_FIELD(info, regnum)
+	    && REG_FIELD(&xpd->requested_reply, do_subreg) == REG_FIELD(info,
+									do_subreg)
+	    && REG_FIELD(&xpd->requested_reply, subreg) == REG_FIELD(info,
+								     subreg)) {
 		xpd->last_reply = *info;
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);
@@ -198,7 +191,7 @@ static int ECHO_ec_set(xpd_t *xpd, int pos, bool on)
 			ts[ts_number] &= ~ts_mask;
 	}
 	LINE_DBG(GENERAL, xpd, pos, "%s = %d -- ts_number=%d ts_mask=0x%X\n",
-		__func__, on, ts_number, ts_mask);
+		 __func__, on, ts_number, ts_mask);
 	return 0;
 }
 
@@ -220,7 +213,7 @@ static int ECHO_ec_get(xpd_t *xpd, int pos)
 	}
 #if 0
 	LINE_DBG(GENERAL, xpd, pos, "ec_get=%d -- ts_number=%d ts_mask=0x%X\n",
-		is_on, ts_number, ts_mask);
+		 is_on, ts_number, ts_mask);
 #endif
 	return is_on;
 }
@@ -233,15 +226,14 @@ static void ECHO_ec_dump(xbus_t *xbus)
 	ts = xbus->echo_state.timeslots;
 	for (i = 0; i + 15 < ECHO_TIMESLOTS; i += 16) {
 		XBUS_DBG(GENERAL, xbus,
-			"EC-DUMP[%03d]: "
-			"0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X "
-			"0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
-			i,
-			ts[i+0], ts[i+1], ts[i+2], ts[i+3], ts[i+4], ts[i+5],
-				ts[i+6], ts[i+7],
-			ts[i+8], ts[i+9], ts[i+10], ts[i+11], ts[i+12],
-				ts[i+13], ts[i+14], ts[i+15]
-			);
+			 "EC-DUMP[%03d]: "
+			 "0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X "
+			 "0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
+			 i, ts[i + 0], ts[i + 1], ts[i + 2], ts[i + 3],
+			 ts[i + 4], ts[i + 5], ts[i + 6], ts[i + 7], ts[i + 8],
+			 ts[i + 9], ts[i + 10], ts[i + 11], ts[i + 12],
+			 ts[i + 13], ts[i + 14], ts[i + 15]
+		    );
 	}
 }
 
@@ -255,7 +247,7 @@ static int ECHO_ec_update(xbus_t *xbus)
 /*---------------- ECHO: Astribank Reply Handlers --------------------------*/
 HANDLER_DEF(ECHO, SET_REPLY)
 {
-	__u8	status;
+	__u8 status;
 
 	BUG_ON(!xpd);
 	status = RPACKET_FIELD(pack, ECHO, SET_REPLY, status);
@@ -263,39 +255,32 @@ HANDLER_DEF(ECHO, SET_REPLY)
 	return 0;
 }
 
-static const struct xops	echo_xops = {
-	.card_new		= ECHO_card_new,
-	.card_init		= ECHO_card_init,
-	.card_remove		= ECHO_card_remove,
-	.card_tick		= ECHO_card_tick,
-	.card_register_reply	= ECHO_card_register_reply,
+static const struct xops echo_xops = {
+	.card_new = ECHO_card_new,
+	.card_init = ECHO_card_init,
+	.card_remove = ECHO_card_remove,
+	.card_tick = ECHO_card_tick,
+	.card_register_reply = ECHO_card_register_reply,
 };
 
-static const struct echoops	echoops = {
-	.ec_set		= ECHO_ec_set,
-	.ec_get		= ECHO_ec_get,
-	.ec_update	= ECHO_ec_update,
-	.ec_dump	= ECHO_ec_dump,
+static const struct echoops echoops = {
+	.ec_set = ECHO_ec_set,
+	.ec_get = ECHO_ec_get,
+	.ec_update = ECHO_ec_update,
+	.ec_dump = ECHO_ec_dump,
 };
 
 static xproto_table_t PROTO_TABLE(ECHO) = {
-	.owner = THIS_MODULE,
-	.entries = {
-		/*	Table	Card	Opcode		*/
-		XENTRY(ECHO,	ECHO,	SET_REPLY),
-	},
-	.name = "ECHO",
-	.ports_per_subunit = 1,
-	.type = XPD_TYPE_ECHO,
-	.xops = &echo_xops,
-	.echoops = &echoops,
-	.packet_is_valid = echo_packet_is_valid,
-	.packet_dump = echo_packet_dump,
-};
+	.owner = THIS_MODULE,.entries = {
+		/*      Table   Card    Opcode          */
+XENTRY(ECHO, ECHO, SET_REPLY),},.name = "ECHO",.ports_per_subunit =
+	    1,.type = XPD_TYPE_ECHO,.xops = &echo_xops,.echoops =
+	    &echoops,.packet_is_valid =
+	    echo_packet_is_valid,.packet_dump = echo_packet_dump,};
 
 static bool echo_packet_is_valid(xpacket_t *pack)
 {
-	const xproto_entry_t	*xe = NULL;
+	const xproto_entry_t *xe = NULL;
 	// DBG(GENERAL, "\n");
 	xe = xproto_card_entry(&PROTO_TABLE(ECHO), XPACKET_OP(pack));
 	return xe != NULL;
@@ -309,14 +294,14 @@ static void echo_packet_dump(const char *msg, xpacket_t *pack)
 /*------------------------- sysfs stuff --------------------------------*/
 static int echo_xpd_probe(struct device *dev)
 {
-	xpd_t	*ec_xpd;
-	int	ret = 0;
+	xpd_t *ec_xpd;
+	int ret = 0;
 
 	ec_xpd = dev_to_xpd(dev);
 	/* Is it our device? */
 	if (ec_xpd->type != XPD_TYPE_ECHO) {
-		XPD_ERR(ec_xpd, "drop suggestion for %s (%d)\n",
-			dev_name(dev), ec_xpd->type);
+		XPD_ERR(ec_xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
+			ec_xpd->type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, ec_xpd, "SYSFS\n");
@@ -325,23 +310,22 @@ static int echo_xpd_probe(struct device *dev)
 
 static int echo_xpd_remove(struct device *dev)
 {
-	xpd_t	*ec_xpd;
+	xpd_t *ec_xpd;
 
 	ec_xpd = dev_to_xpd(dev);
 	XPD_DBG(DEVICES, ec_xpd, "SYSFS\n");
 	return 0;
 }
 
-static struct xpd_driver	echo_driver = {
-	.type		= XPD_TYPE_ECHO,
-	.driver		= {
-		.name = "echo",
+static struct xpd_driver echo_driver = {
+	.type = XPD_TYPE_ECHO,
+	.driver = {
+		   .name = "echo",
 #ifndef OLD_HOTPLUG_SUPPORT
-		.owner = THIS_MODULE,
+		   .owner = THIS_MODULE,
 #endif
-		.probe = echo_xpd_probe,
-		.remove = echo_xpd_remove
-	}
+		   .probe = echo_xpd_probe,
+		   .remove = echo_xpd_remove}
 };
 
 static int __init card_echo_startup(void)

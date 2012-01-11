@@ -24,8 +24,8 @@
 #include "xpd.h"
 
 enum echo_opcodes {
-	XPROTO_NAME(ECHO, SET)		= 0x39,
-	XPROTO_NAME(ECHO, SET_REPLY)	= 0x3A,
+	XPROTO_NAME(ECHO, SET) = 0x39,
+	XPROTO_NAME(ECHO, SET_REPLY) = 0x3A,
 };
 
-#endif	/* CARD_ECHO_H */
+#endif /* CARD_ECHO_H */

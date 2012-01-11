@@ -28,4 +28,4 @@ void flip_parport_bit(unsigned char bitnum);
 #define flip_parport_bit(bitnum)
 #endif
 
-#endif	/* PARPORT_DEBUG_H */
+#endif /* PARPORT_DEBUG_H */

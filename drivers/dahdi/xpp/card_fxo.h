@@ -25,17 +25,14 @@
 #include "xpd.h"
 
 enum fxo_opcodes {
-	XPROTO_NAME(FXO, SIG_CHANGED)		= 0x06,
-/**/
-	XPROTO_NAME(FXO, DAA_WRITE)		= 0x0F,	/* Write to DAA */
-	XPROTO_NAME(FXO, CHAN_CID)		= 0x0F,	/* Write to DAA */
-	XPROTO_NAME(FXO, LED)			= 0x0F,	/* Write to DAA */
+	XPROTO_NAME(FXO, SIG_CHANGED) = 0x06,
+	 /**/ XPROTO_NAME(FXO, DAA_WRITE) = 0x0F,	/* Write to DAA */
+	XPROTO_NAME(FXO, CHAN_CID) = 0x0F,	/* Write to DAA */
+	XPROTO_NAME(FXO, LED) = 0x0F,	/* Write to DAA */
 };
 
+DEF_RPACKET_DATA(FXO, SIG_CHANGED, xpp_line_t sig_status;	/* channels: lsb=1, msb=8 */
+		 xpp_line_t sig_toggles;	/* channels: lsb=1, msb=8 */
+    );
 
-DEF_RPACKET_DATA(FXO, SIG_CHANGED,
-	xpp_line_t	sig_status;	/* channels: lsb=1, msb=8 */
-	xpp_line_t	sig_toggles;	/* channels: lsb=1, msb=8 */
-	);
-
-#endif	/* CARD_FXO_H */
+#endif /* CARD_FXO_H */

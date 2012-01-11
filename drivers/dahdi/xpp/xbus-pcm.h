@@ -33,10 +33,10 @@
 #ifdef	__KERNEL__
 
 enum sync_mode {
-	SYNC_MODE_NONE	= 0x00,
-	SYNC_MODE_AB	= 0x01,		/* Astribank sync */
-	SYNC_MODE_PLL	= 0x03,		/* Adjust XPD's PLL according to HOST */
-	SYNC_MODE_QUERY	= 0x80,
+	SYNC_MODE_NONE = 0x00,
+	SYNC_MODE_AB = 0x01,	/* Astribank sync */
+	SYNC_MODE_PLL = 0x03,	/* Adjust XPD's PLL according to HOST */
+	SYNC_MODE_QUERY = 0x80,
 };
 
 /*
@@ -46,7 +46,7 @@ enum sync_mode {
  * time representations.
  */
 struct xpp_timestamp {
-	struct timeval	tv;
+	struct timeval tv;
 };
 
 /*
@@ -58,12 +58,12 @@ struct xpp_timestamp {
  *     from other dahdi devices).
  */
 struct xpp_ticker {		/* for rate calculation */
-	int			count;
-	int			cycle;
-	struct xpp_timestamp	first_sample;
-	struct xpp_timestamp	last_sample;
-	int			tick_period;	/* usec/tick */
-	spinlock_t		lock;
+	int count;
+	int cycle;
+	struct xpp_timestamp first_sample;
+	struct xpp_timestamp last_sample;
+	int tick_period;	/* usec/tick */
+	spinlock_t lock;
 };
 
 /*
@@ -71,66 +71,65 @@ struct xpp_ticker {		/* for rate calculation */
  * xbus ticker to a reference ticker.
  */
 struct xpp_drift {
-	int			delta_tick;		/* from ref_ticker */
-	int			lost_ticks;		/* occurances */
-	int			lost_tick_count;
-	int			sync_inaccuracy;
-	struct xpp_timestamp	last_lost_tick;
-	long			delta_sum;
-	int			offset_prev;
-	int			offset_range;
-	int			offset_min;
-	int			offset_max;
-	int			min_speed;
-	int			max_speed;
-	spinlock_t		lock;
+	int delta_tick;		/* from ref_ticker */
+	int lost_ticks;		/* occurances */
+	int lost_tick_count;
+	int sync_inaccuracy;
+	struct xpp_timestamp last_lost_tick;
+	long delta_sum;
+	int offset_prev;
+	int offset_range;
+	int offset_min;
+	int offset_max;
+	int min_speed;
+	int max_speed;
+	spinlock_t lock;
 };
 
 void xpp_drift_init(xbus_t *xbus);
 
-static inline long usec_diff(const struct timeval *tv1, const struct timeval *tv2)
+static inline long usec_diff(const struct timeval *tv1,
+			     const struct timeval *tv2)
 {
-	long			diff_sec;
-	long			diff_usec;
+	long diff_sec;
+	long diff_usec;
 
 	diff_sec = tv1->tv_sec - tv2->tv_sec;
 	diff_usec = tv1->tv_usec - tv2->tv_usec;
 	return diff_sec * 1000000 + diff_usec;
 }
 
-
-int		xbus_pcm_init(void *top);
-void		xbus_pcm_shutdown(void);
-int		send_pcm_frame(xbus_t *xbus, xframe_t *xframe);
-void		pcm_recompute(xpd_t *xpd, xpp_line_t tmp_pcm_mask);
-void		xframe_receive_pcm(xbus_t *xbus, xframe_t *xframe);
-void		update_wanted_pcm_mask(xpd_t *xpd, xpp_line_t new_mask, uint new_pcm_len);
-void		generic_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask);
-void		generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack);
-void		generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack);
-int		generic_timing_priority(xpd_t *xpd);
-int		generic_echocancel_timeslot(xpd_t *xpd, int pos);
-int		generic_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask);
-void		fill_beep(u_char *buf, int num, int duration);
-const char	*sync_mode_name(enum sync_mode mode);
-void		xbus_set_command_timer(xbus_t *xbus, bool on);
-void		xbus_request_sync(xbus_t *xbus, enum sync_mode mode);
-void		got_new_syncer(xbus_t *xbus, enum sync_mode mode, int drift);
-int		xbus_command_queue_tick(xbus_t *xbus);
-void		xbus_reset_counters(xbus_t *xbus);
-void		elect_syncer(const char *msg);
-int		exec_sync_command(const char *buf, size_t count);
-int		fill_sync_string(char *buf, size_t count);
+int xbus_pcm_init(void *top);
+void xbus_pcm_shutdown(void);
+int send_pcm_frame(xbus_t *xbus, xframe_t *xframe);
+void pcm_recompute(xpd_t *xpd, xpp_line_t tmp_pcm_mask);
+void xframe_receive_pcm(xbus_t *xbus, xframe_t *xframe);
+void update_wanted_pcm_mask(xpd_t *xpd, xpp_line_t new_mask, uint new_pcm_len);
+void generic_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask);
+void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack);
+void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack);
+int generic_timing_priority(xpd_t *xpd);
+int generic_echocancel_timeslot(xpd_t *xpd, int pos);
+int generic_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask);
+void fill_beep(u_char *buf, int num, int duration);
+const char *sync_mode_name(enum sync_mode mode);
+void xbus_set_command_timer(xbus_t *xbus, bool on);
+void xbus_request_sync(xbus_t *xbus, enum sync_mode mode);
+void got_new_syncer(xbus_t *xbus, enum sync_mode mode, int drift);
+int xbus_command_queue_tick(xbus_t *xbus);
+void xbus_reset_counters(xbus_t *xbus);
+void elect_syncer(const char *msg);
+int exec_sync_command(const char *buf, size_t count);
+int fill_sync_string(char *buf, size_t count);
 #ifdef	DAHDI_SYNC_TICK
-void		dahdi_sync_tick(struct dahdi_span *span, int is_master);
+void dahdi_sync_tick(struct dahdi_span *span, int is_master);
 #endif
 
 #ifdef	DEBUG_PCMTX
-extern int	pcmtx;
-extern int	pcmtx_chan;
+extern int pcmtx;
+extern int pcmtx_chan;
 #endif
 
-#endif	/* __KERNEL__ */
+#endif /* __KERNEL__ */
 
-#endif	/* XBUS_PCM_H */
-
+#endif /* XBUS_PCM_H */
