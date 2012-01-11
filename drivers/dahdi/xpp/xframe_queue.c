@@ -19,6 +19,7 @@ void xframe_queue_init(struct xframe_queue *q,
 	q->name = name;
 	q->priv = priv;
 }
+EXPORT_SYMBOL(xframe_queue_init);
 
 void xframe_queue_clearstats(struct xframe_queue *q)
 {
@@ -26,6 +27,7 @@ void xframe_queue_clearstats(struct xframe_queue *q)
 	//q->overflows = 0;     /* Never clear overflows */
 	q->worst_lag_usec = 0L;
 }
+EXPORT_SYMBOL(xframe_queue_clearstats);
 
 static void __xframe_dump_queue(struct xframe_queue *q)
 {
@@ -88,6 +90,7 @@ bool xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	spin_unlock_irqrestore(&q->lock, flags);
 	return ret;
 }
+EXPORT_SYMBOL(xframe_enqueue);
 
 static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 {
@@ -124,11 +127,13 @@ xframe_t *xframe_dequeue(struct xframe_queue *q)
 	spin_unlock_irqrestore(&q->lock, flags);
 	return frm;
 }
+EXPORT_SYMBOL(xframe_dequeue);
 
 void xframe_queue_disable(struct xframe_queue *q, bool disabled)
 {
 	q->disabled = disabled;
 }
+EXPORT_SYMBOL(xframe_queue_disable);
 
 void xframe_queue_clear(struct xframe_queue *q)
 {
@@ -144,11 +149,13 @@ void xframe_queue_clear(struct xframe_queue *q)
 	XBUS_DBG(DEVICES, xbus, "%s: finished queue clear (%d items)\n",
 		 q->name, i);
 }
+EXPORT_SYMBOL(xframe_queue_clear);
 
 uint xframe_queue_count(struct xframe_queue *q)
 {
 	return q->count;
 }
+EXPORT_SYMBOL(xframe_queue_count);
 
 /*------------------------- Frame Alloc/Dealloc --------------------*/
 
@@ -289,6 +296,7 @@ xframe_t *get_xframe(struct xframe_queue *q)
 	//XBUS_INFO(xbus, "%s\n", __func__);
 	return xframe;
 }
+EXPORT_SYMBOL(get_xframe);
 
 void put_xframe(struct xframe_queue *q, xframe_t *xframe)
 {
@@ -306,13 +314,4 @@ void put_xframe(struct xframe_queue *q, xframe_t *xframe)
 	}
 	xframe_queue_adjust(q);
 }
-
-EXPORT_SYMBOL(xframe_queue_init);
-EXPORT_SYMBOL(xframe_queue_clearstats);
-EXPORT_SYMBOL(xframe_enqueue);
-EXPORT_SYMBOL(xframe_dequeue);
-EXPORT_SYMBOL(xframe_queue_disable);
-EXPORT_SYMBOL(xframe_queue_clear);
-EXPORT_SYMBOL(xframe_queue_count);
-EXPORT_SYMBOL(get_xframe);
 EXPORT_SYMBOL(put_xframe);

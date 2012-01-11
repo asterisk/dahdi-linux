@@ -45,7 +45,9 @@ static DEF_PARM(int, disable_pcm, 0, 0644, "Disable all PCM transmissions");
 #ifdef	DEBUG_PCMTX
 DEF_PARM(int, pcmtx, -1, 0644,
 	 "Forced PCM value to transmit (negative to disable)");
+EXPORT_SYMBOL(pcmtx);
 DEF_PARM(int, pcmtx_chan, 0, 0644, "channel to force PCM value");
+EXPORT_SYMBOL(pcmtx_chan);
 #endif
 static DEF_PARM_BOOL(disable_pll_sync, 0, 0644,
 		     "Disable automatic adjustment of AB clocks");
@@ -328,6 +330,7 @@ const char *sync_mode_name(enum sync_mode mode)
 		return NULL;
 	return sync_mode_names[mode];
 }
+EXPORT_SYMBOL(sync_mode_name);
 
 /*
  * Caller must aquire/release the 'ref_ticker_lock' spinlock
@@ -431,6 +434,7 @@ out:
 	spin_unlock_irqrestore(&ref_ticker_lock, flags2);
 	spin_unlock_irqrestore(&xbus->lock, flags);
 }
+EXPORT_SYMBOL(got_new_syncer);
 
 void xbus_request_sync(xbus_t *xbus, enum sync_mode mode)
 {
@@ -457,6 +461,7 @@ void xbus_request_sync(xbus_t *xbus, enum sync_mode mode)
 		xbus_set_command_timer(xbus, 1);
 	}
 }
+EXPORT_SYMBOL(xbus_request_sync);
 
 static void reset_sync_counters(void)
 {
@@ -569,6 +574,7 @@ void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 noop:
 	return;
 }
+EXPORT_SYMBOL(dahdi_sync_tick);
 #endif
 
 /*
@@ -695,6 +701,7 @@ void elect_syncer(const char *msg)
 		update_sync_master(the_xbus, force_dahdi_sync);
 	spin_unlock_irqrestore(&elect_syncer_lock, flags);
 }
+EXPORT_SYMBOL(elect_syncer);
 
 /*
  * This function should be called with the xpd already locked
@@ -706,6 +713,7 @@ void update_wanted_pcm_mask(xpd_t *xpd, xpp_line_t new_mask, uint new_pcm_len)
 	XPD_DBG(SIGNAL, xpd, "pcm_len=%d wanted_pcm_mask=0x%X\n",
 		PHONEDEV(xpd).pcm_len, PHONEDEV(xpd).wanted_pcm_mask);
 }
+EXPORT_SYMBOL(update_wanted_pcm_mask);
 
 /*
  * This function is used by FXS/FXO. The pcm_mask argument signifies
@@ -743,6 +751,7 @@ void generic_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask)
 	update_wanted_pcm_mask(xpd, pcm_mask, pcm_len);
 	spin_unlock_irqrestore(&PHONEDEV(xpd).lock_recompute_pcm, flags);
 }
+EXPORT_SYMBOL(generic_card_pcm_recompute);
 
 void fill_beep(u_char *buf, int num, int duration)
 {
@@ -931,6 +940,7 @@ void generic_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 	XPD_COUNTER(xpd, PCM_WRITE)++;
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
+EXPORT_SYMBOL(generic_card_pcm_fromspan);
 
 void generic_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 {
@@ -983,12 +993,12 @@ out:
 	XPD_COUNTER(xpd, PCM_READ)++;
 	spin_unlock_irqrestore(&xpd->lock, flags);
 }
+EXPORT_SYMBOL(generic_card_pcm_tospan);
 
 int generic_echocancel_timeslot(xpd_t *xpd, int pos)
 {
 	return xpd->addr.unit * 32 + pos;
 }
-
 EXPORT_SYMBOL(generic_echocancel_timeslot);
 
 int generic_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask)
@@ -1009,7 +1019,6 @@ int generic_echocancel_setmask(xpd_t *xpd, xpp_line_t ec_mask)
 	CALL_EC_METHOD(ec_update, xpd->xbus, xpd->xbus);
 	return 0;
 }
-
 EXPORT_SYMBOL(generic_echocancel_setmask);
 
 static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
@@ -1090,6 +1099,7 @@ int generic_timing_priority(xpd_t *xpd)
 {
 	return PHONEDEV(xpd).timing_priority;
 }
+EXPORT_SYMBOL(generic_timing_priority);
 
 static void xbus_tick(xbus_t *xbus)
 {
@@ -1338,19 +1348,3 @@ int xbus_pcm_init(void *toplevel)
 void xbus_pcm_shutdown(void)
 {
 }
-
-EXPORT_SYMBOL(xbus_request_sync);
-EXPORT_SYMBOL(got_new_syncer);
-EXPORT_SYMBOL(elect_syncer);
-#ifdef	DAHDI_SYNC_TICK
-EXPORT_SYMBOL(dahdi_sync_tick);
-#endif
-EXPORT_SYMBOL(update_wanted_pcm_mask);
-EXPORT_SYMBOL(generic_card_pcm_recompute);
-EXPORT_SYMBOL(generic_card_pcm_tospan);
-EXPORT_SYMBOL(generic_card_pcm_fromspan);
-EXPORT_SYMBOL(generic_timing_priority);
-#ifdef	DEBUG_PCMTX
-EXPORT_SYMBOL(pcmtx);
-EXPORT_SYMBOL(pcmtx_chan);
-#endif

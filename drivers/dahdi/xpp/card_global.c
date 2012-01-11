@@ -413,6 +413,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	ret = send_cmd_frame(xbus, xframe);
 	return ret;
 }
+EXPORT_SYMBOL(xpp_register_request);
 
 /*
  * The XPD parameter is totaly ignored by the driver and firmware as well.
@@ -766,7 +767,4 @@ int run_initialize_registers(xpd_t *xpd)
 err:
 	return ret;
 }
-
-EXPORT_SYMBOL(sync_mode_name);
 EXPORT_SYMBOL(run_initialize_registers);
-EXPORT_SYMBOL(xpp_register_request);

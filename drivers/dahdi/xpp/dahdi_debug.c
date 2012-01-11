@@ -55,6 +55,7 @@ void dump_poll(int debug, const char *msg, int poll)
 			DBG(GENERAL, "%s: %s\n", msg, poll_names[i].name);
 	}
 }
+EXPORT_SYMBOL(dump_poll);
 
 void alarm2str(int alarm, char *buf, int buflen)
 {
@@ -78,6 +79,4 @@ void alarm2str(int alarm, char *buf, int buflen)
 	if (p > buf)		/* kill last comma */
 		*(p - 1) = '\0';
 }
-
-EXPORT_SYMBOL(dump_poll);
 EXPORT_SYMBOL(alarm2str);

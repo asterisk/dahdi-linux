@@ -57,6 +57,7 @@ struct proc_dir_entry *xpp_proc_toplevel = NULL;
 #define	DELAY_UNTIL_DIALTONE	3000
 
 DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
+EXPORT_SYMBOL(debug);
 static DEF_PARM_BOOL(prefmaster, 0, 0644,
 		     "Do we want to be dahdi preferred sync master");
 // DEF_ARRAY(int, pcmtx, 4, 0, "Forced PCM values to transmit");
@@ -99,7 +100,6 @@ void xbus_flip_bit(xbus_t *xbus, unsigned int bitnum0, unsigned int bitnum1)
 	if (num == parport_xbuses[1])
 		flip_parport_bit(bitnum1);
 }
-
 EXPORT_SYMBOL(xbus_flip_bit);
 #endif
 
@@ -142,12 +142,14 @@ xpd_t *get_xpd(const char *msg, xpd_t *xpd)
 	kref_get(&xpd->kref);
 	return xpd;
 }
+EXPORT_SYMBOL(get_xpd);
 
 void put_xpd(const char *msg, xpd_t *xpd)
 {
 	XPD_DBG(DEVICES, xpd, "%s: refcount_xpd=%d\n", msg, refcount_xpd(xpd));
 	kref_put(&xpd->kref, xpd_destroy);
 }
+EXPORT_SYMBOL(put_xpd);
 
 static void xpd_proc_remove(xbus_t *xbus, xpd_t *xpd)
 {
@@ -217,6 +219,7 @@ void xpd_free(xpd_t *xpd)
 	 */
 	put_xbus(__func__, xbus);	/* was taken in xpd_alloc() */
 }
+EXPORT_SYMBOL(xpd_free);
 
 /*
  * Synchronous part of XPD detection.
@@ -254,6 +257,7 @@ int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table, int unit,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(create_xpd);
 
 #ifdef CONFIG_PROC_FS
 
@@ -596,6 +600,7 @@ err:
 	}
 	return NULL;
 }
+EXPORT_SYMBOL(xpd_alloc);
 
 /*
  * The xpd isn't open by anyone, we can unregister it and free it
@@ -635,6 +640,7 @@ void update_xpd_status(xpd_t *xpd, int alarm_flag)
 	span->alarms = alarm_flag;
 	dahdi_alarm_notify(span);
 }
+EXPORT_SYMBOL(update_xpd_status);
 
 /*
  * Used to block/pass PCM during onhook-transfers. E.g:
@@ -652,6 +658,7 @@ void oht_pcm(xpd_t *xpd, int pos, bool pass)
 	}
 	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 }
+EXPORT_SYMBOL(oht_pcm);
 
 /*
  * Update our hookstate -- for PCM block/pass
@@ -667,6 +674,7 @@ void mark_offhook(xpd_t *xpd, int pos, bool to_offhook)
 	}
 	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 }
+EXPORT_SYMBOL(mark_offhook);
 
 /*
  * Send a signalling notification to Asterisk
@@ -682,6 +690,7 @@ void notify_rxsig(xpd_t *xpd, int pos, enum dahdi_rxsig rxsig)
 	if (SPAN_REGISTERED(xpd))
 		dahdi_hooksig(XPD_CHAN(xpd, pos), rxsig);
 }
+EXPORT_SYMBOL(notify_rxsig);
 
 /*
  * Called when hardware state changed:
@@ -706,6 +715,7 @@ void hookstate_changed(xpd_t *xpd, int pos, bool to_offhook)
 	notify_rxsig(xpd, pos,
 		     (to_offhook) ? DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
 }
+EXPORT_SYMBOL(hookstate_changed);
 
 #define	XPP_MAX_LEN	512
 
@@ -750,6 +760,7 @@ int xpp_open(struct dahdi_chan *chan)
 		CALL_PHONE_METHOD(card_open, xpd, pos);
 	return 0;
 }
+EXPORT_SYMBOL(xpp_open);
 
 int xpp_close(struct dahdi_chan *chan)
 {
@@ -767,6 +778,7 @@ int xpp_close(struct dahdi_chan *chan)
 	atomic_dec(&PHONEDEV(xpd).open_counter);	/* from xpp_open() */
 	return 0;
 }
+EXPORT_SYMBOL(xpp_close);
 
 void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd)
 {
@@ -781,6 +793,7 @@ void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd)
 	XPD_NOTICE(xpd, "        IOC_NR=%d\n", _IOC_NR(cmd));
 	XPD_NOTICE(xpd, "        IOC_SIZE=0x%02X\n", _IOC_SIZE(cmd));
 }
+EXPORT_SYMBOL(report_bad_ioctl);
 
 int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 {
@@ -804,6 +817,7 @@ int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(xpp_ioctl);
 
 int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 {
@@ -828,7 +842,6 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 	    txsig);
 	return CALL_PHONE_METHOD(card_hooksig, xpd, pos, txsig);
 }
-
 EXPORT_SYMBOL(xpp_hooksig);
 
 /* Req: Set the requested chunk size.  This is the unit in which you must
@@ -871,6 +884,7 @@ int xpp_maint(struct dahdi_span *span, int cmd)
 		update_xpd_status(xpd, DAHDI_ALARM_LOOPBACK);
 	return ret;
 }
+EXPORT_SYMBOL(xpp_maint);
 
 #ifdef	CONFIG_DAHDI_WATCHDOG
 /*
@@ -951,7 +965,6 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 	}
 	return "XPP";
 }
-
 EXPORT_SYMBOL(xpp_echocan_name);
 
 int xpp_echocan_create(struct dahdi_chan *chan,
@@ -983,7 +996,6 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 	CALL_EC_METHOD(ec_update, xbus, xbus);
 	return ret;
 }
-
 EXPORT_SYMBOL(xpp_echocan_create);
 
 void xpp_span_assigned(struct dahdi_span *span)
@@ -997,7 +1009,6 @@ void xpp_span_assigned(struct dahdi_span *span)
 		dahdi_alarm_notify(&phonedev->span);
 	}
 }
-
 EXPORT_SYMBOL(xpp_span_assigned);
 
 static const struct dahdi_span_ops xpp_span_ops = {
@@ -1038,7 +1049,6 @@ void xpd_set_spanname(xpd_t *xpd)
 	snprintf(span->desc, MAX_SPANDESC, "Xorcom XPD [%s].%d: %s",
 		 xpd->xbus->label, span->offset + 1, xpd->type_name);
 }
-
 EXPORT_SYMBOL(xpd_set_spanname);
 
 static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
@@ -1210,23 +1220,6 @@ static void __exit xpp_dahdi_cleanup(void)
 	xbus_core_shutdown();
 	do_cleanup();
 }
-
-EXPORT_SYMBOL(debug);
-EXPORT_SYMBOL(create_xpd);
-EXPORT_SYMBOL(get_xpd);
-EXPORT_SYMBOL(put_xpd);
-EXPORT_SYMBOL(xpd_alloc);
-EXPORT_SYMBOL(xpd_free);
-EXPORT_SYMBOL(update_xpd_status);
-EXPORT_SYMBOL(oht_pcm);
-EXPORT_SYMBOL(mark_offhook);
-EXPORT_SYMBOL(notify_rxsig);
-EXPORT_SYMBOL(hookstate_changed);
-EXPORT_SYMBOL(xpp_open);
-EXPORT_SYMBOL(xpp_close);
-EXPORT_SYMBOL(xpp_ioctl);
-EXPORT_SYMBOL(xpp_maint);
-EXPORT_SYMBOL(report_bad_ioctl);
 
 MODULE_DESCRIPTION("XPP Dahdi Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");

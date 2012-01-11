@@ -144,6 +144,7 @@ const char *xbus_statename(enum xbus_state st)
 	}
 	return NULL;
 }
+EXPORT_SYMBOL(xbus_statename);
 
 static void init_xbus(uint num, xbus_t *xbus)
 {
@@ -163,6 +164,7 @@ xbus_t *xbus_num(uint num)
 	desc = &xbuses_array[num];
 	return desc->xbus;
 }
+EXPORT_SYMBOL(xbus_num);
 
 static void initialize_xbuses_array(void)
 {
@@ -241,6 +243,7 @@ void xframe_init(xbus_t *xbus, xframe_t *xframe, void *buf, size_t maxsize,
 	do_gettimeofday(&xframe->tv_created);
 	xframe->xframe_magic = XFRAME_MAGIC;
 }
+EXPORT_SYMBOL(xframe_init);
 
 /*
  * Return pointer to next packet slot in the frame
@@ -266,6 +269,7 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 	atomic_add(len, &frm->frame_len);
 	return (xpacket_t *)(frm->packets + newlen - len);
 }
+EXPORT_SYMBOL(xframe_next_packet);
 
 static DEFINE_SPINLOCK(serialize_dump_xframe);
 
@@ -371,6 +375,7 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe,
 	} while (1);
 	spin_unlock_irqrestore(&serialize_dump_xframe, flags);
 }
+EXPORT_SYMBOL(dump_xframe);
 
 /**
  *
@@ -402,6 +407,7 @@ error:
 	FREE_SEND_XFRAME(xbus, xframe);
 	return ret;
 }
+EXPORT_SYMBOL(send_pcm_frame);
 
 static int really_send_cmd_frame(xbus_t *xbus, xframe_t *xframe)
 {
@@ -462,6 +468,7 @@ int xbus_command_queue_tick(xbus_t *xbus)
 		xbus->usec_nosend = 0;
 	return ret;
 }
+EXPORT_SYMBOL(xbus_command_queue_tick);
 
 static void xbus_command_queue_clean(xbus_t *xbus)
 {
@@ -520,6 +527,7 @@ err:
 	FREE_SEND_XFRAME(xbus, xframe);
 	return ret;
 }
+EXPORT_SYMBOL(send_cmd_frame);
 
 /*------------------------- Receive Tasklet Handling ---------------*/
 
@@ -571,6 +579,7 @@ void xbus_receive_xframe(xbus_t *xbus, xframe_t *xframe)
 			FREE_RECV_XFRAME(xbus, xframe);
 	}
 }
+EXPORT_SYMBOL(xbus_receive_xframe);
 
 /*------------------------- Bus Management -------------------------*/
 xpd_t *xpd_of(const xbus_t *xbus, int xpd_num)
@@ -579,6 +588,7 @@ xpd_t *xpd_of(const xbus_t *xbus, int xpd_num)
 		return NULL;
 	return xbus->xpds[xpd_num];
 }
+EXPORT_SYMBOL(xpd_of);
 
 xpd_t *xpd_byaddr(const xbus_t *xbus, uint unit, uint subunit)
 {
@@ -586,6 +596,7 @@ xpd_t *xpd_byaddr(const xbus_t *xbus, uint unit, uint subunit)
 		return NULL;
 	return xbus->xpds[XPD_IDX(unit, subunit)];
 }
+EXPORT_SYMBOL(xpd_byaddr);
 
 int xbus_xpd_bind(xbus_t *xbus, xpd_t *xpd, int unit, int subunit)
 {
@@ -1330,6 +1341,7 @@ bad_state:
 		    xbus_statename(XBUS_STATE(xbus)), xbus_statename(newstate));
 	goto out;
 }
+EXPORT_SYMBOL(xbus_setstate);
 
 int xbus_activate(xbus_t *xbus)
 {
@@ -1346,6 +1358,7 @@ int xbus_activate(xbus_t *xbus)
 	xbus_request_sync(xbus, SYNC_MODE_NONE);
 	return 0;
 }
+EXPORT_SYMBOL(xbus_activate);
 
 int xbus_connect(xbus_t *xbus)
 {
@@ -1364,6 +1377,7 @@ int xbus_connect(xbus_t *xbus)
 	xbus_activate(xbus);
 	return 0;
 }
+EXPORT_SYMBOL(xbus_connect);
 
 void xbus_deactivate(xbus_t *xbus)
 {
@@ -1383,6 +1397,7 @@ void xbus_deactivate(xbus_t *xbus)
 	xbus_unregister_dahdi_device(xbus);
 	xbus_release_xpds(xbus);	/* taken in xpd_alloc() [kref_init] */
 }
+EXPORT_SYMBOL(xbus_deactivate);
 
 void xbus_disconnect(xbus_t *xbus)
 {
@@ -1406,6 +1421,7 @@ void xbus_disconnect(xbus_t *xbus)
 	xbus_sysfs_transport_remove(xbus);	/* Device-Model */
 	put_xbus(__func__, xbus);	/* from xbus_new() [kref_init()] */
 }
+EXPORT_SYMBOL(xbus_disconnect);
 
 static xbus_t *xbus_alloc(void)
 {
@@ -1478,6 +1494,7 @@ void xbus_free(xbus_t *xbus)
 	spin_unlock_irqrestore(&xbuses_lock, flags);
 	KZFREE(xbus);
 }
+EXPORT_SYMBOL(xbus_free);
 
 xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size,
 		 struct device *transport_device, void *priv)
@@ -1572,6 +1589,7 @@ nobus:
 	xbus_free(xbus);
 	return NULL;
 }
+EXPORT_SYMBOL(xbus_new);
 
 /*------------------------- Proc handling --------------------------*/
 
@@ -1584,6 +1602,7 @@ void xbus_reset_counters(xbus_t *xbus)
 		xbus->counters[i] = 0;
 	}
 }
+EXPORT_SYMBOL(xbus_reset_counters);
 
 static bool xpds_done(xbus_t *xbus)
 {
@@ -1927,6 +1946,7 @@ struct xbus_ops *transportops_get(xbus_t *xbus)
 	/* fall through */
 	return ops;
 }
+EXPORT_SYMBOL(transportops_get);
 
 void transportops_put(xbus_t *xbus)
 {
@@ -1938,6 +1958,7 @@ void transportops_put(xbus_t *xbus)
 	if (atomic_dec_and_test(&xbus->transport.transport_refcount))
 		wake_up(&xbus->transport.transport_unused);
 }
+EXPORT_SYMBOL(transportops_put);
 
 /*------------------------- Initialization -------------------------*/
 static void xbus_core_cleanup(void)
@@ -1984,25 +2005,3 @@ void xbus_core_shutdown(void)
 	xbus_core_cleanup();
 	xpp_driver_exit();
 }
-
-EXPORT_SYMBOL(xpd_of);
-EXPORT_SYMBOL(xpd_byaddr);
-EXPORT_SYMBOL(xbus_num);
-EXPORT_SYMBOL(xbus_setstate);
-EXPORT_SYMBOL(xbus_statename);
-EXPORT_SYMBOL(xbus_new);
-EXPORT_SYMBOL(xbus_free);
-EXPORT_SYMBOL(xbus_connect);
-EXPORT_SYMBOL(xbus_activate);
-EXPORT_SYMBOL(xbus_deactivate);
-EXPORT_SYMBOL(xbus_disconnect);
-EXPORT_SYMBOL(xbus_receive_xframe);
-EXPORT_SYMBOL(xbus_reset_counters);
-EXPORT_SYMBOL(xframe_next_packet);
-EXPORT_SYMBOL(dump_xframe);
-EXPORT_SYMBOL(send_pcm_frame);
-EXPORT_SYMBOL(send_cmd_frame);
-EXPORT_SYMBOL(xframe_init);
-EXPORT_SYMBOL(transportops_get);
-EXPORT_SYMBOL(transportops_put);
-EXPORT_SYMBOL(xbus_command_queue_tick);

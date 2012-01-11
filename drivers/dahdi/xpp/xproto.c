@@ -43,6 +43,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr)
 	return ((addr->subunit & ~BITMASK(SUBUNIT_BITS)) == 0)
 	    && ((addr->unit & ~BITMASK(UNIT_BITS)) == 0);
 }
+EXPORT_SYMBOL(valid_xpd_addr);
 
 /*------ General Protocol Management ----------------------------*/
 
@@ -55,6 +56,7 @@ const xproto_entry_t *xproto_card_entry(const xproto_table_t *table,
 	xe = &table->entries[opcode];
 	return (xe->handler != NULL) ? xe : NULL;
 }
+EXPORT_SYMBOL(xproto_card_entry);
 
 const xproto_entry_t *xproto_global_entry(__u8 opcode)
 {
@@ -64,6 +66,7 @@ const xproto_entry_t *xproto_global_entry(__u8 opcode)
 	//DBG(GENERAL, "opcode=0x%X xe=%p\n", opcode, xe);
 	return xe;
 }
+EXPORT_SYMBOL(xproto_global_entry);
 
 xproto_handler_t xproto_global_handler(__u8 opcode)
 {
@@ -136,6 +139,7 @@ void notify_bad_xpd(const char *funcname, xbus_t *xbus,
 	XBUS_NOTICE(xbus, "%s: non-existing address (%1d%1d): %s\n", funcname,
 		    addr.unit, addr.subunit, msg);
 }
+EXPORT_SYMBOL(notify_bad_xpd);
 
 static int packet_process(xbus_t *xbus, xpacket_t *pack)
 {
@@ -312,6 +316,7 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 		xbus->max_rx_process = usec;
 	return ret;
 }
+EXPORT_SYMBOL(xframe_receive);
 
 #define	VERBOSE_DEBUG		1
 #define	ERR_REPORT_LIMIT	20
@@ -357,6 +362,7 @@ void dump_packet(const char *msg, const xpacket_t *packet, bool debug)
 #endif
 	printk("\n");
 }
+EXPORT_SYMBOL(dump_packet);
 
 void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 	__u8 unit, xportno_t port, const reg_cmd_t *regcmd)
@@ -425,6 +431,7 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 	PORT_DBG(REGS, xbus, unit, port, "%s: %s %c%c %s %s\n", msg, port_buf,
 		 action, modifier, reg_buf, data_buf);
 }
+EXPORT_SYMBOL(dump_reg_cmd);
 
 const char *xproto_name(xpd_type_t xpd_type)
 {
@@ -436,6 +443,7 @@ const char *xproto_name(xpd_type_t xpd_type)
 		return NULL;
 	return proto_table->name;
 }
+EXPORT_SYMBOL(xproto_name);
 
 #define	CHECK_XOP(xops, f)	\
 		if (!(xops)->f) { \
@@ -492,6 +500,7 @@ int xproto_register(const xproto_table_t *proto_table)
 	xprotocol_tables[type] = proto_table;
 	return 0;
 }
+EXPORT_SYMBOL(xproto_register);
 
 void xproto_unregister(const xproto_table_t *proto_table)
 {
@@ -511,14 +520,4 @@ void xproto_unregister(const xproto_table_t *proto_table)
 		       __func__, name, type);
 	xprotocol_tables[type] = NULL;
 }
-
-EXPORT_SYMBOL(dump_packet);
-EXPORT_SYMBOL(dump_reg_cmd);
-EXPORT_SYMBOL(xframe_receive);
-EXPORT_SYMBOL(notify_bad_xpd);
-EXPORT_SYMBOL(valid_xpd_addr);
-EXPORT_SYMBOL(xproto_global_entry);
-EXPORT_SYMBOL(xproto_card_entry);
-EXPORT_SYMBOL(xproto_name);
-EXPORT_SYMBOL(xproto_register);
 EXPORT_SYMBOL(xproto_unregister);

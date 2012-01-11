@@ -799,12 +799,14 @@ int xpd_driver_register(struct device_driver *driver)
 	}
 	return ret;
 }
+EXPORT_SYMBOL(xpd_driver_register);
 
 void xpd_driver_unregister(struct device_driver *driver)
 {
 	DBG(DEVICES, "%s\n", driver->name);
 	driver_unregister(driver);
 }
+EXPORT_SYMBOL(xpd_driver_unregister);
 
 static void xpd_release(struct device *dev)
 {
@@ -947,7 +949,6 @@ int echocancel_xpd(xpd_t *xpd, int on)
 
 	return ret;
 }
-
 EXPORT_SYMBOL(echocancel_xpd);
 
 /*--------- Sysfs Device handling ----*/
@@ -1060,6 +1061,3 @@ void xpp_driver_exit(void)
 	driver_unregister(&xpp_driver);
 	bus_unregister(&toplevel_bus_type);
 }
-
-EXPORT_SYMBOL(xpd_driver_register);
-EXPORT_SYMBOL(xpd_driver_unregister);

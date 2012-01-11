@@ -59,7 +59,6 @@ void flip_parport_bit(unsigned char bitnum)
 	spin_unlock_irqrestore(&lock, flags);
 	parport_write_data(debug_sync_parport, value);
 }
-
 EXPORT_SYMBOL(flip_parport_bit);
 
 static void parport_attach(struct parport *port)
