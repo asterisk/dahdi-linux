@@ -31,7 +31,7 @@
 #include <linux/device.h>
 #include <linux/version.h>
 #include <asm/atomic.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #include <linux/semaphore.h>
 #else
 #include <asm/semaphore.h>
@@ -42,9 +42,9 @@
 #include <dahdi/kernel.h>
 
 #ifdef __KERNEL__
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,14)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
 /* also added in RHEL kernels with the OpenInfiniband backport: */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,9) || !defined(DEFINE_SPINLOCK)
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9) || !defined(DEFINE_SPINLOCK)
 typedef	unsigned gfp_t;		/* Added in 2.6.14 */
 #endif
 #endif
@@ -54,28 +54,28 @@ typedef	unsigned gfp_t;		/* Added in 2.6.14 */
  * bool is now defined as a proper boolean type (gcc _Bool)
  * but the command line parsing framework handles it as int.
  */
-#define	DEF_PARM_BOOL(name,init,perm,desc)	\
+#define	DEF_PARM_BOOL(name, init, perm, desc)	\
 	int name = init;	\
 	module_param(name, bool, perm);		\
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
 
-#define	DEF_PARM(type,name,init,perm,desc)	\
+#define	DEF_PARM(type, name, init, perm, desc)	\
 	type name = init;	\
 	module_param(name, type, perm);		\
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
 
-#if	LINUX_VERSION_CODE	< KERNEL_VERSION(2,6,10)
+#if	LINUX_VERSION_CODE	< KERNEL_VERSION(2, 6, 10)
 /*
  * Old 2.6 kernels had module_param_array() macro that receive the counter
  * by value.
  */
-#define	DEF_ARRAY(type,name,count,init,desc)	\
+#define	DEF_ARRAY(type, name, count, init, desc)	\
 	unsigned int name ## _num_values;	\
 	type name[count] = { [0 ... ((count)-1)] = (init) };			\
 	module_param_array(name, type, name ## _num_values, 0644);	\
 	MODULE_PARM_DESC(name, desc " ( 1-" __MODULE_STRING(count) ")")
 #else
-#define	DEF_ARRAY(type,name,count,init,desc)	\
+#define	DEF_ARRAY(type, name, count, init, desc)	\
 	unsigned int name ## _num_values;	\
 	type name[count] = {[0 ... ((count)-1)] = init};			\
 	module_param_array(name, type, &name ## _num_values, 0644);	\
@@ -148,7 +148,7 @@ struct phonedev {
 	const struct phoneops	*phoneops;	/* Card level operations */
 	struct dahdi_span	span;
 	struct dahdi_chan	*chans[32];
-#define	XPD_CHAN(xpd,chan)	(PHONEDEV(xpd).chans[(chan)])
+#define	XPD_CHAN(xpd, chan)	(PHONEDEV(xpd).chans[(chan)])
 	struct dahdi_echocan_state *ec[32];
 
 	int		channels;
@@ -228,7 +228,7 @@ struct xpd {
 	unsigned int	timer_count;
 };
 
-#define	for_each_line(xpd,i)	for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
+#define	for_each_line(xpd, i)	for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
 #define	IS_BRI(xpd)		((xpd)->type == XPD_TYPE_BRI)
 #define	TICK_TOLERANCE		500 /* usec */
 

@@ -21,7 +21,7 @@
  */
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
 #  warning "This module is tested only with 2.6 kernels"
 #endif
 
@@ -267,7 +267,7 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	return len;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 #define xbus_attr(field, format_string)                                    \
 static ssize_t                                                             \
 field##_show(struct device *dev, struct device_attribute *attr, char *buf) \
@@ -339,7 +339,7 @@ static int astribank_hotplug(struct device *dev, char **envp, int envnum, char *
 		XBUS_ADD_UEVENT_VAR("XBUS_NAME=%s", xbus->busname);	\
 	} while (0)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 #define XBUS_ADD_UEVENT_VAR(fmt, val...)			\
 	do {							\
 		int err = add_uevent_var(envp, num_envp, &i,	\

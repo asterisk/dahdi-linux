@@ -64,7 +64,7 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 
 /* FIXME: A flag that was deprecated at some point, and rather useless */
 /* anyway. Only used in the code or-ed to other flags                  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 #  define URB_ASYNC_UNLINK 0
 #endif
 /* Get a minor range for your devices from the usb maintainer */
@@ -74,7 +74,7 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 #define	PROC_USBXPP_SUMMARY	"xpp_usb"
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
 #  warning "This module is tested only with 2.6 kernels"
 #endif
 
@@ -85,13 +85,13 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 	usb_buffer_free(dev, size, addr, dma)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 #  undef USB_FIELDS_MISSING
 #else
 #  define USB_FIELDS_MISSING
 
 #  define USB_MAX_STRING	128
-#  define USB_GET_STRING(udev,field,buf)		\
+#  define USB_GET_STRING(udev, field, buf)		\
 	do {						\
 		if ((udev)->descriptor.field) {		\
 			char	tmp[USB_MAX_STRING];	\
@@ -99,7 +99,7 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
 		}					\
 	} while (0);
-#  define USB_GET_IFACE_NAME(udev,iface,buf)		\
+#  define USB_GET_IFACE_NAME(udev, iface, buf)		\
 	do {						\
 		if ((iface)->desc.iInterface) {		\
 			char	tmp[USB_MAX_STRING];	\
@@ -255,7 +255,7 @@ static DEFINE_SEMAPHORE(disconnect_sem);
  * Debian-Etch and Centos5 are using 2.6.18 for now (lucky for us).
  * Fedora6 jumped from 2.6.18 to 2.6.20. So far luck is on our side ;-)
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
 #define	USB_PASS_CB(u)	struct urb *u, struct pt_regs *regs
 #else
 #define	USB_PASS_CB(u)	struct urb *u
@@ -511,7 +511,7 @@ MODULE_DEVICE_TABLE (usb, xusb_table);
 
 /* usb specific object needed to register this driver with the usb subsystem */
 static struct usb_driver xusb_driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 16)
 	.owner =	THIS_MODULE,
 #endif
 	.name =		"xpp_usb",
@@ -550,7 +550,7 @@ static struct usb_class_driver xusb_class = {
 	.name =		"usb/xpp_usb%d",
 	.fops =		&xusb_fops,
 /* FIXME: The sysfs class interfase seems to have chaged around here */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 15)
 	.mode =		S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH,
 #endif
 	.minor_base =	USB_SKEL_MINOR_BASE,
@@ -639,7 +639,7 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc, st
  * being called from the probe we may already have the lock to udev (the Usb DEVice).
  * Thus we call the internal __usb_reset_device instead.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
 #define	DO_USB_RESET_DEVICE(dev)	__usb_reset_device(dev)
 #else
 #define	DO_USB_RESET_DEVICE(dev)	usb_reset_device(dev)
@@ -677,7 +677,7 @@ static int xusb_probe(struct usb_interface *interface, const struct usb_device_i
 	}
 	if (!model_info) {
 		ERR("Missing endpoint setup for this device %d:%d\n",
-				udev->descriptor.idVendor,udev->descriptor.idProduct);
+				udev->descriptor.idVendor, udev->descriptor.idProduct);
 		retval = -ENODEV;
 		goto probe_failed;
 	}
@@ -990,12 +990,12 @@ static int __init xpp_usb_init(void)
 	INFO("revision %s\n", XPP_VERSION);
 	xusb_cache = kmem_cache_create("xusb_cache",
 			sizeof(xframe_t) + XFRAME_DATASIZE,
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,6,22)) && defined(CONFIG_SLUB)
+#if (LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 22)) && defined(CONFIG_SLUB)
 			0, SLAB_STORE_USER,
 #else
 			0, 0,
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 23)
 			NULL,
 #endif
 			NULL);

@@ -219,7 +219,7 @@ static int xframe_receive_cmd(xbus_t *xbus, xframe_t *xframe)
 		pack = (xpacket_t *)p;
 		len = XPACKET_LEN(pack);
 		/* Sanity checks */
-		if (unlikely(XPACKET_OP(pack) == XPROTO_NAME(GLOBAL,PCM_READ))) {
+		if (unlikely(XPACKET_OP(pack) == XPROTO_NAME(GLOBAL, PCM_READ))) {
 			static int	rate_limit;
 
 			if ((rate_limit++ % 1003) == 0) {

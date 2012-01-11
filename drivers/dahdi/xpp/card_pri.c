@@ -331,7 +331,7 @@ struct PRI_priv_data {
 #define	NO_DCHAN	(0)
 #define	DCHAN(p)	((p)->chanconfig_dchan)
 #define	VALID_DCHAN(p)	(DCHAN(p) != NO_DCHAN)
-#define	SET_DCHAN(p,d)	do { DCHAN(p) = (d); } while (0);
+#define	SET_DCHAN(p, d)	do { DCHAN(p) = (d); } while (0);
 
 	byte				cas_rs_e[NUM_CAS_RS_E];
 	byte				cas_ts_e[NUM_CAS_RS_E];
@@ -786,7 +786,7 @@ static int set_localloop(xpd_t *xpd, bool localloop)
 	return 0;
 }
 
-#define	VALID_CONFIG(bit,flg,str)	[bit] = { .flags = flg, .name = str }
+#define	VALID_CONFIG(bit, flg, str)	[bit] = { .flags = flg, .name = str }
 
 static const struct {
 	const char	*name;

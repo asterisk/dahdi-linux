@@ -68,9 +68,9 @@ enum fxs_leds {
 /* Shortcuts */
 #define	SLIC_WRITE	1
 #define	SLIC_READ	0
-#define	SLIC_DIRECT_REQUEST(xbus,xpd,port,writing,reg,dL)	\
+#define	SLIC_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
 	xpp_register_request((xbus), (xpd), (port), (writing), (reg), 0, 0, (dL), 0, 0, 0)
-#define	SLIC_INDIRECT_REQUEST(xbus,xpd,port,writing,reg,dL,dH)	\
+#define	SLIC_INDIRECT_REQUEST(xbus, xpd, port, writing, reg, dL, dH)	\
 	xpp_register_request((xbus), (xpd), (port), (writing), 0x1E, 1, (reg), (dL), 1, (dH), 0)
 
 #define	VALID_PORT(port)	(((port) >= 0 && (port) <= 7) || (port) == PORT_BROADCAST)
@@ -148,11 +148,11 @@ struct FXS_priv_data {
  * LED counter values:
  *	n>1	: BLINK every n'th tick
  */
-#define	LED_COUNTER(priv,pos,color)	((priv)->led_counter[color][pos])
-#define	IS_BLINKING(priv,pos,color)	(LED_COUNTER(priv,pos,color) > 0)
-#define	MARK_BLINK(priv,pos,color,t)	((priv)->led_counter[color][pos] = (t))
-#define	MARK_OFF(priv,pos,color)	do { BIT_CLR((priv)->ledcontrol[color],(pos)); MARK_BLINK((priv),(pos),(color),0); } while (0)
-#define	MARK_ON(priv,pos,color)		do { BIT_SET((priv)->ledcontrol[color],(pos)); MARK_BLINK((priv),(pos),(color),0); } while (0)
+#define	LED_COUNTER(priv, pos, color)	((priv)->led_counter[color][pos])
+#define	IS_BLINKING(priv, pos, color)	(LED_COUNTER(priv, pos, color) > 0)
+#define	MARK_BLINK(priv, pos, color, t)	((priv)->led_counter[color][pos] = (t))
+#define	MARK_OFF(priv, pos, color)	do { BIT_CLR((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
+#define	MARK_ON(priv, pos, color)		do { BIT_SET((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
 
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 

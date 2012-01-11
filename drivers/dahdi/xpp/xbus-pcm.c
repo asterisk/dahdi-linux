@@ -21,7 +21,7 @@
  */
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
 #  warning "This module is tested only with 2.6 kernels"
 #endif
 
@@ -166,7 +166,7 @@ static void sample_tick(xbus_t *xbus, int sample)
 	}
 }
 #else
-#define	sample_tick(x,y)
+#define	sample_tick(x, y)
 #endif
 
 /*
@@ -981,7 +981,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 		pack = (xpacket_t *)p;
 		len = XPACKET_LEN(pack);
 		/* Sanity checks */
-		if (unlikely(XPACKET_OP(pack) != XPROTO_NAME(GLOBAL,PCM_READ))) {
+		if (unlikely(XPACKET_OP(pack) != XPROTO_NAME(GLOBAL, PCM_READ))) {
 			static int	rate_limit;
 
 			if ((rate_limit++ % 1003) == 0) {

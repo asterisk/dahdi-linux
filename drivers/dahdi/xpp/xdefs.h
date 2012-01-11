@@ -56,9 +56,9 @@ struct list_head { struct list_head *next; struct list_head *prev; };
 #ifndef	BIT	/* added in 2.6.24 */
 #define	BIT(i)		(1UL << (i))
 #endif
-#define	BIT_SET(x,i)	((x) |= BIT(i))
-#define	BIT_CLR(x,i)	((x) &= ~BIT(i))
-#define	IS_SET(x,i)	(((x) & BIT(i)) != 0)
+#define	BIT_SET(x, i)	((x) |= BIT(i))
+#define	BIT_CLR(x, i)	((x) &= ~BIT(i))
+#define	IS_SET(x, i)	(((x) & BIT(i)) != 0)
 #define	BITMASK(i)	(((u64)1 << (i)) - 1)
 
 #define	MAX_PROC_WRITE	100	/* Largest buffer we allow writing our /proc files */
@@ -102,7 +102,7 @@ typedef unsigned char		byte;
 #ifdef __KERNEL__
 
 /* Kernel versions... */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 #define	KMEM_CACHE_T	kmem_cache_t
 #else
 #define	KMEM_CACHE_T	struct kmem_cache
@@ -117,38 +117,38 @@ typedef unsigned char		byte;
 /*
  * Hotplug replaced with uevent in 2.6.16
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 16)
 #define	OLD_HOTPLUG_SUPPORT	// for older kernels
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
 #define	OLD_HOTPLUG_SUPPORT_269// for way older kernels
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-#define	DEVICE_ATTR_READER(name,dev,buf)	\
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
+#define	DEVICE_ATTR_READER(name, dev, buf)	\
 		ssize_t name(struct device *dev, struct device_attribute *attr, char *buf)
-#define	DEVICE_ATTR_WRITER(name,dev,buf, count)	\
+#define	DEVICE_ATTR_WRITER(name, dev, buf, count)	\
 		ssize_t name(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 #else
-#define	DEVICE_ATTR_READER(name,dev,buf)	\
+#define	DEVICE_ATTR_READER(name, dev, buf)	\
 		ssize_t name(struct device *dev, char *buf)
-#define	DEVICE_ATTR_WRITER(name,dev,buf, count)	\
+#define	DEVICE_ATTR_WRITER(name, dev, buf, count)	\
 		ssize_t name(struct device *dev, const char *buf, size_t count)
 #endif
-#define	DRIVER_ATTR_READER(name,drv,buf)	\
+#define	DRIVER_ATTR_READER(name, drv, buf)	\
 		ssize_t name(struct device_driver *drv, char * buf)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 #define	SET_PROC_DIRENTRY_OWNER(p)	do { (p)->owner = THIS_MODULE; } while (0);
 #else
 #define	SET_PROC_DIRENTRY_OWNER(p)	do { } while (0);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
 /* Also don't define this for later RHEL >= 5.2 . hex_asc is from the
  * same linux-2.6-net-infrastructure-updates-to-mac80211-iwl4965.patch
  * as is the bool typedef. */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)  || !  defined(hex_asc)
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 18)  || !  defined(hex_asc)
 typedef int			bool;
 #endif
 #endif

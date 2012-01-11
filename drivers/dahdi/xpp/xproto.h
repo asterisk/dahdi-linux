@@ -92,49 +92,49 @@ typedef	byte	xpd_type_t;
 
 bool valid_xpd_addr(const struct xpd_addr *addr);
 
-#define	XPROTO_NAME(card,op)	card ## _ ## op
-#define	XPROTO_HANDLER(card,op)	XPROTO_NAME(card,op ## _handler)
-#define	XPROTO_CALLER(card,op)	XPROTO_NAME(card,op ## _send)
+#define	XPROTO_NAME(card, op)	card ## _ ## op
+#define	XPROTO_HANDLER(card, op)	XPROTO_NAME(card, op ## _handler)
+#define	XPROTO_CALLER(card, op)	XPROTO_NAME(card, op ## _send)
 
-#define	HANDLER_DEF(card,op)	\
-	static int XPROTO_HANDLER(card,op) (	\
+#define	HANDLER_DEF(card, op)	\
+	static int XPROTO_HANDLER(card, op) (	\
 		xbus_t *xbus,			\
 		xpd_t *xpd,			\
 		const xproto_entry_t *cmd,	\
 		xpacket_t *pack)
 
-#define	CALL_PROTO(card,op, ...)	XPROTO_CALLER(card,op)( __VA_ARGS__ )
+#define	CALL_PROTO(card, op, ...)	XPROTO_CALLER(card, op)( __VA_ARGS__ )
 
-#define	DECLARE_CMD(card,op, ...)	\
+#define	DECLARE_CMD(card, op, ...)	\
 	int CALL_PROTO(card, op, xbus_t *xbus, xpd_t *xpd, ## __VA_ARGS__ )
 
 #define	HOSTCMD(card, op, ...)					\
 		DECLARE_CMD(card, op, ## __VA_ARGS__ )
 
-#define	RPACKET_NAME(card,op)	XPROTO_NAME(RPACKET_ ## card, op)
-#define	RPACKET_TYPE(card,op)	struct RPACKET_NAME(card, op)
+#define	RPACKET_NAME(card, op)	XPROTO_NAME(RPACKET_ ## card, op)
+#define	RPACKET_TYPE(card, op)	struct RPACKET_NAME(card, op)
 
-#define	DEF_RPACKET_DATA(card,op, ...)		\
-	RPACKET_TYPE(card,op) {			\
+#define	DEF_RPACKET_DATA(card, op, ...)		\
+	RPACKET_TYPE(card, op) {			\
 		struct xpacket_header	head;	\
 		__VA_ARGS__			\
 	} PACKED
 #define	RPACKET_HEADERSIZE		sizeof(struct xpacket_header)
-#define	RPACKET_FIELD(p,card,op,field)	(((RPACKET_TYPE(card,op) *)(p))->field)
-#define	RPACKET_SIZE(card,op)		sizeof(RPACKET_TYPE(card,op))
+#define	RPACKET_FIELD(p, card, op, field)	(((RPACKET_TYPE(card, op) *)(p))->field)
+#define	RPACKET_SIZE(card, op)		sizeof(RPACKET_TYPE(card, op))
 
-#define	XENTRY(prototab,module,op)			\
-	[ XPROTO_NAME(module,op) ] = {			\
-		.handler = XPROTO_HANDLER(module,op),	\
-		.datalen = RPACKET_SIZE(module,op),	\
+#define	XENTRY(prototab, module, op)			\
+	[ XPROTO_NAME(module, op) ] = {			\
+		.handler = XPROTO_HANDLER(module, op),	\
+		.datalen = RPACKET_SIZE(module, op),	\
 		.name = #op,				\
 		.table = &PROTO_TABLE(prototab)		\
 	}
 
 #define	XPACKET_INIT(p, card, op, to, pcm, pcmslot)		\
 		do {						\
-			XPACKET_OP(p) = XPROTO_NAME(card,op);	\
-			XPACKET_LEN(p) = RPACKET_SIZE(card,op);	\
+			XPACKET_OP(p) = XPROTO_NAME(card, op);	\
+			XPACKET_LEN(p) = RPACKET_SIZE(card, op);	\
 			XPACKET_IS_PCM(p) = (pcm);		\
 			XPACKET_PCMSLOT(p) = (pcmslot);		\
 			XPACKET_RESERVED(p) = 0;		\
@@ -146,7 +146,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 
 #define	XFRAME_NEW_CMD(frm, p, xbus, card, op, to)		\
 	do {							\
-		int		pack_len = RPACKET_SIZE(card,op);	\
+		int		pack_len = RPACKET_SIZE(card, op);	\
 								\
 		if (!XBUS_FLAGS(xbus, CONNECTED))		\
 			return -ENODEV;				\
@@ -191,7 +191,7 @@ typedef struct reg_cmd {
 } PACKED reg_cmd_t;
 
 /* Shortcut access macros */
-#define	REG_FIELD(regptr,member)	((regptr)->alt.r.member)
+#define	REG_FIELD(regptr, member)	((regptr)->alt.r.member)
 #define	REG_XDATA(regptr)		((regptr)->alt.d.xdata)
 
 #ifdef __KERNEL__
@@ -283,7 +283,7 @@ struct xproto_table {
 #include "card_pri.h"
 
 
-#define	MEMBER(card,op)	RPACKET_TYPE(card,op)	RPACKET_NAME(card,op)
+#define	MEMBER(card, op)	RPACKET_TYPE(card, op)	RPACKET_NAME(card, op)
 
 struct xpacket {
 	struct xpacket_header	head;

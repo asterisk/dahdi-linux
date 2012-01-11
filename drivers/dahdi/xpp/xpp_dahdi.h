@@ -52,7 +52,7 @@ void report_bad_ioctl(const char *msg, xpd_t *xpd, int pos, unsigned int cmd);
 int total_registered_spans(void);
 void oht_pcm(xpd_t *xpd, int pos, bool pass);
 void mark_offhook(xpd_t *xpd, int pos, bool to_offhook);
-#define	IS_OFFHOOK(xpd,pos)	IS_SET((xpd)->phonedev.offhook_state, (pos))
+#define	IS_OFFHOOK(xpd, pos)	IS_SET((xpd)->phonedev.offhook_state, (pos))
 void notify_rxsig(xpd_t *xpd, int pos, enum dahdi_rxsig rxsig);
 
 #ifdef CONFIG_PROC_FS

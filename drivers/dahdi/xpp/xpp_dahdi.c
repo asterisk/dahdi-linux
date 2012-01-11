@@ -26,7 +26,7 @@
  */
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
 #  warning "This module is tested only with 2.6 kernels"
 #endif
 
@@ -76,7 +76,7 @@ static void phonedev_cleanup(xpd_t *xpd);
  */
 static int parport_xbuses[2] = { 0, 1 };
 unsigned int parport_xbuses_num_values;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,9)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 9)
 module_param_array(parport_xbuses, int, &parport_xbuses_num_values, 0577);
 #else
 module_param_array(parport_xbuses, int, parport_xbuses_num_values, 0577);
@@ -1095,7 +1095,7 @@ void xpd_dahdi_preunregister(xpd_t *xpd)
 		dahdi_alarm_notify(&PHONEDEV(xpd).span);
 		XPD_DBG(DEVICES, xpd, "Queuing DAHDI_EVENT_REMOVED on all channels to ask user to release them\n");
 		for (j=0; j<PHONEDEV(xpd).span.channels; j++) {
-			dahdi_qevent_lock(XPD_CHAN(xpd, j),DAHDI_EVENT_REMOVED);
+			dahdi_qevent_lock(XPD_CHAN(xpd, j), DAHDI_EVENT_REMOVED);
 		}
 	}
 }

@@ -516,7 +516,7 @@ static int __init xpp_mmap_init(void)
 	xframe_cache = kmem_cache_create("xframe_cache",
 			sizeof(xframe_t) + XFRAME_DATASIZE,
 			0, 0,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,23)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 23)
 			NULL,
 #endif
 			NULL);

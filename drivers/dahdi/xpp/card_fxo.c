@@ -78,7 +78,7 @@ enum fxo_leds {
 /* Shortcuts */
 #define	DAA_WRITE	1
 #define	DAA_READ	0
-#define	DAA_DIRECT_REQUEST(xbus,xpd,port,writing,reg,dL)	\
+#define	DAA_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
 	xpp_register_request((xbus), (xpd), (port), (writing), (reg), 0, 0, (dL), 0, 0, 0)
 
 /*---------------- FXO Protocol Commands ----------------------------------*/
@@ -157,11 +157,11 @@ struct FXO_priv_data {
  * LED counter values:
  *	n>1	: BLINK every n'th tick
  */
-#define	LED_COUNTER(priv,pos,color)	((priv)->led_counter[color][pos])
-#define	IS_BLINKING(priv,pos,color)	(LED_COUNTER(priv,pos,color) > 0)
-#define	MARK_BLINK(priv,pos,color,t)	((priv)->led_counter[color][pos] = (t))
-#define	MARK_OFF(priv,pos,color)	do { BIT_CLR((priv)->ledcontrol[color],(pos)); MARK_BLINK((priv),(pos),(color),0); } while (0)
-#define	MARK_ON(priv,pos,color)		do { BIT_SET((priv)->ledcontrol[color],(pos)); MARK_BLINK((priv),(pos),(color),0); } while (0)
+#define	LED_COUNTER(priv, pos, color)	((priv)->led_counter[color][pos])
+#define	IS_BLINKING(priv, pos, color)	(LED_COUNTER(priv, pos, color) > 0)
+#define	MARK_BLINK(priv, pos, color, t)	((priv)->led_counter[color][pos] = (t))
+#define	MARK_OFF(priv, pos, color)	do { BIT_CLR((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
+#define	MARK_ON(priv, pos, color)		do { BIT_SET((priv)->ledcontrol[color], (pos)); MARK_BLINK((priv), (pos), (color), 0); } while (0)
 
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 
@@ -781,7 +781,7 @@ static const char echotune_regs[sizeof(struct wctdm_echo_coefs)] = {30, 45, 46, 
 
 static int FXO_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long arg)
 {
-	int			i,ret;
+	int			i, ret;
 	unsigned char		echotune_data[ARRAY_SIZE(echotune_regs)];
 
 	BUG_ON(!xpd);
@@ -1187,8 +1187,8 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count, in
 	for_each_line(xpd, i) {
 		if (!IS_SET(PHONEDEV(xpd).digital_outputs, i) && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
 			len += sprintf(page + len, "  %d%d ",
-				IS_BLINKING(priv,i,LED_GREEN),
-				IS_BLINKING(priv,i,LED_RED));
+				IS_BLINKING(priv, i, LED_GREEN),
+				IS_BLINKING(priv, i, LED_RED));
 	}
 	len += sprintf(page + len, "\nBattery-Data:");
 	len += sprintf(page + len, "\n\t%-17s: ", "voltage");

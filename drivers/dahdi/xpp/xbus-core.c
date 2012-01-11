@@ -21,7 +21,7 @@
  */
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
 #  warning "This module is tested only with 2.6 kernels"
 #endif
 
@@ -314,8 +314,8 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, i
 		do_print = 0;
 		if (debug == DBG_ANY)
 			do_print = 1;
-		else if (XPACKET_OP(pack) != XPROTO_NAME(GLOBAL,PCM_READ) &&
-			XPACKET_OP(pack) != XPROTO_NAME(GLOBAL,PCM_WRITE))
+		else if (XPACKET_OP(pack) != XPROTO_NAME(GLOBAL, PCM_READ) &&
+			XPACKET_OP(pack) != XPROTO_NAME(GLOBAL, PCM_WRITE))
 			do_print = 1;
 		else if (debug & DBG_PCM) {
 			static int	rate_limit;
@@ -550,7 +550,7 @@ xpd_t	*xpd_byaddr(const xbus_t *xbus, uint unit, uint subunit)
 {
 	if (unit > MAX_UNIT || subunit > MAX_SUBUNIT)
 		return NULL;
-	return xbus->xpds[XPD_IDX(unit,subunit)];
+	return xbus->xpds[XPD_IDX(unit, subunit)];
 }
 
 int xbus_xpd_bind(xbus_t *xbus, xpd_t *xpd, int unit, int subunit)
@@ -559,7 +559,7 @@ int xbus_xpd_bind(xbus_t *xbus, xpd_t *xpd, int unit, int subunit)
 	unsigned long	flags;
 
 	BUG_ON(!xbus);
-	xpd_num = XPD_IDX(unit,subunit);
+	xpd_num = XPD_IDX(unit, subunit);
 	XBUS_DBG(DEVICES, xbus, "XPD #%d\n", xpd_num);
 	spin_lock_irqsave(&xbus->lock, flags);
 	if (!VALID_XPD_NUM(xpd_num)) {
@@ -1014,7 +1014,7 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
  * it returns only when all XPD's on the bus are detected and
  * initialized.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 20)
 static void xbus_populate(struct work_struct *work)
 {
 	struct xbus_workqueue	*worker = container_of(work, struct xbus_workqueue, xpds_init_work);
@@ -1101,7 +1101,7 @@ int xbus_process_worker(xbus_t *xbus)
 	}
 	XBUS_DBG(DEVICES, xbus, "\n");
 	/* Initialize the work. (adapt to kernel API changes). */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,20)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&worker->xpds_init_work, xbus_populate);
 #else
 	INIT_WORK(&worker->xpds_init_work, xbus_populate, worker);

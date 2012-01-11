@@ -140,7 +140,7 @@ struct xbus_workqueue {
 
 /*
  * Allocate/Free an xframe from pools of empty xframes.
- * Calls to {get,put}_xframe are wrapped in
+ * Calls to {get, put}_xframe are wrapped in
  * the macros bellow, so we take/return it
  * to the correct pool.
  */
@@ -316,7 +316,7 @@ xpacket_t *xframe_next_packet(xframe_t *xframe, int len);
 /*
  * Map: unit+subunit <--> index in xbus->xpds[]
  */
-#define	XPD_IDX(unit,subunit)	((unit) * MAX_SUBUNIT + (subunit))
+#define	XPD_IDX(unit, subunit)	((unit) * MAX_SUBUNIT + (subunit))
 #define	XBUS_UNIT(idx)		((idx) / MAX_SUBUNIT)
 #define	XBUS_SUBUNIT(idx)	((idx) % MAX_SUBUNIT)
 
