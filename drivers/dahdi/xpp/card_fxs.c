@@ -195,34 +195,34 @@ static void vmwi_search(xpd_t *xpd, lineno_t pos, bool on)
 /*
  * LED and RELAY control is done via SLIC register 0x06:
  *         7     6     5     4     3     2     1     0
- * 	+-----+-----+-----+-----+-----+-----+-----+-----+
- * 	| M2  | M1  | M3  | C2  | O1  | O3  | C1  | C3  |
- * 	+-----+-----+-----+-----+-----+-----+-----+-----+
+ *	+-----+-----+-----+-----+-----+-----+-----+-----+
+ *	| M2  | M1  | M3  | C2  | O1  | O3  | C1  | C3  |
+ *	+-----+-----+-----+-----+-----+-----+-----+-----+
  *
- * 	Cn	- Control bit (control one digital line)
- * 	On	- Output bit (program a digital line for output)
- * 	Mn	- Mask bit (only the matching output control bit is affected)
+ *	Cn	- Control bit (control one digital line)
+ *	On	- Output bit (program a digital line for output)
+ *	Mn	- Mask bit (only the matching output control bit is affected)
  *
- * 	C3	- OUTPUT RELAY (0 - OFF, 1 - ON)
- * 	C1	- GREEN LED (0 - OFF, 1 - ON)
- * 	O3	- Output RELAY (this line is output)
- * 	O1	- Output GREEN (this line is output)
- * 	C2	- RED LED (0 - OFF, 1 - ON)
- * 	M3	- Mask RELAY. (1 - C3 effect the OUTPUT RELAY)
- * 	M2	- Mask RED. (1 - C2 effect the RED LED)
- * 	M1	- Mask GREEN. (1 - C1 effect the GREEN LED)
+ *	C3	- OUTPUT RELAY (0 - OFF, 1 - ON)
+ *	C1	- GREEN LED (0 - OFF, 1 - ON)
+ *	O3	- Output RELAY (this line is output)
+ *	O1	- Output GREEN (this line is output)
+ *	C2	- RED LED (0 - OFF, 1 - ON)
+ *	M3	- Mask RELAY. (1 - C3 effect the OUTPUT RELAY)
+ *	M2	- Mask RED. (1 - C2 effect the RED LED)
+ *	M1	- Mask GREEN. (1 - C1 effect the GREEN LED)
  *
- * 	The OUTPUT RELAY (actually a relay out) is connected to line 0 and 4 only.
+ *	The OUTPUT RELAY (actually a relay out) is connected to line 0 and 4 only.
  */
 
-//		        		       		GREEN	RED	OUTPUT RELAY
-static const int	led_register_mask[] = { 	BIT(7),	BIT(6),	BIT(5) };
-static const int	led_register_vals[] = { 	BIT(4),	BIT(1),	BIT(0) };
+//						GREEN	RED	OUTPUT RELAY
+static const int	led_register_mask[] = {	BIT(7),	BIT(6),	BIT(5) };
+static const int	led_register_vals[] = {	BIT(4),	BIT(1),	BIT(0) };
 
 /*
  * pos can be:
- * 	- A line number
- * 	- ALL_LINES. This is not valid anymore since 8-Jan-2007.
+ *	- A line number
+ *	- ALL_LINES. This is not valid anymore since 8-Jan-2007.
  */
 static int do_led(xpd_t *xpd, lineno_t chan, byte which, bool on)
 {
@@ -1039,9 +1039,9 @@ static int FXS_card_close(xpd_t *xpd, lineno_t chan)
 /*
  * INPUT polling is done via SLIC register 0x06 (same as LEDS):
  *         7     6     5     4     3     2     1     0
- * 	+-----+-----+-----+-----+-----+-----+-----+-----+
- * 	| I1  | I3  |     |     | I2  | I4  |     |     |
- * 	+-----+-----+-----+-----+-----+-----+-----+-----+
+ *	+-----+-----+-----+-----+-----+-----+-----+-----+
+ *	| I1  | I3  |     |     | I2  | I4  |     |     |
+ *	+-----+-----+-----+-----+-----+-----+-----+-----+
  *
  */
 static int	input_channels[] = { 6, 7, 2, 3 };	// Slic numbers of input relays

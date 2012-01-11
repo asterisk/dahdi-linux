@@ -85,10 +85,10 @@ static int apply_pri_protocol(xpd_t *xpd);
 #define	PROC_REGISTER_FNAME	"slics"
 
 enum pri_protocol {
-	PRI_PROTO_0  	= 0,
+	PRI_PROTO_0	= 0,
 	PRI_PROTO_E1	= 1,
-	PRI_PROTO_T1 	= 2,
-	PRI_PROTO_J1 	= 3
+	PRI_PROTO_T1	= 2,
+	PRI_PROTO_J1	= 3
 };
 
 static const char *protocol_names[] = {

@@ -197,7 +197,7 @@ static void reset_battery_readings(xpd_t *xpd, lineno_t pos)
 	power_change(xpd, pos, POWER_UNKNOWN);
 }
 
-static const int	led_register_mask[] = { 	BIT(7),	BIT(6),	BIT(5) };
+static const int	led_register_mask[] = {	BIT(7),	BIT(6),	BIT(5) };
 
 /*
  * LED control is done via DAA register 0x20
@@ -781,7 +781,7 @@ static const char echotune_regs[sizeof(struct wctdm_echo_coefs)] = {30, 45, 46, 
 
 static int FXO_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long arg)
 {
-	int 			i,ret;
+	int			i,ret;
 	unsigned char		echotune_data[ARRAY_SIZE(echotune_regs)];
 
 	BUG_ON(!xpd);

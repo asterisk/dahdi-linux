@@ -113,10 +113,10 @@ static const char *xhfc_state_name(bool is_nt, enum xhfc_states state)
 
 #define	A_SU_WR_STA		0x30	/* ST/Up state machine register		*/
 #define		V_SU_LD_STA	0x10
-#define 	V_SU_ACT	0x60	/* start activation/deactivation	*/
-#define 	STA_DEACTIVATE	0x40	/* start deactivation in A_SU_WR_STA */
-#define 	STA_ACTIVATE	0x60	/* start activation   in A_SU_WR_STA */
-#define 	V_SU_SET_G2_G3	0x80
+#define	V_SU_ACT	0x60	/* start activation/deactivation	*/
+#define	STA_DEACTIVATE	0x40	/* start deactivation in A_SU_WR_STA */
+#define	STA_ACTIVATE	0x60	/* start activation   in A_SU_WR_STA */
+#define	V_SU_SET_G2_G3	0x80
 
 #define	A_SU_RD_STA		0x30
 typedef union {

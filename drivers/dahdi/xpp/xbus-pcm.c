@@ -63,7 +63,7 @@ static struct xpp_ticker	global_ticks_series;
 
 #define	PROC_SYNC		"sync"
 #define SYNC_CYCLE		500	/* Sampling cycle in usec */
-#define SYNC_CYCLE_SAMPLE 	100	/* Samples from end of SYNC_CYCLE */
+#define SYNC_CYCLE_SAMPLE	100	/* Samples from end of SYNC_CYCLE */
 #define SYNC_CONVERGE		10	/* Number of SYNC_CYCLE's to converge speed */
 #define SYNC_CENTER		500	/* Offset from ref_ticker to other AB's */
 #define SYNC_DELTA		40	/* If within +/-SYNC_DELTA, try to stay there */

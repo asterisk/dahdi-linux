@@ -266,7 +266,7 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, i
 	xpacket_t	*pack;
 	uint16_t	pos = 0;
 	uint16_t	nextpos;
-	int 		num = 1;
+	int		num = 1;
 	bool		do_print;
 	unsigned long	flags;
 
@@ -350,8 +350,8 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, i
 /**
  *
  * Frame is freed:
- * 	- In case of error, by this function.
- * 	- Otherwise, by the underlying sending mechanism
+ *	- In case of error, by this function.
+ *	- Otherwise, by the underlying sending mechanism
  */
 int send_pcm_frame(xbus_t *xbus, xframe_t *xframe)
 {

@@ -71,8 +71,8 @@ struct xpacket_header {
 
 /*
  * The LSB of the type number signifies:
- * 	0 - TO_PSTN
- * 	1 - TO_PHONE
+ *	0 - TO_PSTN
+ *	1 - TO_PHONE
  */
 #define	XPD_TYPE_FXS		1	// TO_PHONE
 #define	XPD_TYPE_FXO		2	// TO_PSTN

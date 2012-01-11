@@ -442,7 +442,7 @@ static struct bus_type toplevel_bus_type = {
 	.name           = "astribanks",
 	.match          = astribank_match,
 #ifdef OLD_HOTPLUG_SUPPORT
-	.hotplug 	= astribank_hotplug,
+	.hotplug	= astribank_hotplug,
 #else
 	.uevent         = astribank_uevent,
 #endif

@@ -1031,7 +1031,7 @@ static void __exit xpp_usb_shutdown(void)
 
 static int xusb_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
-	int 		len = 0;
+	int		len = 0;
 	unsigned long	flags;
 	int		i;
 	//unsigned long stamp = jiffies;

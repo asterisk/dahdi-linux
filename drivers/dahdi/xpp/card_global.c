@@ -258,7 +258,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			writing,	/* writing	*/
 			regnum,
 			do_subreg,	/* use subreg	*/
-			subreg, 	/* subreg	*/
+			subreg,	/* subreg	*/
 			data_low,
 			do_datah,	/* use data_high*/
 			data_high);
