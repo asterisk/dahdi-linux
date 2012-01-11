@@ -73,7 +73,7 @@ static void transport_destroy(xbus_t *xbus);
 /* Data structures */
 static DEFINE_SPINLOCK(xbuses_lock);
 #ifdef	CONFIG_PROC_FS
-static struct proc_dir_entry	*proc_xbuses = NULL;
+static struct proc_dir_entry	*proc_xbuses;
 #endif
 
 static struct xbus_desc {

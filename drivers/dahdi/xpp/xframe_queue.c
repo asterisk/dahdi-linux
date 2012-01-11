@@ -48,7 +48,7 @@ static void __xframe_dump_queue(struct xframe_queue *q)
 static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 {
 	int			ret = 1;
-	static int		overflow_cnt = 0;
+	static int		overflow_cnt;
 
 	if(unlikely(q->disabled)) {
 		ret = 0;

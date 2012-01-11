@@ -984,7 +984,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 			if (get_user(val, (int __user *)arg))
 				return -EFAULT;
 			if(!vmwi_ioctl) {
-				static bool	notified = 0;
+				static bool	notified;
 
 				if(!notified++)
 					LINE_NOTICE(xpd, pos,

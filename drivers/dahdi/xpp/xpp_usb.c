@@ -167,7 +167,7 @@ static struct xusb_counters {
 
 #define	MAX_PENDING_WRITES	100
 
-static KMEM_CACHE_T	*xusb_cache = NULL;
+static KMEM_CACHE_T	*xusb_cache;
 
 typedef	struct xusb	xusb_t;
 
@@ -243,7 +243,7 @@ struct xusb {
 
 static DEFINE_SPINLOCK(xusb_lock);
 static xusb_t *xusb_array[MAX_BUSES] = {};
-static unsigned bus_count = 0;
+static unsigned bus_count;
 
 
 /* prevent races between open() and disconnect() */

@@ -836,7 +836,7 @@ int xpp_maint(struct dahdi_span *span, int cmd)
  */
 static int xpp_watchdog(struct dahdi_span *span, int cause)
 {
-	static	int rate_limit = 0;
+	static	int rate_limit;
 
 	if((rate_limit++ % 1000) == 0)
 		DBG(GENERAL, "\n");

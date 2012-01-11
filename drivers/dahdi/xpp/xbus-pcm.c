@@ -54,10 +54,10 @@ static struct xpp_ticker	dahdi_ticker;
  * The ref_ticker points to the current referece tick source.
  * I.e: one of our AB or dahdi_ticker
  */
-static struct xpp_ticker	*ref_ticker = NULL;
+static struct xpp_ticker	*ref_ticker;
 static DEFINE_SPINLOCK(ref_ticker_lock);
 static DEFINE_SPINLOCK(elect_syncer_lock);
-static bool			force_dahdi_sync = 0;	/* from /sys/bus/astribanks/drivers/xppdrv/sync */
+static bool			force_dahdi_sync;	/* from /sys/bus/astribanks/drivers/xppdrv/sync */
 static xbus_t			*global_ticker;
 static struct xpp_ticker	global_ticks_series;
 
@@ -80,7 +80,7 @@ static struct xpp_ticker	global_ticks_series;
 #define	SYNC_ADJ_SLOW	10000
 
 #ifdef	DAHDI_SYNC_TICK
-static unsigned int		dahdi_tick_count = 0;
+static unsigned int		dahdi_tick_count;
 #endif
 
 /*------------------------- SYNC Handling --------------------------*/
@@ -795,7 +795,7 @@ static bool pcm_valid(xpd_t *xpd, xpacket_t *pack)
 	/* FRAMES: include opcode in calculation */
 	good_len = RPACKET_HEADERSIZE + sizeof(xpp_line_t) + count * 8;
 	if(XPACKET_LEN(pack) != good_len) {
-		static int rate_limit = 0;
+		static int rate_limit;
 
 		XPD_COUNTER(xpd, RECV_ERRORS)++;
 		if((rate_limit++ % 1000) <= 10) {

@@ -30,7 +30,7 @@
 #include <linux/parport.h>
 #include "parport_debug.h"
 
-static struct parport	*debug_sync_parport = NULL;
+static struct parport	*debug_sync_parport;
 static int		parport_toggles[8];	/* 8 bit flip-flop */
 
 void flip_parport_bit(unsigned char bitnum)
