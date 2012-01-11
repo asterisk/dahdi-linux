@@ -46,33 +46,33 @@
 		category, THIS_MODULE->name, (xbus)->busname, (unit), (port), ## __VA_ARGS__)
 
 #define	DBG(bits, fmt, ...)	\
-	((void)((debug & (DBG_ ## bits)) && PRINTK(DEBUG, "-" #bits, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+	((void)((debug & (DBG_ ## bits)) && PRINTK(DEBUG, "-" #bits, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	INFO(fmt, ...)		PRINTK(INFO, "", fmt, ## __VA_ARGS__)
 #define	NOTICE(fmt, ...)	PRINTK(NOTICE, "", fmt, ## __VA_ARGS__)
 #define	WARNING(fmt, ...)	PRINTK(WARNING, "", fmt, ## __VA_ARGS__)
 #define	ERR(fmt, ...)		PRINTK(ERR, "", fmt, ## __VA_ARGS__)
 
 #define	XBUS_DBG(bits, xbus, fmt, ...)	\
-			((void)((debug & (DBG_ ## bits)) && XBUS_PRINTK(DEBUG, "-" #bits, xbus, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+			((void)((debug & (DBG_ ## bits)) && XBUS_PRINTK(DEBUG, "-" #bits, xbus, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	XBUS_INFO(xbus, fmt, ...)		XBUS_PRINTK(INFO, "", xbus, fmt, ## __VA_ARGS__)
 #define	XBUS_NOTICE(xbus, fmt, ...)		XBUS_PRINTK(NOTICE, "", xbus, fmt, ## __VA_ARGS__)
 #define	XBUS_ERR(xbus, fmt, ...)		XBUS_PRINTK(ERR, "", xbus, fmt, ## __VA_ARGS__)
 
 #define	XPD_DBG(bits, xpd, fmt, ...)	\
-		((void)((debug & (DBG_ ## bits)) && XPD_PRINTK(DEBUG, "-" #bits, xpd, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+		((void)((debug & (DBG_ ## bits)) && XPD_PRINTK(DEBUG, "-" #bits, xpd, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	XPD_INFO(xpd, fmt, ...)		XPD_PRINTK(INFO, "", xpd, fmt, ## __VA_ARGS__)
 #define	XPD_NOTICE(xpd, fmt, ...)	XPD_PRINTK(NOTICE, "", xpd, fmt, ## __VA_ARGS__)
 #define	XPD_WARNING(xpd, fmt, ...)	XPD_PRINTK(WARNING, "", xpd, fmt, ## __VA_ARGS__)
 #define	XPD_ERR(xpd, fmt, ...)		XPD_PRINTK(ERR, "", xpd, fmt, ## __VA_ARGS__)
 
 #define	LINE_DBG(bits, xpd, pos, fmt, ...)	\
-			((void)((debug & (DBG_ ## bits)) && LINE_PRINTK(DEBUG, "-" #bits, xpd, pos, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+			((void)((debug & (DBG_ ## bits)) && LINE_PRINTK(DEBUG, "-" #bits, xpd, pos, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	LINE_NOTICE(xpd, pos, fmt, ...)		LINE_PRINTK(NOTICE, "", xpd, pos, fmt, ## __VA_ARGS__)
 #define	LINE_ERR(xpd, pos, fmt, ...)		LINE_PRINTK(ERR, "", xpd, pos, fmt, ## __VA_ARGS__)
 
 #define	PORT_DBG(bits, xbus, unit, port, fmt, ...)	\
 			((void)((debug & (DBG_ ## bits)) && PORT_PRINTK(DEBUG, "-" #bits,	\
-					xbus, unit, port, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+					xbus, unit, port, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	PORT_NOTICE(xbus, unit, port, fmt, ...)	PORT_PRINTK(NOTICE, "", xbus, unit, port, fmt, ## __VA_ARGS__)
 #define	PORT_ERR(xbus, unit, port, fmt, ...)		PORT_PRINTK(ERR, "", xbus, unit, port, fmt, ## __VA_ARGS__)
 

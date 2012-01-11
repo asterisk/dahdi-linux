@@ -606,7 +606,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 			return -ENOSYS;
 		default:
 			XPD_ERR(xpd, "%s: Unknown pri protocol = %d\n",
-				__FUNCTION__, set_proto);
+				__func__, set_proto);
 			return -EINVAL;
 	}
 	priv->pri_protocol = set_proto;
@@ -747,7 +747,7 @@ static void set_reg_lim0(const char *msg, xpd_t *xpd)
 		lim0 |=  REG_LIM0_MAS;
 	else
 		lim0 &= ~REG_LIM0_MAS;
-	XPD_DBG(SIGNAL, xpd, "%s(%s): %s, %s\n", __FUNCTION__, msg,
+	XPD_DBG(SIGNAL, xpd, "%s(%s): %s, %s\n", __func__, msg,
 		(is_master_mode) ? "MASTER" : "SLAVE",
 		(localloop) ? "LOCALLOOP" : "NO_LOCALLOOP");
 	write_subunit(xpd, REG_LIM0 , lim0);
@@ -764,7 +764,7 @@ static int set_master_mode(const char *msg, xpd_t *xpd)
 {
 	BUG_ON(!xpd);
 	XPD_DBG(SIGNAL, xpd, "\n");
-	set_reg_lim0(__FUNCTION__, xpd);
+	set_reg_lim0(__func__, xpd);
 	set_clocking(xpd);
 	return 0;
 }
@@ -777,12 +777,12 @@ static int set_localloop(xpd_t *xpd, bool localloop)
 	priv = xpd->priv;
 	if(SPAN_REGISTERED(xpd)) {
 		XPD_NOTICE(xpd, "Registered as span %d. Cannot do %s\n",
-			PHONEDEV(xpd).span.spanno, __FUNCTION__);
+			PHONEDEV(xpd).span.spanno, __func__);
 		return -EBUSY;
 	}
 	priv->local_loopback = localloop;
-	XPD_DBG(SIGNAL, xpd, "%s: %s\n", __FUNCTION__, (localloop) ? "LOCALLOOP" : "NO");
-	set_master_mode(__FUNCTION__, xpd);
+	XPD_DBG(SIGNAL, xpd, "%s: %s\n", __func__, (localloop) ? "LOCALLOOP" : "NO");
+	set_master_mode(__func__, xpd);
 	return 0;
 }
 
@@ -921,7 +921,7 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 		}
 		if(flags && flags != BIT(i)) {
 			ERR("%s: BUG: i=%d flags=0x%X\n",
-				__FUNCTION__, i, flags);
+				__func__, i, flags);
 			// BUG();
 		}
 	}
@@ -1012,24 +1012,24 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 		framingstr, codingstr, crcstr,
 		(lineconfig & DAHDI_CONFIG_NOTOPEN)?"YELLOW":"",
 		lineconfig);
-	set_reg_lim0(__FUNCTION__, xpd);
-	XPD_DBG(GENERAL, xpd, "%s: fmr1(0x%02X) = 0x%02X\n", __FUNCTION__, REG_FMR1, fmr1);
+	set_reg_lim0(__func__, xpd);
+	XPD_DBG(GENERAL, xpd, "%s: fmr1(0x%02X) = 0x%02X\n", __func__, REG_FMR1, fmr1);
 	write_subunit(xpd, REG_FMR1, fmr1);
-	XPD_DBG(GENERAL, xpd, "%s: fmr2(0x%02X) = 0x%02X\n", __FUNCTION__, REG_FMR2, fmr2);
+	XPD_DBG(GENERAL, xpd, "%s: fmr2(0x%02X) = 0x%02X\n", __func__, REG_FMR2, fmr2);
 	write_subunit(xpd, REG_FMR2, fmr2);
-	XPD_DBG(GENERAL, xpd, "%s: fmr0(0x%02X) = 0x%02X\n", __FUNCTION__, REG_FMR0, fmr0);
+	XPD_DBG(GENERAL, xpd, "%s: fmr0(0x%02X) = 0x%02X\n", __func__, REG_FMR0, fmr0);
 	write_subunit(xpd, REG_FMR0, fmr0);
-	XPD_DBG(GENERAL, xpd, "%s: fmr4(0x%02X) = 0x%02X\n", __FUNCTION__, REG_FMR4, fmr4);
+	XPD_DBG(GENERAL, xpd, "%s: fmr4(0x%02X) = 0x%02X\n", __func__, REG_FMR4, fmr4);
 	write_subunit(xpd, REG_FMR4, fmr4);
 	if(fmr3) {
-		XPD_DBG(GENERAL, xpd, "%s: fmr3(0x%02X) = 0x%02X\n", __FUNCTION__, REG_FMR3, fmr3);
+		XPD_DBG(GENERAL, xpd, "%s: fmr3(0x%02X) = 0x%02X\n", __func__, REG_FMR3, fmr3);
 		write_subunit(xpd, REG_FMR3, fmr3);
 	}
-	XPD_DBG(GENERAL, xpd, "%s: cmdr(0x%02X) = 0x%02X\n", __FUNCTION__, REG_CMDR_E, cmdr);
+	XPD_DBG(GENERAL, xpd, "%s: cmdr(0x%02X) = 0x%02X\n", __func__, REG_CMDR_E, cmdr);
 	write_subunit(xpd, REG_CMDR_E, cmdr);
 #ifdef JAPANEZE_SUPPORT
 	if(rc0) {
-		XPD_DBG(GENERAL, xpd, "%s: rc0(0x%02X) = 0x%02X\n", __FUNCTION__, REG_RC0, rc0);
+		XPD_DBG(GENERAL, xpd, "%s: rc0(0x%02X) = 0x%02X\n", __func__, REG_RC0, rc0);
 		write_subunit(xpd, REG_RC0, rc0);
 	}
 #endif
@@ -1042,12 +1042,12 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig)
 			 * They are unused in E1 and should be 1
 			 */
 			XPD_DBG(GENERAL, xpd, "%s: rs1(0x%02X) = 0x%02X\n",
-				__FUNCTION__, REG_RS1_E, rs1);
+				__func__, REG_RS1_E, rs1);
 			write_subunit(xpd, REG_RS1_E, rs1);
 		}
 		xsp |= REG_XSP_E_CASEN;	/* Same as REG_FMR5_T_EIBR for T1 */
 	}
-	XPD_DBG(GENERAL, xpd, "%s: xsp(0x%02X) = 0x%02X\n", __FUNCTION__, REG_XSP_E, xsp);
+	XPD_DBG(GENERAL, xpd, "%s: xsp(0x%02X) = 0x%02X\n", __func__, REG_XSP_E, xsp);
 	write_subunit(xpd, REG_XSP_E, xsp);
 	return 0;
 bad_lineconfig:
@@ -1206,7 +1206,7 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 	PHONEDEV(xpd).direction = TO_PSTN;
 	XPD_DBG(DEVICES, xpd, "%s\n", xpd->type_name);
 	PHONEDEV(xpd).timing_priority = 1;		/* High priority SLAVE */
-	set_master_mode(__FUNCTION__, xpd);
+	set_master_mode(__func__, xpd);
 	for(ret = 0; ret < NUM_LEDS; ret++) {
 		DO_LED(xpd, ret, PRI_LED_ON);
 		msleep(20);
@@ -1576,7 +1576,7 @@ static int encode_rbsbits_e1(xpd_t *xpd, int pos, int bits)
 	if(pos == 15)
 		return 0;	/* Don't write dchan in CAS */
 	if(pos < 0 || pos > 31) {
-		XPD_NOTICE(xpd, "%s: pos=%d out of range. Ignore\n", __FUNCTION__, pos);
+		XPD_NOTICE(xpd, "%s: pos=%d out of range. Ignore\n", __func__, pos);
 		return 0;
 	}
 	if(pos >= 16) {
@@ -1609,7 +1609,7 @@ static int encode_rbsbits_t1(xpd_t *xpd, int pos, int bits)
 	BUG_ON(!priv);
 	BUG_ON(priv->pri_protocol != PRI_PROTO_T1);
 	if(pos < 0 || pos >= PHONEDEV(xpd).channels) {
-		XPD_ERR(xpd, "%s: Bad pos=%d\n", __FUNCTION__, pos);
+		XPD_ERR(xpd, "%s: Bad pos=%d\n", __func__, pos);
 		return 0;
 	}
 	chan_per_reg = CHAN_PER_REGS(priv);
@@ -1701,7 +1701,7 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 			return -EINVAL;
 	} else {
 		XPD_NOTICE(xpd, "%s: protocol %s is not supported yet with CAS\n",
-			__FUNCTION__, pri_protocol_name(priv->pri_protocol));
+			__func__, pri_protocol_name(priv->pri_protocol));
 		return -EINVAL;
 	}
 	return 0;
@@ -1996,19 +1996,19 @@ static int decode_cas_e1(xpd_t *xpd, byte regnum, byte data_low)
 	BUG_ON(priv->pri_protocol != PRI_PROTO_E1);
 	XPD_DBG(SIGNAL, xpd, "RBS: RX: data_low=0x%02X\n", data_low);
 	if(pos >= NUM_CAS_RS_E) {
-		XPD_ERR(xpd, "%s: got bad pos=%d [0-%d]\n", __FUNCTION__, pos, NUM_CAS_RS_E);
+		XPD_ERR(xpd, "%s: got bad pos=%d [0-%d]\n", __func__, pos, NUM_CAS_RS_E);
 		return -EINVAL;
 	}
 	if(chan1 < 0 || chan1 > PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "%s: %s CAS: Bad chan1 number (%d)\n",
-			__FUNCTION__,
+			__func__,
 			pri_protocol_name(priv->pri_protocol),
 			chan1);
 		return -EINVAL;
 	}
 	if(chan2 < 0 || chan2 > PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "%s: %s CAS: Bad chan2 number (%d)\n",
-			__FUNCTION__,
+			__func__,
 			pri_protocol_name(priv->pri_protocol),
 			chan2);
 		return -EINVAL;
@@ -2058,12 +2058,12 @@ static int decode_cas_t1(xpd_t *xpd, byte regnum, byte data_low)
 			rxsig <<= 2;
 		pos = rsnum * chan_per_reg + chan_per_reg - i - 1;
 		if(pos < 0 || pos >= PHONEDEV(xpd).channels) {
-			XPD_ERR(xpd, "%s: Bad pos=%d\n", __FUNCTION__, pos);
+			XPD_ERR(xpd, "%s: Bad pos=%d\n", __func__, pos);
 			continue;
 		}
 		chan = XPD_CHAN(xpd, pos);
 		if(!chan) {
-			XPD_ERR(xpd, "%s: Null channel in pos=%d\n", __FUNCTION__, pos);
+			XPD_ERR(xpd, "%s: Null channel in pos=%d\n", __func__, pos);
 			continue;
 		}
 		if(chan->rxsig != rxsig) {
@@ -2110,7 +2110,7 @@ static void process_cas_dchan(xpd_t *xpd, byte regnum, byte data_low)
 
 			XPD_NOTICE(xpd,
 				"%s: received register 0x%X in protocol %s. Ignore\n",
-				__FUNCTION__, regnum, pri_protocol_name(priv->pri_protocol));
+				__func__, regnum, pri_protocol_name(priv->pri_protocol));
 			return;
 		}
 		if(decode_cas_e1(xpd, regnum, data_low) < 0)
@@ -2119,14 +2119,14 @@ static void process_cas_dchan(xpd_t *xpd, byte regnum, byte data_low)
 		if(regnum > REG_RS12_E) {
 			XPD_NOTICE(xpd,
 				"%s: received register 0x%X in protocol %s. Ignore\n",
-				__FUNCTION__, regnum, pri_protocol_name(priv->pri_protocol));
+				__func__, regnum, pri_protocol_name(priv->pri_protocol));
 			return;
 		}
 		if(decode_cas_t1(xpd, regnum, data_low) < 0)
 			return;
 	} else {
 		XPD_NOTICE(xpd, "%s: protocol %s is not supported yet with CAS\n",
-			__FUNCTION__, pri_protocol_name(priv->pri_protocol));
+			__func__, pri_protocol_name(priv->pri_protocol));
 	}
 	priv->cas_replies++;
 }
@@ -2151,7 +2151,7 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		static int	rate_limit;
 
 		if((rate_limit++ % 1003) < 5)
-			notify_bad_xpd(__FUNCTION__, xbus, addr , orig_xpd->xpdname);
+			notify_bad_xpd(__func__, xbus, addr , orig_xpd->xpdname);
 		return -EPROTO;
 	}
 	spin_lock_irqsave(&xpd->lock, flags);
@@ -2518,37 +2518,37 @@ static int pri_xpd_probe(struct device *dev)
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
 	ret = device_create_file(dev, &dev_attr_pri_protocol);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_protocol) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_protocol) failed: %d\n", __func__, ret);
 		goto fail_pri_protocol;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_localloop);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_localloop) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_localloop) failed: %d\n", __func__, ret);
 		goto fail_pri_localloop;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_layer1);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_layer1) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_layer1) failed: %d\n", __func__, ret);
 		goto fail_pri_layer1;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_alarms);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_alarms) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_alarms) failed: %d\n", __func__, ret);
 		goto fail_pri_alarms;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_cas);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_cas) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_cas) failed: %d\n", __func__, ret);
 		goto fail_pri_cas;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_dchan);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_dchan) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_dchan) failed: %d\n", __func__, ret);
 		goto fail_pri_dchan;
 	}
 	ret = device_create_file(dev, &dev_attr_pri_clocking);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(pri_clocking) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(pri_clocking) failed: %d\n", __func__, ret);
 		goto fail_pri_clocking;
 	}
 	return 0;

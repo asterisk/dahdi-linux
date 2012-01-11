@@ -162,7 +162,7 @@ static xframe_t *transport_alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
 		return NULL;
 	}
 	spin_lock_irqsave(&xbus->transport.lock, flags);
-	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __FUNCTION__, atomic_read(&xbus->transport.transport_refcount));
+	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __func__, atomic_read(&xbus->transport.transport_refcount));
 	xframe = ops->alloc_xframe(xbus, gfp_flags);
 	if(!xframe) {
 		static int rate_limit;
@@ -187,7 +187,7 @@ static void transport_free_xframe(xbus_t *xbus, xframe_t *xframe)
 	ops = xbus->transport.ops;
 	BUG_ON(!ops);
 	spin_lock_irqsave(&xbus->transport.lock, flags);
-	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __FUNCTION__, atomic_read(&xbus->transport.transport_refcount));
+	//XBUS_INFO(xbus, "%s (transport_refcount=%d)\n", __func__, atomic_read(&xbus->transport.transport_refcount));
 	ops->free_xframe(xbus, xframe);
 	transportops_put(xbus);
 	spin_unlock_irqrestore(&xbus->transport.lock, flags);
@@ -273,7 +273,7 @@ xframe_t *get_xframe(struct xframe_queue *q)
 	 *
 	 * memset(xframe->packets, 0, xframe->frame_maxlen);
 	 */
-	//XBUS_INFO(xbus, "%s\n", __FUNCTION__);
+	//XBUS_INFO(xbus, "%s\n", __func__);
 	return xframe;
 }
 
@@ -284,7 +284,7 @@ void put_xframe(struct xframe_queue *q, xframe_t *xframe)
 	BUG_ON(!q);
 	xbus = (xbus_t *)q->priv;
 	BUG_ON(!xbus);
-	//XBUS_INFO(xbus, "%s\n", __FUNCTION__);
+	//XBUS_INFO(xbus, "%s\n", __func__);
 	BUG_ON(!TRANSPORT_EXIST(xbus));
 	if(unlikely(!xframe_enqueue(q, xframe))) {
 		XBUS_ERR(xbus, "Failed returning xframe to %s\n", q->name);

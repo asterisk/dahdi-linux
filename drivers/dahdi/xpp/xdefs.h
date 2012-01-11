@@ -39,7 +39,7 @@ typedef uint32_t __u32;
 
 #include <stdio.h>
 
-#define	DBG(fmt, ...)		printf("DBG: %s: " fmt, __FUNCTION__, ## __VA_ARGS__)
+#define	DBG(fmt, ...)		printf("DBG: %s: " fmt, __func__, ## __VA_ARGS__)
 #define	INFO(fmt, ...)		printf("INFO: " fmt, ## __VA_ARGS__)
 #define	NOTICE(fmt, ...)	printf("NOTICE: " fmt, ## __VA_ARGS__)
 #define	ERR(fmt, ...)		printf("ERR: " fmt, ## __VA_ARGS__)

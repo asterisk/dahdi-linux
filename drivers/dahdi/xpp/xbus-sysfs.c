@@ -88,7 +88,7 @@ static DEVICE_ATTR_WRITER(xbus_state_store, dev, buf, count)
 		xbus_activate(xbus);
 	else {
 		XBUS_NOTICE(xbus, "%s: Illegal action %s in state %s. Ignored.\n",
-			__FUNCTION__, buf,
+			__func__, buf,
 			xbus_statename(XBUS_STATE(xbus)));
 		return -EINVAL;
 	}
@@ -759,7 +759,7 @@ int xpd_driver_register(struct device_driver *driver)
 	driver->bus = &xpd_type;
 	if((ret = driver_register(driver)) < 0) {
 		ERR("%s: driver_register(%s) failed. Error number %d",
-			__FUNCTION__, driver->name, ret);
+			__func__, driver->name, ret);
 	}
 	return ret;
 }
@@ -794,7 +794,7 @@ int xpd_device_register(xbus_t *xbus, xpd_t *xpd)
 	dev->release = xpd_release;
 	ret = device_register(dev);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_register failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_register failed: %d\n", __func__, ret);
 		return ret;
 	}
 	return 0;
@@ -979,7 +979,7 @@ int xbus_sysfs_create(xbus_t *xbus)
 	astribank->release = astribank_release;
 	ret = device_register(astribank);
 	if(ret) {
-		XBUS_ERR(xbus, "%s: device_register failed: %d\n", __FUNCTION__, ret);
+		XBUS_ERR(xbus, "%s: device_register failed: %d\n", __func__, ret);
 		dev_set_drvdata(astribank, NULL);
 	}
 	return ret;
@@ -992,17 +992,17 @@ int __init xpp_driver_init(void)
 	DBG(DEVICES, "SYSFS\n");
 	if((ret = bus_register(&toplevel_bus_type)) < 0) {
 		ERR("%s: bus_register(%s) failed. Error number %d",
-			__FUNCTION__, toplevel_bus_type.name, ret);
+			__func__, toplevel_bus_type.name, ret);
 		goto failed_toplevel;
 	}
 	if((ret = driver_register(&xpp_driver)) < 0) {
 		ERR("%s: driver_register(%s) failed. Error number %d",
-			__FUNCTION__, xpp_driver.name, ret);
+			__func__, xpp_driver.name, ret);
 		goto failed_xpp_driver;
 	}
 	if((ret = bus_register(&xpd_type)) < 0) {
 		ERR("%s: bus_register(%s) failed. Error number %d",
-			__FUNCTION__, xpd_type.name, ret);
+			__func__, xpd_type.name, ret);
 		goto failed_xpd_bus;
 	}
 	return 0;

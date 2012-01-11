@@ -805,7 +805,7 @@ static int FXS_card_hooksig(xpd_t *xpd, int pos, enum dahdi_txsig txsig)
 			break;
 		default:
 			XPD_NOTICE(xpd, "%s: Can't set tx state to %s (%d)\n",
-				__FUNCTION__, txsig2str(txsig), txsig);
+				__func__, txsig2str(txsig), txsig);
 			ret = -EINVAL;
 	}
 	return ret;
@@ -872,7 +872,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd, unsigned long a
 		return -ENODEV;
 	if (pos < 0 || pos >= PHONEDEV(xpd).channels) {
 		XPD_NOTICE(xpd, "Bad channel number %d in %s(), cmd=%u\n",
-			pos, __FUNCTION__, cmd);
+			pos, __func__, cmd);
 		return -EINVAL;
 	}
 

@@ -57,7 +57,7 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644, "Number of consecutive tx_sluggis
 		THIS_MODULE->name, (xusb)->index, xusb->path, xusb->serial, ## __VA_ARGS__)
 
 #define	XUSB_DBG(bits, xusb, fmt, ...)	\
-			((void)((debug & (DBG_ ## bits)) && XUSB_PRINTK(DEBUG, xusb, "%s: " fmt, __FUNCTION__, ## __VA_ARGS__)))
+			((void)((debug & (DBG_ ## bits)) && XUSB_PRINTK(DEBUG, xusb, "%s: " fmt, __func__, ## __VA_ARGS__)))
 #define	XUSB_ERR(xusb, fmt, ...)		XUSB_PRINTK(ERR, xusb, fmt, ## __VA_ARGS__)
 #define	XUSB_NOTICE(xusb, fmt, ...)		XUSB_PRINTK(NOTICE, xusb, fmt, ## __VA_ARGS__)
 #define	XUSB_INFO(xusb, fmt, ...)		XUSB_PRINTK(INFO, xusb, fmt, ## __VA_ARGS__)
@@ -399,7 +399,7 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 
 		if((rate_limit++ % 1000) == 0)
 			XBUS_ERR(xbus, "%s: usb_submit_urb failed: %d\n",
-				__FUNCTION__, ret);
+				__func__, ret);
 		ret = -EBADF;
 		goto failure;
 	}
@@ -439,7 +439,7 @@ static int xframe_send_cmd(xbus_t *xbus, xframe_t *xframe)
 {
 	BUG_ON(!xbus);
 	BUG_ON(!xframe);
-	//XBUS_INFO(xbus, "%s:\n", __FUNCTION__);
+	//XBUS_INFO(xbus, "%s:\n", __func__);
 	return do_send_xframe(xbus, xframe);
 }
 
@@ -467,7 +467,7 @@ static bool xusb_listen(xusb_t *xusb)
 
 		if((rate_limit++ % 1000) == 0)
 			XBUS_ERR(xbus, "%s: usb_submit_urb failed: %d\n",
-				__FUNCTION__, ret);
+				__func__, ret);
 		FREE_RECV_XFRAME(xbus, xframe);
 		goto out;
 	}

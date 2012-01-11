@@ -383,7 +383,7 @@ static int xpp_mmap_proc_write(struct file *file, const char __user *buffer, uns
 		if (*p == '\0') break;
 		value = simple_strtoul(p, &endp, 16);
 		if (endp == p || value > 0xFF) {
-		    INFO("%s: Bad input\n", __FUNCTION__);
+		    INFO("%s: Bad input\n", __func__);
 		    count = -EINVAL;
 		    goto out;
 		}

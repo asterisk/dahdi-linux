@@ -1372,7 +1372,7 @@ static void su_new_state(xpd_t *xpd, byte reg_x30)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	if(!priv->initialized) {
-		XPD_ERR(xpd, "%s called on uninitialized AB\n", __FUNCTION__);
+		XPD_ERR(xpd, "%s called on uninitialized AB\n", __func__);
 		return;
 	}
 	new_state.reg = reg_x30;
@@ -1477,7 +1477,7 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		static int	rate_limit;
 
 		if((rate_limit++ % 1003) < 5)
-			notify_bad_xpd(__FUNCTION__, xbus, addr , orig_xpd->xpdname);
+			notify_bad_xpd(__func__, xbus, addr , orig_xpd->xpdname);
 		return -EPROTO;
 	}
 	spin_lock_irqsave(&xpd->lock, flags);

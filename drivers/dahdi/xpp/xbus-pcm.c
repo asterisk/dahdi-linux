@@ -401,7 +401,7 @@ void got_new_syncer(xbus_t *xbus, enum sync_mode mode, int drift)
 	case SYNC_MODE_QUERY:		/* ignore           */
 		break;
 	default:
-		XBUS_ERR(xbus, "%s: unknown mode=0x%X\n", __FUNCTION__, mode);
+		XBUS_ERR(xbus, "%s: unknown mode=0x%X\n", __func__, mode);
 	}
 out:
 	spin_unlock_irqrestore(&ref_ticker_lock, flags2);
@@ -987,7 +987,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			if((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
 					"%s: Non-PCM packet within a PCM xframe. (%d)\n",
-					__FUNCTION__, rate_limit);
+					__func__, rate_limit);
 				dump_xframe("In PCM xframe", xbus, xframe, debug);
 			}
 			goto out;
@@ -999,7 +999,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			if((rate_limit++ % 1003) == 0) {
 				XBUS_NOTICE(xbus,
 					"%s: Invalid packet length %d. (%d)\n",
-					__FUNCTION__, len, rate_limit);
+					__func__, len, rate_limit);
 				dump_xframe("BAD LENGTH", xbus, xframe, debug);
 			}
 			goto out;
@@ -1009,7 +1009,7 @@ static int copy_pcm_tospan(xbus_t *xbus, xframe_t *xframe)
 			static int	rate_limit;
 
 			if((rate_limit++ % 1003) == 0) {
-				notify_bad_xpd(__FUNCTION__, xbus, XPACKET_ADDR(pack), "RECEIVE PCM");
+				notify_bad_xpd(__func__, xbus, XPACKET_ADDR(pack), "RECEIVE PCM");
 				dump_xframe("Unknown XPD addr", xbus, xframe, debug);
 			}
 			goto out;
@@ -1093,7 +1093,7 @@ static void xbus_tick(xbus_t *xbus)
 							if((rate_limit++ % 3001) == 0)
 								XBUS_ERR(xbus,
 									"%s: failed to allocate new xframe\n",
-									__FUNCTION__);
+									__func__);
 							return;
 						}
 					}
@@ -1227,7 +1227,7 @@ int exec_sync_command(const char *buf, size_t count)
 		CALL_PROTO(GLOBAL, SYNC_SOURCE, xbus, NULL, SYNC_MODE_QUERY, 0);
 		put_xbus(__func__, xbus);
 	} else {
-		ERR("%s: cannot parse '%s'\n", __FUNCTION__, buf);
+		ERR("%s: cannot parse '%s'\n", __func__, buf);
 		ret = -EINVAL;
 	}
 	return ret;

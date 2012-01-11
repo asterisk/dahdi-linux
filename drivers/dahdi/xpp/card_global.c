@@ -545,7 +545,7 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 		static int	rate_limit;
 
 		if((rate_limit++ % 1003) < 5)
-			notify_bad_xpd(__FUNCTION__, xbus, XPACKET_ADDR(pack), "");
+			notify_bad_xpd(__func__, xbus, XPACKET_ADDR(pack), "");
 		return -EPROTO;
 	}
 	if(debug & DBG_REGS) {

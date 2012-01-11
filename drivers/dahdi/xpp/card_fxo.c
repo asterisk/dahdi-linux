@@ -835,7 +835,7 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	struct FXO_priv_data	*priv;
 
 	if(!xpd) {
-		notify_bad_xpd(__FUNCTION__, xbus, XPACKET_ADDR(pack), cmd->name);
+		notify_bad_xpd(__func__, xbus, XPACKET_ADDR(pack), cmd->name);
 		return -EPROTO;
 	}
 	priv = xpd->priv;
@@ -1359,7 +1359,7 @@ static int fxo_xpd_probe(struct device *dev)
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
 	ret = device_create_file(dev, &dev_attr_fxo_battery);
 	if(ret) {
-		XPD_ERR(xpd, "%s: device_create_file(fxo_battery) failed: %d\n", __FUNCTION__, ret);
+		XPD_ERR(xpd, "%s: device_create_file(fxo_battery) failed: %d\n", __func__, ret);
 		goto fail_fxo_battery;
 	}
 	return 0;

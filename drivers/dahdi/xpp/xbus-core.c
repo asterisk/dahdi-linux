@@ -164,7 +164,7 @@ static void finalize_xbuses_array(void)
 
 	for(i = 0; i < ARRAY_SIZE(xbuses_array); i++) {
 		if(xbuses_array[i].xbus != NULL) {
-			ERR("%s: xbus #%d is not NULL\n", __FUNCTION__, i);
+			ERR("%s: xbus #%d is not NULL\n", __func__, i);
 			BUG();
 		}
 	}
@@ -272,7 +272,7 @@ void dump_xframe(const char msg[], const xbus_t *xbus, const xframe_t *xframe, i
 
 	if(xframe->xframe_magic != XFRAME_MAGIC) {
 		XBUS_ERR(xbus, "%s: bad xframe_magic %lX\n",
-			__FUNCTION__, xframe->xframe_magic);
+			__func__, xframe->xframe_magic);
 		return;
 	}
 	spin_lock_irqsave(&serialize_dump_xframe, flags);
@@ -472,13 +472,13 @@ int send_cmd_frame(xbus_t *xbus, xframe_t *xframe)
 		goto err;
 	}
 	if(debug & DBG_COMMANDS)
-		dump_xframe(__FUNCTION__, xbus, xframe, DBG_ANY);
+		dump_xframe(__func__, xbus, xframe, DBG_ANY);
 	if(!xframe_enqueue(&xbus->command_queue, xframe)) {
 		if((rate_limit++ % 1003) == 0) {
 			XBUS_ERR(xbus,
 				"Dropped command xframe. Cannot enqueue (%d)\n",
 				rate_limit);
-			dump_xframe(__FUNCTION__, xbus, xframe, DBG_ANY);
+			dump_xframe(__func__, xbus, xframe, DBG_ANY);
 		}
 		xbus_setstate(xbus, XBUS_STATE_FAIL);
 		ret = -E2BIG;
@@ -582,7 +582,7 @@ int xbus_xpd_bind(xbus_t *xbus, xpd_t *xpd, int unit, int subunit)
 	spin_unlock_irqrestore(&xbus->lock, flags);
 	/* Must be done out of atomic context */
 	if(xpd_device_register(xbus, xpd) < 0) {
-		XPD_ERR(xpd, "%s: xpd_device_register() failed\n", __FUNCTION__);
+		XPD_ERR(xpd, "%s: xpd_device_register() failed\n", __func__);
 		/* FIXME: What to do? */
 	}
 	return 0;
@@ -595,18 +595,18 @@ int xbus_xpd_unbind(xbus_t *xbus, xpd_t *xpd)
 
 	XBUS_DBG(DEVICES, xbus, "XPD #%d\n", xpd_num);
 	if(!VALID_XPD_NUM(xpd_num)) {
-		XBUS_ERR(xbus, "%s: Bad xpd_num = %d\n", __FUNCTION__, xpd_num);
+		XBUS_ERR(xbus, "%s: Bad xpd_num = %d\n", __func__, xpd_num);
 		BUG();
 	}
 	if(xbus->xpds[xpd_num] == NULL) {
-		XBUS_ERR(xbus, "%s: slot xpd_num=%d is empty\n", __FUNCTION__, xpd_num);
+		XBUS_ERR(xbus, "%s: slot xpd_num=%d is empty\n", __func__, xpd_num);
 		BUG();
 	}
 	if(xbus->xpds[xpd_num] != xpd) {
 		xpd_t	*other = xbus->xpds[xpd_num];
 
 		XBUS_ERR(xbus, "%s: slot xpd_num=%d is occupied by %p (%s)\n",
-				__FUNCTION__, xpd_num, other, other->xpdname);
+				__func__, xpd_num, other, other->xpdname);
 		BUG();
 	}
 	spin_lock_irqsave(&xbus->lock, flags);
@@ -1031,7 +1031,7 @@ void xbus_populate(void *data)
 
 	xbus = container_of(worker, xbus_t, worker);
 	xbus = get_xbus(__func__, xbus->num);	/* return in function end */
-	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __FUNCTION__);
+	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __func__);
 	spin_lock_irqsave(&worker->worker_lock, flags);
 	list_for_each_safe(card, next_card, &worker->card_list) {
 		struct card_desc_struct	*card_desc = list_entry(card, struct card_desc_struct, card_list);
@@ -1091,12 +1091,12 @@ int xbus_process_worker(xbus_t *xbus)
 	struct xbus_workqueue	*worker;
 
 	if(!xbus) {
-		ERR("%s: xbus gone -- skip initialization\n", __FUNCTION__);
+		ERR("%s: xbus gone -- skip initialization\n", __func__);
 		return 0;
 	}
 	worker = &xbus->worker;
 	if (down_trylock(&worker->running_initialization)) {
-		ERR("%s: xbus is disconnected -- skip initialization\n", __FUNCTION__);
+		ERR("%s: xbus is disconnected -- skip initialization\n", __func__);
 		return 0;
 	}
 	XBUS_DBG(DEVICES, xbus, "\n");
@@ -1130,7 +1130,7 @@ static void worker_reset(xbus_t *xbus)
 	DBG(DEVICES, "%s\n", name);
 	if(!worker->xpds_init_done) {
 		NOTICE("%s: worker(%s)->xpds_init_done=%d\n",
-			__FUNCTION__, name, worker->xpds_init_done);
+			__func__, name, worker->xpds_init_done);
 	}
 	spin_lock_irqsave(&worker->worker_lock, flags);
 	list_for_each_safe(card, next_card, &worker->card_list) {
@@ -1278,7 +1278,7 @@ bool xbus_setstate(xbus_t *xbus, enum xbus_state newstate)
 				goto bad_state;
 			break;
 		default:
-			XBUS_NOTICE(xbus, "%s: unknown state %d\n", __FUNCTION__, newstate);
+			XBUS_NOTICE(xbus, "%s: unknown state %d\n", __func__, newstate);
 			goto out;
 	}
 	/* All good */
@@ -1387,7 +1387,7 @@ static xbus_t *xbus_alloc(void)
 
 	xbus = KZALLOC(sizeof(xbus_t), GFP_KERNEL);
 	if(!xbus) {
-		ERR("%s: out of memory\n", __FUNCTION__);
+		ERR("%s: out of memory\n", __func__);
 		return NULL;
 	}
 	spin_lock_irqsave(&xbuses_lock, flags);
@@ -1395,7 +1395,7 @@ static xbus_t *xbus_alloc(void)
 		if(xbuses_array[i].xbus == NULL)
 			break;
 	if(i >= MAX_BUSES) {
-		ERR("%s: No free slot for new bus. i=%d\n", __FUNCTION__, i);
+		ERR("%s: No free slot for new bus. i=%d\n", __func__, i);
 		KZFREE(xbus);
 		xbus = NULL;
 		goto out;
@@ -1456,7 +1456,7 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size, struct device *tran
 	BUG_ON(!ops);
 	xbus = xbus_alloc();
 	if(!xbus) {
-		ERR("%s: Failed allocating new xbus\n", __FUNCTION__);
+		ERR("%s: Failed allocating new xbus\n", __func__);
 		return NULL;
 	}
 	snprintf(xbus->busname, XBUS_NAMELEN, "XBUS-%02d", xbus->num);
@@ -1700,7 +1700,7 @@ static int xbus_read_proc(char *page, char **start, off_t off, int count, int *e
 	}
 	len += sprintf(page + len, "<-- len=%d\n", len);
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	put_xbus(__FUNCTION__, xbus);	/* from xbus_read_proc() */
+	put_xbus(__func__, xbus);	/* from xbus_read_proc() */
 out:
 	if (len <= off+count)
 		*eof = 1;
@@ -1728,7 +1728,7 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 	const size_t		max_text = max_len * 3 + 10;
 
 	if(count > max_text) {
-		XBUS_ERR(xbus, "%s: line too long (%ld > %zd)\n", __FUNCTION__, count, max_len);
+		XBUS_ERR(xbus, "%s: line too long (%ld > %zd)\n", __func__, count, max_len);
 		return -EFBIG;
 	}
 	/* 3 bytes per hex-digit and space */
@@ -1757,7 +1757,7 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 			break;
 		if(!isxdigit(*p)) {
 			XBUS_ERR(xbus, "%s: bad hex value ASCII='0x%X' at position %ld\n",
-					__FUNCTION__, *p, (long)(p - buf));
+					__func__, *p, (long)(p - buf));
 			count = -EINVAL;
 			goto out;
 		}
@@ -1768,7 +1768,7 @@ static int proc_xbus_command_write(struct file *file, const char __user *buffer,
 			hexdigit[1] = *p++;
 		if(sscanf(hexdigit, "%2X", &val) != 1) {
 			XBUS_ERR(xbus, "%s: bad hex value '%s' at position %ld\n",
-					__FUNCTION__, hexdigit, (long)(p - buf));
+					__func__, hexdigit, (long)(p - buf));
 			count = -EINVAL;
 			goto out;
 		}

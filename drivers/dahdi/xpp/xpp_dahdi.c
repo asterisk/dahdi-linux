@@ -210,7 +210,7 @@ void xpd_free(xpd_t *xpd)
 	/*
 	 * This must be last, so the xbus cannot be released before the xpd
 	 */
-	put_xbus(__FUNCTION__, xbus);		/* was taken in xpd_alloc() */
+	put_xbus(__func__, xbus);		/* was taken in xpd_alloc() */
 }
 
 /*
@@ -401,7 +401,7 @@ const char *xpd_statename(enum xpd_state st)
 bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 {
 	BUG_ON(!xpd);
-	XPD_DBG(DEVICES, xpd, "%s: %s (%d) -> %s (%d)\n", __FUNCTION__,
+	XPD_DBG(DEVICES, xpd, "%s: %s (%d) -> %s (%d)\n", __func__,
 		xpd_statename(xpd->xpd_state), xpd->xpd_state,
 		xpd_statename(newstate), newstate);
 	switch(newstate) {
@@ -413,7 +413,7 @@ bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 		if(xpd->addr.subunit != 0) {
 			XPD_NOTICE(xpd,
 				"%s: Moving to %s allowed only for subunit 0\n",
-				__FUNCTION__, xpd_statename(newstate));
+				__func__, xpd_statename(newstate));
 			goto badstate;
 		}
 		break;
@@ -430,13 +430,13 @@ bool xpd_setstate(xpd_t *xpd, enum xpd_state newstate)
 	case XPD_STATE_NOHW:
 		break;
 	default:
-		XPD_ERR(xpd, "%s: Unknown newstate=%d\n", __FUNCTION__, newstate);
+		XPD_ERR(xpd, "%s: Unknown newstate=%d\n", __func__, newstate);
 	}
 	xpd->xpd_state = newstate;
 	return 1;
 badstate:
 	XPD_NOTICE(xpd, "%s: cannot transition: %s (%d) -> %s (%d)\n",
-		__FUNCTION__,
+		__func__,
 		xpd_statename(xpd->xpd_state), xpd->xpd_state,
 		xpd_statename(newstate), newstate);
 	return 0;
@@ -477,7 +477,7 @@ __must_check static int phonedev_init(xpd_t *xpd, const xproto_table_t *proto_ta
 	atomic_set(&phonedev->open_counter, 0);
 	for (x = 0; x < phonedev->channels; x++) {
 		if (!(phonedev->chans[x] = KZALLOC(sizeof(*(phonedev->chans[x])), GFP_KERNEL))) {
-			ERR("%s: Unable to allocate channel %d\n", __FUNCTION__, x);
+			ERR("%s: Unable to allocate channel %d\n", __func__, x);
 			goto err;
 		}
 		phonedev->ec[x] = KZALLOC(sizeof(*(phonedev->ec[x])),
@@ -513,13 +513,13 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus,
 		type, channels, alloc_size);
 	if(channels > CHANNELS_PERXPD) {
 		XBUS_ERR(xbus, "%s: type=%d: too many channels %d\n",
-			__FUNCTION__, type, channels);
+			__func__, type, channels);
 		goto err;
 	}
 
 	if((xpd = KZALLOC(alloc_size, GFP_KERNEL)) == NULL) {
 		XBUS_ERR(xbus, "%s: type=%d: Unable to allocate memory\n",
-			__FUNCTION__, type);
+			__func__, type);
 		goto err;
 	}
 	xpd->priv = (byte *)xpd + sizeof(xpd_t);
@@ -576,7 +576,7 @@ void update_xpd_status(xpd_t *xpd, int alarm_flag)
 	struct dahdi_span *span = &PHONEDEV(xpd).span;
 
 	if(!SPAN_REGISTERED(xpd)) {
-		// XPD_NOTICE(xpd, "%s: XPD is not registered. Skipping.\n", __FUNCTION__);
+		// XPD_NOTICE(xpd, "%s: XPD is not registered. Skipping.\n", __func__);
 		return;
 	}
 	switch (alarm_flag) {
@@ -749,7 +749,7 @@ int xpp_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long arg)
 
 	if(!xpd) {
 		ERR("%s: channel in pos %d, was already closed. Ignore.\n",
-			__FUNCTION__, pos);
+			__func__, pos);
 		return -ENODEV;
 	}
 	switch (cmd) {
@@ -772,13 +772,13 @@ int xpp_hooksig(struct dahdi_chan *chan, enum dahdi_txsig txsig)
 
 	if(!xpd) {
 		ERR("%s: channel in pos %d, was already closed. Ignore.\n",
-			__FUNCTION__, pos);
+			__func__, pos);
 		return -ENODEV;
 	}
 	if(!PHONE_METHOD(card_hooksig, xpd)) {
 		LINE_ERR(xpd, pos,
 			"%s: No hooksig method for this channel. Ignore.\n",
-			__FUNCTION__);
+			__func__);
 		return -ENODEV;
 	}
 	xbus = xpd->xbus;
@@ -863,7 +863,7 @@ static void echocan_free(struct dahdi_chan *chan,
 	LINE_DBG(GENERAL, xpd, pos, "mode=0x%X\n", ec->status.mode);
 	CALL_EC_METHOD(ec_set, xbus, xpd, pos, 0);
 	CALL_EC_METHOD(ec_update, xbus, xbus);
-	put_xpd(__FUNCTION__, xpd);	/* aquired in xpp_echocan_create() */
+	put_xpd(__func__, xpd);	/* aquired in xpp_echocan_create() */
 }
 
 static const struct dahdi_echocan_features xpp_ec_features = {
@@ -935,7 +935,7 @@ int xpp_echocan_create(struct dahdi_chan *chan,
 	*ec = phonedev->ec[pos];
 	(*ec)->ops = &xpp_ec_ops;
 	(*ec)->features = xpp_ec_features;
-	xpd = get_xpd(__FUNCTION__, xpd);	/* Returned in echocan_free() */
+	xpd = get_xpd(__func__, xpd);	/* Returned in echocan_free() */
 	LINE_DBG(GENERAL, xpd, pos, "(tap=%d, param_count=%d)\n",
 		ecp->tap_length, ecp->param_count);
 	ret = CALL_EC_METHOD(ec_set, xbus, xpd, pos, 1);
