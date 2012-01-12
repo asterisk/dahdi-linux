@@ -245,18 +245,14 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	seconds = seconds % 60;
 	hours = minutes / 60;
 	minutes = minutes % 60;
-#define	SHOW(ptr,item) \
-	len += snprintf(buf + len, PAGE_SIZE - len, \
-	"%-15s: %8d\n", #item, (ptr)->item)
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len,
-		     "%-15s: %8d (was %d:%02d:%02d ago)\n", "lost_ticks",
-		     di->lost_ticks, hours, minutes, seconds);
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"%-15s: %8d (was %d:%02d:%02d ago)\n", "lost_ticks",
+		di->lost_ticks, hours, minutes, seconds);
 	speed_range = abs(di->max_speed - di->min_speed);
 	uframes_inaccuracy = di->sync_inaccuracy / 125;
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d ", "instability",
-		     speed_range + uframes_inaccuracy);
+	len += snprintf(buf + len, PAGE_SIZE - len,
+		"%-15s: %8d ", "instability",
+		speed_range + uframes_inaccuracy);
 	if (xbus->sync_mode == SYNC_MODE_AB) {
 		buf[len++] = '-';
 	} else {
@@ -266,20 +262,21 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 			buf[len++] = '#';
 	}
 	buf[len++] = '\n';
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d (uframes)\n",
-		     "inaccuracy", uframes_inaccuracy);
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n", "speed_range",
-		     speed_range);
+	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d (uframes)\n",
+		"inaccuracy", uframes_inaccuracy);
+	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n",
+		"speed_range", speed_range);
+#define	SHOW(ptr, item) \
+	do { \
+		len += snprintf(buf + len, PAGE_SIZE - len, \
+		"%-15s: %8d\n", #item, (ptr)->item); \
+	} while (0)
 	SHOW(xbus, sync_adjustment);
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n",
-		     "offset (usec)", di->offset_prev);
+	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n",
+		"offset (usec)", di->offset_prev);
 	SHOW(di, offset_range);
-	len +=
-	    snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n", "best_speed",
-		     (di->max_speed + di->min_speed) / 2);
+	len += snprintf(buf + len, PAGE_SIZE - len, "%-15s: %8d\n",
+		"best_speed", (di->max_speed + di->min_speed) / 2);
 	SHOW(di, min_speed);
 	SHOW(di, max_speed);
 	SHOW(ticker, cycle);
