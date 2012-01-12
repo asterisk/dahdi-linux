@@ -1641,12 +1641,19 @@ static const struct phoneops fxs_phoneops = {
 };
 
 static xproto_table_t PROTO_TABLE(FXS) = {
-	.owner = THIS_MODULE,.entries = {
+	.owner = THIS_MODULE,
+	.entries = {
 		/*      Prototable      Card    Opcode          */
-	XENTRY(FXS, FXS, SIG_CHANGED),},.name = "FXS",	/* protocol name */
-.ports_per_subunit = 8,.type = XPD_TYPE_FXS,.xops =
-	    &fxs_xops,.phoneops = &fxs_phoneops,.packet_is_valid =
-	    fxs_packet_is_valid,.packet_dump = fxs_packet_dump,};
+		XENTRY(	FXS,		FXS,	SIG_CHANGED	),
+	},
+	.name = "FXS",	/* protocol name */
+	.ports_per_subunit = 8,
+	.type = XPD_TYPE_FXS,
+	.xops = &fxs_xops,
+	.phoneops = &fxs_phoneops,
+	.packet_is_valid = fxs_packet_is_valid,
+	.packet_dump = fxs_packet_dump,
+};
 
 static bool fxs_packet_is_valid(xpacket_t *pack)
 {

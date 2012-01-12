@@ -465,11 +465,11 @@ static int __init xpp_mmap_load_fpga(u8 * data, size_t size)
 		 */
 		for (j = 0; j < 8; j++)
 		{
-			if (__u8 &1)
+			if (__u8 & 1)
 				bfin_write_PORTGIO_SET(DATA);
 			else
 				bfin_write_PORTGIO_CLEAR(DATA);
-			__u8 >>=1;
+			__u8 >>= 1;
 			bfin_write_PORTGIO_SET(DCLK);
 			bfin_write_PORTGIO_CLEAR(DCLK);
 		}

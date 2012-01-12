@@ -1219,12 +1219,19 @@ static const struct phoneops fxo_phoneops = {
 };
 
 static xproto_table_t PROTO_TABLE(FXO) = {
-	.owner = THIS_MODULE,.entries = {
+	.owner = THIS_MODULE,
+	.entries = {
 		/*      Prototable      Card    Opcode          */
-	XENTRY(FXO, FXO, SIG_CHANGED),},.name = "FXO",	/* protocol name */
-.ports_per_subunit = 8,.type = XPD_TYPE_FXO,.xops =
-	    &fxo_xops,.phoneops = &fxo_phoneops,.packet_is_valid =
-	    fxo_packet_is_valid,.packet_dump = fxo_packet_dump,};
+		XENTRY(	FXO,		FXO,	SIG_CHANGED	),
+	},
+	.name = "FXO",	/* protocol name */
+	.ports_per_subunit = 8,
+	.type = XPD_TYPE_FXO,
+	.xops = &fxo_xops,
+	.phoneops = &fxo_phoneops,
+	.packet_is_valid = fxo_packet_is_valid,
+	.packet_dump = fxo_packet_dump,
+};
 
 static bool fxo_packet_is_valid(xpacket_t *pack)
 {

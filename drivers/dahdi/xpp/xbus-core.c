@@ -1813,7 +1813,8 @@ static int proc_xbus_command_write(struct file *file,
 		int val;
 		char hexdigit[3];
 
-		while (*p && isspace(*p))	// skip whitespace
+		/* skip whitespace */
+		while (*p && isspace(*p))
 			p++;
 		if (!(*p))
 			break;

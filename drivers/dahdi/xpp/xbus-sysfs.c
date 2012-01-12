@@ -291,20 +291,18 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 static ssize_t                                                             \
 field##_show(struct device *dev, struct device_attribute *attr, char *buf) \
 {                                                                          \
-        xbus_t	*xbus;                                                     \
-                                                                           \
-        xbus = dev_to_xbus(dev);                                           \
-        return sprintf (buf, format_string, xbus->field);                  \
+	xbus_t	*xbus;                                                     \
+	xbus = dev_to_xbus(dev);                                           \
+	return sprintf(buf, format_string, xbus->field);                   \
 }
 #else
 #define xbus_attr(field, format_string)                                    \
 static ssize_t                                                             \
 field##_show(struct device *dev, char *buf)                                \
 {                                                                          \
-        xbus_t	*xbus;                                                     \
-                                                                           \
-        xbus = dev_to_xbus(dev);                                           \
-        return sprintf (buf, format_string, xbus->field);                  \
+	xbus_t	*xbus;                                                     \
+	xbus = dev_to_xbus(dev);                                           \
+	return sprintf(buf, format_string, xbus->field);                   \
 }
 #endif
 

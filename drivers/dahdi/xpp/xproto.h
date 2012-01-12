@@ -85,7 +85,7 @@ typedef __u8 xpd_type_t;
 
 #define	XPD_TYPE_PREFIX	"xpd-type-"
 
-#define	MODULE_ALIAS_XPD(type)	\
+#define	MODULE_ALIAS_XPD(type) \
 	MODULE_ALIAS(XPD_TYPE_PREFIX __stringify(type))
 
 #define	PCM_CHUNKSIZE	(CHANNELS_PERXPD * 8)	/* samples of 8 bytes */
@@ -96,26 +96,26 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 #define	XPROTO_HANDLER(card, op)	XPROTO_NAME(card, op ## _handler)
 #define	XPROTO_CALLER(card, op)	XPROTO_NAME(card, op ## _send)
 
-#define	HANDLER_DEF(card, op)	\
+#define	HANDLER_DEF(card, op) \
 	static int XPROTO_HANDLER(card, op) (	\
 		xbus_t *xbus,			\
 		xpd_t *xpd,			\
 		const xproto_entry_t *cmd,	\
 		xpacket_t *pack)
 
-#define	CALL_PROTO(card, op, ...)	XPROTO_CALLER(card, op)( __VA_ARGS__ )
+#define	CALL_PROTO(card, op, ...)	XPROTO_CALLER(card, op)(__VA_ARGS__)
 
-#define	DECLARE_CMD(card, op, ...)	\
-	int CALL_PROTO(card, op, xbus_t *xbus, xpd_t *xpd, ## __VA_ARGS__ )
+#define	DECLARE_CMD(card, op, ...) \
+	int CALL_PROTO(card, op, xbus_t *xbus, xpd_t *xpd, ## __VA_ARGS__)
 
-#define	HOSTCMD(card, op, ...)					\
-		DECLARE_CMD(card, op, ## __VA_ARGS__ )
+#define	HOSTCMD(card, op, ...) \
+		DECLARE_CMD(card, op, ## __VA_ARGS__)
 
 #define	RPACKET_NAME(card, op)	XPROTO_NAME(RPACKET_ ## card, op)
 #define	RPACKET_TYPE(card, op)	struct RPACKET_NAME(card, op)
 
-#define	DEF_RPACKET_DATA(card, op, ...)		\
-	RPACKET_TYPE(card, op) {			\
+#define	DEF_RPACKET_DATA(card, op, ...) \
+	RPACKET_TYPE(card, op) {		\
 		struct xpacket_header	head;	\
 		__VA_ARGS__			\
 	} PACKED
@@ -124,7 +124,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 		(((RPACKET_TYPE(card, op) *)(p))->field)
 #define	RPACKET_SIZE(card, op)		sizeof(RPACKET_TYPE(card, op))
 
-#define	XENTRY(prototab, module, op)			\
+#define	XENTRY(prototab, module, op) \
 	[ XPROTO_NAME(module, op) ] = {			\
 		.handler = XPROTO_HANDLER(module, op),	\
 		.datalen = RPACKET_SIZE(module, op),	\
@@ -132,7 +132,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 		.table = &PROTO_TABLE(prototab)		\
 	}
 
-#define	XPACKET_INIT(p, card, op, to, pcm, pcmslot)		\
+#define	XPACKET_INIT(p, card, op, to, pcm, pcmslot) \
 		do {						\
 			XPACKET_OP(p) = XPROTO_NAME(card, op);	\
 			XPACKET_LEN(p) = RPACKET_SIZE(card, op);	\
@@ -145,9 +145,9 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 			XPACKET_ADDR_RESERVED(p) = 0;		\
 		} while (0)
 
-#define	XFRAME_NEW_CMD(frm, p, xbus, card, op, to)		\
+#define	XFRAME_NEW_CMD(frm, p, xbus, card, op, to) \
 	do {							\
-		int		pack_len = RPACKET_SIZE(card, op);	\
+		int	pack_len = RPACKET_SIZE(card, op);	\
 								\
 		if (!XBUS_FLAGS(xbus, CONNECTED))		\
 			return -ENODEV;				\
@@ -219,16 +219,16 @@ xproto_handler_t xproto_global_handler(__u8 opcode);
  * CALL_XMETHOD() calls the method, passing mandatory arguments
  */
 #define	XMETHOD(name, xpd)	((xpd)->xops->name)
-#define	CALL_XMETHOD(name, xpd, ...)                              \
-		(XMETHOD(name, (xpd))((xpd)->xbus, (xpd), ## __VA_ARGS__ ))
+#define	CALL_XMETHOD(name, xpd, ...) \
+		(XMETHOD(name, (xpd))((xpd)->xbus, (xpd), ## __VA_ARGS__))
 
 /*
  * PHONE_METHOD() resolve to method pointer (NULL for optional methods)
  * CALL_PHONE_METHOD() calls the method, passing mandatory arguments
  */
 #define	PHONE_METHOD(name, xpd)	(PHONEDEV(xpd).phoneops->name)
-#define	CALL_PHONE_METHOD(name, xpd, ...)                              \
-		(PHONE_METHOD(name, (xpd))((xpd), ## __VA_ARGS__ ))
+#define	CALL_PHONE_METHOD(name, xpd, ...) \
+		(PHONE_METHOD(name, (xpd))((xpd), ## __VA_ARGS__))
 
 struct phoneops {
 	void (*card_pcm_recompute) (xpd_t *xpd, xpp_line_t pcm_mask);

@@ -2266,12 +2266,18 @@ static const struct phoneops pri_phoneops = {
 };
 
 static xproto_table_t PROTO_TABLE(PRI) = {
-	.owner = THIS_MODULE,.entries = {
+	.owner = THIS_MODULE,
+	.entries = {
 		/*      Table   Card    Opcode          */
-	},.name = "PRI",	/* protocol name */
-.ports_per_subunit = 1,.type = XPD_TYPE_PRI,.xops =
-	    &pri_xops,.phoneops = &pri_phoneops,.packet_is_valid =
-	    pri_packet_is_valid,.packet_dump = pri_packet_dump,};
+	},
+	.name = "PRI",	/* protocol name */
+	.ports_per_subunit = 1,
+	.type = XPD_TYPE_PRI,
+	.xops = &pri_xops,
+	.phoneops = &pri_phoneops,
+	.packet_is_valid = pri_packet_is_valid,
+	.packet_dump = pri_packet_dump,
+};
 
 static bool pri_packet_is_valid(xpacket_t *pack)
 {

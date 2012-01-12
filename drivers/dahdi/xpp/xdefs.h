@@ -158,7 +158,7 @@ typedef char *charp;
 /* Also don't define this for later RHEL >= 5.2 . hex_asc is from the
  * same linux-2.6-net-infrastructure-updates-to-mac80211-iwl4965.patch
  * as is the bool typedef. */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 18)  || !  defined(hex_asc)
+#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 18)  || !defined(hex_asc)
 typedef int bool;
 #endif
 #endif

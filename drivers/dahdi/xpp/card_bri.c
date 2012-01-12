@@ -1611,12 +1611,18 @@ static const struct phoneops bri_phoneops = {
 };
 
 static xproto_table_t PROTO_TABLE(BRI) = {
-	.owner = THIS_MODULE,.entries = {
+	.owner = THIS_MODULE,
+	.entries = {
 		/*      Table   Card    Opcode          */
-	},.name = "BRI",	/* protocol name */
-.ports_per_subunit = 1,.type = XPD_TYPE_BRI,.xops =
-	    &bri_xops,.phoneops = &bri_phoneops,.packet_is_valid =
-	    bri_packet_is_valid,.packet_dump = bri_packet_dump,};
+	},
+	.name = "BRI",	/* protocol name */
+	.ports_per_subunit = 1,
+	.type = XPD_TYPE_BRI,
+	.xops = &bri_xops,
+	.phoneops = &bri_phoneops,
+	.packet_is_valid = bri_packet_is_valid,
+	.packet_dump = bri_packet_dump,
+};
 
 static bool bri_packet_is_valid(xpacket_t *pack)
 {

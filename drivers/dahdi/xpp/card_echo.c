@@ -272,12 +272,19 @@ static const struct echoops echoops = {
 };
 
 static xproto_table_t PROTO_TABLE(ECHO) = {
-	.owner = THIS_MODULE,.entries = {
+	.owner = THIS_MODULE,
+	.entries = {
 		/*      Table   Card    Opcode          */
-XENTRY(ECHO, ECHO, SET_REPLY),},.name = "ECHO",.ports_per_subunit =
-	    1,.type = XPD_TYPE_ECHO,.xops = &echo_xops,.echoops =
-	    &echoops,.packet_is_valid =
-	    echo_packet_is_valid,.packet_dump = echo_packet_dump,};
+		XENTRY(	ECHO,	ECHO,	SET_REPLY	),
+	},
+	.name = "ECHO",
+	.ports_per_subunit = 1,
+	.type = XPD_TYPE_ECHO,
+	.xops = &echo_xops,
+	.echoops = &echoops,
+	.packet_is_valid = echo_packet_is_valid,
+	.packet_dump = echo_packet_dump,
+};
 
 static bool echo_packet_is_valid(xpacket_t *pack)
 {

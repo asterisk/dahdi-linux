@@ -268,7 +268,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		writing,		/* writing      */
 		regnum, do_subreg,	/* use subreg   */
 		subreg,			/* subreg       */
- 		data_low, do_datah,	/* use data_high */
+		data_low, do_datah,	/* use data_high */
 		data_high);
 #endif
 	ret = xpp_register_request(xpd->xbus, xpd, portno,
@@ -627,14 +627,17 @@ HANDLER_DEF(GLOBAL, ERROR_CODE)
 
 xproto_table_t PROTO_TABLE(GLOBAL) = {
 	.entries = {
-		/*      Prototable      Card    Opcode          */
-XENTRY(GLOBAL, GLOBAL, NULL_REPLY), XENTRY(GLOBAL, GLOBAL,
-							   AB_DESCRIPTION),
-		    XENTRY(GLOBAL, GLOBAL, SYNC_REPLY),
-		    XENTRY(GLOBAL, GLOBAL, ERROR_CODE),
-		    XENTRY(GLOBAL, GLOBAL, REGISTER_REPLY),},.name =
-	    "GLOBAL",.packet_is_valid =
-	    global_packet_is_valid,.packet_dump = global_packet_dump,};
+		/*	Prototable	Card	Opcode		*/
+		XENTRY(	GLOBAL,		GLOBAL,	NULL_REPLY	),
+		XENTRY(	GLOBAL,		GLOBAL,	AB_DESCRIPTION	),
+		XENTRY(	GLOBAL,		GLOBAL,	SYNC_REPLY	),
+		XENTRY(	GLOBAL,		GLOBAL,	ERROR_CODE	),
+		XENTRY(	GLOBAL,		GLOBAL,	REGISTER_REPLY	),
+	},
+	.name = "GLOBAL",
+	.packet_is_valid = global_packet_is_valid,
+	.packet_dump = global_packet_dump,
+};
 
 static bool global_packet_is_valid(xpacket_t *pack)
 {

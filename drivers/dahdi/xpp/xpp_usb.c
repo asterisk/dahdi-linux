@@ -510,20 +510,23 @@ static const struct xusb_model_info {
 	struct xusb_endpoint out;
 } model_table[] = {
 	[MODEL_FPGA_XPD] = {
-		.iface_num = 0,.in = {
-		.ep_addr = 0x86},.out = {
-.ep_addr = 0x02},.desc = "FPGA_XPD"},};
+		.iface_num = 0,
+		.in = { .ep_addr = 0x86 },
+		.out = { .ep_addr = 0x02 },
+		.desc = "FPGA_XPD"
+	},
+};
 
 /* table of devices that work with this driver */
 static const struct usb_device_id xusb_table[] = {
 /* FPGA_FXS */	{USB_DEVICE(0xE4E4, 0x1132),
-		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+		.driver_info = (kernel_ulong_t)&model_table[MODEL_FPGA_XPD]},
 /* FPGA_1141 */	{USB_DEVICE(0xE4E4, 0x1142),
-		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+		.driver_info = (kernel_ulong_t)&model_table[MODEL_FPGA_XPD]},
 /* FPGA_1151 */	{USB_DEVICE(0xE4E4, 0x1152),
-		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+		.driver_info = (kernel_ulong_t)&model_table[MODEL_FPGA_XPD]},
 /* FPGA_1161 */	{USB_DEVICE(0xE4E4, 0x1162),
-		.driver_info = (kernel_ulong_t) & model_table[MODEL_FPGA_XPD]},
+		.driver_info = (kernel_ulong_t)&model_table[MODEL_FPGA_XPD]},
 /* Terminate */	{}
 };
 
@@ -640,7 +643,7 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 			    ep_addr, endpoint->bmAttributes);
 			continue;
 		}
-		if (usb_pipein(ep_addr)) {	// Input
+		if (usb_pipein(ep_addr)) {	/* Input */
 			if (ep_addr == model_info->in.ep_addr) {
 				if (!check_usb1(endpoint))
 					return 0;
@@ -649,7 +652,7 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 				xusb_ep->max_size = endpoint->wMaxPacketSize;
 				xusb_ep->callback = xpp_receive_callback;
 			}
-		} else {	// Output
+		} else {			/* Output */
 			if (ep_addr == model_info->out.ep_addr) {
 				if (!check_usb1(endpoint))
 					return 0;
@@ -832,7 +835,7 @@ probe_failed:
 	ERR("Failed to initialize xpp usb bus: %d\n", retval);
 	usb_set_intfdata(interface, NULL);
 	if (xusb) {
-		if (xusb->minor) {	// passed registration phase
+		if (xusb->minor) {	/* passed registration phase */
 			ERR("Calling usb_deregister_dev()\n");
 			usb_deregister_dev(interface, &xusb_class);
 		}
