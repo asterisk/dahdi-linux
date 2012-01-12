@@ -81,7 +81,7 @@ struct xpacket_header {
 #define	XPD_TYPE_ECHO		5	// Octasic echo canceller
 #define	XPD_TYPE_NOMODULE	7
 
-typedef byte xpd_type_t;
+typedef __u8 xpd_type_t;
 
 #define	XPD_TYPE_PREFIX	"xpd-type-"
 
@@ -168,7 +168,7 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 #define	MULTIBYTE_MAX_LEN	5	/* FPGA firmware limitation */
 
 typedef struct reg_cmd {
-	byte bytes:3;		/* Length (for Multibyte)       */
+	__u8 bytes:3;		/* Length (for Multibyte)       */
 	__u8 eoframe:1;		/* For BRI -- end of frame      */
 	__u8 portnum:3;		/* For port specific registers  */
 	__u8 is_multibyte:1;

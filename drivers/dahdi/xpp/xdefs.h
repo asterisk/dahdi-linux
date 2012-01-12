@@ -102,7 +102,6 @@ struct list_head {
 #define	CHAN_BITS		5	/* 0-31 for E1 */
 
 typedef char *charp;
-typedef unsigned char byte;
 #ifdef __KERNEL__
 
 /* Kernel versions... */
@@ -171,8 +170,8 @@ typedef struct xpd xpd_t;
 typedef struct xframe xframe_t;
 typedef struct xpacket xpacket_t;
 typedef __u32 xpp_line_t;	/* at most 31 lines for E1 */
-typedef byte lineno_t;
-typedef byte xportno_t;
+typedef __u8 lineno_t;
+typedef __u8 xportno_t;
 
 #define	PORT_BROADCAST		255
 
