@@ -241,11 +241,10 @@ static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 	if (chan == PORT_BROADCAST) {
 		priv->ledstate[which] = (on) ? ~0 : 0;
 	} else {
-		if (on) {
+		if (on)
 			BIT_SET(priv->ledstate[which], chan);
-		} else {
+		else
 			BIT_CLR(priv->ledstate[which], chan);
-		}
 	}
 	value = 0;
 	value |= ((BIT(5) | BIT(6) | BIT(7)) & ~led_register_mask[which]);
@@ -289,11 +288,10 @@ static void handle_fxo_leds(xpd_t *xpd)
 						 (IS_SET
 						  (priv->ledstate[color],
 						   i)) ? "ON" : "OFF");
-					if (!IS_SET(priv->ledstate[color], i)) {
+					if (!IS_SET(priv->ledstate[color], i))
 						do_led(xpd, i, color, 1);
-					} else {
+					else
 						do_led(xpd, i, color, 0);
-					}
 				}
 			} else if (IS_SET(priv->ledcontrol[color], i)
 				   && !IS_SET(priv->ledstate[color], i)) {

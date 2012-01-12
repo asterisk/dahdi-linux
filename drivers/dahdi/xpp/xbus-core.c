@@ -263,9 +263,8 @@ xpacket_t *xframe_next_packet(xframe_t *frm, int len)
 	DBG(GENERAL, "len=%d, newlen=%d, frm->frame_len=%d\n",
 			len, newlen, XFRAME_LEN(frm));
 #endif
-	if (newlen > XFRAME_DATASIZE) {
+	if (newlen > XFRAME_DATASIZE)
 		return NULL;
-	}
 	atomic_add(len, &frm->frame_len);
 	return (xpacket_t *)(frm->packets + newlen - len);
 }
@@ -476,9 +475,8 @@ static void xbus_command_queue_clean(xbus_t *xbus)
 
 	XBUS_DBG(DEVICES, xbus, "count=%d\n", xbus->command_queue.count);
 	xframe_queue_disable(&xbus->command_queue, 1);
-	while ((frm = xframe_dequeue(&xbus->command_queue)) != NULL) {
+	while ((frm = xframe_dequeue(&xbus->command_queue)) != NULL)
 		FREE_SEND_XFRAME(xbus, frm);
-	}
 }
 
 static int xbus_command_queue_waitempty(xbus_t *xbus)
@@ -490,9 +488,8 @@ static int xbus_command_queue_waitempty(xbus_t *xbus)
 	    wait_event_interruptible(xbus->command_queue_empty,
 				     xframe_queue_count(&xbus->command_queue) ==
 				     0);
-	if (ret) {
+	if (ret)
 		XBUS_ERR(xbus, "waiting for command_queue interrupted!!!\n");
-	}
 	return ret;
 }
 
@@ -561,9 +558,8 @@ static void receive_tasklet_func(unsigned long data)
 
 	BUG_ON(!xbus);
 	xbus->cpu_rcv_tasklet[cpu]++;
-	while ((xframe = xframe_dequeue(&xbus->receive_queue)) != NULL) {
+	while ((xframe = xframe_dequeue(&xbus->receive_queue)) != NULL)
 		xframe_receive(xbus, xframe);
-	}
 }
 
 void xbus_receive_xframe(xbus_t *xbus, xframe_t *xframe)
@@ -809,9 +805,8 @@ static int xpd_initialize(xpd_t *xpd)
 		/* Turn on all channels */
 		CALL_PHONE_METHOD(card_state, xpd, 1);
 	}
-	if (!xpd_setstate(xpd, XPD_STATE_READY)) {
+	if (!xpd_setstate(xpd, XPD_STATE_READY))
 		goto out;
-	}
 	XPD_INFO(xpd, "Initialized: %s\n", xpd->type_name);
 	ret = 0;
 out:
@@ -1597,9 +1592,8 @@ void xbus_reset_counters(xbus_t *xbus)
 	int i;
 
 	XBUS_DBG(GENERAL, xbus, "Reseting counters\n");
-	for (i = 0; i < XBUS_COUNTER_MAX; i++) {
+	for (i = 0; i < XBUS_COUNTER_MAX; i++)
 		xbus->counters[i] = 0;
-	}
 }
 EXPORT_SYMBOL(xbus_reset_counters);
 

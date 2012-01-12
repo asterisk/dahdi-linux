@@ -709,9 +709,8 @@ static DEVICE_ATTR_READER(offhook_show, dev, buf)
 	for_each_line(xpd, i) {
 		len += sprintf(buf + len, "%d ", IS_OFFHOOK(xpd, i));
 	}
-	if (len) {
+	if (len)
 		len--;		/* backout last space */
-	}
 	len += sprintf(buf + len, "\n");
 	return len;
 }

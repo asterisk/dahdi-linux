@@ -266,11 +266,10 @@ static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 	if (chan == PORT_BROADCAST) {
 		priv->ledstate[which] = (on) ? ~0 : 0;
 	} else {
-		if (on) {
+		if (on)
 			BIT_SET(priv->ledstate[which], chan);
-		} else {
+		else
 			BIT_CLR(priv->ledstate[which], chan);
-		}
 	}
 	LINE_DBG(LEDS, xpd, chan, "LED: which=%d -- %s\n", which,
 		 (on) ? "on" : "off");
@@ -315,11 +314,10 @@ static void handle_fxs_leds(xpd_t *xpd)
 						 (IS_SET
 						  (priv->ledstate[color],
 						   i)) ? "ON" : "OFF");
-					if (!IS_SET(priv->ledstate[color], i)) {
+					if (!IS_SET(priv->ledstate[color], i))
 						do_led(xpd, i, color, 1);
-					} else {
+					else
 						do_led(xpd, i, color, 0);
-					}
 				}
 			} else
 			    if (IS_SET
@@ -937,12 +935,10 @@ static int set_vmwi(xpd_t *xpd, int pos, unsigned long arg)
 			    "%s: VMWI(hvdc) is not implemented yet. Ignored.\n",
 			    __func__);
 	}
-	if (VMWI_TYPE(priv, pos, HVAC)) {
+	if (VMWI_TYPE(priv, pos, HVAC))
 		;		/* VMWI_NEON */
-	}
-	if (priv->vmwisetting[pos].vmwi_type == 0) {
+	if (priv->vmwisetting[pos].vmwi_type == 0)
 		;		/* Disable VMWI */
-	}
 	priv->vmwisetting[pos] = vmwisetting;
 	set_vm_led_mode(xpd->xbus, xpd, pos, PHONEDEV(xpd).msg_waiting[pos]);
 	return 0;
@@ -1308,9 +1304,8 @@ static void detect_vmwi(xpd_t *xpd)
 				int j;
 
 				LINE_NOTICE(xpd, i, "MSG WAITING Unexpected:");
-				for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
+				for (j = 0; j < DAHDI_CHUNKSIZE; j++)
 					printk(" %02X", writechunk[j]);
-				}
 				printk("\n");
 			}
 		}
@@ -1504,9 +1499,8 @@ static void process_dtmf(xpd_t *xpd, uint portnum, __u8 val)
 	digit = dtmf_digits[val];
 	want_mute = IS_SET(priv->want_dtmf_mute, portnum);
 	want_event = IS_SET(priv->want_dtmf_events, portnum);
-	if (!IS_SET(priv->prev_key_down, portnum) && !key_down) {
+	if (!IS_SET(priv->prev_key_down, portnum) && !key_down)
 		LINE_NOTICE(xpd, portnum, "DTMF: duplicate UP (%c)\n", digit);
-	}
 	if (key_down)
 		BIT_SET(priv->prev_key_down, portnum);
 	else
@@ -1562,9 +1556,8 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/*
 	 * Process digital inputs polling results
 	 */
-	else if (!indirect && regnum == REG_DIGITAL_IOCTRL) {
+	else if (!indirect && regnum == REG_DIGITAL_IOCTRL)
 		process_digital_inputs(xpd, info);
-	}
 #endif
 	else if (!indirect && regnum == REG_LOOPCLOSURE) {	/* OFFHOOK ? */
 		__u8 val = REG_FIELD(info, data_low);

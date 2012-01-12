@@ -368,21 +368,17 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count,
 			memcpy(rchunk, rp, DAHDI_CHUNKSIZE);
 			memcpy(wchunk, wp, DAHDI_CHUNKSIZE);
 			len += sprintf(page + len, "\n  port %2d>  |  ", i);
-			for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
+			for (j = 0; j < DAHDI_CHUNKSIZE; j++)
 				len += sprintf(page + len, "%02X ", rchunk[j]);
-			}
 			len += sprintf(page + len, " |  ");
-			for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
+			for (j = 0; j < DAHDI_CHUNKSIZE; j++)
 				len += sprintf(page + len, "%02X ", wchunk[j]);
-			}
-			len +=
-			    sprintf(page + len, " | %c",
-				    (IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i)) ?
-				    '+' : ' ');
-			len +=
-			    sprintf(page + len, " %c",
-				    (IS_SET(PHONEDEV(xpd).mute_dtmf, i)) ? '-' :
-				    ' ');
+			len += sprintf(page + len, " | %c",
+				(IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))
+					?  '+' : ' ');
+			len += sprintf(page + len, " %c",
+				(IS_SET(PHONEDEV(xpd).mute_dtmf, i))
+					? '-' : ' ');
 		}
 	}
 #endif
@@ -487,9 +483,8 @@ static void phonedev_cleanup(xpd_t *xpd)
 	unsigned int x;
 
 	for (x = 0; x < phonedev->channels; x++) {
-		if (phonedev->chans[x]) {
+		if (phonedev->chans[x])
 			KZFREE(phonedev->chans[x]);
-		}
 		if (phonedev->ec[x])
 			KZFREE(phonedev->ec[x]);
 	}

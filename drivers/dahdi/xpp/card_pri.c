@@ -843,9 +843,8 @@ static void set_rbslines(xpd_t *xpd, int channo)
 			int bytenum = i / 8;
 			int bitnum = i % 8;
 
-			if (!IS_SET(new_rbslines, i)) {
+			if (!IS_SET(new_rbslines, i))
 				BIT_SET(clear_lines, (7 - bitnum));
-			}
 			if (IS_SET(modified_lines, i))
 				reg_changed = 1;
 			if (bitnum == 7) {
@@ -1156,9 +1155,8 @@ static int pri_chanconfig(struct file *file, struct dahdi_chan *chan,
 			chan->channo, chan->name);
 		SET_DCHAN(priv, chan->channo);
 		/* In T1, we don't know before-hand */
-		if (priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 0) {
+		if (priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 0)
 			set_mode_cas(xpd, 0);
-		}
 	} else {
 		if (chan->channo == 1) {
 			XPD_DBG(GENERAL, xpd,
@@ -1376,9 +1374,8 @@ static void dchan_state(xpd_t *xpd, bool up)
 	BUG_ON(!xpd);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if (priv->is_cas) {
+	if (priv->is_cas)
 		return;
-	}
 	if (priv->dchan_alive == up)
 		return;
 	if (!priv->layer1_up)	/* No layer1, kill dchan */
@@ -1724,9 +1721,8 @@ static int pri_rbsbits(struct dahdi_chan *chan, int bits)
 			 sig2str(chan->sig), bits);
 		return 0;
 	}
-	if (!priv->layer1_up) {
+	if (!priv->layer1_up)
 		XPD_DBG(SIGNAL, xpd, "RBS: TX: No layer1 yet. Keep going.\n");
-	}
 	if (priv->pri_protocol == PRI_PROTO_E1) {
 		if (encode_rbsbits_e1(xpd, pos, bits) < 0)
 			return -EINVAL;
@@ -1776,14 +1772,12 @@ static void PRI_card_pcm_fromspan(xpd_t *xpd, xpacket_t *pack)
 
 		if (priv->pri_protocol == PRI_PROTO_E1) {
 			/* In E1 - Only 0'th channel is unused */
-			if (i == 0) {
+			if (i == 0)
 				physical_chan++;
-			}
 		} else if (priv->pri_protocol == PRI_PROTO_T1) {
 			/* In T1 - Every 4'th channel is unused */
-			if ((i % 3) == 0) {
+			if ((i % 3) == 0)
 				physical_chan++;
-			}
 		}
 		if (IS_SET(wanted_lines, i)) {
 			physical_mask |= BIT(physical_chan);
@@ -2214,9 +2208,8 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	else if (regnum == REG_FRS1 && !REG_FIELD(info, do_subreg))
 		priv->reg_frs1 = data_low;
 	if (priv->is_cas && !REG_FIELD(info, do_subreg)) {
-		if (regnum >= REG_RS1_E && regnum <= REG_RS16_E) {
+		if (regnum >= REG_RS1_E && regnum <= REG_RS16_E)
 			process_cas_dchan(xpd, regnum, data_low);
-		}
 	}
 	/*
 	 * Update /proc info only if reply relate to the
@@ -2496,14 +2489,12 @@ static DEVICE_ATTR_READER(pri_cas_show, dev, buf)
 		len +=
 		    sprintf(buf + len, "CAS: replies=%d\n", priv->cas_replies);
 		len += sprintf(buf + len, "   CAS-TS: ");
-		for (i = 0; i < NUM_CAS_RS_E; i++) {
+		for (i = 0; i < NUM_CAS_RS_E; i++)
 			len += sprintf(buf + len, " %02X", priv->cas_ts_e[i]);
-		}
 		len += sprintf(buf + len, "\n");
 		len += sprintf(buf + len, "   CAS-RS: ");
-		for (i = 0; i < NUM_CAS_RS_E; i++) {
+		for (i = 0; i < NUM_CAS_RS_E; i++)
 			len += sprintf(buf + len, " %02X", priv->cas_rs_e[i]);
-		}
 		len += sprintf(buf + len, "\n");
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);

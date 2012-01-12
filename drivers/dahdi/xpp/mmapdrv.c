@@ -88,9 +88,8 @@ static void print_buffer(const char *msg, const char *buf, int len)
 {
 	int i;
 	printk(KERN_ERR "%s", msg);
-	for (i = 0; i < len; i++) {
+	for (i = 0; i < len; i++)
 		printk("%02X ", (unsigned char)buf[i]);
-	}
 	printk("\n");
 }
 

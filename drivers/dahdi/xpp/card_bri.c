@@ -520,9 +520,8 @@ static void bri_hdlc_hard_xmit(struct dahdi_chan *chan)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	dchan = XPD_CHAN(xpd, 2);
-	if (dchan == chan) {
+	if (dchan == chan)
 		atomic_inc(&priv->hdlc_pending);
-	}
 }
 
 static int send_dchan_frame(xpd_t *xpd, xframe_t *xframe, bool is_eof)
@@ -1199,9 +1198,8 @@ static void BRI_card_pcm_recompute(xpd_t *xpd, xpp_line_t dont_care)
 				line_count += 2;
 			}
 			/* subunits have fake pcm_len and wanted_pcm_mask */
-			if (i > 0) {
+			if (i > 0)
 				update_wanted_pcm_mask(sub_xpd, lines, 0);
-			}
 		}
 	}
 	/*
@@ -1417,9 +1415,8 @@ static void su_new_state(xpd_t *xpd, __u8 reg_x30)
 		return;
 	}
 	new_state.reg = reg_x30;
-	if (new_state.bits.v_su_t2_exp) {
+	if (new_state.bits.v_su_t2_exp)
 		XPD_NOTICE(xpd, "T2 Expired\n");
-	}
 	priv->reg30_ticks = 0;
 	priv->reg30_good = 1;
 	if (priv->state_register.bits.v_su_sta == new_state.bits.v_su_sta)
@@ -1548,9 +1545,8 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		}
 		goto end;
 	}
-	if (REG_FIELD(info, regnum) == A_SU_RD_STA) {
+	if (REG_FIELD(info, regnum) == A_SU_RD_STA)
 		su_new_state(xpd, REG_FIELD(info, data_low));
-	}
 
 	/* Update /proc info only if reply relate to the last slic read request */
 	if (REG_FIELD(&xpd->requested_reply, regnum) ==
@@ -1672,11 +1668,10 @@ static int proc_bri_info_read(char *page, char **start, off_t off, int count,
 			    priv->state_register.bits.v_g2_g3);
 	} else
 		len += sprintf(page + len, "Unknown\n");
-	if (IS_NT(xpd)) {
+	if (IS_NT(xpd))
 		len += sprintf(page + len, "T1 Timer: %d\n", priv->t1);
-	} else {
+	else
 		len += sprintf(page + len, "T3 Timer: %d\n", priv->t3);
-	}
 	len += sprintf(page + len, "Tick Counter: %d\n", priv->tick_counter);
 	len +=
 	    sprintf(page + len, "Last Poll Reply: %d ticks ago\n",
