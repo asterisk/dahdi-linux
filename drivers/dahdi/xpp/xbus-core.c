@@ -940,8 +940,7 @@ static void xbus_free_ddev(xbus_t *xbus)
 {
 	if (!xbus->ddev)
 		return;
-	if (xbus->ddev->devicetype)
-		kfree(xbus->ddev->devicetype);
+	kfree(xbus->ddev->devicetype);	/* NULL is safe */
 	xbus->ddev->devicetype = NULL;
 	xbus->ddev->location = NULL;
 	xbus->ddev->hardware_id = NULL;
