@@ -8,32 +8,33 @@
 #include "dahdi.h"
 
 /* FIXME: Move to kernel.h */
-#define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
+#define module_printk(level, fmt, args...) \
+		printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
 	device_create(class, device, devt, NULL, "%s", name)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
 	device_create(class, device, devt, name)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 15)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
-        class_device_create(class, NULL, devt, device, name)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
+	class_device_create(class, NULL, devt, device, name)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
-        class_device_create(class, devt, device, name)
+	class_device_create(class, devt, device, name)
 #else
 #define CLASS_DEV_CREATE(class, devt, device, name) \
-        class_simple_device_add(class, devt, device, name)
+	class_simple_device_add(class, devt, device, name)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #define CLASS_DEV_DESTROY(class, devt) \
 	device_destroy(class, devt)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
 #define CLASS_DEV_DESTROY(class, devt) \
 	class_device_destroy(class, devt)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 9)
 #define CLASS_DEV_DESTROY(class, devt) \
 	class_simple_device_remove(devt)
 #else
@@ -41,10 +42,10 @@
 	class_simple_device_remove(class, devt)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
-static struct class *dahdi_class = NULL;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
+static struct class *dahdi_class;
 #else
-static struct class_simple *dahdi_class = NULL;
+static struct class_simple *dahdi_class;
 #define class_create class_simple_create
 #define class_destroy class_simple_destroy
 #endif
@@ -78,17 +79,21 @@ enum kobject_action {
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
-#define	DEVICE_ATTR_READER(name, dev, buf)	\
-		ssize_t name(struct device *dev, struct device_attribute *attr,\
-				char *buf)
-#define	DEVICE_ATTR_WRITER(name, dev, buf, count)	\
-		ssize_t name(struct device *dev, struct device_attribute *attr,\
-				const char *buf, size_t count)
+#define	DEVICE_ATTR_READER(name, dev, buf) \
+		ssize_t name(struct device *dev, \
+			struct device_attribute *attr, \
+			char *buf)
+#define	DEVICE_ATTR_WRITER(name, dev, buf, count) \
+		ssize_t name(struct device *dev, \
+			struct device_attribute *attr, \
+			const char *buf, size_t count)
 #define BUS_ATTR_READER(name, dev, buf) \
-	ssize_t name(struct device *dev, struct device_attribute *attr, \
+	ssize_t name(struct device *dev, \
+		struct device_attribute *attr, \
 		char *buf)
 #define BUS_ATTR_WRITER(name, dev, buf, count) \
-		ssize_t name(struct device *dev, struct device_attribute *attr,\
+		ssize_t name(struct device *dev, \
+			struct device_attribute *attr, \
 			const char *buf, size_t count)
 #else
 #define	DEVICE_ATTR_READER(name, dev, buf)	\
@@ -367,7 +372,8 @@ int dahdi_register_chardev(struct dahdi_chardev *dev)
 
 	strcpy(udevname, DAHDI_STRING);
 	strcat(udevname, dev->name);
-	CLASS_DEV_CREATE(dahdi_class, MKDEV(DAHDI_MAJOR, dev->minor), NULL, udevname);
+	CLASS_DEV_CREATE(dahdi_class,
+		MKDEV(DAHDI_MAJOR, dev->minor), NULL, udevname);
 	kfree(udevname);
 	return 0;
 }
@@ -591,7 +597,7 @@ dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
 	ret = sscanf(buf, "%u:%u:%u", &local_span_number, &desired_spanno,
 		     &desired_basechanno);
 	if (ret != 3) {
-		dev_notice(dev, "badly formatted input (should be <num>:<num>:<num>)\n");
+		dev_notice(dev, "bad input (should be <num>:<num>:<num>)\n");
 		return -EINVAL;
 	}
 
@@ -607,7 +613,8 @@ dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
 			return (ret) ? ret : count;
 		}
 	}
-	dev_notice(dev, "no match for local span number %d\n", local_span_number);
+	dev_notice(dev, "no match for local span number %d\n",
+		local_span_number);
 	return -EINVAL;
 }
 
@@ -659,7 +666,8 @@ dahdi_spantype_show(struct device *dev,
 
 	/* TODO: Make sure this doesn't overflow the page. */
 	list_for_each_entry(span, &ddev->spans, device_node) {
-		count = sprintf(buf, "%d:%s\n", local_spanno(span), span->spantype);
+		count = sprintf(buf, "%d:%s\n",
+			local_spanno(span), span->spantype);
 		buf += count;
 		total += count;
 	}
@@ -698,8 +706,9 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 	}
 
 	if (local_spanno(span) != local_span_number) {
-		module_printk(KERN_WARNING, "%d is not a valid local span number "
-			      "for this device.\n", local_span_number);
+		module_printk(KERN_WARNING,
+				"%d is not a valid local span number "
+				"for this device.\n", local_span_number);
 		return -EINVAL;
 	}
 
@@ -828,7 +837,9 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 
 	res = register_chrdev(DAHDI_MAJOR, "dahdi", dahdi_fops);
 	if (res) {
-		module_printk(KERN_ERR, "Unable to register DAHDI character device handler on %d\n", DAHDI_MAJOR);
+		module_printk(KERN_ERR,
+			"Unable to register DAHDI character device "
+			"handler on %d\n", DAHDI_MAJOR);
 		return res;
 	}
 	module_printk(KERN_INFO, "Telephony Interface Registered on major %d\n",
