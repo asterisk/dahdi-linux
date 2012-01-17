@@ -211,13 +211,10 @@ under driver/staging/echo . In fact, dahdi_echocan_oslec assumes that
 this is where the oslec code lies. If it is elsewhere you'll need to fix
 the #include line.
 
-Thus for the moment, the simplest way to build OSLEC with dahdi is:
-
-1. Copy the directory `drivers/staging/echo` from a recent kernel tree 
-   (at least 2.6.28-rc1) to the a subdirectory with the same name in the
-   dahdi-linux tree.
-
-2. Edit drivers/dahdi/Kbuild and uncomment the two lines related to OSLEC.
+Thus for the moment, the simplest way to build OSLEC with dahdi is to
+copy the directory `drivers/staging/echo` from a recent kernel tree (at
+least 2.6.28-rc1) to the a subdirectory with the same name in the
+dahdi-linux tree.
 
 After doing that, you'll see the following when building (running
 'make')
