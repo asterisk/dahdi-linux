@@ -33,14 +33,13 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_MG2)	+= dahdi_echocan_mg2.o
 
 obj-m += $(DAHDI_MODULES_EXTRA)
 
-# Only enable this if you think you know what you're doing. This is not
-# supported yet:
-#obj-m += dahdi_echocan_oslec.o
-#
-# A quick and dirty way to build OSLEC, if you happened to place it
-# yourself in the dahdi source tree. This is experimental. See README
-# regarding OSLEC.
-#obj-m += ../staging/echo/
+# If you want to build OSLEC, include the code in the standard location:
+# drivers/staging/echo . The DAHDI OSLEC echo canceller will be built as
+# well:
+ifneq (,$(wildcard $(src)/../staging/echo/echo.c))
+obj-m += dahdi_echocan_oslec.o
+obj-m += ../staging/echo/
+endif
 
 CFLAGS_MODULE += -I$(DAHDI_INCLUDE) -I$(src)
 
