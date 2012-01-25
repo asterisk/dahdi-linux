@@ -1523,7 +1523,7 @@ struct mutex {
 	printk(KERN_ ## level "%s%s-%s: span-%d: " fmt, #level,	\
 		category, THIS_MODULE->name, (span)->spanno, ## __VA_ARGS__)
 #define	chan_printk(level, category, chan, fmt, ...)	\
-	printk(KERN_ ## level "%s%s-%s: %d: " fmt, #level,	\
+	printk(KERN_ ## level "%s%s-%s: chan-%d: " fmt, #level,	\
 		category, THIS_MODULE->name, (chan)->channo, ## __VA_ARGS__)
 #define	dahdi_err(fmt, ...)	DAHDI_PRINTK(ERR, "", fmt, ## __VA_ARGS__)
 #define	span_info(span, fmt, ...)	span_printk(INFO, "", span, fmt, \
