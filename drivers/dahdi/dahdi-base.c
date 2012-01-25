@@ -6882,9 +6882,8 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
 		dev_notice(span_device(span),
-			 "local span %d is already assigned span %d "
-			 "with base channel %d\n", local_spanno(span), span->spanno,
-			 span->chans[0]->channo);
+			 "local span %d is already assigned span %d\n",
+			 local_spanno(span), span->spanno);
 		return -EINVAL;
 	}
 

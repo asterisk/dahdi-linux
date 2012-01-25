@@ -250,6 +250,8 @@ static BUS_ATTR_READER(basechan_show, dev, buf)
 	struct dahdi_span *span;
 
 	span = dev_to_span(dev);
+	if (!span->channels)
+		return -ENODEV;
 	return sprintf(buf, "%d\n", span->chans[0]->channo);
 }
 
