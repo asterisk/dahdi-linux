@@ -759,7 +759,7 @@ void dahdi_sysfs_exit(void)
 		DEL_DAHDI_DEV(DAHDI_CTL);
 		dummy_dev.ctl = 0;
 	}
-	if (dahdi_class) {
+	if (dahdi_class && !IS_ERR(dahdi_class)) {
 		dahdi_dbg(DEVICES, "Destroying DAHDI class:\n");
 		class_destroy(dahdi_class);
 		dahdi_class = NULL;
@@ -850,8 +850,8 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 	module_printk(KERN_INFO, "Version: %s\n", dahdi_version);
 
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
-	if (!dahdi_class) {
-		res = -EEXIST;
+	if (IS_ERR(dahdi_class)) {
+		res = PTR_ERR(dahdi_class);
 		goto cleanup;
 	}
 
