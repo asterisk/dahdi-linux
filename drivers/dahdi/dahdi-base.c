@@ -190,6 +190,7 @@ static struct core_timer {
 	struct timer_list timer;
 	struct timespec start_interval;
 	unsigned long interval;
+	int dahdi_receive_used;
 	atomic_t count;
 	atomic_t shutdown;
 	atomic_t last_count;
@@ -9620,6 +9621,10 @@ static void coretimer_func(unsigned long param)
 		/* This is the code path if a board driver is not calling
 		 * dahdi_receive, and therefore the core of dahdi needs to
 		 * perform the master span processing itself. */
+		if (core_timer.dahdi_receive_used) {
+			core_timer.dahdi_receive_used = 0;
+			dahdi_dbg(GENERAL, "Master changed to core_timer\n");
+		}
 
 		if (!atomic_read(&core_timer.shutdown)) {
 			mod_timer(&core_timer.timer, jiffies +
@@ -9665,6 +9670,10 @@ static void coretimer_func(unsigned long param)
 
 		/* It looks like a board driver is calling dahdi_receive. We
 		 * will just check again in a second. */
+		if (!core_timer.dahdi_receive_used) {
+			core_timer.dahdi_receive_used = 1;
+			dahdi_dbg(GENERAL, "Master is no longer core_timer\n");
+		}
 		atomic_set(&core_timer.count, 0);
 		atomic_set(&core_timer.last_count, 0);
 		core_timer.start_interval = now;
