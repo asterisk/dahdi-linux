@@ -934,8 +934,9 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 			debounce = atomic_read(&priv->ring_debounce[i]);
 			if (debounce)
 				LINE_NOTICE(xpd, i,
-					"debounced false ring (only %d ticks)\n",
-					debounce);
+					"Ignored a false short ring "
+					"(lasted only %dms)\n",
+					ring_debounce - debounce);
 			/*
 			 * Now set a new ring alarm.
 			 * It will be checked in handle_fxo_ring()
