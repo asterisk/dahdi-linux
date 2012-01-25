@@ -101,8 +101,10 @@
 #  else
 #define dev_name(dev)		((dev)->bus_id)
 #  endif
-#define dev_set_name(dev, format, ...) \
-	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__);
+#define dev_set_name(dev, fmt, ...) \
+	do { \
+		snprintf((dev)->bus_id, BUS_ID_SIZE, fmt, ## __VA_ARGS__); \
+	} while (0)
 #endif
 
 /*! Default chunk size for conferences and such -- static right now, might make
