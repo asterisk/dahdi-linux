@@ -44,8 +44,6 @@
 static int debug;
 static int aggressive;
 
-#define debug_printk(level, fmt, args...) if (debug >= level) printk(KERN_DEBUG "%s (%s): " fmt, THIS_MODULE->name, __FUNCTION__, ## args)
-
 /* Uncomment to provide summary statistics for overall echo can performance every 4000 samples */ 
 /* #define MEC2_STATS 4000 */
 

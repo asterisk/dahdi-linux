@@ -44,8 +44,6 @@
 static int debug;
 static int aggressive;
 
-#define debug_printk(level, fmt, args...) if (debug >= level) printk("%s (%s): " fmt, THIS_MODULE->name, __FUNCTION__, ## args)
-
 #define ABS(a) abs(a!=-32768?a:-32767)
 
 #define RESTORE_COEFFS {\

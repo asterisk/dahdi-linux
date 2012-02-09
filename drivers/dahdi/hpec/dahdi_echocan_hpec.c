@@ -31,8 +31,6 @@
 
 static int debug;
 
-#define debug_printk(level, fmt, args...) if (debug >= level) printk(KERN_DEBUG "%s (%s): " fmt, THIS_MODULE->name, __FUNCTION__, ## args)
-
 #include "hpec_user.h"
 #include "hpec.h"
 
