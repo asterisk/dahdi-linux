@@ -60,7 +60,6 @@
 #include <asm/atomic.h>
 
 #define DAHDI_PRINK_MACROS_USE_debug
-#define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 
 /* Grab fasthdlc with tables */
 #define FAST_HDLC_NEED_TABLES

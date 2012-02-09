@@ -38,7 +38,6 @@
 
 static int debug;
 
-#define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 #define debug_printk(level, fmt, args...) if (debug >= level) printk("%s (%s): " fmt, THIS_MODULE->name, __FUNCTION__, ## args)
 
 static int echo_can_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,

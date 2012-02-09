@@ -7,10 +7,6 @@
 
 #include "dahdi.h"
 
-/* FIXME: Move to kernel.h */
-#define module_printk(level, fmt, args...) \
-		printk(level "%s: " fmt, THIS_MODULE->name, ## args)
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
 	device_create(class, device, devt, NULL, "%s", name)

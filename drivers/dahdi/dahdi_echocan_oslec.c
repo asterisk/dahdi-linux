@@ -36,8 +36,6 @@
 
 #include <dahdi/kernel.h>
 
-#define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
-
 static int echo_can_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 			   struct dahdi_echocanparam *p, struct dahdi_echocan_state **ec);
 static void echo_can_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);

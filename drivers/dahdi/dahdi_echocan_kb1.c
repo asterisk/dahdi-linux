@@ -44,7 +44,6 @@
 static int debug;
 static int aggressive;
 
-#define module_printk(level, fmt, args...) printk(level "%s: " fmt, THIS_MODULE->name, ## args)
 #define debug_printk(level, fmt, args...) if (debug >= level) printk(KERN_DEBUG "%s (%s): " fmt, THIS_MODULE->name, __FUNCTION__, ## args)
 
 /* Uncomment to provide summary statistics for overall echo can performance every 4000 samples */ 

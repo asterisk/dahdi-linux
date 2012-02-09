@@ -1516,6 +1516,10 @@ struct mutex {
 #define	DAHDI_PSEUDO	255
 
 /* prink-wrapper macros */
+
+#define module_printk(level, fmt, args...) \
+		printk(level "%s: " fmt, THIS_MODULE->name, ## args)
+
 #define	DAHDI_PRINTK(level, category, fmt, ...)	\
 	printk(KERN_ ## level "%s%s-%s: " fmt, #level, category, \
 			THIS_MODULE->name, ## __VA_ARGS__)
