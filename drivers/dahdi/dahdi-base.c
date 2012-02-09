@@ -49,7 +49,9 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/delay.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 16)
 #include <linux/mutex.h>
+#endif
 
 #if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 #include <linux/smp_lock.h>
