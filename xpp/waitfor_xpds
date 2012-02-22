@@ -29,14 +29,53 @@ set -e
 # For lab testing
 mydir=`dirname $0`
 PATH="${mydir}:${PATH}"
-XPP_WAIT_AB_TIMEOUT=80
+XPP_WAIT_AB_TIMEOUT=100
 
 [ -r /etc/dahdi/init.conf ] && . /etc/dahdi/init.conf
 
 ab_list() {
+	find /sys/devices -name idVendor 2>/dev/null | \
+		xargs grep -H  'e4e4' 2>/dev/null | \
+		sed -e 's/idVendor.*/idProduct/' | xargs grep -H '11[3456]' | \
+		sed 's,/[^/]*$,,' || :
+}
+
+ab_serial_nums() {
+	ab_list | \
+		sed 's,$,/serial,' | \
+		xargs grep -H '' 2>/dev/null | \
+		sed 's,.*/serial:,,' | \
+		sed 's/^$/NO-SERIAL/' | \
+		sort -u
+}
+
+detected_serial_nums() {
+	cat /sys/bus/astribanks/devices/*/transport/serial 2> /dev/null | \
+		sed 's/^$/NO-SERIAL/' | \
+		sort -u || :
+}
+
+calc_union() {
+	echo "$@" | tr -s ' ' '\n' | sort -u
+}
+
+detected_ab_list() {
 	# Only check /sys info (don't use /proc anymore).
-	ab=`find /sys/bus/astribanks/devices/xbus-*/ -name waitfor_xpds 2> /dev/null || :`
-	echo $ab
+	find /sys/bus/astribanks/devices/*/ -name waitfor_xpds 2> /dev/null || :
+}
+
+waitfor_ab_initialization() {
+	oldab=''
+	while
+		if ! ab=`detected_ab_list`; then
+			exit 1
+		fi
+		test "$oldab" != "$ab"
+	do
+		oldab="$ab"
+		cat $ab
+		#echo -n 1>&2 "_"
+	done
 }
 
 # Any hardware?
@@ -55,10 +94,25 @@ if ! astribank_is_starting; then
 	exit 0
 fi
 
-# Wait for driver and first device
+serial_nums=`ab_serial_nums`
+
+# Loop until detected (hopefully) all astribanks and they are initialized
 echo -n 1>&2 "Astribanks detection "
 tries="$XPP_WAIT_AB_TIMEOUT"
-while [ ! -e "/sys/bus/astribanks/devices/xbus-00" ]
+last_detected=0
+while
+	new_serial_nums=`ab_serial_nums`
+	detected_serial_nums=`detected_serial_nums`
+	curr_union=`calc_union $curr_union $serial_nums $new_serial_nums`
+	num_detected=`detected_ab_list | wc -l`
+	if [ "$num_detected" != "$last_detected" ]; then
+		# Visual feedback (number of detected AB so far)
+		echo -n 1>&2 "[$num_detected]"
+		last_detected="$num_detected"
+		waitfor_ab_initialization > /dev/null
+	fi
+	# Break only when we have something and it's stable
+	test "$curr_union" != "$detected_serial_nums" -o "$detected_serial_nums" = ''
 do
 	if [ "$tries" -le 0 ]; then
 		echo 1>&2 "TIMEOUT"
@@ -67,21 +121,15 @@ do
 	echo -n 1>&2 "."
 	sleep 1
 	: $((tries-=1))
+	serial_nums="$new_serial_nums"
 done
+
+# Finished: Show a nice output
 echo ""
+cat /sys/bus/astribanks/devices/*/waitfor_xpds 2> /dev/null || :
 
 # Wait for device to stabilize and XPD's to finish initalizations
 echo 1>&2 "Astribanks initializing spans"
-while
-	if ! ab=`ab_list`; then
-		exit 1
-	fi
-	test "$oldab" != "$ab"
-do
-	oldab="$ab"
-	cat $ab
-done
-
 if [ "$XPP_HOTPLUG_DAHDI" = yes ]; then
 	if [ "$CALLED_FROM_ATRIBANK_HOOK" = '' ]; then
 		# Now we can wait until the hotplug run would remove the semaphore
