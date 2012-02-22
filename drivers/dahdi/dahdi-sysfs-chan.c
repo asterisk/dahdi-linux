@@ -11,6 +11,7 @@
 #include "dahdi.h"
 #include "dahdi-sysfs.h"
 
+/* shortcuts, for code readability */
 #define MAKE_DAHDI_DEV(num, name) \
 	CLASS_DEV_CREATE(dahdi_class, MKDEV(DAHDI_MAJOR, num), NULL, name)
 #define DEL_DAHDI_DEV(num) \
@@ -35,9 +36,7 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 	if (test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
 		return 0;
 	snprintf(chan_name, sizeof(chan_name), "dahdi!%d", chan->channo);
-	dummy = (void *)CLASS_DEV_CREATE(dahdi_class,
-		MKDEV(DAHDI_MAJOR, chan->channo),
-		NULL, chan_name);
+	dummy = (void *)MAKE_DAHDI_DEV(chan->channo, chan_name);
 	if (IS_ERR(dummy)) {
 		res = PTR_ERR(dummy);
 		chan_err(chan, "Failed creating sysfs device: %d\n",
@@ -52,10 +51,13 @@ void chan_sysfs_remove(struct dahdi_chan *chan)
 {
 	if (!test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
 		return;
-	CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, chan->channo));
+	DEL_DAHDI_DEV(chan->channo);
 	clear_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
 }
 
+/*
+ * Used by dahdi_transcode.c
+ */
 int dahdi_register_chardev(struct dahdi_chardev *dev)
 {
 	static const char *DAHDI_STRING = "dahdi!";
@@ -68,33 +70,115 @@ int dahdi_register_chardev(struct dahdi_chardev *dev)
 
 	strcpy(udevname, DAHDI_STRING);
 	strcat(udevname, dev->name);
-	CLASS_DEV_CREATE(dahdi_class,
-		MKDEV(DAHDI_MAJOR, dev->minor), NULL, udevname);
+	MAKE_DAHDI_DEV(dev->minor, udevname);
 	kfree(udevname);
 	return 0;
 }
 EXPORT_SYMBOL(dahdi_register_chardev);
 
+/*
+ * Used by dahdi_transcode.c
+ */
 int dahdi_unregister_chardev(struct dahdi_chardev *dev)
 {
-	CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, dev->minor));
-
+	DEL_DAHDI_DEV(dev->minor);
 	return 0;
 }
 EXPORT_SYMBOL(dahdi_unregister_chardev);
 
-/* Only used to flag that the device exists: */
+/*--------- Sysfs Device handling ----*/
+
+/*
+ * Describe fixed device files and maintain their
+ * pointer so fixed_devfiles_remove() can always be called
+ * and work cleanly
+ */
 static struct {
-	unsigned int ctl:1;
-	unsigned int timer:1;
-	unsigned int channel:1;
-	unsigned int pseudo:1;
-} dummy_dev;
+	int	minor;
+	char	*name;
+	void	*dev;	/* FIXME: wrong type because of old kernels */
+} fixed_minors[] = {
+	{ DAHDI_CTL,		"dahdi!ctl",	},
+	{ DAHDI_TIMER,		"dahdi!timer",	},
+	{ DAHDI_CHANNEL,	"dahdi!channel",},
+	{ DAHDI_PSEUDO,		"dahdi!pseudo",	},
+};
+
+/*
+ * Removes /dev/dahdi/{ctl,timer,channel,pseudo}
+ *
+ * It is safe to call it during initialization error handling,
+ * as it skips non existing objects.
+ */
+static void fixed_devfiles_remove(void)
+{
+	int i;
+
+	if (!dahdi_class)
+		return;
+	for (i = 0; i < ARRAY_SIZE(fixed_minors); i++) {
+		void *d = fixed_minors[i].dev;
+		if (d && !IS_ERR(d))
+			dahdi_dbg(DEVICES, "Removing fixed device file %s\n",
+				fixed_minors[i].name);
+			DEL_DAHDI_DEV(fixed_minors[i].minor);
+	}
+}
+
+/*
+ * Creates /dev/dahdi/{ctl,timer,channel,pseudo}
+ */
+static int fixed_devfiles_create(void)
+{
+	int i;
+	int res = 0;
+
+	if (!dahdi_class) {
+		dahdi_err("%s: dahdi_class is not initialized yet!\n",
+				__func__);
+		res = -ENODEV;
+		goto cleanup;
+	}
+	for (i = 0; i < ARRAY_SIZE(fixed_minors); i++) {
+		char *name = fixed_minors[i].name;
+		int minor = fixed_minors[i].minor;
+		void *dummy;
+
+		dahdi_dbg(DEVICES, "Making fixed device file %s\n", name);
+		dummy = (void *)MAKE_DAHDI_DEV(minor, name);
+		if (IS_ERR(dummy)) {
+			int res = PTR_ERR(dummy);
+
+			dahdi_err("%s: failed (%d: %s). Error: %d\n",
+					__func__, minor, name, res);
+			goto cleanup;
+		}
+		fixed_minors[i].dev = dummy;
+	}
+	return 0;
+cleanup:
+	fixed_devfiles_remove();
+	return res;
+}
+
+/*
+ * Called during driver unload and while handling any error during
+ * driver load.
+ * Always clean any (and only) objects that were initialized (invariant)
+ */
+static void sysfs_channels_cleanup(void)
+{
+	fixed_devfiles_remove();
+	if (dahdi_class) {
+		dahdi_dbg(DEVICES, "Destroying DAHDI class:\n");
+		class_destroy(dahdi_class);
+		dahdi_class = NULL;
+	}
+}
 
 int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 {
 	int res = 0;
-	void *dev;
 
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
 	if (IS_ERR(dahdi_class)) {
@@ -103,68 +187,16 @@ int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 			__func__, res);
 		goto cleanup;
 	}
-	dahdi_dbg(DEVICES, "Creating /dev/dahdi/timer:\n");
-	dev = MAKE_DAHDI_DEV(DAHDI_TIMER, "dahdi!timer");
-	if (IS_ERR(dev)) {
-		res = PTR_ERR(dev);
+	res = fixed_devfiles_create();
+	if (res)
 		goto cleanup;
-	}
-	dummy_dev.timer = 1;
-
-	dahdi_dbg(DEVICES, "Creating /dev/dahdi/channel:\n");
-	dev = MAKE_DAHDI_DEV(DAHDI_CHANNEL, "dahdi!channel");
-	if (IS_ERR(dev)) {
-		res = PTR_ERR(dev);
-		goto cleanup;
-	}
-	dummy_dev.channel = 1;
-
-	dahdi_dbg(DEVICES, "Creating /dev/dahdi/pseudo:\n");
-	dev = MAKE_DAHDI_DEV(DAHDI_PSEUDO, "dahdi!pseudo");
-	if (IS_ERR(dev)) {
-		res = PTR_ERR(dev);
-		goto cleanup;
-	}
-	dummy_dev.pseudo = 1;
-
-	dahdi_dbg(DEVICES, "Creating /dev/dahdi/ctl:\n");
-	dev = MAKE_DAHDI_DEV(DAHDI_CTL, "dahdi!ctl");
-	if (IS_ERR(dev)) {
-		res = PTR_ERR(dev);
-		goto cleanup;
-	}
-	dummy_dev.ctl = 1;
 	return 0;
 cleanup:
-	dahdi_sysfs_chan_exit();
+	sysfs_channels_cleanup();
 	return res;
 }
 
 void dahdi_sysfs_chan_exit(void)
 {
-	if (dummy_dev.pseudo) {
-		dahdi_dbg(DEVICES, "Removing /dev/dahdi/pseudo:\n");
-		DEL_DAHDI_DEV(DAHDI_PSEUDO);
-		dummy_dev.pseudo = 0;
-	}
-	if (dummy_dev.channel) {
-		dahdi_dbg(DEVICES, "Removing /dev/dahdi/channel:\n");
-		DEL_DAHDI_DEV(DAHDI_CHANNEL);
-		dummy_dev.channel = 0;
-	}
-	if (dummy_dev.timer) {
-		dahdi_dbg(DEVICES, "Removing /dev/dahdi/timer:\n");
-		DEL_DAHDI_DEV(DAHDI_TIMER);
-		dummy_dev.timer = 0;
-	}
-	if (dummy_dev.ctl) {
-		dahdi_dbg(DEVICES, "Removing /dev/dahdi/ctl:\n");
-		DEL_DAHDI_DEV(DAHDI_CTL);
-		dummy_dev.ctl = 0;
-	}
-	if (dahdi_class && !IS_ERR(dahdi_class)) {
-		dahdi_dbg(DEVICES, "Destroying DAHDI class\n");
-		class_destroy(dahdi_class);
-		dahdi_class = NULL;
-	}
+	sysfs_channels_cleanup();
 }

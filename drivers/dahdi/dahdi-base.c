@@ -10021,6 +10021,7 @@ static int __init dahdi_init(void)
 {
 	int res = 0;
 
+	module_printk(KERN_INFO, "Version: %s\n", dahdi_version);
 #ifdef CONFIG_PROC_FS
 	root_proc_entry = proc_mkdir("dahdi", NULL);
 	if (!root_proc_entry) {

@@ -349,7 +349,7 @@ int span_sysfs_create(struct dahdi_span *span)
 
 	for (x = 0; x < span->channels; x++) {
 		res = chan_sysfs_create(span->chans[x]);
-		if (res < 0)
+		if (res)
 			goto cleanup;
 	}
 	return 0;
@@ -361,10 +361,11 @@ cleanup:
 
 /* Only used to flag that the device exists: */
 static struct {
-	unsigned int sysfs_driver_registered:1;
-	unsigned int sysfs_spans_bus_type:1;
-	unsigned int dahdi_device_bus_registered:1;
-} device_state_flags;
+	unsigned int clean_dahdi_driver:1;
+	unsigned int clean_span_bus_type:1;
+	unsigned int clean_device_bus:1;
+	unsigned int clean_chardev:1;
+} should_cleanup;
 
 static inline struct dahdi_device *to_ddev(struct device *dev)
 {
@@ -603,25 +604,30 @@ static struct bus_type dahdi_device_bus = {
 	.dev_attrs = dahdi_device_attrs,
 };
 
-void dahdi_sysfs_exit(void)
+static void dahdi_sysfs_cleanup(void)
 {
 	dahdi_dbg(DEVICES, "SYSFS\n");
-	dahdi_sysfs_chan_exit();
-	if (device_state_flags.sysfs_driver_registered) {
+	if (should_cleanup.clean_dahdi_driver) {
 		dahdi_dbg(DEVICES, "Unregister driver\n");
 		driver_unregister(&dahdi_driver);
-		device_state_flags.sysfs_driver_registered = 0;
+		should_cleanup.clean_dahdi_driver = 0;
 	}
-	if (device_state_flags.sysfs_spans_bus_type) {
+	if (should_cleanup.clean_span_bus_type) {
 		dahdi_dbg(DEVICES, "Unregister span bus type\n");
 		bus_unregister(&spans_bus_type);
-		device_state_flags.sysfs_spans_bus_type = 0;
+		should_cleanup.clean_span_bus_type = 0;
 	}
-	unregister_chrdev(DAHDI_MAJOR, "dahdi");
+	dahdi_sysfs_chan_exit();
+	if (should_cleanup.clean_chardev) {
+		dahdi_dbg(DEVICES, "Unregister character device\n");
+		unregister_chrdev(DAHDI_MAJOR, "dahdi");
+		should_cleanup.clean_chardev = 0;
+	}
 
-	if (device_state_flags.dahdi_device_bus_registered) {
+	if (should_cleanup.clean_device_bus) {
+		dahdi_dbg(DEVICES, "Unregister DAHDI device bus\n");
 		bus_unregister(&dahdi_device_bus);
-		device_state_flags.dahdi_device_bus_registered = 0;
+		should_cleanup.clean_device_bus = 0;
 	}
 }
 
@@ -674,12 +680,14 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 {
 	int res = 0;
 
+	dahdi_dbg(DEVICES, "Registering DAHDI device bus\n");
 	res = bus_register(&dahdi_device_bus);
 	if (res)
 		return res;
+	should_cleanup.clean_device_bus = 1;
 
-	device_state_flags.dahdi_device_bus_registered = 1;
-
+	dahdi_dbg(DEVICES,
+		"Registering character device (major=%d)\n", DAHDI_MAJOR);
 	res = register_chrdev(DAHDI_MAJOR, "dahdi", dahdi_fops);
 	if (res) {
 		module_printk(KERN_ERR,
@@ -687,30 +695,38 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 			"handler on %d\n", DAHDI_MAJOR);
 		return res;
 	}
-	module_printk(KERN_INFO, "Telephony Interface Registered on major %d\n",
-			DAHDI_MAJOR);
-	module_printk(KERN_INFO, "Version: %s\n", dahdi_version);
+	should_cleanup.clean_chardev = 1;
 
-	dahdi_sysfs_chan_init(dahdi_fops);
+	res = dahdi_sysfs_chan_init(dahdi_fops);
+	if (res)
+		goto cleanup;
+
 	res = bus_register(&spans_bus_type);
-	if (res != 0) {
+	if (res) {
 		dahdi_err("%s: bus_register(%s) failed. Error number %d",
 			__func__, spans_bus_type.name, res);
 		goto cleanup;
 	}
-	device_state_flags.sysfs_spans_bus_type = 1;
+	should_cleanup.clean_span_bus_type = 1;
+
 	res = driver_register(&dahdi_driver);
-	if (res < 0) {
+	if (res) {
 		dahdi_err("%s: driver_register(%s) failed. Error number %d",
 			__func__, dahdi_driver.name, res);
 		goto cleanup;
 	}
-	device_state_flags.sysfs_driver_registered = 1;
+	should_cleanup.clean_dahdi_driver = 1;
 
+	module_printk(KERN_INFO, "Telephony Interface Registered on major %d\n",
+			DAHDI_MAJOR);
 	return 0;
 
 cleanup:
-	dahdi_sysfs_exit();
+	dahdi_sysfs_cleanup();
 	return res;
 }
 
+void __exit dahdi_sysfs_exit(void)
+{
+	dahdi_sysfs_cleanup();
+}
