@@ -95,4 +95,12 @@ enum kobject_action {
 	class_simple_device_remove(class, devt)
 #endif
 
+/* Global */
+int __init dahdi_sysfs_chan_init(const struct file_operations *fops);
+void dahdi_sysfs_chan_exit(void);
+
+/* Channel Handling */
+int chan_sysfs_create(struct dahdi_chan *chan);
+void chan_sysfs_remove(struct dahdi_chan *chan);
+
 #endif	/* DAHDI_SYSFS_H */
