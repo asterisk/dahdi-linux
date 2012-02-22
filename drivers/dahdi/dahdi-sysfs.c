@@ -259,6 +259,35 @@ static BUS_ATTR_READER(channels_show, dev, buf)
 	return sprintf(buf, "%d\n", span->channels);
 }
 
+static BUS_ATTR_READER(lineconfig_show, dev, buf)
+{
+	struct dahdi_span *span;
+	int len = 0;
+
+	span = dev_to_span(dev);
+	if (span->lineconfig) {
+		/* framing first */
+		if (span->lineconfig & DAHDI_CONFIG_B8ZS)
+			len += sprintf(buf + len, "B8ZS/");
+		else if (span->lineconfig & DAHDI_CONFIG_AMI)
+			len += sprintf(buf + len, "AMI/");
+		else if (span->lineconfig & DAHDI_CONFIG_HDB3)
+			len += sprintf(buf + len, "HDB3/");
+		/* then coding */
+		if (span->lineconfig & DAHDI_CONFIG_ESF)
+			len += sprintf(buf + len, "ESF");
+		else if (span->lineconfig & DAHDI_CONFIG_D4)
+			len += sprintf(buf + len, "D4");
+		else if (span->lineconfig & DAHDI_CONFIG_CCS)
+			len += sprintf(buf + len, "CCS");
+		/* E1's can enable CRC checking */
+		if (span->lineconfig & DAHDI_CONFIG_CRC4)
+			len += sprintf(buf + len, "/CRC4");
+	}
+	len += sprintf(buf + len, "\n");
+	return len;
+}
+
 static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(name),
 	__ATTR_RO(desc),
@@ -271,6 +300,7 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(is_sync_master),
 	__ATTR_RO(basechan),
 	__ATTR_RO(channels),
+	__ATTR_RO(lineconfig),
 	__ATTR_NULL,
 };
 

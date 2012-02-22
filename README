@@ -802,6 +802,12 @@ A free-form description of the span.
 ===== /sys/bus/dahdi_spans/devices/span-N/lbo
 LBO setting for the channel.
 
+===== /sys/bus/dahdi_spans/devices/span-N/lineconfig
+The framing and coding of the span, for a digital span. Textual
+represenation:
+
+<B8ZS|AMI|HDB3>/<D4|ESF|CCS>[/CRC4]
+
 ===== /sys/bus/dahdi_spans/devices/span-N/local_spanno
 The number of the span within the DAHDI device.
 
