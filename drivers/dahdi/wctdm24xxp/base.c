@@ -1904,7 +1904,7 @@ static void wctdm_fxo_ring_detect(struct wctdm *wc, struct wctdm_module *mod)
 		if (!is_fxo_ringing(fxo)) {
 			set_ring(fxo, DEBOUNCING_RINGOFF);
 			fxo->ringdebounce_timer =
-					wc->framecount + ringdebounce / 2;
+					wc->framecount + ringdebounce / 8;
 		}
 		break;
 	case DEBOUNCING_RINGOFF:
