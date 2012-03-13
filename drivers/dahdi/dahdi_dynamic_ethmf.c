@@ -224,13 +224,8 @@ static inline int ethmf_trx_spans_ready(unsigned int addr_hash, struct ztdeth *(
 /**
  * Ethernet receiving side processing function.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 static int ztdethmf_rcv(struct sk_buff *skb, struct net_device *dev,
 		struct packet_type *pt, struct net_device *orig_dev)
-#else
-static int ztdethmf_rcv(struct sk_buff *skb, struct net_device *dev,
-		struct packet_type *pt)
-#endif
 {
 	int num_spans = 0, span_index = 0;
 	unsigned char *data;
@@ -267,13 +262,8 @@ static int ztdethmf_rcv(struct sk_buff *skb, struct net_device *dev,
 
 		rcu_read_lock();
 		do {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 9)
 			find_ethmf(eth_hdr(skb)->h_source,
 				htons(span_index), &z, &span);
-#else
-			find_ethmf(skb->mac.ethernet->h_source,
-				htons(span_index), &z, &span);
-#endif
 			if (unlikely(!z || !span)) {
 				/* The recv'd span does not belong to us */
 				/* ethmf_errors_inc(); */
@@ -396,10 +386,6 @@ static void ztdethmf_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 	struct net_device *dev;
 	unsigned char addr[ETH_ALEN];
 	int spans_ready = 0, index = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	static DEFINE_SPINLOCK(lock);
-	unsigned long flags;
-#endif
 
 	if (atomic_read(&shutdown))
 		return;
@@ -411,24 +397,12 @@ static void ztdethmf_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 		return;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	if (!atomic_read(&z->ready)) {
-		spin_lock_irqsave(&lock, flags);
-		atomic_inc(&z->ready);
-		if (1 == atomic_read(&z->ready)) {
-			memcpy(z->msgbuf, msg, msglen);
-			z->msgbuf_len = msglen;
-		}
-		spin_unlock_irqrestore(&lock, flags);
-	}
-#else
 	if (!atomic_read(&z->ready)) {
 		if (atomic_inc_return(&z->ready) == 1) {
 			memcpy(z->msgbuf, msg, msglen);
 			z->msgbuf_len = msglen;
 		}
 	}
-#endif
 
 	spans_ready = ethmf_trx_spans_ready(z->addr_hash, &ready_spans);
 	if (spans_ready) {

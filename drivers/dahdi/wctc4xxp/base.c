@@ -42,11 +42,7 @@
 
 #include "dahdi/kernel.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-#include <asm/io.h>
-#else
 #include <linux/io.h>
-#endif
 
 /* COMPILE TIME OPTIONS =================================================== */
 
@@ -72,13 +68,6 @@
 	if ((debug & _dbgmask) == (_dbgmask)) {				\
 		dev_info(&(wc)->pdev->dev, _fmt, ## _args);		\
 	}								\
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
-/* also added in RHEL kernels with the OpenInfiniband backport: */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9) || !defined(DEFINE_SPINLOCK)
-typedef	unsigned gfp_t;		/* Added in 2.6.14 */
-#endif
-#endif
 
 
 /* define CONFIG_WCTC4XXP_POLLING to operate in a pure polling mode.  This is

@@ -1809,9 +1809,7 @@ static struct xpd_driver fxs_driver = {
 	.type = XPD_TYPE_FXS,
 	.driver = {
 		   .name = "fxs",
-#ifndef OLD_HOTPLUG_SUPPORT
 		   .owner = THIS_MODULE,
-#endif
 		   .probe = fxs_xpd_probe,
 		   .remove = fxs_xpd_remove}
 };

@@ -1198,7 +1198,6 @@ static int b4xxp_find_sync(struct b4xxp *b4)
 		return src;
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18))
 static ssize_t b4_timing_master_show(struct device *dev,
 				     struct device_attribute *attr,
 				     char *buf)
@@ -1225,13 +1224,6 @@ static void remove_sysfs_files(struct b4xxp *b4)
 	device_remove_file(&b4->pdev->dev,
 			   &dev_attr_timing_master);
 }
-
-#else
-
-static inline void create_sysfs_files(struct b4xxp *b4) { return; }
-static inline void remove_sysfs_files(struct b4xxp *b4) { return; }
-
-#endif /* LINUX_KERNEL > 2.6.18 */
 
 /*
  * allocates memory and pretty-prints a given S/T state engine state to it.

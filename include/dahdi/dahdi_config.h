@@ -21,9 +21,6 @@
 
 #ifdef __KERNEL__
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
-#include <linux/config.h>
-#endif
 #endif
 
 /* DAHDI compile time options */
@@ -76,9 +73,7 @@
 /* You can still override them below */
 #if defined(CONFIG_HDLC) || defined(CONFIG_HDLC_MODULE)
 #define DAHDI_HDLC_TYPE_TRANS
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,3)
 #define HDLC_MAINTAINERS_ARE_MORE_STUPID_THAN_I_THOUGHT
-#endif
 #endif
 
 /*

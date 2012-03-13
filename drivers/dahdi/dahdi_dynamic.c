@@ -406,12 +406,7 @@ static void dahdi_dynamic_release(struct kref *kref)
 
 static inline int dynamic_put(struct dahdi_dynamic *d)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
-	kref_put(&d->kref, dahdi_dynamic_release);
-	return 1;
-#else
 	return kref_put(&d->kref, dahdi_dynamic_release);
-#endif
 }
 
 static inline void dynamic_get(struct dahdi_dynamic *d)

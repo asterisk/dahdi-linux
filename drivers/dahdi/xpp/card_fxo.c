@@ -1481,9 +1481,7 @@ static struct xpd_driver fxo_driver = {
 	.type = XPD_TYPE_FXO,
 	.driver = {
 		   .name = "fxo",
-#ifndef OLD_HOTPLUG_SUPPORT
 		   .owner = THIS_MODULE,
-#endif
 		   .probe = fxo_xpd_probe,
 		   .remove = fxo_xpd_remove}
 };

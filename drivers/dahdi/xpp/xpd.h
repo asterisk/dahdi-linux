@@ -42,13 +42,6 @@
 #include <dahdi/kernel.h>
 
 #ifdef __KERNEL__
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
-/* also added in RHEL kernels with the OpenInfiniband backport: */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 9) || !defined(DEFINE_SPINLOCK)
-typedef unsigned gfp_t;		/* Added in 2.6.14 */
-#endif
-#endif
-
 /*
  * FIXME: Kludge for 2.6.19
  * bool is now defined as a proper boolean type (gcc _Bool)
@@ -64,23 +57,11 @@ typedef unsigned gfp_t;		/* Added in 2.6.14 */
 	module_param(name, type, perm); \
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
 
-#if	LINUX_VERSION_CODE	< KERNEL_VERSION(2, 6, 10)
-/*
- * Old 2.6 kernels had module_param_array() macro that receive the counter
- * by value.
- */
-#define	DEF_ARRAY(type, name, count, init, desc) \
-	unsigned int name ## _num_values; \
-	type name[count] = { [0 ... ((count)-1)] = (init) }; \
-	module_param_array(name, type, name ## _num_values, 0644); \
-	MODULE_PARM_DESC(name, desc " ( 1-" __MODULE_STRING(count) ")")
-#else
 #define	DEF_ARRAY(type, name, count, init, desc) \
 	unsigned int name ## _num_values; \
 	type name[count] = {[0 ... ((count)-1)] = init}; \
 	module_param_array(name, type, &name ## _num_values, 0644); \
 	MODULE_PARM_DESC(name, desc " ( 1-" __MODULE_STRING(count) ")")
-#endif
 #endif // __KERNEL__
 
 #define	CARD_DESC_MAGIC	0xca9dde5c

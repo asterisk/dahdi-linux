@@ -2697,13 +2697,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	spin_lock_init(&wc->reglock);
 	INIT_LIST_HEAD(&wc->active_cmds);
 	INIT_LIST_HEAD(&wc->pending_cmds);
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-	wc->timer.function = te12xp_timer;
-	wc->timer.data = (unsigned long)wc;
-	init_timer(&wc->timer);
-#	else
 	setup_timer(&wc->timer, te12xp_timer, (unsigned long)wc);
-#	endif
 
 #	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&wc->timer_work, timer_work_func, wc);
@@ -2876,13 +2870,11 @@ static DEFINE_PCI_DEVICE_TABLE(te12xp_pci_tbl) = {
 	{ 0 }
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 static void te12xp_shutdown(struct pci_dev *pdev)
 {
 	struct t1 *wc = pci_get_drvdata(pdev);
 	voicebus_quiesce(&wc->vb);
 }
-#endif
 
 static int te12xp_suspend(struct pci_dev *pdev, pm_message_t state)
 {
@@ -2895,9 +2887,7 @@ static struct pci_driver te12xp_driver = {
 	.name = "wcte12xp",
 	.probe = te12xp_init_one,
 	.remove = __devexit_p(te12xp_remove_one),
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = te12xp_shutdown,
-#endif
 	.suspend = te12xp_suspend,
 	.id_table = te12xp_pci_tbl,
 };

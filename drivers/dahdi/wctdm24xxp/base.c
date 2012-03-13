@@ -6051,13 +6051,11 @@ static DEFINE_PCI_DEVICE_TABLE(wctdm_pci_tbl) = {
 	{ 0 }
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 static void wctdm_shutdown(struct pci_dev *pdev)
 {
 	struct wctdm *wc = pci_get_drvdata(pdev);
 	voicebus_quiesce(&wc->vb);
 }
-#endif
 
 MODULE_DEVICE_TABLE(pci, wctdm_pci_tbl);
 
@@ -6070,9 +6068,7 @@ static struct pci_driver wctdm_driver = {
 	.name = "wctdm24xxp",
 	.probe = wctdm_init_one,
 	.remove = __devexit_p(wctdm_remove_one),
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = wctdm_shutdown,
-#endif
 	.suspend = wctdm_suspend,
 	.id_table = wctdm_pci_tbl,
 };

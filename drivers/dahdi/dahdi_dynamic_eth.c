@@ -74,11 +74,7 @@ static struct dahdi_span *ztdeth_getspan(unsigned char *addr, unsigned short sub
 	return span;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
 static int ztdeth_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt, struct net_device *orig_dev)
-#else
-static int ztdeth_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt)
-#endif
 {
 	struct dahdi_span *span;
 	struct ztdeth_header *zh;
@@ -87,11 +83,7 @@ static int ztdeth_rcv(struct sk_buff *skb, struct net_device *dev, struct packet
 #else
 	zh = (struct ztdeth_header *)skb->nh.raw;
 #endif
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
 	span = ztdeth_getspan(eth_hdr(skb)->h_source, zh->subaddr);
-#else
-	span = ztdeth_getspan(skb->mac.ethernet->h_source, zh->subaddr);
-#endif	
 	if (span) {
 		skb_pull(skb, sizeof(struct ztdeth_header));
 #ifdef NEW_SKB_LINEARIZE

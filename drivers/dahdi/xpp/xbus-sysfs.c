@@ -20,11 +20,6 @@
  *
  */
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#warning "This module is tested only with 2.6 kernels"
-#endif
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/errno.h>
@@ -286,7 +281,6 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	return len;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 #define xbus_attr(field, format_string)                                    \
 static ssize_t                                                             \
 field##_show(struct device *dev, struct device_attribute *attr, char *buf) \
@@ -295,16 +289,6 @@ field##_show(struct device *dev, struct device_attribute *attr, char *buf) \
 	xbus = dev_to_xbus(dev);                                           \
 	return sprintf(buf, format_string, xbus->field);                   \
 }
-#else
-#define xbus_attr(field, format_string)                                    \
-static ssize_t                                                             \
-field##_show(struct device *dev, char *buf)                                \
-{                                                                          \
-	xbus_t	*xbus;                                                     \
-	xbus = dev_to_xbus(dev);                                           \
-	return sprintf(buf, format_string, xbus->field);                   \
-}
-#endif
 
 xbus_attr(connector, "%s\n");
 xbus_attr(label, "%s\n");
@@ -332,23 +316,6 @@ static int astribank_match(struct device *dev, struct device_driver *driver)
 	    dev_name(dev), driver->name);
 	return 1;
 }
-
-#ifdef OLD_HOTPLUG_SUPPORT
-static int astribank_hotplug(struct device *dev, char **envp, int envnum,
-			     char *buff, int bufsize)
-{
-	xbus_t *xbus;
-
-	if (!dev)
-		return -ENODEV;
-	xbus = dev_to_xbus(dev);
-	envp[0] = buff;
-	if (snprintf(buff, bufsize, "XBUS_NAME=%s", xbus->busname) >= bufsize)
-		return -ENOMEM;
-	envp[1] = NULL;
-	return 0;
-}
-#else
 
 #define	XBUS_VAR_BLOCK	\
 	do {		\
@@ -407,8 +374,6 @@ static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 
 #endif
 
-#endif /* OLD_HOTPLUG_SUPPORT */
-
 void astribank_uevent_send(xbus_t *xbus, enum kobject_action act)
 {
 	struct kobject *kobj;
@@ -416,26 +381,7 @@ void astribank_uevent_send(xbus_t *xbus, enum kobject_action act)
 	kobj = &xbus->astribank.kobj;
 	XBUS_DBG(DEVICES, xbus, "SYFS bus_id=%s action=%d\n",
 		 dev_name(&xbus->astribank), act);
-
-#if defined(OLD_HOTPLUG_SUPPORT_269)
-	{
-		/* Copy from new kernels lib/kobject_uevent.c */
-		static const char *str[] = {
-			[KOBJ_ADD] "add",
-			[KOBJ_REMOVE] "remove",
-			[KOBJ_CHANGE] "change",
-			[KOBJ_MOUNT] "mount",
-			[KOBJ_UMOUNT] "umount",
-			[KOBJ_OFFLINE] "offline",
-			[KOBJ_ONLINE] "online"
-		};
-		kobject_hotplug(str[act], kobj);
-	}
-#elif defined(OLD_HOTPLUG_SUPPORT)
-	kobject_hotplug(kobj, act);
-#else
 	kobject_uevent(kobj, act);
-#endif
 }
 
 static void astribank_release(struct device *dev)
@@ -461,11 +407,7 @@ static void astribank_release(struct device *dev)
 static struct bus_type toplevel_bus_type = {
 	.name = "astribanks",
 	.match = astribank_match,
-#ifdef OLD_HOTPLUG_SUPPORT
-	.hotplug = astribank_hotplug,
-#else
 	.uevent = astribank_uevent,
-#endif
 	.dev_attrs = xbus_dev_attrs,
 	.drv_attrs = xpp_attrs,
 };
@@ -493,9 +435,7 @@ static struct device_driver xpp_driver = {
 	.bus = &toplevel_bus_type,
 	.probe = astribank_probe,
 	.remove = astribank_remove,
-#ifndef OLD_HOTPLUG_SUPPORT
 	.owner = THIS_MODULE
-#endif
 };
 
 /*--------- Sysfs XPD handling ----*/

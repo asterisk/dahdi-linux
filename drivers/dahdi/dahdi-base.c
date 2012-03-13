@@ -49,9 +49,7 @@
 #include <linux/sched.h>
 #include <linux/list.h>
 #include <linux/delay.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 16)
 #include <linux/mutex.h>
-#endif
 
 #if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 #include <linux/smp_lock.h>
@@ -342,12 +340,7 @@ static void tone_zone_release(struct kref *kref)
  */
 static inline int tone_zone_put(struct dahdi_zone *z)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
-	kref_put(&z->refcount, tone_zone_release);
-	return 1;
-#else
 	return kref_put(&z->refcount, tone_zone_release);
-#endif
 }
 
 static inline void tone_zone_get(struct dahdi_zone *z)
@@ -549,10 +542,6 @@ u_char __dahdi_lin2a[16384];
 #endif
 
 static u_char defgain[256];
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-#define __RW_LOCK_UNLOCKED() RW_LOCK_UNLOCKED
-#endif
 
 #define NUM_SIGS	10
 
@@ -1878,10 +1867,6 @@ static int dahdi_register_hdlc_device(struct net_device *dev, const char *dev_na
 	result = register_netdev(dev);
 	if (result != 0)
 		return -EIO;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,14)
-	if (netif_carrier_ok(dev))
-		netif_carrier_off(dev); /* no carrier until DCD goes up */
-#endif
 	return 0;
 }
 
@@ -3162,13 +3147,9 @@ static int dahdi_open(struct inode *inode, struct file *file)
 				return -ENXIO;
 			}
 		}
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-		__MOD_INC_USE_COUNT (dahdi_transcode_fops->owner);
-#else
 		if (!try_module_get(dahdi_transcode_fops->owner)) {
 			return -ENXIO;
 		}
-#endif
 		if (dahdi_transcode_fops && dahdi_transcode_fops->open) {
 			return dahdi_transcode_fops->open(inode, file);
 		} else {
@@ -10106,35 +10087,6 @@ static void __exit dahdi_cleanup(void)
 #endif
 	flush_find_master_work();
 }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
-char *dahdi_kasprintf(gfp_t gfp, const char *fmt, ...)
-{
-	va_list ap;
-	char *p;
-	char *temp;
-	unsigned int len;
-
-	temp = kmalloc(PAGE_SIZE, GFP_KERNEL);
-	if (!temp)
-		return NULL;
-
-	va_start(ap, fmt);
-	len = vsnprintf(temp, PAGE_SIZE, fmt, ap);
-	va_end(ap);
-
-	p = kzalloc(len + 1, gfp);
-	if (!p) {
-		kfree(temp);
-		return NULL;
-	}
-
-	memcpy(p, temp, len + 1);
-	kfree(temp);
-	return p;
-}
-EXPORT_SYMBOL(dahdi_kasprintf);
-#endif
 
 module_init(dahdi_init);
 module_exit(dahdi_cleanup);

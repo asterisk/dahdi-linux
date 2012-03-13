@@ -2653,9 +2653,7 @@ static struct xpd_driver pri_driver = {
 	.type = XPD_TYPE_PRI,
 	.driver = {
 		   .name = "pri",
-#ifndef OLD_HOTPLUG_SUPPORT
 		   .owner = THIS_MODULE,
-#endif
 		   .probe = pri_xpd_probe,
 		   .remove = pri_xpd_remove}
 };

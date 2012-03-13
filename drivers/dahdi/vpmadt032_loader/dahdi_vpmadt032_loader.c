@@ -38,18 +38,9 @@ logger(const char *format, ...)
 	int res;
 	va_list args;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 9)
 	va_start(args, format);
 	res = vprintk(format, args);
 	va_end(args);
-#else
-	char buf[256];
-
-	va_start(args, format);
-	res = vsnprintf(buf, sizeof(buf), format, args);
-	va_end(args);
-	printk(KERN_INFO "%s" buf);
-#endif
 
 	return res;
 }

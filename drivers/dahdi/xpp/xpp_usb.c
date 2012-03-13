@@ -68,11 +68,6 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644,
 #define	XUSB_INFO(xusb, fmt, ...) \
 	XUSB_PRINTK(INFO, xusb, fmt, ## __VA_ARGS__)
 
-/* FIXME: A flag that was deprecated at some point, and rather useless */
-/* anyway. Only used in the code or-ed to other flags                  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
-#define URB_ASYNC_UNLINK 0
-#endif
 /* Get a minor range for your devices from the usb maintainer */
 #define USB_SKEL_MINOR_BASE	192
 
@@ -80,41 +75,11 @@ static DEF_PARM(uint, drop_pcm_after, 6, 0644,
 #define	PROC_USBXPP_SUMMARY	"xpp_usb"
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#warning "This module is tested only with 2.6 kernels"
-#endif
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
 #define usb_alloc_coherent(dev, size, mem_flags, dma) \
 	usb_buffer_alloc(dev, size, mem_flags, dma)
 #define usb_free_coherent(dev, size, addr, dma) \
 	usb_buffer_free(dev, size, addr, dma)
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
-#undef USB_FIELDS_MISSING
-#else
-#define USB_FIELDS_MISSING
-
-#define USB_MAX_STRING	128
-#define USB_GET_STRING(udev, field, buf)		\
-	do {						\
-		if ((udev)->descriptor.field) {		\
-			char	tmp[USB_MAX_STRING];	\
-			if (usb_string((udev), (udev)->descriptor.field, \
-				tmp, sizeof(tmp)) > 0) \
-				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
-		}					\
-	} while (0);
-#define USB_GET_IFACE_NAME(udev, iface, buf)		\
-	do {						\
-		if ((iface)->desc.iInterface) {		\
-			char	tmp[USB_MAX_STRING];	\
-			if (usb_string((udev), (iface)->desc.iInterface, \
-				tmp, sizeof(tmp)) > 0) \
-				snprintf((buf), USB_MAX_STRING, "%s", tmp); \
-		}					\
-	} while (0);
 #endif
 
 #ifdef	DEBUG_PCM_TIMING
@@ -233,18 +198,10 @@ struct xusb {
 	atomic_t pcm_tx_drops;
 	atomic_t usb_sluggish_count;
 
-#ifdef USB_FIELDS_MISSING
-	/* storage for missing strings in old kernels */
-	char manufacturer[USB_MAX_STRING];
-	char product[USB_MAX_STRING];
-	char serial[USB_MAX_STRING];
-	char interface_name[USB_MAX_STRING];
-#else
 	const char *manufacturer;
 	const char *product;
 	const char *serial;
 	const char *interface_name;
-#endif
 
 };
 
@@ -299,7 +256,7 @@ static void uframe_recompute(struct uframe *uframe, enum xusb_dir dir)
 	BUG_ON(uframe->uframe_magic != UFRAME_MAGIC);
 	usb_fill_bulk_urb(urb, udev, pipe, uframe->transfer_buffer,
 			  uframe->transfer_buffer_length, urb_cb, uframe);
-	urb->transfer_flags = (URB_NO_TRANSFER_DMA_MAP | URB_ASYNC_UNLINK);
+	urb->transfer_flags = (URB_NO_TRANSFER_DMA_MAP);
 }
 
 static xframe_t *alloc_xframe(xbus_t *xbus, gfp_t gfp_flags)
@@ -537,9 +494,6 @@ MODULE_DEVICE_TABLE(usb, xusb_table);
  * with the usb subsystem
  */
 static struct usb_driver xusb_driver = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 16)
-	.owner = THIS_MODULE,
-#endif
 	.name = "xpp_usb",
 	.probe = xusb_probe,
 	.disconnect = xusb_disconnect,
@@ -575,10 +529,6 @@ static const struct file_operations xusb_fops = {
 static struct usb_class_driver xusb_class = {
 	.name = "usb/xpp_usb%d",
 	.fops = &xusb_fops,
-/* FIXME: The sysfs class interfase seems to have chaged around here */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 15)
-	.mode = S_IFCHR | S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH,
-#endif
 	.minor_base = USB_SKEL_MINOR_BASE,
 };
 
@@ -674,18 +624,6 @@ static int set_endpoints(xusb_t *xusb, struct usb_host_interface *iface_desc,
 	return 1;
 }
 
-/*
- * The USB stack before 2.6.10 seems to be a bit shoddy. It seems that when
- * being called from the probe we may already have the lock to
- * udev (the Usb DEVice).
- * Thus we call the internal __usb_reset_device instead.
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-#define	DO_USB_RESET_DEVICE(dev)	__usb_reset_device(dev)
-#else
-#define	DO_USB_RESET_DEVICE(dev)	usb_reset_device(dev)
-#endif
-
 /**
  *	xusb_probe
  *
@@ -715,7 +653,7 @@ static int xusb_probe(struct usb_interface *interface,
 		    iface_desc->desc.bInterfaceNumber, model_info->iface_num);
 		return -ENODEV;
 	}
-	if ((retval = DO_USB_RESET_DEVICE(udev)) < 0) {
+	if ((retval = usb_reset_device(udev)) < 0) {
 		ERR("usb_reset_device failed: %d\n", retval);
 		goto probe_failed;
 	}
@@ -746,17 +684,10 @@ static int xusb_probe(struct usb_interface *interface,
 		retval = -ENODEV;
 		goto probe_failed;
 	}
-#ifndef USB_FIELDS_MISSING
 	xusb->serial = udev->serial;
 	xusb->manufacturer = udev->manufacturer;
 	xusb->product = udev->product;
 	xusb->interface_name = iface_desc->string;
-#else
-	USB_GET_STRING(udev, iSerialNumber, xusb->serial);
-	USB_GET_STRING(udev, iManufacturer, xusb->manufacturer);
-	USB_GET_STRING(udev, iProduct, xusb->product);
-	USB_GET_IFACE_NAME(udev, iface_desc, xusb->interface_name);
-#endif
 	INFO("XUSB: %s -- %s -- %s\n", xusb->manufacturer, xusb->product,
 	     xusb->interface_name);
 

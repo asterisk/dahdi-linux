@@ -329,9 +329,7 @@ static struct xpd_driver echo_driver = {
 	.type = XPD_TYPE_ECHO,
 	.driver = {
 		   .name = "echo",
-#ifndef OLD_HOTPLUG_SUPPORT
 		   .owner = THIS_MODULE,
-#endif
 		   .probe = echo_xpd_probe,
 		   .remove = echo_xpd_remove}
 };

@@ -354,19 +354,6 @@ void xbus_sysfs_transport_remove(xbus_t *xbus);
 int xbus_sysfs_create(xbus_t *xbus);
 void xbus_sysfs_remove(xbus_t *xbus);
 
-#ifdef	OLD_HOTPLUG_SUPPORT_269
-/* Copy from new kernels lib/kobject_uevent.c */
-enum kobject_action {
-	KOBJ_ADD,
-	KOBJ_REMOVE,
-	KOBJ_CHANGE,
-	KOBJ_MOUNT,
-	KOBJ_UMOUNT,
-	KOBJ_OFFLINE,
-	KOBJ_ONLINE,
-};
-#endif
-
 void astribank_uevent_send(xbus_t *xbus, enum kobject_action act);
 
 #endif /* XBUS_CORE_H */

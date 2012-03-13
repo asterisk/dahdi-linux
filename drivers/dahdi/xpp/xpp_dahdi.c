@@ -25,11 +25,6 @@
  *
  */
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#warning "This module is tested only with 2.6 kernels"
-#endif
-
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/errno.h>
@@ -79,11 +74,7 @@ static void phonedev_cleanup(xpd_t *xpd);
 static int parport_xbuses[2] = { 0, 1 };
 
 unsigned int parport_xbuses_num_values;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 9)
 module_param_array(parport_xbuses, int, &parport_xbuses_num_values, 0577);
-#else
-module_param_array(parport_xbuses, int, parport_xbuses_num_values, 0577);
-#endif
 MODULE_PARM_DESC(parport_xbuses, "Id's of xbuses to sample (1-2)");
 
 /*

@@ -28,10 +28,6 @@
 #include "vpm450m.h"
 #include "oct6100api/oct6100_api.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
-#include <linux/config.h>
-#endif
-
 /* API for Octasic access */
 UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
 {

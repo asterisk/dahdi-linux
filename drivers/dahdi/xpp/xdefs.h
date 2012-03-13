@@ -118,16 +118,6 @@ typedef char *charp;
 			kfree(p);			\
 		} while (0);
 
-/*
- * Hotplug replaced with uevent in 2.6.16
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 16)
-#define	OLD_HOTPLUG_SUPPORT	// for older kernels
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-#define	OLD_HOTPLUG_SUPPORT_269	// for way older kernels
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 #define	DEVICE_ATTR_READER(name, dev, buf) \
 		ssize_t name(struct device *dev, \

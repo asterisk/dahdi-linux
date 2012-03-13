@@ -38,9 +38,6 @@
 
 #include <dahdi/dahdi_config.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18)
-#include <linux/config.h>
-#endif
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -60,11 +57,7 @@
 
 #include <linux/poll.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 #define dahdi_pci_module pci_register_driver
-#else
-#define dahdi_pci_module pci_module_init
-#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
 #define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id)
@@ -76,22 +69,9 @@
 #define HAVE_NET_DEVICE_OPS
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 #define DAHDI_IRQ_SHARED IRQF_SHARED
 #define DAHDI_IRQ_DISABLED IRQF_DISABLED
 #define DAHDI_IRQ_SHARED_DISABLED IRQF_SHARED | IRQF_DISABLED
-#else
-#define DAHDI_IRQ_SHARED SA_SHIRQ
-#define DAHDI_IRQ_DISABLED SA_INTERRUPT
-#define DAHDI_IRQ_SHARED_DISABLED SA_SHIRQ | SA_INTERRUPT
-#endif
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,16)
-#ifndef dev_notice
-#define dev_notice(dev, format, arg...)         \
-        dev_printk(KERN_NOTICE , dev , format , ## arg)
-#endif
-#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
 #  ifdef RHEL_RELEASE_VERSION
@@ -1409,60 +1389,6 @@ static inline int strcasecmp(const char *s1, const char *s2)
 	return c1 - c2;
 }
 #endif /* clamp_val */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-static inline void list_replace(struct list_head *old, struct list_head *new)
-{
-        new->next = old->next;
-        new->next->prev = new;
-        new->prev = old->prev;
-        new->prev->next = new;
-}
-
-#ifndef WARN_ON_ONCE
-#define WARN_ON_ONCE(__condition) do {         \
-	static int __once = 1;                 \
-	if (unlikely(__condition)) {           \
-		if (__once) {                  \
-			__once = 0;            \
-			WARN_ON(0);            \
-		}                              \
-	}                                      \
-} while (0)
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 17)
-#ifndef POLLRDHUP
-#define POLLRDHUP 0
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
-#define kzalloc(a, b) kcalloc(1, a, b)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
-#define synchronize_rcu() synchronize_kernel()
-#define kasprintf dahdi_kasprintf
-char *dahdi_kasprintf(gfp_t gfp, const char *fmt, ...);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 11)
-#if !defined(HAVE_WAIT_FOR_COMPLETION_TIMEOUT)
-static inline unsigned long
-wait_for_completion_interruptible_timeout(struct completion *x,
-					  unsigned long timeout)
-{
-	/* There is a race condition here.  If x->done is reset to 0
-	 * before the call to wait_for_completion after this thread wakes.
-	 */
-	timeout = wait_event_interruptible_timeout(x->wait, x->done, timeout);
-	if (timeout)
-		wait_for_completion(x);
-
-	return timeout;
-}
-#endif
-typedef u32 __bitwise pm_message_t;
-#endif /* 2.6.11 */
-#endif /* 2.6.12 */
-#endif /* 2.6.14 */
-#endif /* 2.6.17 */
-#endif /* 2.6.18 */
 #endif /* 2.6.22 */
 #endif /* 2.6.25 */
 #endif /* 2.6.26 */

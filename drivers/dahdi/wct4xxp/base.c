@@ -119,11 +119,7 @@ struct cpu_workqueue_struct {
  */
 struct workqueue_struct {
 	/* TODO: Find out exactly where the API changed */
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,15)
 	struct cpu_workqueue_struct *cpu_wq;
-#else
-	struct cpu_workqueue_struct cpu_wq[NR_CPUS];
-#endif
 	const char *name;
 	struct list_head list; 	/* Empty if single thread */
 };
@@ -2400,7 +2396,6 @@ static void __t4_set_sclk_src(struct t4 *wc, int mode, int master, int slave)
 	__t4_pci_out(wc, WC_DMACTRL, wc->dmactrl);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18))
 static ssize_t t4_timing_master_show(struct device *dev,
 				     struct device_attribute *attr,
 				     char *buf)
@@ -2430,13 +2425,6 @@ static void remove_sysfs_files(struct t4 *wc)
 	device_remove_file(&wc->dev->dev,
 			   &dev_attr_timing_master);
 }
-
-#else
-
-static inline void create_sysfs_files(struct t4 *wc) { return; }
-static inline void remove_sysfs_files(struct t4 *wc) { return; }
-
-#endif /* LINUX_KERNEL > 2.6.18 */
 
 static inline void __t4_update_timing(struct t4 *wc)
 {
@@ -4617,12 +4605,6 @@ static int t8_update_firmware(struct t4 *wc, const struct firmware *fw,
 	const u32 BASE_ADDRESS = 0x00080000;
 	const u8 *data, *end;
 	size_t size = 0;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	u32 *pci_state;
-	pci_state = kzalloc(64 * sizeof(u32), GFP_KERNEL);
-	if (!pci_state)
-		return -ENOMEM;
-#endif
 
 	/* Erase flash */
 	erase_half(wc);
@@ -4647,11 +4629,7 @@ static int t8_update_firmware(struct t4 *wc, const struct firmware *fw,
 
 	/* Reset te820 fpga after loading firmware */
 	dev_info(&wc->dev->dev, "Firmware load complete. Reseting device.\n");
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	res = pci_save_state(wc->dev, pci_state);
-#else
 	res = pci_save_state(wc->dev);
-#endif
 	if (res)
 		goto error_exit;
 	/* Set the fpga reset bits and clobber the remainder of the
@@ -4659,11 +4637,7 @@ static int t8_update_firmware(struct t4 *wc, const struct firmware *fw,
 	t4_pci_out(wc, WC_LEDS, 0xe0000000);
 	msleep(1000);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	pci_restore_state(wc->dev, pci_state);
-#else
 	pci_restore_state(wc->dev);
-#endif
 
 	/* Signal the driver to restart initialization.
 	 * This will back out all initialization so far and
@@ -4671,9 +4645,6 @@ static int t8_update_firmware(struct t4 *wc, const struct firmware *fw,
 	return -EAGAIN;
 
 error_exit:
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 10)
-	kfree(pci_state);
-#endif
 	return res;
 }
 
@@ -5383,13 +5354,11 @@ static DEFINE_PCI_DEVICE_TABLE(t4_pci_tbl) =
 	{ 0, }
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 static void _t4_shutdown(struct pci_dev *pdev)
 {
 	struct t4 *wc = pci_get_drvdata(pdev);
 	t4_hardware_stop(wc);
 }
-#endif
 
 static int t4_suspend(struct pci_dev *pdev, pm_message_t state)
 {
@@ -5400,9 +5369,7 @@ static struct pci_driver t4_driver = {
 	.name = "wct4xxp",
 	.probe = t4_init_one_retry,
 	.remove = __devexit_p(t4_remove_one),
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 12)
 	.shutdown = _t4_shutdown,
-#endif
 	.suspend = t4_suspend,
 	.id_table = t4_pci_tbl,
 };

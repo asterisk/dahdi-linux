@@ -1,7 +1,4 @@
 #include <linux/version.h>
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#  warning "This module is tested only with 2.6 kernels"
-#endif
 
 #define DAHDI_PRINK_MACROS_USE_debug
 #include <linux/kernel.h>
@@ -17,13 +14,7 @@
 #define DEL_DAHDI_DEV(num) \
 	CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, num))
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
 static struct class *dahdi_class;
-#else
-static struct class_simple *dahdi_class;
-#define class_create class_simple_create
-#define class_destroy class_simple_destroy
-#endif
 
 int chan_sysfs_create(struct dahdi_chan *chan)
 {

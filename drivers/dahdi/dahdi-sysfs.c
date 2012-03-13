@@ -22,23 +22,6 @@ static inline struct dahdi_span *dev_to_span(struct device *dev)
 	return dev_get_drvdata(dev);
 }
 
-#ifdef OLD_HOTPLUG_SUPPORT
-static int span_hotplug(struct device *dev, char **envp, int envnum,
-		char *buff, int bufsize)
-{
-	struct dahdi_span *span;
-
-	if (!dev)
-		return -ENODEV;
-	span = dev_to_span(dev);
-	envp[0] = buff;
-	if (snprintf(buff, bufsize, "SPAN_NAME=%s", span->name) >= bufsize)
-		return -ENOMEM;
-	envp[1] = NULL;
-	return 0;
-}
-#else
-
 #define	SPAN_VAR_BLOCK	\
 	do {		\
 		DAHDI_ADD_UEVENT_VAR("DAHDI_INIT_DIR=%s", initdir);	\
@@ -101,8 +84,6 @@ static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 }
 
 #endif
-
-#endif	/* OLD_HOTPLUG_SUPPORT */
 
 #define span_attr(field, format_string)				\
 static BUS_ATTR_READER(field##_show, dev, buf)			\
@@ -214,11 +195,7 @@ static struct driver_attribute dahdi_attrs[] = {
 static struct bus_type spans_bus_type = {
 	.name           = "dahdi_spans",
 	.match          = span_match,
-#ifdef OLD_HOTPLUG_SUPPORT
-	.hotplug	= span_hotplug,
-#else
 	.uevent         = span_uevent,
-#endif
 	.dev_attrs	= span_dev_attrs,
 	.drv_attrs	= dahdi_attrs,
 };
@@ -246,9 +223,7 @@ static struct device_driver dahdi_driver = {
 	.bus		= &spans_bus_type,
 	.probe		= span_probe,
 	.remove		= span_remove,
-#ifndef OLD_HOTPLUG_SUPPORT
 	.owner		= THIS_MODULE
-#endif
 };
 
 static void span_uevent_send(struct dahdi_span *span, enum kobject_action act)
@@ -258,26 +233,7 @@ static void span_uevent_send(struct dahdi_span *span, enum kobject_action act)
 	kobj = &span->span_device->kobj;
 	span_dbg(DEVICES, span, "SYFS dev_name=%s action=%d\n",
 		dev_name(span->span_device), act);
-
-#if defined(OLD_HOTPLUG_SUPPORT_269)
-	{
-		/* Copy from new kernels lib/kobject_uevent.c */
-		static const char *const str[] = {
-			[KOBJ_ADD]	"add",
-			[KOBJ_REMOVE]	"remove",
-			[KOBJ_CHANGE]	"change",
-			[KOBJ_MOUNT]	"mount",
-			[KOBJ_UMOUNT]	"umount",
-			[KOBJ_OFFLINE]	"offline",
-			[KOBJ_ONLINE]	"online"
-		};
-		kobject_hotplug(str[act], kobj);
-	}
-#elif defined(OLD_HOTPLUG_SUPPORT)
-	kobject_hotplug(kobj, act);
-#else
 	kobject_uevent(kobj, act);
-#endif
 }
 
 static void span_release(struct device *dev)
@@ -372,37 +328,25 @@ static inline struct dahdi_device *to_ddev(struct device *dev)
 	return container_of(dev, struct dahdi_device, dev);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t dahdi_device_manufacturer_show(struct device *dev, char *buf)
-#else
 static ssize_t
 dahdi_device_manufacturer_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	return sprintf(buf, "%s\n", ddev->manufacturer);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t dahdi_device_type_show(struct device *dev, char *buf)
-#else
 static ssize_t
 dahdi_device_type_show(struct device *dev,
 		       struct device_attribute *attr, char *buf)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	return sprintf(buf, "%s\n", ddev->devicetype);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t dahdi_device_span_count_show(struct device *dev, char *buf)
-#else
 static ssize_t
 dahdi_device_span_count_show(struct device *dev,
 			     struct device_attribute *attr, char *buf)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	unsigned int count = 0;
@@ -414,13 +358,9 @@ dahdi_device_span_count_show(struct device *dev,
 	return sprintf(buf, "%d\n", count);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t dahdi_device_hardware_id_show(struct device *dev, char *buf)
-#else
 static ssize_t
 dahdi_device_hardware_id_show(struct device *dev,
 			     struct device_attribute *attr, char *buf)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 
@@ -428,28 +368,18 @@ dahdi_device_hardware_id_show(struct device *dev,
 		(ddev->hardware_id) ? ddev->hardware_id : "");
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t
-dahdi_device_auto_assign(struct device *dev, const char *buf, size_t count)
-#else
 static ssize_t
 dahdi_device_auto_assign(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	dahdi_assign_device_spans(ddev);
 	return count;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t
-dahdi_device_assign_span(struct device *dev, const char *buf, size_t count)
-#else
 static ssize_t
 dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
-#endif
 {
 	int ret;
 	struct dahdi_span *span;
@@ -482,14 +412,9 @@ dahdi_device_assign_span(struct device *dev, struct device_attribute *attr,
 	return -EINVAL;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t
-dahdi_device_unassign_span(struct device *dev, const char *buf, size_t count)
-#else
 static ssize_t
 dahdi_device_unassign_span(struct device *dev, struct device_attribute *attr,
 			   const char *buf, size_t count)
-#endif
 {
 	int ret;
 	unsigned int local_span_number;
@@ -515,13 +440,9 @@ dahdi_device_unassign_span(struct device *dev, struct device_attribute *attr,
 	return (ret < 0) ? ret : count;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t dahdi_spantype_show(struct device *dev, char *buf)
-#else
 static ssize_t
 dahdi_spantype_show(struct device *dev,
 		    struct device_attribute *attr, char *buf)
-#endif
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	int count = 0;
@@ -539,14 +460,9 @@ dahdi_spantype_show(struct device *dev,
 	return total;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 13)
-static ssize_t
-dahdi_spantype_store(struct device *dev, const char *buf, size_t count)
-#else
 static ssize_t
 dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 		     const char *buf, size_t count)
-#endif
 {
 	struct dahdi_device *const ddev = to_ddev(dev);
 	int ret;

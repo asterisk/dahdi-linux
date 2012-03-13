@@ -20,11 +20,6 @@
  *
  */
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 0)
-#warning "This module is tested only with 2.6 kernels"
-#endif
-
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/module.h>
