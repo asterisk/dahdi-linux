@@ -642,7 +642,7 @@ cleanup:
 	return res;
 }
 
-void __exit dahdi_sysfs_exit(void)
+void dahdi_sysfs_exit(void)
 {
 	dahdi_sysfs_cleanup();
 }
