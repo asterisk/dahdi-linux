@@ -50,8 +50,8 @@ sub scan($) {
 
 	opendir(D, $sysfs_astribanks) || return();
 	while(my $entry = readdir D) {
-		next unless $entry =~ /xbus-(\d+)/;
-		my $xbus = Dahdi::Xpp::Xbus->new($1);
+		next if $entry eq '.' or $entry eq '..';
+		my $xbus = Dahdi::Xpp::Xbus->new($sysfs_astribanks, $entry);
 		push(@xbuses, $xbus);
 	}
 	closedir D;

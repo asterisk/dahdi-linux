@@ -99,14 +99,15 @@ my %file_warned;	# Prevent duplicate warnings about same file.
 
 sub xpd_attr_path($@) {
 	my $self = shift || die;
+	my $xbus = $self->xbus;
 	my ($busnum, $unitnum, $subunitnum, @attr) = (
-		$self->xbus->num,
+		$xbus->num,
 		$self->unit,
 		$self->subunit,
 		@_);
 	foreach my $attr (@attr) {
-		my $file = sprintf "$Dahdi::Xpp::sysfs_xpds/%02d:%1d:%1d/$attr",
-		   $busnum, $unitnum, $subunitnum;
+		my $file = sprintf "%s/%02d:%1d:%1d/$attr",
+		   $xbus->sysfs_dir, $busnum, $unitnum, $subunitnum;
 		next unless -f $file;
 		return $file;
 	}
@@ -217,12 +218,12 @@ sub xpds_by_spanno() {
 	return @idx;
 }
 
-sub new($$$$$) {
+sub new($$$) {
 	my $pack = shift or die "Wasn't called as a class method\n";
-	my $xbus = shift || die;
-	my $unit = shift;	# May be zero
-	my $subunit = shift;	# May be zero
-	my $sysfsdir = shift || die;
+	my $xbus = shift or die;
+	my $xpdstr = shift or die;
+	my $sysfsdir = sprintf "%s/%s", $xbus->sysfs_dir, $xpdstr;
+	my ($busnum, $unit, $subunit) = split(/:/, $xpdstr);
 	my $self = {
 		XBUS		=> $xbus,
 		ID		=> sprintf("%1d%1d", $unit, $subunit),

@@ -45,23 +45,11 @@ sub get_xpd_by_number($$) {
 	return $wanted;
 }
 
-my %file_warned;	# Prevent duplicate warnings about same file.
-
-sub xbus_attr_path($$) {
-	my ($busnum, @attr) = @_;
-	foreach my $attr (@attr) {
-		my $file = sprintf "$Dahdi::Xpp::sysfs_astribanks/xbus-%02d/$attr", $busnum;
-		next unless -f $file;
-		return $file;
-	}
-	return undef;
-}
-
 sub xbus_getattr($$) {
 	my $xbus = shift || die;
 	my $attr = shift || die;
 	$attr = lc($attr);
-	my $file = xbus_attr_path($xbus->num, lc($attr));
+	my $file = sprintf "%s/%s", $xbus->sysfs_dir, $attr;
 
 	open(F, $file) || die "Failed opening '$file': $!";
 	my $val = <F>;
@@ -104,12 +92,11 @@ sub transport_type($$) {
 }
 
 sub read_xpdnames($) {
-	my $xbus_num = shift || die;
-	my $xbus_dir = "$Dahdi::Xpp::sysfs_astribanks/xbus-$xbus_num";
-	my $pat = sprintf "%s/xbus-%02d/[0-9][0-9]:[0-9]:[0-9]", $Dahdi::Xpp::sysfs_astribanks, $xbus_num;
+	my $xbus_dir = shift or die;
+	my $pat = sprintf "%s/[0-9][0-9]:[0-9]:[0-9]", $xbus_dir;
 	my @xpdnames;
 
-	#print STDERR "read_xpdnames($xbus_num): $pat\n";
+	#printf STDERR "read_xpdnames(%s): $pat\n", $xbus_dir;
 	foreach (glob $pat) {
 		die "Bad /sys entry: '$_'" unless m/^.*\/([0-9][0-9]):([0-9]):([0-9])$/;
 		my ($busnum, $unit, $subunit) = ($1, $2, $3);
@@ -120,19 +107,30 @@ sub read_xpdnames($) {
 	return @xpdnames;
 }
 
+sub read_num($) {
+	my $self = shift or die;
+	my $xbus_dir = $self->sysfs_dir;
+	my @xpdnames = read_xpdnames($xbus_dir);
+	my $first = shift @xpdnames or die "No XPDs for '$xbus_dir'\n";
+	$first =~ /^(\d+\d+).*/;
+	return $1;
+}
+
 sub new($$) {
 	my $pack = shift or die "Wasn't called as a class method\n";
-	my $num = shift;
-	my $xbus_dir = "$Dahdi::Xpp::sysfs_astribanks/xbus-$num";
-	my $self = {
-		NUM		=> $num,
-		NAME		=> "XBUS-$num",
-		SYSFS_DIR	=> $xbus_dir,
-		};
+	my $parent_dir = shift or die;
+	my $entry_dir = shift or die;
+	my $xbus_dir = "$parent_dir/$entry_dir";
+	my $self = {};
 	bless $self, $pack;
+	$self->{SYSFS_DIR} = $xbus_dir;
+	my $num = $self->read_num;
+	$self->{NUM} = $num;
+	$self->{NAME} = "XBUS-$num";
 	$self->read_attrs;
 	# Get transport related info
 	my $transport = "$xbus_dir/transport";
+	die "OLD DRIVER: missing '$transport'\n" unless -e $transport;
 	my $transport_type = $self->transport_type($xbus_dir);
 	if(defined $transport_type) {
 		my $tt = "Dahdi::Hardware::$transport_type";
@@ -141,11 +139,9 @@ sub new($$) {
 	}
 	my @xpdnames;
 	my @xpds;
-	die "OLD DRIVER: missing '$transport'\n" unless -e $transport;
-	@xpdnames = read_xpdnames($num);
+	@xpdnames = read_xpdnames($self->sysfs_dir);
 	foreach my $xpdstr (@xpdnames) {
-		my ($busnum, $unit, $subunit) = split(/:/, $xpdstr);
-		my $xpd = Dahdi::Xpp::Xpd->new($self, $unit, $subunit, "$xbus_dir/$xpdstr");
+		my $xpd = Dahdi::Xpp::Xpd->new($self, $xpdstr);
 		push(@xpds, $xpd);
 	}
 	@{$self->{XPDS}} = sort { $a->id <=> $b->id } @xpds;
