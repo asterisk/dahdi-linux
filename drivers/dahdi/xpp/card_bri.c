@@ -706,6 +706,7 @@ static xpd_t *BRI_card_new(xbus_t *xbus, int unit, int subunit,
 		return NULL;
 	PHONEDEV(xpd).direction = (to_phone) ? TO_PHONE : TO_PSTN;
 	xpd->type_name = (to_phone) ? "BRI_NT" : "BRI_TE";
+	xbus->sync_mode_default = SYNC_MODE_AB;
 	if (bri_proc_create(xbus, xpd) < 0)
 		goto err;
 	return xpd;
