@@ -19,7 +19,7 @@ my $sync;
 my $autoselect;
 
 sub usage() {
-	print 
+	print
 		"$0: show / set Astribank sync source\n".
 		"\n".
 		"Usage: $0 [-v]                    Show sync source.\n".
@@ -158,7 +158,7 @@ When run without parameters, xpp_sync will display a list of Astribanks
 (xbuses) that are connected and registered as Dahdi spans. The current
 xpp sync master will be marked.
 
-If you this an Astribank is connected and yet it does not appear on the 
+If you this an Astribank is connected and yet it does not appear on the
 output of xpp_sync, it may be unregistered. Try running dahdi_registration .
 
 =head2 Parameters
@@ -199,12 +199,12 @@ Also print the numeric xpp sync rank.
 		XBUS-00
 	==================================================
 
-In this example we see that the recommended xpp sync master is XBUS-02 - 
+In this example we see that the recommended xpp sync master is XBUS-02 -
 it is the first on the list. It is also the actual syncer, as we can see
 from the '+' beside it.
 
 xpp_sync is normally called from the dahdi init.d script.
-The parameter it is called with defaults to 
+The parameter it is called with defaults to
 I<auto>, but it is possible to override that parameter (e.g: set it to
 I<dahdi>) through the value of XPP_SYNC in /etc/dahdi/init.conf .
 
@@ -212,12 +212,13 @@ I<dahdi>) through the value of XPP_SYNC in /etc/dahdi/init.conf .
 
 =over
 
-=item /proc/xpp/sync
+=item /sys/bus/astribanks/drivers/xppdrv/sync
 
-(Deprecated: no longer supported)
-xpp_sync is essentially a nicer interface to /proc/xpp/sync . That file
-shows the current xpp sync master (and in what format you need to write
-to it to set the master).
+xpp_sync is essentially a nicer interface to
+C</sys/bus/astribanks/drivers/xppdrv/sync>. That file
+shows the current xpp sync master.
+
+Writing to it, force XPP drivers to use a different sync master
 
 =back
 

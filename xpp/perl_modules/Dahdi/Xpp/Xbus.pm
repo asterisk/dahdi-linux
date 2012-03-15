@@ -51,12 +51,6 @@ sub xbus_attr_path($$) {
 	my ($busnum, @attr) = @_;
 	foreach my $attr (@attr) {
 		my $file = sprintf "$Dahdi::Xpp::sysfs_astribanks/xbus-%02d/$attr", $busnum;
-		unless(-f $file) {
-			my $procfile = sprintf "$Dahdi::proc_xpp_base/XBUS-%02d/$attr", $busnum;
-			warn "$0: warning - OLD DRIVER: missing '$file'. Fall back to '$procfile'\n"
-				unless $file_warned{$attr}++;
-			$file = $procfile;
-		}
 		next unless -f $file;
 		return $file;
 	}
@@ -109,21 +103,6 @@ sub transport_type($$) {
 	return $xbus->{TRANSPORT_TYPE};
 }
 
-sub read_xpdnames_old($) {
-	my $xbus_num = shift || die;
-	my $pat = sprintf "$Dahdi::proc_xpp_base/XBUS-%02d/XPD-[0-9][0-9]", $xbus_num;
-	my @xpdnames;
-
-	#print STDERR "read_xpdnames_old($xbus_num): $pat\n";
-	foreach (glob $pat) {
-		die "Bad /proc entry: '$_'" unless /^.*XPD-([0-9])([0-9])$/;
-		my $name = sprintf("%02d:%1d:%1d", $xbus_num, $1, $2);
-		#print STDERR "\t> $_ ($name)\n";
-		push(@xpdnames, $name);
-	}
-	return @xpdnames;
-}
-
 sub read_xpdnames($) {
 	my $xbus_num = shift || die;
 	my $xbus_dir = "$Dahdi::Xpp::sysfs_astribanks/xbus-$xbus_num";
@@ -140,8 +119,6 @@ sub read_xpdnames($) {
 	}
 	return @xpdnames;
 }
-
-my $warned_notransport = 0;
 
 sub new($$) {
 	my $pack = shift or die "Wasn't called as a class method\n";
@@ -164,17 +141,11 @@ sub new($$) {
 	}
 	my @xpdnames;
 	my @xpds;
-	if(-e $transport) {
-		@xpdnames = read_xpdnames($num);
-	} else {
-		@xpdnames = read_xpdnames_old($num);
-		warn "$0: warning - OLD DRIVER: missing '$transport'. Fall back to /proc\n"
-			unless $warned_notransport++;
-	}
+	die "OLD DRIVER: missing '$transport'\n" unless -e $transport;
+	@xpdnames = read_xpdnames($num);
 	foreach my $xpdstr (@xpdnames) {
 		my ($busnum, $unit, $subunit) = split(/:/, $xpdstr);
-		my $procdir = "$Dahdi::proc_xpp_base/XBUS-$busnum/XPD-$unit$subunit";
-		my $xpd = Dahdi::Xpp::Xpd->new($self, $unit, $subunit, $procdir, "$xbus_dir/$xpdstr");
+		my $xpd = Dahdi::Xpp::Xpd->new($self, $unit, $subunit, "$xbus_dir/$xpdstr");
 		push(@xpds, $xpd);
 	}
 	@{$self->{XPDS}} = sort { $a->id <=> $b->id } @xpds;

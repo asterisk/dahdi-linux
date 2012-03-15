@@ -32,7 +32,6 @@ BEGIN {
 		$Dahdi::virt_base = '';
 	}
 	$Dahdi::proc_dahdi_base = "$Dahdi::virt_base/proc/dahdi";
-	$Dahdi::proc_xpp_base = "$Dahdi::virt_base/proc/xpp";
 	$Dahdi::proc_usb_base = "$Dahdi::virt_base/proc/bus/usb";
 	$Dahdi::sys_base = "$Dahdi::virt_base/sys";
 }

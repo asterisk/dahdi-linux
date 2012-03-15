@@ -34,7 +34,6 @@ hardware and loaded Dahdi devices.
 
 our $virt_base;
 our $proc_dahdi_base;
-our $proc_xpp_base;
 our $proc_usb_base;
 our $sys_base;
 

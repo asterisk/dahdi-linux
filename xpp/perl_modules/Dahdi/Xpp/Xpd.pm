@@ -52,11 +52,6 @@ Applicable only to digital (BRI/PRI) modules and always 0 for others.
 
 Textual name: E.g. C<XPD-10>.
 
-=head1 dir
-
-The ProcFS directory with information about the XPD. e.g.
-C</proc/xpp/XBUS-00/XPD-10>.
-
 =head1 sysfs_dir
 
 The SysFS directory with information about the module. E.g.
@@ -112,63 +107,10 @@ sub xpd_attr_path($@) {
 	foreach my $attr (@attr) {
 		my $file = sprintf "$Dahdi::Xpp::sysfs_xpds/%02d:%1d:%1d/$attr",
 		   $busnum, $unitnum, $subunitnum;
-		unless(-f $file) {
-			my $procfile = sprintf "/proc/xpp/XBUS-%02d/XPD-%1d%1d/$attr",
-			   $busnum, $unitnum, $subunitnum;
-			warn "$0: warning - OLD DRIVER: missing '$file'. Fall back to /proc\n"
-				unless $file_warned{$attr}++;
-			$file = $procfile;
-		}
 		next unless -f $file;
 		return $file;
 	}
 	return undef;
-}
-
-# Backward compat plug for old /proc interface...
-sub xpd_old_gettype($) {
-	my $xpd = shift || die;
-	my $summary = "/proc/xpp/" . $xpd->fqn . "/summary";
-	open(F, $summary) or die "Failed to open '$summary': $!";
-	my $head = <F>;
-	close F;
-	chomp $head;
-	$head =~ s/^XPD-\d+\s+\(//;
-	$head =~ s/,.*//;
-	return $head;
-}
-
-sub xpd_old_getspan($) {
-	my $xpd = shift || die;
-	my $dahdi_registration = "/proc/xpp/" . $xpd->fqn . "/dahdi_registration";
-	open(F, $dahdi_registration) or die "Failed to open '$dahdi_registration': $!";
-	my $head = <F>;
-	close F;
-	chomp $head;
-	return $head;
-}
-
-sub xpd_old_getoffhook($) {
-	my $xpd = shift || die;
-	my $summary = "/proc/xpp/" . $xpd->fqn . "/summary";
-	my $channels;
-
-	local $/ = "\n";
-	open(F, "$summary") || die "Failed opening $summary: $!\n";
-	my $head = <F>;
-	chomp $head;	# "XPD-00 (BRI_TE ,card present, span 3)"
-	my $offhook;
-	while(<F>) {
-		chomp;
-		if(s/^\s*offhook\s*:\s*//) {
-			s/\s*$//;
-			$offhook = $_;
-			$offhook || die "No channels in '$summary'";
-			last;
-		}
-	}
-	close F;
-	return $offhook;
 }
 
 my %attr_missing_warned;	# Prevent duplicate warnings
@@ -198,10 +140,6 @@ sub xpd_getattr($$) {
 	$attr = lc($attr);
 	my $file = $xpd->xpd_attr_path(lc($attr));
 
-	# Handle special cases for backward compat
-	return xpd_old_gettype($xpd) if $attr eq 'type' and !defined $file;
-	return xpd_old_getspan($xpd) if $attr eq 'span' and !defined $file;
-	return xpd_old_getoffhook($xpd) if $attr eq 'offhook' and !defined $file;
 	if(!defined($file)) {
 		warn "$0: xpd_getattr($attr) -- Missing attribute.\n" if
 			$attr_missing_warned{$attr};
@@ -284,7 +222,6 @@ sub new($$$$$) {
 	my $xbus = shift || die;
 	my $unit = shift;	# May be zero
 	my $subunit = shift;	# May be zero
-	my $procdir = shift || die;
 	my $sysfsdir = shift || die;
 	my $self = {
 		XBUS		=> $xbus,
@@ -292,7 +229,6 @@ sub new($$$$$) {
 		FQN		=> $xbus->name . "/" . "XPD-$unit$subunit",
 		UNIT		=> $unit,
 		SUBUNIT		=> $subunit,
-		DIR		=> $procdir,
 		SYSFS_DIR	=> $sysfsdir,
 		};
 	bless $self, $pack;
@@ -319,7 +255,7 @@ sub new($$$$$) {
 		}
 	}
 	$self->{IS_DIGITAL} = ( $self->{IS_BRI} || $self->{IS_PRI} );
-	Dahdi::Xpp::Line->create_all($self, $procdir);
+	Dahdi::Xpp::Line->create_all($self);
 	return $self;
 }
 

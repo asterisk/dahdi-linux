@@ -104,8 +104,8 @@ sub by_xpporder {
 
 =head1 xbuses([sort_order])
 
-Scans system (/proc and /sys) and returns a list of Astribank (Xbus) 
-objects. The optional parameter sort_order is the order in which 
+Scans system (via /sys) and returns a list of Astribank (Xbus)
+objects. The optional parameter sort_order is the order in which
 the Astribanks will be returns:
 
 
@@ -249,53 +249,17 @@ sub xpd_of_span($) {
 Gets (and optionally sets) the internal Astribanks synchronization
 source. When used to set sync source, returns the original sync source.
 
-A synchronization source is a value valid writing into /proc/xpp/sync .
+A synchronization source is a value valid writing into
+  /sys/bus/astribanks/drivers/xppdrv/sync
 For more information read that file and see README.Astribank .
 
 =cut
-
-sub sync_via_proc {
-	my $newsync = shift;
-	my $result;
-	my $newapi = 0;
-
-	my $proc_base = $Dahdi::proc_xpp_base;
-	my $file = "$proc_base/sync";
-	return '' unless -f $file;
-	# First query
-	open(F, "$file") or die "Failed to open $file for reading: $!";
-	while(<F>) {
-		chomp;
-		/SYNC=/ and $newapi = 1;
-		s/#.*//;
-		if(/\S/) {	# First non-comment line
-			s/^SYNC=\D*// if $newapi;
-			$result = $_;
-			last;
-		}
-	}
-	close F;
-	if(defined($newsync)) {		# Now change
-		$newsync =~ s/.*/\U$&/;
-		if($newsync =~ /^(\d+)$/) {
-			$newsync = ($newapi)? "SYNC=$1" : "$1 0";
-		} elsif($newsync ne 'DAHDI') {
-			die "Bad sync parameter '$newsync'";
-		}
-		open(F, ">$file") or die "Failed to open $file for writing: $!";
-		print F $newsync;
-		close(F) or die "Failed in closing $file: $!";
-	}
-	return $result;
-}
 
 sub sync {
 	my ($newsync) = @_;
 	my $result;
 	my $file = "$sysfs_ab_driver/sync";
-	if(! -f $file) {	# Old /proc interface
-		return sync_via_proc(@_);
-	}
+	die "Missing '$file'\n" unless -f $file;
 	open(F, "$file") or die "Failed to open $file for reading: $!";
 	$result = <F>;
 	close F;
@@ -329,7 +293,7 @@ XPD (the rough equivalent of a Dahdi span) object.
 
 =item L<Dahdi::Xpp::Line>
 
-Object for a line: an analog port or a time-slot in a adapter. 
+Object for a line: an analog port or a time-slot in a adapter.
 Equivalent of a channel in Dahdi.
 
 =item L<Dahdi>

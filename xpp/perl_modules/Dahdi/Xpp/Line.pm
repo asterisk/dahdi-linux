@@ -42,7 +42,6 @@ sub blink($$) {
 sub create_all($$) {
 	my $pack = shift or die "Wasn't called as a class method\n";
 	my $xpd = shift || die;
-	my $procdir = shift || die;
 	local $/ = "\n";
 	my @lines;
 	for(my $i = 0; $i < $xpd->{CHANNELS}; $i++) {
@@ -52,37 +51,14 @@ sub create_all($$) {
 	$xpd->{LINES} = \@lines;
 	if($xpd->type eq 'FXO') {
 		my $battery = $xpd->xpd_getattr("fxo_battery");
-		if(defined $battery) {
-			my @batt = split(/\s+/, $battery);
-			foreach my $l (@lines) {
-				die unless @batt;
-				my $state = shift @batt;
-				$l->{BATTERY} = ($state eq '+') ? 1 : 0;
-			}
-		} else {
-			# Fallback to old interface
-			my ($infofile) = glob "$procdir/*_info";
-			die "Failed globbing '$procdir/*_info'" unless defined $infofile;
-			open(F, "$infofile") || die "Failed opening '$infofile': $!";
-			my $battery_info = 0;
-			while (<F>) {
-				chomp;
-				$battery_info = 1 if /^Battery:/;
-				if($battery_info && s/^\s*on\s*:\s*//) {
-					my @batt = split;
-					foreach my $l (@lines) {
-						die unless @batt;
-						my $state = shift @batt;
-						$l->{BATTERY} = ($state eq '+') ? 1 : 0;
-					}
-					$battery_info = 0;
-					die if @batt;
-				}
-			}
-			close F;
+		die "Missing '$battery' attribute\n" unless defined $battery;
+		my @batt = split(/\s+/, $battery);
+		foreach my $l (@lines) {
+			die unless @batt;
+			my $state = shift @batt;
+			$l->{BATTERY} = ($state eq '+') ? 1 : 0;
 		}
 	}
-	close F;
 }
 
 
