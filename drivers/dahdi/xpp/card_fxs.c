@@ -1687,26 +1687,43 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	len +=
-	    sprintf(page + len, "%-8s %-10s %-10s %-10s %-10s %-10s\n",
-		    "Channel", "idletxhookstate", "lasttxhook", "ohttimer",
-		    "neon_blinking", "search_fsk_pattern");
+	len += sprintf(page + len, "%-12s", "Channel:");
 	for_each_line(xpd, i) {
-		char pref;
+		len += sprintf(page + len, "%4d", i);
+	}
+	len += sprintf(page + len, "\n%-12s", "");
+	for_each_line(xpd, i) {
+		char *chan_type;
 
 		if (IS_SET(PHONEDEV(xpd).digital_outputs, i))
-			pref = 'O';
+			chan_type = "out";
 		else if (IS_SET(PHONEDEV(xpd).digital_inputs, i))
-			pref = 'I';
+			chan_type = "in";
 		else
-			pref = ' ';
-		len +=
-		    sprintf(page + len, "%c%7d %10d %10d %10d %10d %10d\n",
-			    pref, i, priv->idletxhookstate[i],
-			    priv->lasttxhook[i], priv->ohttimer[i],
-			    IS_SET(priv->neon_blinking, i),
-			    IS_SET(priv->search_fsk_pattern, i)
-		    );
+			chan_type = "";
+		len += sprintf(page + len, "%4s", chan_type);
+	}
+	len += sprintf(page + len, "\n%-12s", "idletxhook:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d", priv->idletxhookstate[i]);
+	}
+	len += sprintf(page + len, "\n%-12s", "lasttxhook:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d", priv->lasttxhook[i]);
+	}
+	len += sprintf(page + len, "\n%-12s", "ohttimer:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d", priv->ohttimer[i]);
+	}
+	len += sprintf(page + len, "\n%-12s", "neon_blink:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d",
+			    IS_SET(priv->neon_blinking, i));
+	}
+	len += sprintf(page + len, "\n%-12s", "search_fsk:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d",
+			    IS_SET(priv->search_fsk_pattern, i));
 	}
 	len += sprintf(page + len, "\n%-12s", "vbat_h:");
 	for_each_line(xpd, i) {
@@ -1715,8 +1732,8 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 	}
 	len += sprintf(page + len, "\n");
 	for (led = 0; led < NUM_LEDS; led++) {
-		len += sprintf(page + len, "LED #%d", led);
-		len += sprintf(page + len, "\n\t%-17s: ", "ledstate");
+		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+			led, "ledstate");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
@@ -1724,7 +1741,8 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 				    sprintf(page + len, "%d ",
 					    IS_SET(priv->ledstate[led], i));
 		}
-		len += sprintf(page + len, "\n\t%-17s: ", "ledcontrol");
+		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+			led, "ledcontrol");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
@@ -1732,7 +1750,8 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 				    sprintf(page + len, "%d ",
 					    IS_SET(priv->ledcontrol[led], i));
 		}
-		len += sprintf(page + len, "\n\t%-17s: ", "led_counter");
+		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+			led, "led_counter");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
@@ -1740,8 +1759,8 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 				    sprintf(page + len, "%d ",
 					    LED_COUNTER(priv, i, led));
 		}
-		len += sprintf(page + len, "\n");
 	}
+	len += sprintf(page + len, "\n");
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	if (len <= off + count)
 		*eof = 1;
