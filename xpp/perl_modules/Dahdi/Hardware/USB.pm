@@ -34,6 +34,7 @@ my %usb_ids = (
 	'e4e4:1161'	=> { DRIVER => 'xpp_usb', DESCRIPTION => 'Astribank-modular USB-firmware' },
 	'e4e4:1162'	=> { DRIVER => 'xpp_usb', DESCRIPTION => 'Astribank-modular FPGA-firmware' },
 	'e4e4:1163'	=> { DRIVER => 'xpp_usb', DESCRIPTION => 'Astribank-TwinStar monitor' },
+	'e4e4:1164'	=> { DRIVER => 'xpp_usb', DESCRIPTION => 'Astribank-EEPROM burner' },
 	
 	# Sangoma USB FXO:
 	'10c4:8461'	=> { DRIVER => 'wanpipe', DESCRIPTION => 'Sangoma WANPIPE USB-FXO Device' },
