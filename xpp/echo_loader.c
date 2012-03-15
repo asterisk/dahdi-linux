@@ -292,8 +292,9 @@ int test_send(struct astribank_device *astribank)
         return ret;
 }
 
-void echo_send_data(struct astribank_device *astribank, const unsigned int addr, const unsigned int data)
+int echo_send_data(struct astribank_device *astribank, const unsigned int addr, const unsigned int data)
 {
+	int ret;
 /*	DBG("SEND: %04X -> [%04X]\n", data, addr);
 	DBG("\t\t[%04X] <- %04X\n", 0x0008, (addr >> 20));
 	DBG("\t\t[%04X] <- %04X\n", 0x000A, (addr >> 4) & ((1 << 16) - 1));
@@ -302,25 +303,48 @@ void echo_send_data(struct astribank_device *astribank, const unsigned int addr,
  */
 
 	DBG("SND:\n");
-	spi_send(astribank, 0x0008, (addr >> 20)			, 0, 0);
-	spi_send(astribank, 0x000A, (addr >> 4) & ((1 << 16) - 1)	, 0, 0);
-	spi_send(astribank, 0x0004, data				, 0, 0);
-	spi_send(astribank, 0x0000, (((addr >> 1) & 0x7) << 9) | 
+	ret = spi_send(astribank, 0x0008, (addr >> 20)			, 0, 0);
+	if (ret < 0)
+		goto failed;
+	ret = spi_send(astribank, 0x000A, (addr >> 4) & ((1 << 16) - 1)	, 0, 0);
+	if (ret < 0)
+		goto failed;
+	ret = spi_send(astribank, 0x0004, data				, 0, 0);
+	if (ret < 0)
+		goto failed;
+	ret = spi_send(astribank, 0x0000, (((addr >> 1) & 0x7) << 9) |
 				(1 << 8) | (3 << 12) | 1		, 0, 0);
+	if (ret < 0)
+		goto failed;
+	return cOCT6100_ERR_OK;
+failed:
+	AB_ERR(astribank, "echo_send_data: spi_send failed (ret = %d)\n", ret);
+	return ret;
 }
 
-unsigned int echo_recv_data(struct astribank_device *astribank, const unsigned int addr)
+int echo_recv_data(struct astribank_device *astribank, const unsigned int addr)
 {
 	unsigned int data = 0x00;
-	unsigned int ret;
+	int ret;
 
 	DBG("RCV:\n");
-	spi_send(astribank, 0x0008, (addr >> 20)			, 0, 0);
-	spi_send(astribank, 0x000A, (addr >> 4) & ((1 << 16) - 1)	, 0, 0);
-	spi_send(astribank, 0x0000, (((addr >> 1) & 0x7) << 9) | 
+	ret = spi_send(astribank, 0x0008, (addr >> 20)			, 0, 0);
+	if (ret < 0)
+		goto failed;
+	ret = spi_send(astribank, 0x000A, (addr >> 4) & ((1 << 16) - 1)	, 0, 0);
+	if (ret < 0)
+		goto failed;
+	ret = spi_send(astribank, 0x0000, (((addr >> 1) & 0x7) << 9) |
 				(1 << 8) | 1				, 0, 0);
+	if (ret < 0)
+		goto failed;
 	ret = spi_send(astribank, 0x0004, data				, 1, 0);
+	if (ret < 0)
+		goto failed;
 	return ret; 
+failed:
+	AB_ERR(astribank, "echo_recv_data: spi_send failed (ret = %d)\n", ret);
+	return ret;
 }
 
 int load_file(char *filename, unsigned char **ppBuf, UINT32 *pLen)
@@ -416,9 +440,13 @@ UINT32 Oct6100UserDriverWriteApi(tPOCT6100_WRITE_PARAMS f_pWriteParams)
 	const unsigned int 		data 		= f_pWriteParams->usWriteData;
 	const struct echo_mod		*echo_mod 	= (struct echo_mod *)(f_pWriteParams->pProcessContext);
 	struct astribank_device 	*astribank 	= echo_mod->astribank;
+	int ret;
 
-	echo_send_data(astribank, addr, data);
-
+	ret = echo_send_data(astribank, addr, data);
+	if (ret < 0) {
+		ERR("echo_send_data failed (ret = %d)\n", ret);
+		return cOCT6100_ERR_FATAL_DRIVER_WRITE_API;
+	}
 	return cOCT6100_ERR_OK;
 }
 
@@ -432,9 +460,15 @@ UINT32 Oct6100UserDriverWriteSmearApi(tPOCT6100_WRITE_SMEAR_PARAMS f_pSmearParam
 	unsigned int 			i;
 
 	for (i = 0; i < len; i++) {
+		int ret;
+
 		addr = f_pSmearParams->ulWriteAddress + (i << 1);
 		data = f_pSmearParams->usWriteData;
-		echo_send_data(astribank, addr, data);
+		ret = echo_send_data(astribank, addr, data);
+		if (ret < 0) {
+			ERR("echo_send_data failed (ret = %d)\n", ret);
+			return cOCT6100_ERR_FATAL_DRIVER_WRITE_API;
+		}
 	}
 	return cOCT6100_ERR_OK;
 }
@@ -449,9 +483,15 @@ UINT32 Oct6100UserDriverWriteBurstApi(tPOCT6100_WRITE_BURST_PARAMS f_pBurstParam
 	unsigned int 			i;
 
 	for (i = 0; i < len; i++) {
+		int ret;
+
 		addr = f_pBurstParams->ulWriteAddress + (i << 1);
 		data = f_pBurstParams->pusWriteData[i];
-		echo_send_data(astribank, addr, data);
+		ret = echo_send_data(astribank, addr, data);
+		if (ret < 0) {
+			ERR("echo_send_data failed (ret = %d)\n", ret);
+			return cOCT6100_ERR_FATAL_DRIVER_WRITE_API;
+		}
 	}
 	return cOCT6100_ERR_OK;
 }
@@ -461,8 +501,14 @@ UINT32 Oct6100UserDriverReadApi(tPOCT6100_READ_PARAMS f_pReadParams)
         const unsigned int              addr  		=  f_pReadParams->ulReadAddress;
 	const struct echo_mod		*echo_mod 	= (struct echo_mod *)f_pReadParams->pProcessContext;
 	struct astribank_device 	*astribank 	= echo_mod->astribank;
+	int ret;
 
-	*f_pReadParams->pusReadData = echo_recv_data(astribank, addr);
+	ret = echo_recv_data(astribank, addr);
+	if (ret < 0) {
+		ERR("echo_recv_data failed (%d)\n", ret);
+		return cOCT6100_ERR_FATAL_DRIVER_READ_API;
+	}
+	*f_pReadParams->pusReadData = ret;
 	return cOCT6100_ERR_OK;
 }
 
@@ -475,8 +521,15 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 	unsigned int 			i;
 
 	for (i = 0;i < len; i++) {
+		unsigned int ret;
+
 		addr = f_pBurstParams->ulReadAddress + (i << 1);
-		f_pBurstParams->pusReadData[i] = echo_recv_data(astribank, addr);
+		ret = echo_recv_data(astribank, addr);
+		if (ret < 0) {
+			ERR("echo_recv_data failed (%d)\n", ret);
+			return cOCT6100_ERR_FATAL_DRIVER_READ_API;
+		}
+		f_pBurstParams->pusReadData[i] = ret;
 	}
 	return cOCT6100_ERR_OK;
 }
@@ -484,7 +537,7 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 inline int get_ver(struct astribank_device *astribank)
 {
  
-	return  spi_send(astribank, 0, 0, 1, 1);
+	return spi_send(astribank, 0, 0, 1, 1);
 }
 
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -509,11 +562,12 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 	tOCT6100_CHANNEL_OPEN					ChannelOpen;
 	UINT32							ulChanHndl;
 
-	test_send(astribank);
+	if (test_send(astribank) < 0)
+		return cOCT6100_ERR_FATAL;
 	cpld_ver = get_ver(astribank);
 	AB_INFO(astribank, "Check EC_CPLD version: %d\n", cpld_ver);
 	if (cpld_ver < 0)
-		return cpld_ver;
+		return cOCT6100_ERR_FATAL;
 	else if (cpld_ver == EC_VER_TEST) {
 		AB_INFO(astribank, "+---------------------------------------------------------+\n");
 		AB_INFO(astribank, "| WARNING: TEST HARDWARE IS ON THE BOARD INSTEAD OF EC!!! |\n");
@@ -533,9 +587,9 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
         if (!(echo_mod = malloc(sizeof(struct echo_mod)))) {
                 AB_ERR(astribank, "cannot allocate memory for echo_mod\n");
-                return 1;
+                return cOCT6100_ERR_FATAL;
         }
-                DBG("allocated mem for echo_mod\n");
+	DBG("allocated mem for echo_mod\n");
 
         memset(echo_mod, 0, sizeof(struct echo_mod));
 
@@ -588,13 +642,13 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 				&pbyImageData,
 				&ulImageByteSize );
 
-	if (pbyImageData == NULL || ulImageByteSize == 0){
-		AB_ERR(astribank, "Bad pbyImageData or ulImageByteSize\n");
-		return 1;
-	}
 	if ( ulResult != 0 ) {
 		AB_ERR(astribank, "Failed load_file %s (%08X)\n", filename, ulResult);
 		return ulResult;
+	}
+	if (pbyImageData == NULL || ulImageByteSize == 0){
+		AB_ERR(astribank, "Bad pbyImageData or ulImageByteSize\n");
+		return cOCT6100_ERR_FATAL;
 	}
 
 	/* Assign the image file.*/
@@ -618,7 +672,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
         if (!pApiInstance) {
                 AB_ERR(astribank, "Out of memory (can't allocate %d bytes)!\n", InstanceSize.ulApiInstanceSize);
-                return 1;
+                return cOCT6100_ERR_FATAL;
         }
 
 	/* Perform actual open of chip */
@@ -750,14 +804,15 @@ int load_echo(struct astribank_device *astribank, char *filename, int is_alaw)
 	int		iLen;
 	int		ret;
 	unsigned char	*pbyFileData = NULL; 
+	UINT32		octasic_status;
 
 	AB_INFO(astribank, "Loading ECHOCAN Firmware: %s (%s)\n",
 		filename, (is_alaw) ? "alaw" : "ulaw");
 	usb_buffer_init(astribank, &usb_buffer);
-	ret = init_octasic(filename, astribank, is_alaw);
-	if (ret) {
+	octasic_status = init_octasic(filename, astribank, is_alaw);
+	if (octasic_status != cOCT6100_ERR_OK) {
 		AB_ERR(astribank, "ECHO %s burning failed (%08X)\n",
-			filename, ret);
+			filename, octasic_status);
 		return -ENODEV;
 	}
 	ret = usb_buffer_flush(astribank, &usb_buffer);
