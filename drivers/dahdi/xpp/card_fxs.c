@@ -135,6 +135,7 @@ struct FXS_priv_data {
 	xpp_line_t		want_dtmf_mute;		/* what dahdi want */
 	xpp_line_t		prev_key_down;		/* DTMF down sets the bit */
 	xpp_line_t		neon_blinking;
+	xpp_line_t vbat_h;		/* High voltage */
 	struct timeval		prev_key_time[CHANNELS_PERXPD];
 	int			led_counter[NUM_LEDS][CHANNELS_PERXPD];
 	int			ohttimer[CHANNELS_PERXPD];
@@ -157,24 +158,33 @@ struct FXS_priv_data {
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 
 /*---------------- FXS: Static functions ----------------------------------*/
+static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
+{
+	struct FXS_priv_data *priv;
+
+	BUG_ON(!xbus);
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
+	if (on)
+		BIT_SET(priv->vbat_h, chan);
+	else
+		BIT_CLR(priv->vbat_h, chan);
+	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_BATTERY,
+			(on) ? REG_BATTERY_BATSL : 0x00);
+}
+
 static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan, enum fxs_state value)
 {
 	struct FXS_priv_data	*priv;
+	bool want_vbat_h = (value == FXS_LINE_RING) ? 1 : 0;
 
 	priv = xpd->priv;
 	LINE_DBG(SIGNAL, xpd, chan, "value=0x%02X\n", value);
 	priv->lasttxhook[chan] = value;
+	if (IS_SET(priv->vbat_h, chan) != want_vbat_h)
+		do_chan_power(xbus, xpd, chan, want_vbat_h);
 	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x40, value);
-}
-
-static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
-{
-	int		value = (on) ? REG_BATTERY_BATSL : 0x00;
-
-	BUG_ON(!xbus);
-	BUG_ON(!xpd);
-	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
-	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_BATTERY, value);
 }
 
 static void vmwi_search(xpd_t *xpd, lineno_t pos, bool on)
@@ -654,7 +664,6 @@ static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos)
 	msgs = PHONEDEV(xpd).msg_waiting[pos];
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (msgs) ? "ON" : "OFF");
 	set_vm_led_mode(xbus, xpd, pos, msgs);
-	do_chan_power(xbus, xpd, pos, msgs > 0);
 	linefeed_control(xbus, xpd, pos, (msgs > 0) ?
 			FXS_LINE_RING : priv->idletxhookstate[pos]);
 }
@@ -691,7 +700,6 @@ static int send_ring(xpd_t *xpd, lineno_t chan, bool on)
 	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on)?"on":"off");
 	priv = xpd->priv;
 	set_vm_led_mode(xbus, xpd, chan, 0);
-	do_chan_power(xbus, xpd, chan, on);		// Power up (for ring)
 	ret = linefeed_control(xbus, xpd, chan, value);
 	if(on) {
 		MARK_BLINK(priv, chan, LED_GREEN, LED_BLINK_RING);
@@ -1549,6 +1557,11 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 				IS_SET(priv->neon_blinking, i),
 				IS_SET(priv->search_fsk_pattern, i)
 			      );
+	}
+	len += sprintf(page + len, "\n%-12s", "vbat_h:");
+	for_each_line(xpd, i) {
+		len += sprintf(page + len, "%4d",
+			    IS_SET(priv->vbat_h, i));
 	}
 	len += sprintf(page + len, "\n");
 	for(led = 0; led < NUM_LEDS; led++) {
