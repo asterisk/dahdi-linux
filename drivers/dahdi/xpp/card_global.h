@@ -35,7 +35,7 @@ enum global_opcodes {
 	 /**/ XPROTO_NAME(GLOBAL, SYNC_SOURCE) = 0x19,
 	XPROTO_NAME(GLOBAL, SYNC_REPLY) = 0x1A,
 	 /**/ XPROTO_NAME(GLOBAL, ERROR_CODE) = 0x22,
-	XPROTO_NAME(GLOBAL, RESET_SYNC_COUNTERS) = 0x23,
+	XPROTO_NAME(GLOBAL, XBUS_RESET) = 0x23,
 	XPROTO_NAME(GLOBAL, NULL_REPLY) = 0xFE,
 };
 
@@ -62,12 +62,13 @@ DEF_RPACKET_DATA(GLOBAL, PCM_READ, xpp_line_t lines; __u8 pcm[PCM_CHUNKSIZE];);
 DEF_RPACKET_DATA(GLOBAL, SYNC_SOURCE, __u8 sync_mode; __u8 drift;);
 DEF_RPACKET_DATA(GLOBAL, SYNC_REPLY, __u8 sync_mode; __u8 drift;);
 DEF_RPACKET_DATA(GLOBAL, REGISTER_REPLY, reg_cmd_t regcmd;);
-DEF_RPACKET_DATA(GLOBAL, RESET_SYNC_COUNTERS, __u8 mask;);
+DEF_RPACKET_DATA(GLOBAL, XBUS_RESET, __u8 mask;);
 DEF_RPACKET_DATA(GLOBAL, ERROR_CODE, __u8 category_code; __u8 errorbits;
 		 __u8 bad_packet[0];);
 
 /* 0x07 */ DECLARE_CMD(GLOBAL, AB_REQUEST);
 /* 0x19 */ DECLARE_CMD(GLOBAL, SYNC_SOURCE, enum sync_mode mode, int drift);
+/* 0x23 */ DECLARE_CMD(GLOBAL, RESET_SPI);
 /* 0x23 */ DECLARE_CMD(GLOBAL, RESET_SYNC_COUNTERS);
 
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,

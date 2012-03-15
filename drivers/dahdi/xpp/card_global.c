@@ -437,17 +437,35 @@ EXPORT_SYMBOL(xpp_register_request);
 	return 0;
 }
 
-/* 0x23 */ HOSTCMD(GLOBAL, RESET_SYNC_COUNTERS)
+/*
+ * Wrapper for different types of xbus reset
+ */
+static int send_xbus_reset(xbus_t *xbus, uint8_t reset_mask)
 {
 	xframe_t *xframe;
 	xpacket_t *pack;
 
 	BUG_ON(!xbus);
-	//XBUS_DBG(SYNC, xbus, "\n");
-	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, RESET_SYNC_COUNTERS, 0);
-	RPACKET_FIELD(pack, GLOBAL, RESET_SYNC_COUNTERS, mask) = 0x10;
+	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, XBUS_RESET, 0);
+	RPACKET_FIELD(pack, GLOBAL, XBUS_RESET, mask) = reset_mask;
 	send_cmd_frame(xbus, xframe);
 	return 0;
+}
+
+/* 0x23 */ HOSTCMD(GLOBAL, RESET_SPI)
+{
+	XBUS_DBG(DEVICES, xbus, "Sending SPI reset\n");
+	/* toggle reset line */
+	send_xbus_reset(xbus, 0x04);
+	send_xbus_reset(xbus, 0x00);
+	return 0;
+}
+
+
+/* 0x23 */ HOSTCMD(GLOBAL, RESET_SYNC_COUNTERS)
+{
+	//XBUS_DBG(SYNC, xbus, "\n");
+	return send_xbus_reset(xbus, 0x10);
 }
 
 /*---------------- GLOBAL: Astribank Reply Handlers -----------------------*/
@@ -542,6 +560,7 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)
 		list_add_tail(&card_desc->card_list, &worker->card_list);
 		spin_unlock_irqrestore(&worker->worker_lock, flags);
 	}
+	CALL_PROTO(GLOBAL, RESET_SPI, xbus, NULL);
 	if (!xbus_process_worker(xbus)) {
 		ret = -ENODEV;
 		goto out;
