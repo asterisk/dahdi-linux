@@ -83,7 +83,7 @@ struct capkey {
 } PACKED;
 
 struct extrainfo {
-	char		text[24];
+	char		text[EXTRAINFO_SIZE];
 } PACKED;
 
 struct mpp_header {

@@ -366,7 +366,17 @@ int mpp_extrainfo_get(struct astribank_device *astribank, struct extrainfo *info
 	}
 	assert(reply->header.op == MPP_EXTRAINFO_GET_REPLY);
 	if(info) {
+		int i;
+
 		memcpy(info, (void *)&CMD_FIELD(reply, MPP, EXTRAINFO_GET_REPLY, info), sizeof(*info));
+		/*
+		 * clean non-printing characters
+		 */
+		for (i = sizeof(*info) - 1; i >= 0; i--) {
+			if (info->text[i] != (char)0xFF)
+				break;
+			info->text[i] = '\0';
+		}
 	}
 	free_command(reply);
 	return 0;
@@ -876,7 +886,11 @@ void show_astribank_status(struct astribank_device *astribank, FILE *fp)
 
 void show_extrainfo(const struct extrainfo *extrainfo, FILE *fp)
 {
-	fprintf(fp, "Extrainfo:             : %s\n", (const char *)(extrainfo->text));
+	char	buf[EXTRAINFO_SIZE + 1];
+
+	memcpy(buf, extrainfo->text, EXTRAINFO_SIZE);
+	buf[EXTRAINFO_SIZE] = '\0';	/* assure null termination */
+	fprintf(fp, "Extrainfo:             : '%s'\n", buf);
 }
 
 int twinstar_show(struct astribank_device *astribank, FILE *fp)

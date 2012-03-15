@@ -108,4 +108,6 @@ enum dev_dest {
 	DEST_EEPROM	= 0x02,
 };
 
+#define	EXTRAINFO_SIZE	24
+
 #endif	/* MPPTALK_DEFS_H */
