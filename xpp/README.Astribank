@@ -45,7 +45,8 @@ Building and Installation
 -------------------------
 Apart from the standard DAHDI build requirements, you also need:
 
-* *libusb development headers* to build the fpga_load firmware loader.
+* *libusb development headers* to build the Astribank firmware tools
+  (astribank_tool, astribank_hexload, astribank_allow).
   This is typically the package libusb-dev on Debian (and derivatives
   like Ubuntu) or libusb-devel on RedHat (and derivatives like
   CentOS/Trixbox).
@@ -561,9 +562,9 @@ Check USB level status. You can use one of the following utilities for it:
 - If lsusb shows the Product ID as *11x1* - only the USB firmware is loaded 
   and not the FPGA firmware is loaded. If this is still the case after 
   a while - either the firmware loading has failed or you don't have
-  fpga_load. Make sure you have libusb-dev(el) installed when
-  building DAHDI. After you have installed it, you may need to re-run
-  ./configure .
+  astribank_hexload/astribank_tool. Make sure you have libusb-dev(el)
+  installed when building DAHDI. After you have installed it, you may need
+  to re-run ./configure .
 - It should list all of your Astribank devices. If it doesn't (for
   more than period of time needed for the initial firmware
   loading) - Check that the Astribank is connected indeed.
@@ -698,7 +699,7 @@ Reset the firmware:
 
 Or disconnect the Astribank from the power and reocnnect. On some older 
 versions of the USB firmware resetting the firmware (or any operation of 
-fpga_load) would fail if the driver is loaded. Hence you would need to 
+astribank_tool) would fail if the driver is loaded. Hence you would need to
 run `rmmod xpp_usb` . In the end, reload the drivers.
 
 
@@ -960,9 +961,9 @@ disconnects and then connects again itself with USB Product ID 11x1
 (and a new device number).
 
 In the second stage, the "FPGA" firmware is loaded.
-The second-stage firmware loading is performed by using program fpga_load, 
-which is built in the directory xpp/utils and then copied to folder 
-/usr/sbin during DAHDI installation.
+The second-stage firmware loading is performed by using program
+astribank_hexload and astribank_tool, which are built in the directory
+xpp/utils and then copied to folder /usr/sbin during DAHDI installation.
 
 The command syntax is similar to the syntax of fxload. You can use the 
 following command in order to load the FPGA firmware manually:
@@ -977,13 +978,6 @@ following command in order to load the FPGA firmware manually:
   astribank_hexload -D /dev/bus/usb/MMM/NNN -p /usr/share/dahdi/PIC_TYPE_[1-4].hex
   # reenumerate (disconnect and reconnect)
   astribank_tool  -D /dev/bus/usb/MMM/NNN -n
-
-With older USB firmwares (before the one included in e.g. dahdi-linux
-2.2) you needed to use instead of all the above:
-
-  # pick the right name according to the device ID. FPGA_1151.hex is for
-  # 115x Astribanks:
-  fpga_load -D /dev/bus/usb/MMM/NNN -I /usr/share/dahdi/FPGA_1151.hex
 
 Please note, that  NNN value differs from that that was used for the 
 fxload command due to the fact that device has "reconnected" itself 

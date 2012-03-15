@@ -17,11 +17,15 @@ astribank_hexload \- Xorcom Astribank (xpp) firmware loader
 
 .SH DESCRIPTION
 .B astribank_hexload
-is a second-stage firmware loader for Xorcom Astribanks. Note that some 
-older models use fpga_load(8) instead.
+is a second-stage firmware loader for Xorcom Astribanks.
 
-It is used to load a file in the Intel HEX format into a Xorcom
-Astribank. It can be used to load either an FPGA firmware or a PIC
+Note that some very old models use fpga_load(8) instead.
+This legacy tool hasn't been used for several releases.
+It can be found in version 2.6 and below of dahdi-tools.
+
+The astribank_hexload(8) program is used to load a file in the
+Intel HEX format into a Xorcom Astribank.
+It can be used to load either an FPGA firmware or a PIC
 firmware. It is normally run by the script xpp_fxloader.
 
 .SH OPTIONS
@@ -92,7 +96,7 @@ what you'd normally use for FXS, FXO and T1.
 .RE
 
 .SH SEE ALSO
-fxload(8), lsusb(8), astribank_tool(8), fpga_load(8)
+fxload(8), lsusb(8), astribank_tool(8)
 
 .SH AUTHOR
 This manual page was written by Tzafrir Cohen <tzafrir.cohen@xorcom.com> .

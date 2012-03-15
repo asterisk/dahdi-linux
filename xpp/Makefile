@@ -80,12 +80,12 @@ TARGETS	= .perlcheck astribank_is_starting
 PROG_INSTALL	= astribank_is_starting
 MAN_INSTALL	= $(PROG_INSTALL:%=%.8)
 ifeq	(1,$(PBX_USB))
-TARGETS	+= fpga_load		\
+TARGETS	+= \
 	   astribank_tool	\
 	   astribank_hexload	\
 	   astribank_allow	\
 	   test_parse
-PROG_INSTALL	+= fpga_load astribank_tool astribank_hexload astribank_allow
+PROG_INSTALL	+= astribank_tool astribank_hexload astribank_allow
 endif
 ifneq	(,$(PERLLIBDIR))
 PROG_INSTALL	+= $(PERL_SCRIPTS)
@@ -122,9 +122,6 @@ endif
 
 CFLAGS		+= -I. -Ixtalk
 
-fpga_load: fpga_load.o hexfile.o
-fpga_load: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
-
 astribank_hexload: $(ABHEXLOAD_OBJS)
 astribank_hexload: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 astribank_hexload: CFLAGS+=$(OCT_CFLAGS)
@@ -137,8 +134,6 @@ astribank_allow: LIBS+=$(EXTRA_LIBS) $(USB_LIB)
 
 astribank_is_starting: astribank_is_starting.o
 astribank_is_starting: LIBS+=$(EXTRA_LIBS)
-
-fpga_load.o: CFLAGS+=-D_GNU_SOURCE	# We use memrchr()
 
 hex2iic: hex2iic.o iic.o hexfile.o
 
