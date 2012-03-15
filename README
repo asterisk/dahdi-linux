@@ -163,6 +163,24 @@ to the script:
   ./build_tools/make_static_devs -d tmp/newroot/dev/dahdi
 
 
+DKMS
+----
+DKMS, Dynamic Kernel Module Support, is a framework for building Linux
+kernel modules. It is used, among others, by several distributions that
+package the DAHDI kernel modules.
+
+DKMS is designed to provide updates over drivers installed from original
+kernel modules tree. Thus it installed modules into /lib/modules/updates
+or /lib/modules/VERSION/updates . This is generally not an issue on
+normal operation. However if you try to install DAHDI from source on
+a system with DAHDI installed from DKMS this way (potentially of an
+older version), be sure to remove the DKMS-installed modules from the
+updates directory. If you're not sure, the following command will give
+you a clue of the versions installed:
+
+  find /lib/modules -name dahdi.ko
+
+
 Installing the B410P drivers with mISDN
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 DAHDI includes the wcb4xxp driver for the B410P, however, support for the
