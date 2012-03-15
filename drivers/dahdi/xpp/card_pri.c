@@ -75,6 +75,7 @@ static bool is_sigtype_dchan(int sigtype)
 
 /*---------------- PRI Protocol Commands ----------------------------------*/
 
+static void dchan_state(xpd_t *xpd, bool up);
 static bool pri_packet_is_valid(xpacket_t *pack);
 static void pri_packet_dump(const char *msg, xpacket_t *pack);
 static int pri_startup(struct file *file, struct dahdi_span *span);
@@ -336,6 +337,7 @@ struct PRI_priv_data {
 	int deflaw;
 	unsigned int dchan_num;
 	bool initialized;
+	bool dchan_is_open;
 	int is_cas;
 
 	unsigned int chanconfig_dchan;
@@ -1086,6 +1088,56 @@ static int pri_set_spantype(struct dahdi_span *span, const char *spantype)
 	return set_pri_proto(xpd, set_proto);
 }
 
+static int PRI_card_open(xpd_t *xpd, lineno_t pos)
+{
+	struct PRI_priv_data *priv;
+	int d;
+
+	/*
+	 * DAHDI without AUDIO_NOTIFY.
+	 * Need to offhook all channels when D-Chan is up
+	 */
+	priv = xpd->priv;
+	d = PRI_DCHAN_IDX(priv);
+	BUG_ON(!xpd);
+	if (pos == d) {
+#ifndef	DAHDI_AUDIO_NOTIFY
+		int i;
+
+		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK the whole span\n");
+		for_each_line(xpd, i) {
+			if (i != d)
+				BIT_SET(PHONEDEV(xpd).offhook_state, i);
+		}
+		CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
+#endif
+		priv->dchan_is_open = 1;
+	}
+	return 0;
+}
+
+static int PRI_card_close(xpd_t *xpd, lineno_t pos)
+{
+	struct PRI_priv_data *priv;
+	int d, i;
+
+	priv = xpd->priv;
+	d = PRI_DCHAN_IDX(priv);
+	BUG_ON(!xpd);
+	if (pos == d) {
+		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK the whole span\n");
+		for_each_line(xpd, i) {
+			if (i != d)
+				BIT_CLR(PHONEDEV(xpd).offhook_state, i);
+		}
+		CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
+		dchan_state(xpd, 0);
+		priv->dchan_is_open = 0;
+	} else if (!priv->dchan_is_open)
+		mark_offhook(xpd, pos, 0);	/* e.g: patgen/pattest */
+	return 0;
+}
+
 /*
  * Called only for 'span' keyword in /etc/dahdi/system.conf
  */
@@ -1244,6 +1296,7 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 		DO_LED(xpd, ret, PRI_LED_OFF);
 	}
 	priv->initialized = 1;
+	priv->dchan_is_open = 0;
 	return 0;
 err:
 	XPD_ERR(xpd, "Failed initializing registers (%d)\n", ret);
@@ -1537,13 +1590,6 @@ static int PRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 		report_bad_ioctl(THIS_MODULE->name, xpd, pos, cmd);
 		return -ENOTTY;
 	}
-	return 0;
-}
-
-static int PRI_card_close(xpd_t *xpd, lineno_t pos)
-{
-	//struct dahdi_chan     *chan = XPD_CHAN(xpd, pos);
-	dchan_state(xpd, 0);
 	return 0;
 }
 
@@ -2254,6 +2300,7 @@ static const struct phoneops pri_phoneops = {
 	.echocancel_setmask = PRI_echocancel_setmask,
 	.card_timing_priority = PRI_timing_priority,
 	.card_ioctl = PRI_card_ioctl,
+	.card_open = PRI_card_open,
 	.card_close = PRI_card_close,
 	.card_state = PRI_card_state,
 };

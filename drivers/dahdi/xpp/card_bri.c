@@ -200,6 +200,7 @@ struct BRI_priv_data {
 	struct proc_dir_entry *bri_info;
 	su_rd_sta_t state_register;
 	bool initialized;
+	bool dchan_is_open;
 	int t1;			/* timer 1 for NT deactivation */
 	int t3;			/* timer 3 for TE activation */
 	ulong l1_flags;
@@ -736,6 +737,19 @@ static int BRI_card_remove(xbus_t *xbus, xpd_t *xpd)
 	return 0;
 }
 
+#ifdef	DAHDI_AUDIO_NOTIFY
+static int bri_audio_notify(struct dahdi_chan *chan, int on)
+{
+	xpd_t *xpd = chan->pvt;
+	int pos = chan->chanpos - 1;
+
+	BUG_ON(!xpd);
+	LINE_DBG(SIGNAL, xpd, pos, "BRI-AUDIO: %s\n", (on) ? "on" : "off");
+	mark_offhook(xpd, pos, on);
+	return 0;
+}
+#endif
+
 static const struct dahdi_span_ops BRI_span_ops = {
 	.owner = THIS_MODULE,
 	.spanconfig = bri_spanconfig,
@@ -756,6 +770,10 @@ static const struct dahdi_span_ops BRI_span_ops = {
 #endif
 #ifdef	CONFIG_DAHDI_WATCHDOG
 	.watchdog = xpp_watchdog,
+#endif
+
+#ifdef	DAHDI_AUDIO_NOTIFY
+	.audio_notify = bri_audio_notify,
 #endif
 };
 
@@ -1021,8 +1039,12 @@ static int BRI_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 
 static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 {
+	struct BRI_priv_data *priv;
+
 	BUG_ON(!xpd);
+	priv = xpd->priv;
 	if (pos == 2) {
+		priv->dchan_is_open = 1;
 		LINE_DBG(SIGNAL, xpd, pos, "OFFHOOK the whole span\n");
 		BIT_SET(PHONEDEV(xpd).offhook_state, 0);
 		BIT_SET(PHONEDEV(xpd).offhook_state, 1);
@@ -1034,6 +1056,9 @@ static int BRI_card_open(xpd_t *xpd, lineno_t pos)
 
 static int BRI_card_close(xpd_t *xpd, lineno_t pos)
 {
+	struct BRI_priv_data *priv;
+
+	priv = xpd->priv;
 	/* Clear D-Channel pending data */
 	if (pos == 2) {
 		LINE_DBG(SIGNAL, xpd, pos, "ONHOOK the whole span\n");
@@ -1041,7 +1066,9 @@ static int BRI_card_close(xpd_t *xpd, lineno_t pos)
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 1);
 		BIT_CLR(PHONEDEV(xpd).offhook_state, 2);
 		CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
-	}
+		priv->dchan_is_open = 0;
+	} else if (!priv->dchan_is_open)
+		mark_offhook(xpd, pos, 0);	/* e.g: patgen/pattest */
 	return 0;
 }
 
