@@ -141,7 +141,7 @@ static int usb_buffer_flush(struct astribank_device *astribank, struct usb_buffe
 	if (ub->curr == 0)
 		return 0;
 	ret = xusb_send(astribank->xusb, ub->data, ub->curr, TIMEOUT);
-	if(ret < 0) {
+	if (ret < 0) {
 		AB_ERR(astribank, "xusb_send failed: %d\n", ret);
 		return ret;
 	}
@@ -208,15 +208,18 @@ static int usb_buffer_send(struct astribank_device *astribank, struct usb_buffer
 		if (ret < 0)
 			return ret;
 		ret = xusb_recv(astribank->xusb, buf, PACKET_SIZE, TIMEOUT);
-		if(ret <= 0) {
+		if (ret <= 0) {
 			AB_ERR(astribank, "No USB packs to read: %s\n", strerror(-ret));
 			return -EINVAL;
 		}
 		DBG("%s: %d bytes recv\n", __func__, ret);
 		phead = (struct xpp_packet_header *)buf;
-		if(phead->header.op != SPI_RCV_XOP && phead->header.op != TST_RCV_XOP) {
-			AB_ERR(astribank, "Got unexpected reply OP=0x%02X\n", phead->header.op);
-			dump_packet(LOG_ERR, DBG_MASK, "hexline[ERR]", buf, ret);
+		if (phead->header.op != SPI_RCV_XOP &&
+			phead->header.op != TST_RCV_XOP) {
+			AB_ERR(astribank, "Got unexpected reply OP=0x%02X\n",
+				phead->header.op);
+			dump_packet(LOG_ERR, DBG_MASK, "hexline[ERR]",
+				buf, ret);
 			return -EINVAL;
 		}
 		dump_packet(LOG_DEBUG, DBG_MASK, "dump:echoline[R]", (char *)phead, phead->header.len);
@@ -240,14 +243,16 @@ int spi_send(struct astribank_device *astribank, uint16_t addr, uint16_t data, i
 	char				buf[PACKET_SIZE];
 	struct xpp_packet_header	*phead = (struct xpp_packet_header *)buf;
 	int				pack_len;
+	int				spi_flags;
 
 	assert(astribank != NULL);
+	spi_flags = 0x30 | (recv_answer ? 0x40 : 0x00) | (ver ? 0x01 : 0x00);
 	pack_len = sizeof(phead->header) + sizeof(phead->alt.spi_pack);
 	phead->header.len 		= pack_len;
 	phead->header.op 		= SPI_SND_XOP;
 	phead->header.unit 		= 0x40;	/* EC has always this unit num */
-	phead->alt.spi_pack.header 	= 0x05; 
-	phead->alt.spi_pack.flags 	= 0x30 | (recv_answer ? 0x40: 0x00) | (ver ? 0x01: 0x00); 
+	phead->alt.spi_pack.header 	= 0x05;
+	phead->alt.spi_pack.flags 	= spi_flags;
 	phead->alt.spi_pack.addr_l	= (addr >> 0) & 0xFF;
 	phead->alt.spi_pack.addr_h	= (addr >> 8) & 0xFF;
 	phead->alt.spi_pack.data_l	= (data >> 0) & 0xFF;
@@ -257,7 +262,7 @@ int spi_send(struct astribank_device *astribank, uint16_t addr, uint16_t data, i
 
 
 	ret = usb_buffer_send(astribank, &usb_buffer, buf, pack_len, TIMEOUT, recv_answer);
-	if(ret < 0) {
+	if (ret < 0) {
 		AB_ERR(astribank, "usb_buffer_send failed: %d\n", ret);
 		return ret;
 	}
@@ -267,29 +272,30 @@ int spi_send(struct astribank_device *astribank, uint16_t addr, uint16_t data, i
 
 int test_send(struct astribank_device *astribank)
 {
-        int                             ret;
-        char                            buf[PACKET_SIZE];
-        struct xpp_packet_header       *phead = (struct xpp_packet_header *)buf;
-        int                             pack_len;
+	int                             ret;
+	char                            buf[PACKET_SIZE];
+	struct xpp_packet_header       *phead = (struct xpp_packet_header *)buf;
+	int                             pack_len;
 
-        assert(astribank != NULL);
-        pack_len = sizeof(phead->header) + sizeof(phead->alt.tst_pack);
-        phead->header.len               = 6;
-        phead->header.op                = 0x35;
-        phead->header.unit              = 0x00;
-        phead->alt.tst_pack.tid         = 0x28; // EC TestId
-        phead->alt.tst_pack.tsid        = 0x00; // EC SubId
+	assert(astribank != NULL);
+	pack_len = sizeof(phead->header) + sizeof(phead->alt.tst_pack);
+	phead->header.len               = 6;
+	phead->header.op                = 0x35;
+	phead->header.unit              = 0x00;
+	phead->alt.tst_pack.tid         = 0x28; /* EC TestId	*/
+	phead->alt.tst_pack.tsid        = 0x00; /* EC SubId	*/
 
-        dump_packet(LOG_DEBUG, DBG_MASK, "dump:echoline[W]", (char *)phead, pack_len);
+	dump_packet(LOG_DEBUG, DBG_MASK, "dump:echoline[W]",
+		(char *)phead, pack_len);
 
-
-        ret = usb_buffer_send(astribank, &usb_buffer, buf, pack_len, TIMEOUT, 1);
-        if(ret < 0) {
-                AB_ERR(astribank, "usb_buffer_send failed: %d\n", ret);
-                return ret;
-        }
-        DBG("%s: Written %d bytes\n", __func__, ret);
-        return ret;
+	ret = usb_buffer_send(astribank,
+		&usb_buffer, buf, pack_len, TIMEOUT, 1);
+	if (ret < 0) {
+		AB_ERR(astribank, "usb_buffer_send failed: %d\n", ret);
+		return ret;
+	}
+	DBG("%s: Written %d bytes\n", __func__, ret);
+	return ret;
 }
 
 int echo_send_data(struct astribank_device *astribank, const unsigned int addr, const unsigned int data)
@@ -341,7 +347,7 @@ int echo_recv_data(struct astribank_device *astribank, const unsigned int addr)
 	ret = spi_send(astribank, 0x0004, data				, 1, 0);
 	if (ret < 0)
 		goto failed;
-	return ret; 
+	return ret;
 failed:
 	AB_ERR(astribank, "echo_recv_data: spi_send failed (ret = %d)\n", ret);
 	return ret;
@@ -349,32 +355,33 @@ failed:
 
 int load_file(char *filename, unsigned char **ppBuf, UINT32 *pLen)
 {
-	unsigned char * pbyFileData = NULL;
-	FILE* pFile; 
+	unsigned char *pbyFileData = NULL;
+	FILE *pFile;
 
 	DBG("Loading %s file...\n", filename);
-	pFile = fopen( filename, "rb" ); 
-	if (pFile == NULL) { 
-		ERR("fopen\n");  
+	pFile = fopen(filename, "rb");
+	if (pFile == NULL) {
+		ERR("fopen\n");
 		return -ENODEV;
-	} 
+	}
 
-	fseek( pFile, 0L, SEEK_END ); 
-	*pLen = ftell( pFile ); 
-	fseek( pFile, 0L, SEEK_SET ); 
+	fseek(pFile, 0L, SEEK_END);
+	*pLen = ftell(pFile);
+	fseek(pFile, 0L, SEEK_SET);
 
-	pbyFileData = (unsigned char *)malloc(*pLen); 
-	if (pbyFileData == NULL) { 
-		fclose( pFile ); 
-		ERR("malloc\n" );  
+	pbyFileData = (unsigned char *)malloc(*pLen);
+	if (pbyFileData == NULL) {
+		fclose(pFile);
+		ERR("malloc\n");
 		return -ENODEV;
 	} else {
 		DBG("allocated mem for pbyFileData\n");
 	}
-	fread(pbyFileData, 1, *pLen, pFile); 
-	fclose(pFile); 
-	DBG("Successful loading %s file into memory (size = %d, DUMP: first = %02X %02X, last = %02X %02X)\n", 
-			filename, *pLen, 
+	fread(pbyFileData, 1, *pLen, pFile);
+	fclose(pFile);
+	DBG("Successful loading %s file into memory "
+		"(size = %d, DUMP: first = %02X %02X, last = %02X %02X)\n",
+			filename, *pLen,
 			pbyFileData[0], pbyFileData[1],
 			pbyFileData[(*pLen)-2], pbyFileData[(*pLen)-1]);
 	*ppBuf = pbyFileData;
@@ -389,7 +396,7 @@ UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
 	unsigned int mask = ~0;
 	
 	gettimeofday(&tv, 0);
-	total_usecs = (((unsigned long long)(tv.tv_sec)) * 1000000) + 
+	total_usecs = (((unsigned long long)(tv.tv_sec)) * 1000000) +
 				  (((unsigned long long)(tv.tv_usec)));
 	f_pTime->aulWallTimeUs[0] = (total_usecs & mask);
 	f_pTime->aulWallTimeUs[1] = (total_usecs >> 32);
@@ -452,13 +459,16 @@ UINT32 Oct6100UserDriverWriteApi(tPOCT6100_WRITE_PARAMS f_pWriteParams)
 
 UINT32 Oct6100UserDriverWriteSmearApi(tPOCT6100_WRITE_SMEAR_PARAMS f_pSmearParams)
 {
-        unsigned int              	addr;
-        unsigned int              	data;
-        unsigned int              	len		= f_pSmearParams->ulWriteLength;
-        const struct echo_mod           *echo_mod       = (struct echo_mod *)f_pSmearParams->pProcessContext;
-        struct astribank_device   	*astribank      = echo_mod->astribank;
+	unsigned int              	addr;
+	unsigned int              	data;
+	unsigned int              	len;
+	const struct echo_mod           *echo_mod;
+	struct astribank_device   	*astribank;
 	unsigned int 			i;
 
+	len = f_pSmearParams->ulWriteLength;
+	echo_mod = (struct echo_mod *)f_pSmearParams->pProcessContext;
+	astribank = echo_mod->astribank;
 	for (i = 0; i < len; i++) {
 		int ret;
 
@@ -475,8 +485,8 @@ UINT32 Oct6100UserDriverWriteSmearApi(tPOCT6100_WRITE_SMEAR_PARAMS f_pSmearParam
 
 UINT32 Oct6100UserDriverWriteBurstApi(tPOCT6100_WRITE_BURST_PARAMS f_pBurstParams)
 {
-        unsigned int              	addr;
-        unsigned int              	data;
+	unsigned int              	addr;
+	unsigned int              	data;
 	unsigned int 			len 		= f_pBurstParams->ulWriteLength;
 	const struct echo_mod		*echo_mod 	= (struct echo_mod *)f_pBurstParams->pProcessContext;
 	struct astribank_device 	*astribank 	= echo_mod->astribank;
@@ -498,11 +508,13 @@ UINT32 Oct6100UserDriverWriteBurstApi(tPOCT6100_WRITE_BURST_PARAMS f_pBurstParam
 
 UINT32 Oct6100UserDriverReadApi(tPOCT6100_READ_PARAMS f_pReadParams)
 {
-        const unsigned int              addr  		=  f_pReadParams->ulReadAddress;
-	const struct echo_mod		*echo_mod 	= (struct echo_mod *)f_pReadParams->pProcessContext;
-	struct astribank_device 	*astribank 	= echo_mod->astribank;
+	const unsigned int              addr =  f_pReadParams->ulReadAddress;
+	const struct echo_mod		*echo_mod;
+	struct astribank_device 	*astribank;
 	int ret;
 
+	echo_mod = (struct echo_mod *)f_pReadParams->pProcessContext;
+	astribank = echo_mod->astribank;
 	ret = echo_recv_data(astribank, addr);
 	if (ret < 0) {
 		ERR("echo_recv_data failed (%d)\n", ret);
@@ -514,12 +526,15 @@ UINT32 Oct6100UserDriverReadApi(tPOCT6100_READ_PARAMS f_pReadParams)
 
 UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 {
-        unsigned int              	addr;
-        unsigned int              	len		= f_pBurstParams->ulReadLength;
-	const struct echo_mod		*echo_mod 	= (struct echo_mod *)f_pBurstParams->pProcessContext;
-	struct astribank_device 	*astribank 	= echo_mod->astribank;
+	unsigned int              	addr;
+	unsigned int              	len;
+	const struct echo_mod		*echo_mod;
+	struct astribank_device 	*astribank;
 	unsigned int 			i;
 
+	len = f_pBurstParams->ulReadLength;
+	echo_mod = (struct echo_mod *)f_pBurstParams->pProcessContext;
+	astribank = echo_mod->astribank;
 	for (i = 0;i < len; i++) {
 		unsigned int ret;
 
@@ -536,7 +551,6 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 
 inline int get_ver(struct astribank_device *astribank)
 {
- 
 	return spi_send(astribank, 0, 0, 1, 1);
 }
 
@@ -581,29 +595,31 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 	/*	1) Configure and Open the OCT6100.			          */
 	/**************************************************************************/
 	/**************************************************************************/
-	
-        memset(&InstanceSize, 0, sizeof(tOCT6100_GET_INSTANCE_SIZE));
-        memset(&OpenChip, 0, sizeof(tOCT6100_CHIP_OPEN));
 
-        if (!(echo_mod = malloc(sizeof(struct echo_mod)))) {
-                AB_ERR(astribank, "cannot allocate memory for echo_mod\n");
-                return cOCT6100_ERR_FATAL;
-        }
+	memset(&InstanceSize, 0, sizeof(tOCT6100_GET_INSTANCE_SIZE));
+	memset(&OpenChip, 0, sizeof(tOCT6100_CHIP_OPEN));
+
+	echo_mod = malloc(sizeof(struct echo_mod));
+	if (!echo_mod) {
+		AB_ERR(astribank, "cannot allocate memory for echo_mod\n");
+		return cOCT6100_ERR_FATAL;
+	}
 	DBG("allocated mem for echo_mod\n");
 
-        memset(echo_mod, 0, sizeof(struct echo_mod));
+	memset(echo_mod, 0, sizeof(struct echo_mod));
 
 	/* Fill the OCT6100 Chip Open configuration structure with default values */
 
-	ulResult = Oct6100ChipOpenDef( &OpenChip );
+	ulResult = Oct6100ChipOpenDef(&OpenChip);
 	if (ulResult != cOCT6100_ERR_OK) {
-                AB_ERR(astribank, "Oct6100ChipOpenDef failed: result=%X\n", ulResult);
+		AB_ERR(astribank, "Oct6100ChipOpenDef failed: result=%X\n",
+			ulResult);
 		return ulResult;
 	}
 
 	OpenChip.pProcessContext      			= echo_mod;
 	/* Configure clocks */
-	
+
 	/* upclk oscillator is at 33.33 Mhz */
 	OpenChip.ulUpclkFreq 				= cOCT6100_UPCLK_FREQ_33_33_MHZ;
 
@@ -632,17 +648,17 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
 	/* External Memory Settings: Use DDR memory*/
 	OpenChip.ulMemoryType				= cOCT6100_MEM_TYPE_DDR;
-	
+
 	OpenChip.ulNumMemoryChips			= 1;
 	OpenChip.ulMemoryChipSize			= cOCT6100_MEMORY_CHIP_SIZE_32MB;
 
 
 	/* Load the image file */
 	ulResult = load_file(	filename,
-				&pbyImageData,
-				&ulImageByteSize );
+			&pbyImageData,
+			&ulImageByteSize);
 
-	if ( ulResult != 0 ) {
+	if (ulResult != 0) {
 		AB_ERR(astribank, "Failed load_file %s (%08X)\n", filename, ulResult);
 		return ulResult;
 	}
@@ -655,47 +671,52 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 	OpenChip.pbyImageFile				= pbyImageData;
 	OpenChip.ulImageSize				= ulImageByteSize;
 
-        /* Inserting default values into tOCT6100_GET_INSTANCE_SIZE structure parameters. */
-        Oct6100GetInstanceSizeDef ( &InstanceSize );
+	/*
+	 * Inserting default values into tOCT6100_GET_INSTANCE_SIZE
+	 * structure parameters.
+	 */
+	Oct6100GetInstanceSizeDef(&InstanceSize);
 
-        /* Get the size of the OCT6100 instance structure. */
-        ulResult = Oct6100GetInstanceSize(&OpenChip, &InstanceSize );
-        if (ulResult != cOCT6100_ERR_OK)
-        {
-                AB_ERR(astribank, "Oct6100GetInstanceSize failed (%08X)\n", ulResult);
-                return ulResult;
-        }
+	/* Get the size of the OCT6100 instance structure. */
+	ulResult = Oct6100GetInstanceSize(&OpenChip, &InstanceSize);
+	if (ulResult != cOCT6100_ERR_OK) {
+		AB_ERR(astribank, "Oct6100GetInstanceSize failed (%08X)\n",
+			ulResult);
+		return ulResult;
+	}
 
-        pApiInstance = malloc(InstanceSize.ulApiInstanceSize);
+	pApiInstance = malloc(InstanceSize.ulApiInstanceSize);
 	echo_mod->pApiInstance 				= pApiInstance;
 	echo_mod->astribank 				= astribank;
 
-        if (!pApiInstance) {
-                AB_ERR(astribank, "Out of memory (can't allocate %d bytes)!\n", InstanceSize.ulApiInstanceSize);
-                return cOCT6100_ERR_FATAL;
-        }
+	if (!pApiInstance) {
+		AB_ERR(astribank, "Out of memory (can't allocate %d bytes)!\n",
+			InstanceSize.ulApiInstanceSize);
+		return cOCT6100_ERR_FATAL;
+	}
 
 	/* Perform actual open of chip */
 	ulResult = Oct6100ChipOpen(pApiInstance, &OpenChip);
 	if (ulResult != cOCT6100_ERR_OK) {
-                AB_ERR(astribank, "Oct6100ChipOpen failed: result=%X\n", ulResult);
+		AB_ERR(astribank, "Oct6100ChipOpen failed: result=%X\n",
+			ulResult);
 		return ulResult;
 	}
 	DBG("%s: OCT6100 is open\n", __func__);
 
 	/* Free the image file data  */
-	free( pbyImageData );
-	
+	free(pbyImageData);
+
 	/**************************************************************************/
 	/**************************************************************************/
 	/*	2) Open channels in echo cancellation mode.                       */
 	/**************************************************************************/
 	/**************************************************************************/
 
-	for( nChan = 0; nChan < ECHO_MAX_CHANS; nChan++ ) {
+	for (nChan = 0; nChan < ECHO_MAX_CHANS; nChan++) {
 		nSlot 						= nChan;
 		/* open a channel.*/
-		Oct6100ChannelOpenDef( &ChannelOpen );
+		Oct6100ChannelOpenDef(&ChannelOpen);
 
 		/* Assign the handle memory.*/
 		ChannelOpen.pulChannelHndl = &ulChanHndl;
@@ -717,7 +738,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 		ChannelOpen.TdmConfig.ulRoutPcmLaw		= pcmLaw;
 		ChannelOpen.TdmConfig.ulRoutStream		= ECHO_ROUT_STREAM;
 		ChannelOpen.TdmConfig.ulRoutTimeslot		= nSlot;
-		
+
 		ChannelOpen.TdmConfig.ulSoutPcmLaw		= pcmLaw;
 		ChannelOpen.TdmConfig.ulSoutStream		= ECHO_SOUT_STREAM;
 		ChannelOpen.TdmConfig.ulSoutTimeslot		= nSlot;
@@ -728,13 +749,13 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 		ChannelOpen.VqeConfig.fSinDcOffsetRemoval	= TRUE;
 
 		ChannelOpen.VqeConfig.ulComfortNoiseMode	= cOCT6100_COMFORT_NOISE_NORMAL;	
-							/*        cOCT6100_COMFORT_NOISE_NORMAL
-								  cOCT6100_COMFORT_NOISE_EXTENDED,
-								  cOCT6100_COMFORT_NOISE_OFF,
-								  cOCT6100_COMFORT_NOISE_FAST_LATCH 
-							 */
+		/*        cOCT6100_COMFORT_NOISE_NORMAL
+			  cOCT6100_COMFORT_NOISE_EXTENDED,
+			  cOCT6100_COMFORT_NOISE_OFF,
+			  cOCT6100_COMFORT_NOISE_FAST_LATCH
+		 */
 		ulResult = Oct6100ChannelOpen(	pApiInstance,
-						&ChannelOpen );
+				&ChannelOpen);
 		if (ulResult != cOCT6100_ERR_OK) {
 			AB_ERR(astribank, "Found error on chan %d\n", nChan);
 			return ulResult;
@@ -747,10 +768,10 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 	/**************************************************************************/
 	/**************************************************************************/
 
-	for( nChan = 8; nChan < 32; nChan++ ) {
+	for (nChan = 8; nChan < 32; nChan++) {
 		nSlot 						= (nChan >> 3) * 32 + (nChan & 0x07);
 		/* open a channel.*/
-		Oct6100ChannelOpenDef( &ChannelOpen );
+		Oct6100ChannelOpenDef(&ChannelOpen);
 
 		/* Assign the handle memory.*/
 		ChannelOpen.pulChannelHndl = &ulChanHndl;
@@ -767,7 +788,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
 		ChannelOpen.TdmConfig.ulRoutStream		= ECHO_ROUT_STREAM2;
 		ChannelOpen.TdmConfig.ulRoutTimeslot		= nSlot;
-		
+
 		ChannelOpen.TdmConfig.ulSoutStream		= ECHO_SOUT_STREAM2;
 		ChannelOpen.TdmConfig.ulSoutTimeslot		= nSlot;
 
@@ -777,13 +798,13 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 		ChannelOpen.VqeConfig.fSinDcOffsetRemoval	= TRUE;
 
 		ChannelOpen.VqeConfig.ulComfortNoiseMode	= cOCT6100_COMFORT_NOISE_NORMAL;	
-							/*        cOCT6100_COMFORT_NOISE_NORMAL
-								  cOCT6100_COMFORT_NOISE_EXTENDED,
-								  cOCT6100_COMFORT_NOISE_OFF,
-								  cOCT6100_COMFORT_NOISE_FAST_LATCH 
-							 */
+		/*        cOCT6100_COMFORT_NOISE_NORMAL
+			  cOCT6100_COMFORT_NOISE_EXTENDED,
+			  cOCT6100_COMFORT_NOISE_OFF,
+			  cOCT6100_COMFORT_NOISE_FAST_LATCH
+		 */
 		ulResult = Oct6100ChannelOpen(	pApiInstance,
-						&ChannelOpen );
+				&ChannelOpen);
 		if (ulResult != cOCT6100_ERR_OK) {
 			AB_ERR(astribank, "Found error on chan %d\n", nChan);
 			return ulResult;
@@ -803,7 +824,7 @@ int load_echo(struct astribank_device *astribank, char *filename, int is_alaw)
 {
 	int		iLen;
 	int		ret;
-	unsigned char	*pbyFileData = NULL; 
+	unsigned char	*pbyFileData = NULL;
 	UINT32		octasic_status;
 
 	AB_INFO(astribank, "Loading ECHOCAN Firmware: %s (%s)\n",
