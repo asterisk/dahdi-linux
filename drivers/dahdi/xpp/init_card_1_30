@@ -51,7 +51,7 @@ BEGIN { $init_dir = dirname($0); unshift(@INC, "$init_dir"); }
 use XppConfig $init_dir;
 my $unit_id;
 my %opts;
-my $vbat_48 = 0;
+my $eeprom_release_201 = 0;
 
 getopts('o:', \%opts);
 
@@ -94,7 +94,7 @@ if (-t STDERR) {
 	}
 	logit "XBUS_MODEL_STRING='$ENV{XBUS_MODEL_STRING}'";
 	if ($ENV{XBUS_MODEL_STRING} =~ m{.*/.*/201}) {
-		$vbat_48 = 1;
+		$eeprom_release_201 = 1;
 	}
 	$chipregs = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/chipregs",
 		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
@@ -292,8 +292,8 @@ sub init_indirect_registers() {
 }
 
 sub init_early_direct_regs() {
-	my $lbv = ($vbat_48) ? "20" : "10";
-	my $vcm = ($vbat_48) ? "02" : "03";
+	my $lbv = ($eeprom_release_201) ? "20" : "10";
+	my $vcm = ($eeprom_release_201) ? "02" : "03";
 
 	return write_to_slic_file("#
 *	WD	08	00	# Audio Path Loopback Control
