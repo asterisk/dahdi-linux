@@ -98,4 +98,16 @@ int eeprom_fill(struct eeprom_table *eprm,
 int astribank_has_twinstar(struct astribank_device *astribank);
 int label_isvalid(const char *label);
 
+#define	AB_REPORT(report_type, astribank, fmt, ...) \
+	report_type("%s [%s]: " fmt, \
+		xusb_devpath((astribank)->xusb), \
+		xusb_serial((astribank)->xusb), \
+		## __VA_ARGS__)
+
+#define	AB_INFO(astribank, fmt, ...) \
+		AB_REPORT(INFO, astribank, fmt, ## __VA_ARGS__)
+
+#define	AB_ERR(astribank, fmt, ...) \
+		AB_REPORT(ERR, astribank, fmt, ## __VA_ARGS__)
+
 #endif	/* ASTRIBANK_USB_H */

@@ -123,9 +123,7 @@ static void usb_buffer_showstatistics(struct astribank_device *astribank, struct
 	long	usec;
 
 	usec = usb_buffer_usec(ub);
-	INFO("%s [%s]: Octasic statistics: packet_size=[%d, %ld, %d] packets=%d, bytes=%ld msec=%ld usec/packet=%d\n",
-		xusb_devpath(astribank->xusb),
-		xusb_serial(astribank->xusb),
+	AB_INFO(astribank, "Octasic statistics: packet_size=[%d, %ld, %d] packets=%d, bytes=%ld msec=%ld usec/packet=%d\n",
 		ub->min_send,
 		ub->total_bytes / ub->num_sends,
 		ub->max_send,
@@ -144,7 +142,7 @@ static int usb_buffer_flush(struct astribank_device *astribank, struct usb_buffe
 		return 0;
 	ret = xusb_send(astribank->xusb, ub->data, ub->curr, TIMEOUT);
 	if(ret < 0) {
-		ERR("xusb_send failed: %d\n", ret);
+		AB_ERR(astribank, "xusb_send failed: %d\n", ret);
 		return ret;
 	}
 	DBG("%s: Written %d bytes\n", __func__, ret);
@@ -179,7 +177,7 @@ static int usb_buffer_append(struct astribank_device *astribank, struct usb_buff
 	char *buf, int len)
 {
 	if (ub->curr + len >= ub->max_len) {
-		ERR("%s: buffer too small ub->curr=%d, len=%d, ub->max_len=%d\n",
+		AB_ERR(astribank, "%s: buffer too small ub->curr=%d, len=%d, ub->max_len=%d\n",
 			__func__, ub->curr, len, ub->max_len);
 		return -ENOMEM;
 	}
@@ -211,13 +209,13 @@ static int usb_buffer_send(struct astribank_device *astribank, struct usb_buffer
 			return ret;
 		ret = xusb_recv(astribank->xusb, buf, PACKET_SIZE, TIMEOUT);
 		if(ret <= 0) {
-			ERR("No USB packs to read: %s\n", strerror(-ret));
+			AB_ERR(astribank, "No USB packs to read: %s\n", strerror(-ret));
 			return -EINVAL;
 		}
 		DBG("%s: %d bytes recv\n", __func__, ret);
 		phead = (struct xpp_packet_header *)buf;
 		if(phead->header.op != SPI_RCV_XOP && phead->header.op != TST_RCV_XOP) {
-			ERR("Got unexpected reply OP=0x%02X\n", phead->header.op);
+			AB_ERR(astribank, "Got unexpected reply OP=0x%02X\n", phead->header.op);
 			dump_packet(LOG_ERR, DBG_MASK, "hexline[ERR]", buf, ret);
 			return -EINVAL;
 		}
@@ -260,7 +258,7 @@ int spi_send(struct astribank_device *astribank, uint16_t addr, uint16_t data, i
 
 	ret = usb_buffer_send(astribank, &usb_buffer, buf, pack_len, TIMEOUT, recv_answer);
 	if(ret < 0) {
-		ERR("usb_buffer_send failed: %d\n", ret);
+		AB_ERR(astribank, "usb_buffer_send failed: %d\n", ret);
 		return ret;
 	}
 	DBG("%s: Written %d bytes\n", __func__, ret);
@@ -287,7 +285,7 @@ int test_send(struct astribank_device *astribank)
 
         ret = usb_buffer_send(astribank, &usb_buffer, buf, pack_len, TIMEOUT, 1);
         if(ret < 0) {
-                ERR("usb_buffer_send failed: %d\n", ret);
+                AB_ERR(astribank, "usb_buffer_send failed: %d\n", ret);
                 return ret;
         }
         DBG("%s: Written %d bytes\n", __func__, ret);
@@ -513,16 +511,13 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
 	test_send(astribank);
 	cpld_ver = get_ver(astribank);
-	INFO("%s [%s]: Check EC_CPLD version: %d\n",
-		xusb_devpath(astribank->xusb),
-		xusb_serial(astribank->xusb),
-		cpld_ver);
+	AB_INFO(astribank, "Check EC_CPLD version: %d\n", cpld_ver);
 	if (cpld_ver < 0)
 		return cpld_ver;
 	else if (cpld_ver == EC_VER_TEST) {
-		INFO("+---------------------------------------------------------+\n");
-		INFO("| WARNING: TEST HARDWARE IS ON THE BOARD INSTEAD OF EC!!! |\n");
-		INFO("+---------------------------------------------------------+\n");
+		AB_INFO(astribank, "+---------------------------------------------------------+\n");
+		AB_INFO(astribank, "| WARNING: TEST HARDWARE IS ON THE BOARD INSTEAD OF EC!!! |\n");
+		AB_INFO(astribank, "+---------------------------------------------------------+\n");
 		return cOCT6100_ERR_OK;
 	}
 
@@ -537,7 +532,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
         memset(&OpenChip, 0, sizeof(tOCT6100_CHIP_OPEN));
 
         if (!(echo_mod = malloc(sizeof(struct echo_mod)))) {
-                ERR("cannot allocate memory for echo_mod\n");
+                AB_ERR(astribank, "cannot allocate memory for echo_mod\n");
                 return 1;
         }
                 DBG("allocated mem for echo_mod\n");
@@ -548,7 +543,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
 	ulResult = Oct6100ChipOpenDef( &OpenChip );
 	if (ulResult != cOCT6100_ERR_OK) {
-                ERR("Oct6100ChipOpenDef failed: result=%X\n", ulResult);
+                AB_ERR(astribank, "Oct6100ChipOpenDef failed: result=%X\n", ulResult);
 		return ulResult;
 	}
 
@@ -594,11 +589,11 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 				&ulImageByteSize );
 
 	if (pbyImageData == NULL || ulImageByteSize == 0){
-		ERR("Bad pbyImageData or ulImageByteSize\n");
+		AB_ERR(astribank, "Bad pbyImageData or ulImageByteSize\n");
 		return 1;
 	}
 	if ( ulResult != 0 ) {
-		ERR("Failed load_file %s (%08X)\n", filename, ulResult);
+		AB_ERR(astribank, "Failed load_file %s (%08X)\n", filename, ulResult);
 		return ulResult;
 	}
 
@@ -613,7 +608,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
         ulResult = Oct6100GetInstanceSize(&OpenChip, &InstanceSize );
         if (ulResult != cOCT6100_ERR_OK)
         {
-                ERR("Oct6100GetInstanceSize failed (%08X)\n", ulResult);
+                AB_ERR(astribank, "Oct6100GetInstanceSize failed (%08X)\n", ulResult);
                 return ulResult;
         }
 
@@ -622,14 +617,14 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 	echo_mod->astribank 				= astribank;
 
         if (!pApiInstance) {
-                ERR("Out of memory (can't allocate %d bytes)!\n", InstanceSize.ulApiInstanceSize);
+                AB_ERR(astribank, "Out of memory (can't allocate %d bytes)!\n", InstanceSize.ulApiInstanceSize);
                 return 1;
         }
 
 	/* Perform actual open of chip */
 	ulResult = Oct6100ChipOpen(pApiInstance, &OpenChip);
 	if (ulResult != cOCT6100_ERR_OK) {
-                ERR("Oct6100ChipOpen failed: result=%X\n", ulResult);
+                AB_ERR(astribank, "Oct6100ChipOpen failed: result=%X\n", ulResult);
 		return ulResult;
 	}
 	DBG("%s: OCT6100 is open\n", __func__);
@@ -687,7 +682,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 		ulResult = Oct6100ChannelOpen(	pApiInstance,
 						&ChannelOpen );
 		if (ulResult != cOCT6100_ERR_OK) {
-			ERR("Found error on chan %d\n", nChan);
+			AB_ERR(astribank, "Found error on chan %d\n", nChan);
 			return ulResult;
 		}
 	}
@@ -736,7 +731,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 		ulResult = Oct6100ChannelOpen(	pApiInstance,
 						&ChannelOpen );
 		if (ulResult != cOCT6100_ERR_OK) {
-			ERR("Found error on chan %d\n", nChan);
+			AB_ERR(astribank, "Found error on chan %d\n", nChan);
 			return ulResult;
 		}
 	}
@@ -755,21 +750,19 @@ int load_echo(struct astribank_device *astribank, char *filename, int is_alaw)
 	int		iLen;
 	int		ret;
 	unsigned char	*pbyFileData = NULL; 
-	const char	*devstr;
 
-	devstr = xusb_devpath(astribank->xusb);
-	INFO("%s [%s]: Loading ECHOCAN Firmware: %s (%s)\n",
-		devstr, xusb_serial(astribank->xusb), filename,
-		(is_alaw) ? "alaw" : "ulaw");
+	AB_INFO(astribank, "Loading ECHOCAN Firmware: %s (%s)\n",
+		filename, (is_alaw) ? "alaw" : "ulaw");
 	usb_buffer_init(astribank, &usb_buffer);
 	ret = init_octasic(filename, astribank, is_alaw);
 	if (ret) {
-		ERR("ECHO %s burning failed (%08X)\n", filename, ret);
+		AB_ERR(astribank, "ECHO %s burning failed (%08X)\n",
+			filename, ret);
 		return -ENODEV;
 	}
 	ret = usb_buffer_flush(astribank, &usb_buffer);
 	if (ret < 0) {
-		ERR("ECHO %s buffer flush failed (%d)\n", filename, ret);
+		AB_ERR(astribank, "ECHO %s buffer flush failed (%d)\n", filename, ret);
 		return -ENODEV;
 	}
 	usb_buffer_showstatistics(astribank, &usb_buffer);
