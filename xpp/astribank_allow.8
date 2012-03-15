@@ -48,6 +48,16 @@ Write capabilities to EEPROM, otherwise read capabilities
 License filename (stdin/stdout if not specified)
 .RE
 
+.B \-m \fInum\fR
+.RS
+Choose the numeric code of license markers to generate.
+This code select the type of \fIBEGIN\fR.../\fIEND\fR... strings
+that delimit the license body.
+
+Valid marker codes are listed with the \fB-h\fR option.
+The default (and first) code is \fB1\fR. Zero is illegal value.
+.RE
+
 .B \-v
 .RS
 Increase verbosity. May be used multiple times.

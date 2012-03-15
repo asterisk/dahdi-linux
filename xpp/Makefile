@@ -74,7 +74,7 @@ ASTRIBANK_OBJS		= astribank_usb.o mpptalk.o $(XTALK_OBJS)
 
 ABHEXLOAD_OBJS		= astribank_hexload.o hexfile.o pic_loader.o $(ECHO_LOADER) $(ASTRIBANK_OBJS) $(OCT_HERE_OBJS)
 ABTOOL_OBJS		= astribank_tool.o $(ASTRIBANK_OBJS)
-ABALLOW_OBJS		= astribank_allow.o $(ASTRIBANK_OBJS)
+ABALLOW_OBJS		= astribank_allow.o astribank_license.o $(ASTRIBANK_OBJS)
 
 TARGETS	= .perlcheck astribank_is_starting
 PROG_INSTALL	= astribank_is_starting
