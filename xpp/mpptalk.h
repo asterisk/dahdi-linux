@@ -69,6 +69,7 @@ int twinstar_show(struct astribank_device *astribank, FILE *fp);
  * Serial commands to FPGA
  */
 int mpps_card_info(struct astribank_device *astribank, int unit, uint8_t *card_type, uint8_t *card_status);
+int mpps_stat(struct astribank_device *astribank, int unit, uint8_t *maincard_version, uint8_t *status);
 
 /*
  * Twinstar

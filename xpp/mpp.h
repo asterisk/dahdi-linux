@@ -95,6 +95,9 @@ struct mpp_header {
 enum mpp_ser_op {
 	SER_CARD_INFO_GET	= 0x1,
 	SER_STAT_GET		= 0x3,
+/* Status bits */
+#define	SER_STAT_WATCHDOG_READY(s)	((s) & 0x01)
+#define	SER_STAT_XPD_ALIVE(s)		((s) & 0x02)
 };
 
 /* Individual commands structure */

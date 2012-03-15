@@ -599,33 +599,59 @@ int mpp_serial_cmd(struct astribank_device *astribank, const uint8_t *in, uint8_
 
 int mpps_card_info(struct astribank_device *astribank, int unit, uint8_t *card_type, uint8_t *card_status)
 {
-	struct card_info_send {
+	/*
+	 * Serial commands must have equal send/receive size
+	 */
+	struct card_info_command {
 		uint8_t	ser_op;
-		uint8_t	addr;
-	} *card_info_send;
-	struct card_info_recv {
-		uint8_t	ser_op_undef;	/* invalid data */
 		uint8_t	addr;
 		uint8_t	card_full_type;	/* (type << 4 | subtype) */
 		uint8_t	card_status;	/* BIT(0) - PIC burned */
-	} *card_info_recv;
-	uint8_t	in[sizeof(struct card_info_recv)];
-	uint8_t	out[sizeof(struct card_info_recv)];
-	int	len;
-	int	ret;
+	} PACKED;
+	struct card_info_command ci_send;
+	struct card_info_command ci_recv;
+	int ret;
 
-	len = sizeof(struct card_info_recv);
-	memset(in, 0, len);
-	memset(out, 0, len);
-	card_info_send = (struct card_info_send *)&in;
-	card_info_recv = (struct card_info_recv *)&out;
-	card_info_send->ser_op = SER_CARD_INFO_GET;
-	card_info_send->addr = (unit << 4);	/* low nibble is subunit */
-	ret = mpp_serial_cmd(astribank, in, out, len);
+	memset(&ci_send, 0, sizeof(ci_send));
+	memset(&ci_recv, 0, sizeof(ci_recv));
+	ci_send.ser_op = SER_CARD_INFO_GET;
+	ci_send.addr = (unit << 4);	/* low nibble is subunit */
+	ret = mpp_serial_cmd(astribank,
+		(uint8_t *)&ci_send,
+		(uint8_t *)&ci_recv,
+		sizeof(struct card_info_command));
+	if (ret < 0)
+		return ret;
+	*card_type = ci_recv.card_full_type;
+	*card_status = ci_recv.card_status;
+	return 0;
+}
+
+int mpps_stat(struct astribank_device *astribank, int unit, uint8_t *fpga_configuration, uint8_t *status)
+{
+	/*
+	 * Serial commands must have equal send/receive size
+	 */
+	struct fpga_stat_command {
+		uint8_t	ser_op;
+		uint8_t	fpga_configuration;
+		uint8_t	status;	/* BIT(0) - Watchdog timer status */
+	} PACKED;
+	struct fpga_stat_command fs_send;
+	struct fpga_stat_command fs_recv;
+	int ret;
+
+	memset(&fs_send, 0, sizeof(fs_send));
+	memset(&fs_recv, 0, sizeof(fs_recv));
+	fs_send.ser_op = SER_STAT_GET;
+	ret = mpp_serial_cmd(astribank,
+		(uint8_t *)&fs_send,
+		(uint8_t *)&fs_recv,
+		sizeof(struct fpga_stat_command));
 	if(ret < 0)
 		return ret;
-	*card_type = card_info_recv->card_full_type;
-	*card_status = card_info_recv->card_status;
+	*fpga_configuration = fs_recv.fpga_configuration;
+	*status = fs_recv.status;
 	return 0;
 }
 

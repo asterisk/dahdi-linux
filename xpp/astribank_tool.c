@@ -79,9 +79,6 @@ static int reset_kind(const char *arg)
 
 static int show_hardware(struct astribank_device *astribank)
 {
-	uint8_t	unit;
-	uint8_t	card_status;
-	uint8_t	card_type;
 	int	ret;
 	struct eeprom_table	eeprom_table;
 	struct capabilities	capabilities;
@@ -95,6 +92,12 @@ static int show_hardware(struct astribank_device *astribank)
 	if(astribank->eeprom_type == EEPROM_TYPE_LARGE) {
 		show_capabilities(&capabilities, stdout);
 		if(STATUS_FPGA_LOADED(astribank->status)) {
+			uint8_t	unit;
+			uint8_t	card_status;
+			uint8_t	card_type;
+			uint8_t	fpga_configuration;
+			uint8_t	status;
+
 			for(unit = 0; unit < 5; unit++) {
 				ret = mpps_card_info(astribank, unit, &card_type, &card_status);
 				if(ret < 0)
@@ -103,6 +106,14 @@ static int show_hardware(struct astribank_device *astribank)
 						((card_type >> 4) & 0xF), (card_type & 0xF),
 						((card_status & 0x1) ? "PIC" : "NOPIC"));
 			}
+			ret = mpps_stat(astribank, unit, &fpga_configuration, &status);
+			if (ret < 0)
+				return ret;
+			printf("FPGA: %-17s: %d\n", "Configuration num", fpga_configuration);
+			printf("FPGA: %-17s: %s\n", "Watchdog Timer",
+				(SER_STAT_WATCHDOG_READY(status)) ? "ready" : "expired");
+			printf("FPGA: %-17s: %s\n", "XPD Alive",
+				(SER_STAT_XPD_ALIVE(status)) ? "yes" : "no");
 		}
 		ret = mpp_extrainfo_get(astribank, &extrainfo);
 		if(ret < 0)
