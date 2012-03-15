@@ -1,0 +1,142 @@
+#! /usr/bin/perl
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2012, Xorcom
+# This program is free software; you can redistribute and/or
+# modify it under the same terms as Perl itself.
+#
+#dahdi_sysfs_copy: Short perl script to copy dahdi related sysfs trees
+#                  into a designated directory.
+#
+# $Id: $
+#
+use strict;
+use warnings;
+
+use File::Path qw(mkpath);
+use File::Copy;
+use Cwd qw(realpath);
+
+my $destdir = shift || die "Usage: $0 <destdir>\n";
+
+my %symlinks;
+my %walk_ups;
+my %inode_cash;
+
+# Starting points for recursion
+my @toplevels = qw(
+	/sys/bus/dahdi_devices
+	/sys/bus/astribanks
+	/sys/class/dahdi
+	);
+
+# Loop prevention (by inode number lookup)
+sub seen {
+	my $ino = shift || die;
+	my $path = shift || die;
+	if(defined $inode_cash{$ino}) {
+		#print STDERR "DEBUG($ino): $path\n";
+		return 1;
+	}
+	$inode_cash{$ino}++;
+	return 0;
+}
+
+# Walk up a path and copy readable attributes from any
+# directory level.
+sub walk_up {
+	my $path = shift || die;
+	my $curr = $path;
+	# Walk up
+	for (my $curr = $path; $curr; $curr =~ s'/?[^/]+$'') {
+		my ($dev, $ino, $mode, $nlink, $uid, $gid) = lstat($curr);
+		next if seen($ino, $curr);	# Skip visited directories
+		# Scan directory
+		opendir(my $d, $curr) || die "Failed opendir($curr): $!\n";
+		my @entries = readdir $d;
+		foreach my $entry (@entries) {
+			next if $entry =~ /^[.][.]?$/;
+			my $file = "$curr/$entry";
+			my ($dev, $ino, $mode, $nlink, $uid, $gid) = lstat($file);
+			# Copy file
+			if (-f _ && ($mode & 0004)) {	# The '-r _' is buggy
+				copy($file, "$destdir$file") ||
+					die "Failed to copy '$file': $!\n";
+			}
+		}
+		closedir $d;
+	}
+}
+
+# Handle a given path (directory,symlink,regular-file)
+sub handle_path {
+	my $path = shift || die;
+	my ($dev, $ino, $mode, $nlink, $uid, $gid) = lstat($path);
+	# Save attributes before recursion starts
+	my $isdir = -d _;
+	my $islink = -l _;
+	my $isreadable = $mode & 00004;	# The '-r _' was buggy
+	return if seen($ino, $path);	# Loop prevention
+	my $dest = "$destdir/$path";
+	if ($isdir) {
+		mkpath("$dest");
+		scan_directory($path);
+	} elsif ($islink) {
+		# We follow links (the seen() protect us from loops)
+		my $target = readlink($path) ||
+			die "Failed readlink($path): $!\n";
+		my $follow = $target;
+		if ($target !~ m{^/}) {	# fix relative symlinks
+			my $dir = $path;
+			$dir =~ s,/[^/]*$,,;
+			$follow = realpath("$dir/$target");
+		}
+		# Save symlink details, so we create them after all
+		# destination tree (subdirectories, files) is ready
+		die "Duplicate entry '$dest'\n" if exists $symlinks{$dest};
+		$symlinks{$dest} = "$target";
+		# Now follow symlink
+		handle_path($follow);
+		$walk_ups{$follow}++;
+	} elsif ($isreadable) {
+		copy($path, "$dest") ||
+			die "Failed to copy '$path': $!\n";
+	}
+}
+
+# Scan a given directory (calling handle_path for recursion)
+sub scan_directory {
+	my $dir = shift || die;
+	my $entry;
+	opendir(my $d, $dir) || die "Failed opendir($dir): $!\n";
+	my @dirs = readdir $d;
+	foreach my $entry (@dirs) {
+		next if $entry =~ /^[.][.]?$/;
+		handle_path("$dir/$entry");
+	}
+	closedir $d;
+}
+
+# Filter out non-existing toplevels
+my @scan = grep { lstat($_) } @toplevels;
+
+# Recurse all trees, creating subdirectories and copying files
+foreach my $path (@scan) {
+	handle_path($path);
+}
+
+# Now, that all sub-directories were created, we can
+# create the wanted symlinks
+for my $dest (keys %symlinks) {
+	my $link = $symlinks{$dest};
+	die "Missing link for '$dest'\n" unless defined $link;
+	unlink $dest if -l $dest;
+	symlink($link,$dest) ||
+		die "Failed symlink($link,$dest): $!\n";
+}
+
+# Walk up directories that were symlink destinations
+# and fill their attributes
+foreach my $dir (keys %walk_ups) {
+	walk_up($dir);
+}
