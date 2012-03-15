@@ -56,7 +56,7 @@ else
 fi
 
 debug() {
-	[ "$DEBUG" != "" ] && $LOGGER "$@"
+	[ "$DEBUG" != "" ] && echo >&2 "$@"
 	return 0
 }
 
@@ -104,10 +104,10 @@ find_dev() {
 
 run_fxload() {
   sleep_if_race
-  fxload -t fx2 $* 2>&1 1>/dev/null | $LOGGER
+  fxload -t fx2 $* 2>&1 1>/dev/null
   status=$PIPESTATUS
   if [ $status != 0 ]; then
-    $LOGGER "fxload failed with status $status"
+    echo >&2 "fxload failed with status $status"
     exit 55
   fi
 }
@@ -240,20 +240,20 @@ usb_firmware_device() {
 
 run_astribank_hexload() {
 	debug "Running: $ASTRIBANK_HEXLOAD $*"
-	$ASTRIBANK_HEXLOAD "$@" | $LOGGER
+	$ASTRIBANK_HEXLOAD "$@"
 	status=$PIPESTATUS
 	if [ $status != 0 ]; then
-		$LOGGER "$ASTRIBANK_HEXLOAD failed with status $status"
+		echo >&2 "$ASTRIBANK_HEXLOAD failed with status $status"
 		exit 77
 	fi
 }
 
 run_astribank_tool() {
 	debug "Running: $ASTRIBANK_TOOL $*"
-	$ASTRIBANK_TOOL "$@" | $LOGGER
+	$ASTRIBANK_TOOL "$@"
 	status=$PIPESTATUS
 	if [ $status != 0 ]; then
-		$LOGGER "$ASTRIBANK_TOOL failed with status $status"
+		echo >&2 "$ASTRIBANK_TOOL failed with status $status"
 		exit 77
 	fi
 }
@@ -385,7 +385,7 @@ wait_renumeration() {
 }
 
 fpga_firmware_all_devices() {
-	echo "Loading FPGA firmwares" | $LOGGER
+	echo "Loading FPGA firmwares"
 	devs=`filter_devs 'e4e4/11[3456]1/*'`
 	n=`echo "$devs" | wc -l`
 	echo "$devs" | (
@@ -395,14 +395,14 @@ fpga_firmware_all_devices() {
 		sleep 1
 		echo "Wait for FPGA loading processes"
 		wait
-		) 2>&1 | $LOGGER
+		)
 	wait_renumeration $numdevs 'e4e4/11[3456]2/*' "fpga_firmware_device"
 }
 
 reset_fpga() {
 	devices=`filter_devs 'e4e4/11[3456][124]/*'`
 	totaldevs=`numdevs 'e4e4/11[3456][124]/*'`
-	$LOGGER -- "Reseting devices [$totaldevs devices]"
+	echo >&2 -- "Reseting devices [$totaldevs devices]"
 	echo "$devices" | grep -v '^$' | while read id_str dev
 	do
 		(
@@ -461,15 +461,15 @@ list)
 	;;
 xppdetect|load|usb)
 	numdevs=`numdevs 'e4e4/11[3456][0134]/*'`
-	$LOGGER -- "--------- FIRMWARE LOADING: ($1) [$numdevs devices]"
+	echo >&2 -- "--------- FIRMWARE LOADING: ($1) [$numdevs devices]"
 
-	usb_firmware_all_devices 2>&1 | $LOGGER
+	usb_firmware_all_devices
 	if [ "$1" != 'usb' ]
 	then
 		fpga_firmware_all_devices
 	fi
 
-	$LOGGER -- "--------- FIRMWARE IS LOADED"
+	echo >&2 -- "--------- FIRMWARE IS LOADED"
 	exit 0
 	;;
 recover-sb)
@@ -524,18 +524,18 @@ udev_delayed_load() {
 		sleep 1
 	done
 	if [ $usb_dev_writable != 1 ]; then
-		$LOGGER "Device $DEVICE not writable. Can't load firmware."
+		echo >&2 "Device $DEVICE not writable. Can't load firmware."
 		return;
 	fi
 
-	$LOGGER "Trying to find what to do for product $PRODUCT, device $DEVICE"
+	echo >&2 "Trying to find what to do for product $PRODUCT, device $DEVICE"
 	case "$PRODUCT" in
 	4b4/8613/*)
 		# This case is for a potentially-broken Astribank.
 		# In most systems you should not set udev rules for those to
 		# get here, as this is actually the ID of a Cypress dev-kit:
 		FIRM_USB="$FIRMWARE_DIR/$USB_RECOV"
-		$LOGGER "Loading recovery firmware '$FIRM_USB' into '$DEVICE'"
+		echo >&2 "Loading recovery firmware '$FIRM_USB' into '$DEVICE'"
 		run_fxload -D "$DEVICE" -I "$FIRM_USB"
 		;;
 	e4e4/11[3456]0/*|e4e4/1163/*)
