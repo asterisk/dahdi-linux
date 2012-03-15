@@ -9595,7 +9595,7 @@ static void coretimer_func(unsigned long param)
 	const long MS_LIMIT = 3000;
 	long difference;
 
-	now = current_kernel_time();
+	ktime_get_ts(&now);
 
 	if (atomic_read(&core_timer.count) ==
 	    atomic_read(&core_timer.last_count)) {
@@ -9668,7 +9668,7 @@ static void coretimer_init(void)
 {
 	init_timer(&core_timer.timer);
 	core_timer.timer.function = coretimer_func;
-	core_timer.start_interval = current_kernel_time();
+	ktime_get_ts(&core_timer.start_interval);
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
 	core_timer.interval = max(msecs_to_jiffies(DAHDI_MSECS_PER_CHUNK), 1UL);
