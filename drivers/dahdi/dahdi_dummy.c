@@ -75,6 +75,7 @@ static inline void hrtimer_set_expires(struct hrtimer *timer, ktime_t time)
 #endif
 
 struct dahdi_dummy {
+	struct dahdi_device *ddev;
 	struct dahdi_span span;
 	struct dahdi_chan _chan;
 	struct dahdi_chan *chan;
@@ -205,37 +206,44 @@ static const struct dahdi_span_ops dummy_ops = {
 
 static int dahdi_dummy_initialize(struct dahdi_dummy *ztd)
 {
+	int res = 0;
 	/* DAHDI stuff */
+	ztd->ddev = dahdi_create_device();
+	if (!ztd->ddev)
+		return -ENOMEM;
+	dev_set_name(&ztd->ddev->dev, "dahdi_dummy");
 	ztd->chan = &ztd->_chan;
 	sprintf(ztd->span.name, "DAHDI_DUMMY/1");
 	snprintf(ztd->span.desc, sizeof(ztd->span.desc) - 1, "%s (source: " CLOCK_SRC ") %d", ztd->span.name, 1);
 	sprintf(ztd->chan->name, "DAHDI_DUMMY/%d/%d", 1, 0);
-	strlcpy(ztd->span.devicetype, "DAHDI Dummy Timing",
-		sizeof(ztd->span.devicetype));
+	ztd->ddev->devicetype = "DAHDI Dummy Timing";
 	ztd->chan->chanpos = 1;
 	ztd->span.chans = &ztd->chan;
 	ztd->span.channels = 0;		/* no channels on our span */
 	ztd->span.deflaw = DAHDI_LAW_MULAW;
 	ztd->chan->pvt = ztd;
 	ztd->span.ops = &dummy_ops;
-	if (dahdi_register(&ztd->span, 0)) {
-		return -1;
-	}
-	return 0;
+	list_add_tail(&ztd->span.device_node, &ztd->ddev->spans);
+	res = dahdi_register_device(ztd->ddev, NULL);
+	return res;
 }
 
 int init_module(void)
 {
+	int res;
 	ztd = kzalloc(sizeof(*ztd), GFP_KERNEL);
 	if (ztd == NULL) {
 		printk(KERN_ERR "dahdi_dummy: Unable to allocate memory\n");
 		return -ENOMEM;
 	}
 
-	if (dahdi_dummy_initialize(ztd)) {
-		printk(KERN_ERR "dahdi_dummy: Unable to intialize DAHDI driver\n");
+	res = dahdi_dummy_initialize(ztd);
+	if (res) {
+		printk(KERN_ERR
+		       "dahdi_dummy: Unable to intialize DAHDI driver (%d)\n",
+		       res);
 		kfree(ztd);
-		return -ENODEV;
+		return res;
 	}
 
 #if defined(USE_HIGHRESTIMER)
@@ -273,7 +281,8 @@ void cleanup_module(void)
 	atomic_set(&shutdown, 1);
 	del_timer_sync(&timer);
 #endif
-	dahdi_unregister(&ztd->span);
+	dahdi_unregister_device(ztd->ddev);
+	dahdi_free_device(ztd->ddev);
 	kfree(ztd);
 	if (debug)
 		printk(KERN_DEBUG "dahdi_dummy: cleanup() finished\n");
