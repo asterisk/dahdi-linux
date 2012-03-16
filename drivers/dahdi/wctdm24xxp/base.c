@@ -1986,20 +1986,16 @@ wctdm_fxs_hooksig(struct wctdm *wc, struct wctdm_module *const mod,
 	switch (txsig) {
 	case DAHDI_TXSIG_ONHOOK:
 		switch (get_dahdi_chan(wc, mod)->sig) {
-		case DAHDI_SIG_EM:
-		case DAHDI_SIG_FXOKS:
-		case DAHDI_SIG_FXOLS:
-			x = fxs->idletxhookstate;
-			break;
 		case DAHDI_SIG_FXOGS:
 			x = (POLARITY_XOR(fxs)) ?
 					SLIC_LF_RING_OPEN :
 					SLIC_LF_TIP_OPEN;
 			break;
+		case DAHDI_SIG_EM:
+		case DAHDI_SIG_FXOKS:
+		case DAHDI_SIG_FXOLS:
 		default:
-			WARN_ONCE(1, "%x is an invalid signaling state for "
-				  "an FXS module.\n",
-				  get_dahdi_chan(wc, mod)->sig);
+			x = fxs->idletxhookstate;
 			break;
 		}
 		break;
