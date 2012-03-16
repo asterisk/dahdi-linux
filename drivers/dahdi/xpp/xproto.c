@@ -75,6 +75,12 @@ static const xproto_table_t *xproto_table(xpd_type_t cardtype)
 	return xprotocol_tables[cardtype];
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 3, 0)
+#define MODULE_REFCOUNT_FORMAT "%s refcount was %d\n"
+#else
+#define MODULE_REFCOUNT_FORMAT "%s refcount was %lu\n"
+#endif
+
 const xproto_table_t *xproto_get(xpd_type_t cardtype)
 {
 	const xproto_table_t *xtable;
@@ -94,7 +100,8 @@ const xproto_table_t *xproto_get(xpd_type_t cardtype)
 	if(xtable) {
 		BUG_ON(!xtable->owner);
 #ifdef CONFIG_MODULE_UNLOAD
-		DBG(GENERAL, "%s refcount was %d\n", xtable->name, module_refcount(xtable->owner));
+		DBG(GENERAL, MODULE_REFCOUNT_FORMAT, xtable->name,
+		    module_refcount(xtable->owner));
 #endif
 		if(!try_module_get(xtable->owner)) {
 			ERR("%s: try_module_get for %s failed.\n", __FUNCTION__, xtable->name);
@@ -108,7 +115,8 @@ void xproto_put(const xproto_table_t *xtable)
 {
 	BUG_ON(!xtable);
 #ifdef CONFIG_MODULE_UNLOAD
-	DBG(GENERAL, "%s refcount was %d\n", xtable->name, module_refcount(xtable->owner));
+	DBG(GENERAL, MODULE_REFCOUNT_FORMAT, xtable->name,
+	    module_refcount(xtable->owner));
 	BUG_ON(module_refcount(xtable->owner) <= 0);
 #endif
 	module_put(xtable->owner);
