@@ -49,6 +49,7 @@ typedef	unsigned gfp_t;		/* Added in 2.6.14 */
 #endif
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31)
 /*
  * FIXME: Kludge for 2.6.19
  * bool is now defined as a proper boolean type (gcc _Bool)
@@ -58,6 +59,12 @@ typedef	unsigned gfp_t;		/* Added in 2.6.14 */
 	int name = init;	\
 	module_param(name, bool, perm);		\
 	MODULE_PARM_DESC(name, desc " [default " #init "]")
+#else
+#define	DEF_PARM_BOOL(name, init, perm, desc) \
+	bool name = init; \
+	module_param(name, bool, perm); \
+	MODULE_PARM_DESC(name, desc " [default " #init "]")
+#endif
 
 #define	DEF_PARM(type,name,init,perm,desc)	\
 	type name = init;	\
