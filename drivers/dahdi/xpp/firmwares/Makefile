@@ -1,8 +1,9 @@
 # Install firmwares and initialization scripts for the Astribank
 # drivers
 
-USB_FW		= USB_FW.hex USB_RECOV.hex
-FPGA_FW		= FPGA_FXS.hex FPGA_1141.hex FPGA_1151.hex FPGA_1161.hex
+USB_FW		= USB_FW.hex USB_FW.201.hex USB_RECOV.hex
+FPGA_FW		= FPGA_FXS.hex FPGA_1141.hex FPGA_1151.hex FPGA_1161.hex  \
+		  FPGA_1161.201.hex
 PIC_FW		= PIC_TYPE_1.hex PIC_TYPE_2.hex PIC_TYPE_3.hex PIC_TYPE_4.hex  
 OCT_FW		= $(wildcard OCT6104E-256D.ima)
 FIRMWARES	= $(USB_FW) $(FPGA_FW) $(PIC_FW) $(OCT_FW)
