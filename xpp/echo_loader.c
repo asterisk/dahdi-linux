@@ -123,7 +123,7 @@ static void usb_buffer_showstatistics(struct astribank_device *astribank, struct
 	long	usec;
 
 	usec = usb_buffer_usec(ub);
-	AB_INFO(astribank, "Octasic statistics: packet_size=[%d, %ld, %d] packets=%d, bytes=%ld msec=%ld usec/packet=%d\n",
+	AB_INFO(astribank, "Octasic statistics: packet_size=[%d, %ld, %d] packets=%d, bytes=%ld msec=%ld usec/packet=%ld\n",
 		ub->min_send,
 		ub->total_bytes / ub->num_sends,
 		ub->max_send,
@@ -822,9 +822,7 @@ UINT32 init_octasic(char *filename, struct astribank_device *astribank, int is_a
 
 int load_echo(struct astribank_device *astribank, char *filename, int is_alaw)
 {
-	int		iLen;
 	int		ret;
-	unsigned char	*pbyFileData = NULL;
 	UINT32		octasic_status;
 
 	AB_INFO(astribank, "Loading ECHOCAN Firmware: %s (%s)\n",

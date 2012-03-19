@@ -22,6 +22,7 @@
 
 #include <errno.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <string.h>
 #include <debug.h>
 #include "astribank_license.h"
@@ -230,7 +231,7 @@ int read_from_file(
 	char buf[256];
 	char *line, *key, *value;
 	int lineno = 0;
-	unsigned int license_marker_begin;
+	unsigned int license_marker_begin = 0;
 	unsigned int license_marker_end;
 	struct table {
 		struct eeprom_table eeprom_table;

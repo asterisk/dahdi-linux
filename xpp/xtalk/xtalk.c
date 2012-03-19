@@ -243,16 +243,17 @@ static int send_command(struct xtalk_device *xtalk_dev, struct xtalk_command *cm
 {
 	int		ret;
 	int		len;
-	char		*buf;
 	void		*priv = xtalk_dev->transport_priv;
 
 	len = cmd->header.len;
 	cmd->header.seq = xtalk_dev->tx_sequenceno;
 
-	buf = (char *)cmd;
 	//printf("%s: len=%d\n", __FUNCTION__, len);
 #if 0
 	extern	FILE	*fp;
+	char		*buf;
+
+	buf = (char *)cmd;
 	if(fp) {
 		int	i;
 

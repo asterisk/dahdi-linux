@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	if (do_write) {
-		int used_marker;
+		unsigned int used_marker;
 		/* update capabilities based on input file */
 		file = stdin;
 		if (filename) {
