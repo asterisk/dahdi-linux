@@ -1500,7 +1500,6 @@ UINT32 Oct6100ApiReserveChannelResources(
 				IN  tPOCT6100_CHANNEL_OPEN				f_pChannelOpen,
 				OUT tPOCT6100_API_ECHO_CHAN_INDEX		f_pChanIndexConf )
 {
-	tPOCT6100_SHARED_INFO			pSharedInfo;
 	tPOCT6100_CHANNEL_OPEN_TDM		pTdmConfig;
 	tPOCT6100_CHANNEL_OPEN_CODEC	pCodecConfig;
 
@@ -1526,9 +1525,6 @@ UINT32 Oct6100ApiReserveChannelResources(
 	BOOL	fExtToneChanEntry	= FALSE;
 	BOOL	fExtToneTsiEntry	= FALSE;
 	BOOL	fExtToneMixerEntry	= FALSE;
-	
-	/* Obtain local pointer to shared portion of instance. */
-	pSharedInfo = f_pApiInstance->pSharedInfo;
 
 	/* Obtain a local pointer to the configuration structures.*/
 	pTdmConfig		= &f_pChannelOpen->TdmConfig;
@@ -1951,7 +1947,6 @@ UINT32 Oct6100ApiWriteChannelStructs(
 	UINT32	ulResult;
 	UINT32	ulDwordAddress;
 	UINT32	ulDwordData;
-	BOOL	fConversionEnabled = FALSE;
 	BOOL	fProgramAdpcmMem;
 	UINT32	ulCompType = 0;
 	UINT32	ulPcmLaw;
@@ -2036,62 +2031,50 @@ UINT32 Oct6100ApiWriteChannelStructs(
 			break;
 		case cOCT6100_G726_40KBPS:				
 			ulCompType = 0x3;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_32KBPS:				
 			ulCompType = 0x2;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_24KBPS:				
 			ulCompType = 0x1;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_16KBPS:				
 			ulCompType = 0x0;		
-			fConversionEnabled = TRUE;
 			break;		
 
 		case cOCT6100_G727_2C_ENCODED:			
 			ulCompType = 0x4;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_3C_ENCODED:			
 			ulCompType = 0x5;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_4C_ENCODED:			
 			ulCompType = 0x6;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_ENCODED:				
 			ulCompType = 0x9;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G711_G726_ENCODED:		
 			ulCompType = 0xA;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G711_G727_2C_ENCODED:		
 			ulCompType = 0xC;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G711_G727_3C_ENCODED:		
 			ulCompType = 0xD;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G711_G727_4C_ENCODED:		
 			ulCompType = 0xE;		
-			fConversionEnabled = TRUE;
 			break;
 		default:
 			return cOCT6100_ERR_FATAL_D4;
@@ -2182,67 +2165,54 @@ UINT32 Oct6100ApiWriteChannelStructs(
 			break;
 		case cOCT6100_G726_40KBPS:				
 			ulCompType = 0x3;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_32KBPS:				
 			ulCompType = 0x2;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_24KBPS:				
 			ulCompType = 0x1;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G726_16KBPS:				
 			ulCompType = 0x0;		
-			fConversionEnabled = TRUE;
 			break;		
 
 		case cOCT6100_G727_40KBPS_4_1:			
 			ulCompType = 0xD;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_40KBPS_3_2:			
 			ulCompType = 0xA;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_40KBPS_2_3:			
 			ulCompType = 0x6;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_32KBPS_4_0:			
 			ulCompType = 0xE;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_32KBPS_3_1:			
 			ulCompType = 0xB;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_32KBPS_2_2:			
 			ulCompType = 0x7;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_24KBPS_3_0:			
 			ulCompType = 0xC;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_24KBPS_2_1:			
 			ulCompType = 0x8;		
-			fConversionEnabled = TRUE;
 			break;
 
 		case cOCT6100_G727_16KBPS_2_0:			
 			ulCompType = 0x9;		
-			fConversionEnabled = TRUE;
 			break;
 
 		default:
@@ -3807,10 +3777,8 @@ UINT32 Oct6100ApiCheckChannelModify(
 	/* Check the TDM config.*/
 	if ( f_pChannelModify->fTdmConfigModified == TRUE )
 	{
-		tPOCT6100_CHANNEL_MODIFY_TDM		pModifyTdm;
 		tPOCT6100_CHANNEL_OPEN_TDM			pOpenTdm;
 
-		pModifyTdm = &f_pChannelModify->TdmConfig;
 		pOpenTdm = &f_pTempChanOpen->TdmConfig;
 
 		ulResult = Oct6100ApiCheckTdmConfig( f_pApiInstance,
@@ -4706,7 +4674,6 @@ UINT32 Oct6100ApiModifyChannelStructs(
 	tOCT6100_WRITE_PARAMS	WriteParams;
 	tPOCT6100_API_CHANNEL_CODEC	pApiCodecConf;
 	tPOCT6100_API_CHANNEL_TDM	pApiTdmConf;
-	tPOCT6100_API_CHANNEL_VQE	pApiVqeConf;
 
 	UINT32	ulResult;
 	UINT16	usReadData;
@@ -4716,8 +4683,6 @@ UINT32 Oct6100ApiModifyChannelStructs(
 
 	UINT32	ulToneConfIndex;
 	BOOL	fClearPlayoutPointers = FALSE;
-
-	BOOL	fConversionEnabled = FALSE;
 
 
 
@@ -4740,7 +4705,6 @@ UINT32 Oct6100ApiModifyChannelStructs(
 	/* Obtain local pointer to the configuration structures of the tPOCT6100_API_CHANNEL structure. */
 	pApiCodecConf = &pChanEntry->CodecConfig;
 	pApiTdmConf   = &pChanEntry->TdmConfig;
-	pApiVqeConf   = &pChanEntry->VqeConfig;
 
 	/*=======================================================================*/
 	/* Init the RIN and SIN TSST index */
@@ -5090,62 +5054,50 @@ UINT32 Oct6100ApiModifyChannelStructs(
 				break;
 			case cOCT6100_G726_40KBPS:				
 				ulCompType = 0x3;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G726_32KBPS:				
 				ulCompType = 0x2;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G726_24KBPS:				
 				ulCompType = 0x1;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G726_16KBPS:				
 				ulCompType = 0x0;		
-				fConversionEnabled = TRUE;
 				break;		
 
 			case cOCT6100_G727_2C_ENCODED:			
 				ulCompType = 0x4;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G727_3C_ENCODED:			
 				ulCompType = 0x5;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G727_4C_ENCODED:			
 				ulCompType = 0x6;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G726_ENCODED:				
 				ulCompType = 0x9;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G711_G726_ENCODED:		
 				ulCompType = 0xA;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G711_G727_2C_ENCODED:		
 				ulCompType = 0xC;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G711_G727_3C_ENCODED:		
 				ulCompType = 0xD;		
-				fConversionEnabled = TRUE;
 				break;
 
 			case cOCT6100_G711_G727_4C_ENCODED:		
 				ulCompType = 0xE;		
-				fConversionEnabled = TRUE;
 				break;
 
 			default:
@@ -5262,67 +5214,54 @@ UINT32 Oct6100ApiModifyChannelStructs(
 					break;
 				case cOCT6100_G726_40KBPS:				
 					ulCompType = 0x3;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G726_32KBPS:				
 					ulCompType = 0x2;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G726_24KBPS:				
 					ulCompType = 0x1;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G726_16KBPS:				
 					ulCompType = 0x0;		
-					fConversionEnabled = TRUE;
 					break;		
 
 				case cOCT6100_G727_40KBPS_4_1:			
 					ulCompType = 0xD;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_40KBPS_3_2:			
 					ulCompType = 0xA;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_40KBPS_2_3:			
 					ulCompType = 0x6;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_32KBPS_4_0:			
 					ulCompType = 0xE;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_32KBPS_3_1:			
 					ulCompType = 0xB;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_32KBPS_2_2:			
 					ulCompType = 0x7;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_24KBPS_3_0:			
 					ulCompType = 0xC;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_24KBPS_2_1:			
 					ulCompType = 0x8;		
-					fConversionEnabled = TRUE;
 					break;
 
 				case cOCT6100_G727_16KBPS_2_0:			
 					ulCompType = 0x9;		
-					fConversionEnabled = TRUE;
 					break;
 
 				default:
@@ -8885,7 +8824,6 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 {
 	tPOCT6100_API_CHANNEL			pChanEntry;
 	tPOCT6100_SHARED_INFO			pSharedInfo;
-	tOCT6100_WRITE_PARAMS			WriteParams;
 	tOCT6100_BUFFER_PLAYOUT_STOP	BufferPlayoutStop;
 	UINT32							ulResult;
 	UINT32							ulTempData;
@@ -8898,10 +8836,6 @@ UINT32 Oct6100ApiWriteVqeNlpMemory(
 	BOOL							fEchoOperationModeChanged;
 	
 	pSharedInfo = f_pApiInstance->pSharedInfo;
-
-	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	WriteParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
 
 	/* Obtain a pointer to the new buffer's list entry. */
 	mOCT6100_GET_CHANNEL_ENTRY_PNT( pSharedInfo, pChanEntry, f_usChanIndex );
@@ -9856,7 +9790,6 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 {
 	tPOCT6100_API_CHANNEL			pChanEntry;
 	tPOCT6100_SHARED_INFO			pSharedInfo;
-	tOCT6100_WRITE_PARAMS			WriteParams;
 	UINT32							ulResult;
 	UINT32							ulTempData;
 	UINT32							ulAfConfigBaseAddress;
@@ -9867,10 +9800,6 @@ UINT32 Oct6100ApiWriteVqeAfMemory(
 	UINT16							usTempData;
 	
 	pSharedInfo = f_pApiInstance->pSharedInfo;
-
-	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	WriteParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
 
 	/* Obtain a pointer to the new buffer's list entry. */
 	mOCT6100_GET_CHANNEL_ENTRY_PNT( pSharedInfo, pChanEntry, f_usChanIndex );
@@ -12338,11 +12267,7 @@ UINT32 Oct6100ApiWriteDebugChanMemory(
 				IN	UINT16							f_usRinRoutTsiIndex,
 				IN	UINT16							f_usSinSoutTsiIndex )
 {
-	tPOCT6100_SHARED_INFO	pSharedInfo;
 	UINT32					ulResult;
-
-	/* Obtain pointer to local portion of the instance. */
-	pSharedInfo = f_pApiInstance->pSharedInfo;
 
 	/*==============================================================================*/
 	/* Write the VQE configuration of the debug channel. */

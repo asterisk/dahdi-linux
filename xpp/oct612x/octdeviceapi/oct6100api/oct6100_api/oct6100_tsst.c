@@ -175,12 +175,9 @@ UINT32 Oct6100ApiValidateTsst(
 {
 	tPOCT6100_SHARED_INFO		pSharedInfo;
 	tPOCT6100_API_CHIP_CONFIG	pChipConfig;	
-	PUINT32						pulTsstAlloc;
 	
 	/* Obtain local pointer to shared portion of instance. */
 	pSharedInfo = f_pApiInstance->pSharedInfo;
-	
-	mOCT6100_GET_TSST_ALLOC_PNT( f_pApiInstance->pSharedInfo, pulTsstAlloc );
 
 	/* Obtain local pointer to chip configuration. */
 	pChipConfig = &pSharedInfo->ChipConfig;

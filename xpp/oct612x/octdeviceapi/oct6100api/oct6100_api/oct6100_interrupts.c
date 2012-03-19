@@ -798,7 +798,6 @@ UINT32 Oct6100ApiReadIntrptRegs(
 	tPOCT6100_API_CHIP_ERROR_STATS	pErrorStats;
 	tPOCT6100_API_INTRPT_MANAGE		pIntrptManage;
 	tOCT6100_READ_PARAMS			ReadParams;
-	tOCT6100_WRITE_PARAMS			WriteParams;
 
 	UINT32	ulResult;
 	UINT16	usReadData;
@@ -819,13 +818,6 @@ UINT32 Oct6100ApiReadIntrptRegs(
 
 	ReadParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
 	ReadParams.pusReadData = &usReadData;
-
-	/* Set some parameters of write struct. */
-	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	WriteParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
-
-
 
 	/* CPU registers. */
 	if ( (f_ulRegister210h & 0x00001) != 0 )
@@ -1296,7 +1288,6 @@ UINT32 Oct6100ApiWriteIeRegs(
 {
 	tPOCT6100_API_INTRPT_MANAGE	pIntrptManage;
 	tOCT6100_WRITE_PARAMS		WriteParams;
-	tOCT6100_READ_PARAMS		ReadParams;
 	UINT32	ulResult;
 
 	/* Get some local pointers. */
@@ -1307,12 +1298,6 @@ UINT32 Oct6100ApiWriteIeRegs(
 
 	WriteParams.ulUserChipId = f_pApiInstance->pSharedInfo->ChipConfig.ulUserChipId;
 
-
-	/* Set some parameters of read struct. */
-	ReadParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	ReadParams.ulUserChipId = f_pApiInstance->pSharedInfo->ChipConfig.ulUserChipId;
-	
 	/*==================================================================================*/
 	WriteParams.ulWriteAddress = 0x104;
 	WriteParams.usWriteData = 0x0000;

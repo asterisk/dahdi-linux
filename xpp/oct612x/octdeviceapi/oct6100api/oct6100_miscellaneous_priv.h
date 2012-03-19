@@ -84,14 +84,12 @@ $Octasic_Revision: 20 $
 {																				\
 	PVOID	_pProcessContext;													\
 	UINT32	_ulUserChipId;														\
-	UINT32	_ulWriteAddress;													\
 	UINT16	_usWriteData;														\
 	UINT32	_ulWriteLength;														\
 																				\
 	/* Store the data that is to be passed to the user. */						\
 	_pProcessContext = SmearParams.pProcessContext;								\
 	_ulUserChipId = SmearParams.ulUserChipId;									\
-	_ulWriteAddress = SmearParams.ulWriteAddress;								\
 	_usWriteData = SmearParams.usWriteData;										\
 	_ulWriteLength = SmearParams.ulWriteLength;									\
 																				\

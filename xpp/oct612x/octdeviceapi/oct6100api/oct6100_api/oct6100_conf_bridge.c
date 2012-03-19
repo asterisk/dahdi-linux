@@ -2893,7 +2893,6 @@ UINT32	Oct6100ApiBridgeAddParticipantToChannel(
 	tPOCT6100_API_CHANNEL				pSourceChanEntry;
 	tPOCT6100_API_CHANNEL				pDestinationChanEntry;
 
-	tPOCT6100_API_FLEX_CONF_PARTICIPANT	pSourceParticipant;
 	tPOCT6100_API_FLEX_CONF_PARTICIPANT	pDestinationParticipant;
 
 	tPOCT6100_SHARED_INFO			pSharedInfo;
@@ -2914,7 +2913,6 @@ UINT32	Oct6100ApiBridgeAddParticipantToChannel(
 	mOCT6100_GET_CONF_BRIDGE_ENTRY_PNT( f_pApiInstance->pSharedInfo, pBridgeEntry, f_usBridgeIndex );
 
 	mOCT6100_GET_CHANNEL_ENTRY_PNT( f_pApiInstance->pSharedInfo, pSourceChanEntry, f_usSourceChannelIndex );
-	mOCT6100_GET_FLEX_CONF_PARTICIPANT_ENTRY_PNT( f_pApiInstance->pSharedInfo, pSourceParticipant, pSourceChanEntry->usFlexConfParticipantIndex );
 	mOCT6100_GET_CHANNEL_ENTRY_PNT( f_pApiInstance->pSharedInfo, pDestinationChanEntry, f_usDestinationChannelIndex );
 	mOCT6100_GET_FLEX_CONF_PARTICIPANT_ENTRY_PNT( f_pApiInstance->pSharedInfo, pDestinationParticipant, pDestinationChanEntry->usFlexConfParticipantIndex );
 
@@ -5069,12 +5067,9 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 	tPOCT6100_API_MIXER_EVENT			pTempEntry;
 	tPOCT6100_API_MIXER_EVENT			pLoadTempEntry;
 	tPOCT6100_API_MIXER_EVENT			pLastEventEntry;
-	tPOCT6100_API_MIXER_EVENT			pLastLoadOrAccumulateEventEntry;
 
-	tPOCT6100_API_CHANNEL				pSourceChanEntry;
 	tPOCT6100_API_CHANNEL				pDestinationChanEntry;
 
-	tPOCT6100_API_FLEX_CONF_PARTICIPANT	pSourceParticipant;
 	tPOCT6100_API_FLEX_CONF_PARTICIPANT	pDestinationParticipant;
 
 	tPOCT6100_SHARED_INFO				pSharedInfo;
@@ -5083,7 +5078,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 
 	UINT32								ulResult;
 	UINT32								ulLoopCount;
-	UINT16								usLastLoadEventIndex;
 	UINT16								usLoadOrAccumulateEventIndex;
 	UINT16								usTempEventIndex;
 	UINT16								usPreviousEventIndex;
@@ -5091,7 +5085,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 
 	UINT16								usReadData;
 	BOOL								fLastEvent = FALSE;
-	BOOL								fSoutCopyEvent = FALSE;
 
 	/* Obtain local pointer to shared portion of instance. */
 	pSharedInfo = f_pApiInstance->pSharedInfo;
@@ -5107,8 +5100,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 
 	mOCT6100_GET_CONF_BRIDGE_ENTRY_PNT( f_pApiInstance->pSharedInfo, pBridgeEntry, f_usBridgeIndex );
 
-	mOCT6100_GET_CHANNEL_ENTRY_PNT( f_pApiInstance->pSharedInfo, pSourceChanEntry, f_usSourceChannelIndex );
-	mOCT6100_GET_FLEX_CONF_PARTICIPANT_ENTRY_PNT( f_pApiInstance->pSharedInfo, pSourceParticipant, pSourceChanEntry->usFlexConfParticipantIndex );
 	mOCT6100_GET_CHANNEL_ENTRY_PNT( f_pApiInstance->pSharedInfo, pDestinationChanEntry, f_usDestinationChannelIndex );
 	mOCT6100_GET_FLEX_CONF_PARTICIPANT_ENTRY_PNT( f_pApiInstance->pSharedInfo, pDestinationParticipant, pDestinationChanEntry->usFlexConfParticipantIndex );
 
@@ -5127,8 +5118,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 		mOCT6100_GET_MIXER_EVENT_ENTRY_PNT( pSharedInfo, pTempEntry, usTempEventIndex );
 
 		pLastEventEntry = pLoadEventEntry;
-		pLastLoadOrAccumulateEventEntry = pLoadEventEntry;
-		usLastLoadEventIndex = usTempEventIndex;
 		usLastEventIndex = usTempEventIndex;
 
 		while( pTempEntry->usEventType != cOCT6100_MIXER_CONTROL_MEM_SUB_STORE && 
@@ -5223,9 +5212,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 					return cOCT6100_ERR_FATAL_C6;
 				}
 			}
-
-			pLastLoadOrAccumulateEventEntry = pTempEntry;
-			usLastLoadEventIndex = usTempEventIndex;
 
 			/* Go to the next entry into the list. */
 			usTempEventIndex = pTempEntry->usNextEventPtr;
@@ -5362,7 +5348,6 @@ UINT32 Oct6100ApiBridgeRemoveParticipantFromChannel(
 			if ( pTempEntry->usEventType == cOCT6100_MIXER_CONTROL_MEM_COPY )
 			{
 				/* No more previous bridges. */
-				fSoutCopyEvent = TRUE;
 			}
 
 			/* Now modify the previous last Store or Sub-Store or Head-Node event from another bridge/channel. */
@@ -7412,7 +7397,6 @@ UINT32 Oct6100ApiGetPrevLastSubStoreEvent(
 				IN		UINT16							f_usBridgeFirstLoadEventPtr,
 				OUT		PUINT16							f_pusLastSubStoreEventIndex )
 {
-	tPOCT6100_API_CONF_BRIDGE	pBridgeEntry;
 	tPOCT6100_API_MIXER_EVENT	pTempMixerEntry;
 	UINT16						usNextEventPtr;
 	UINT16						usHeadEventPtr;
@@ -7420,9 +7404,6 @@ UINT32 Oct6100ApiGetPrevLastSubStoreEvent(
 	UINT32						ulLoopCount = 0;
 	UINT16						usCurrentPtr;
 	UINT32						ulResult = cOCT6100_ERR_OK;
-
-	/* Get current entry to obtain the link to the previous entry.*/
-	mOCT6100_GET_CONF_BRIDGE_ENTRY_PNT( f_pApiInstance->pSharedInfo, pBridgeEntry, f_usBridgeIndex );
 
 	/* Since we have flexible bridges, we have to */
 	/* run down the list and check for the appropriate event. */

@@ -3569,9 +3569,7 @@ UINT32 Oct6100ApiBootSdram(
 	tPOCT6100_SHARED_INFO		pSharedInfo;
 	tPOCT6100_API_CHIP_CONFIG	pChipConfig;
 	tOCT6100_WRITE_PARAMS		WriteParams;
-	tOCT6100_READ_PARAMS		ReadParams;
 	UINT32	ulResult;
-	UINT16	usReadData;
 	UINT16	usWriteData23E;
 	UINT16	usWriteData230;
 	UINT32	i;
@@ -3586,11 +3584,6 @@ UINT32 Oct6100ApiBootSdram(
 	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
 
 	WriteParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
-
-	ReadParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	ReadParams.ulUserChipId = pSharedInfo->ChipConfig.ulUserChipId;
-	ReadParams.pusReadData = &usReadData;
 
 	usWriteData23E = 0x0000;
 	usWriteData230 = 0x0000;
@@ -4995,7 +4988,6 @@ UINT32 Oct6100ApiRunEgo(
 				OUT		PUINT32							f_aulEntry )
 {
 	tPOCT6100_SHARED_INFO		pSharedInfo;
-	tPOCT6100_API_CHIP_CONFIG	pChipConfig;
 	tOCT6100_WRITE_PARAMS		WriteParams;
 	tOCT6100_READ_PARAMS		ReadParams;
 	UINT32	ulResult;
@@ -5007,9 +4999,6 @@ UINT32 Oct6100ApiRunEgo(
 
 	/* Get local pointer to shared portion of instance. */
 	pSharedInfo = f_pApiInstance->pSharedInfo;
-
-	/* Get local pointer to the chip configuration structure. */
-	pChipConfig = &f_pApiInstance->pSharedInfo->ChipConfig;
 
 	/* Set the process context and user chip ID parameters once and for all. */
 	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
@@ -5210,7 +5199,6 @@ UINT32 Oct6100ApiInitChannels(
 	tPOCT6100_SHARED_INFO		pSharedInfo;
 	UINT32 i;
 	UINT32 ulResult;
-	tOCT6100_WRITE_BURST_PARAMS	BurstParams;
 	tOCT6100_WRITE_PARAMS		WriteParams;
 	tOCT6100_READ_PARAMS		ReadParams;
 	UINT16						usReadData;
@@ -5220,7 +5208,6 @@ UINT32 Oct6100ApiInitChannels(
 	UINT32						ulFeatureBitOffset;
 	UINT32						ulFeatureFieldLength;
 	UINT32						ulMask;
-	UINT16						ausWriteData[ 4 ];
 	UINT16						usLoopCount = 0;
 	UINT16						usWriteData = 0;
 	UINT16						usMclkRead;
@@ -5234,11 +5221,6 @@ UINT32 Oct6100ApiInitChannels(
 	WriteParams.pProcessContext = f_pApiInstance->pProcessContext;
 
 	WriteParams.ulUserChipId = f_pApiInstance->pSharedInfo->ChipConfig.ulUserChipId;
-
-	BurstParams.pProcessContext = f_pApiInstance->pProcessContext;
-
-	BurstParams.ulUserChipId = f_pApiInstance->pSharedInfo->ChipConfig.ulUserChipId;
-	BurstParams.pusWriteData = ausWriteData;
 
 	ReadParams.pProcessContext = f_pApiInstance->pProcessContext;
 
