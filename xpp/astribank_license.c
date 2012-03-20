@@ -311,7 +311,6 @@ int read_from_file(
 			case STATE_READ_DATA:
 				license_marker_end = marker_find(line, 1);
 				if (license_marker_end) {
-					printf("DEBUG: end=%d begin=%d\n", license_marker_end, license_marker_begin);
 					if (license_marker_end != license_marker_begin) {
 						ERR("Line %d: End marker != Begin marker\n", lineno);
 						return -1;
