@@ -173,6 +173,15 @@ static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct 
 /* #define CONFIG_FORCE_EXTENDED_RESET */
 /* #define CONFIG_NOEXTENDED_RESET */
 
+/*
+ * Uncomment the following definition in order to disable Active-State Power
+ * Management on the PCIe bridge for PCIe cards. This has been known to work
+ * around issues where the BIOS enables it on the cards even though the
+ * platform does not support it.
+ *
+ */
+/* #define CONFIG_WCT4XXP_DISABLE_ASPM */
+
 #if defined(CONFIG_FORCE_EXTENDED_RESET) && defined(CONFIG_NOEXTENDED_RESET)
 #error "You cannot define both CONFIG_FORCE_EXTENDED_RESET and " \
 		"CONFIG_NOEXTENDED_RESET."
@@ -377,6 +386,11 @@ struct t4 {
 #endif	
 	struct spi_state st;
 };
+
+static inline bool is_pcie(const struct t4 *wc)
+{
+	return (wc->devtype->flags & FLAG_EXPRESS) > 0;
+}
 
 static inline bool has_e1_span(const struct t4 *wc)
 {
@@ -5074,6 +5088,13 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 
 	spin_lock_init(&wc->reglock);
 	wc->devtype = (const struct devtype *)(ent->driver_data);
+
+#ifdef CONFIG_WCT4XXP_DISABLE_ASPM
+	if (is_pcie(wc)) {
+		pci_disable_link_state(pdev->bus->self, PCIE_LINK_STATE_L0S |
+			PCIE_LINK_STATE_L1 | PCIE_LINK_STATE_CLKPM);
+	};
+#endif
 
 	if (is_octal(wc))
 		wc->numspans = 8;
