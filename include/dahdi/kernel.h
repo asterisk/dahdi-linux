@@ -99,16 +99,25 @@
 #endif
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
 #  ifdef RHEL_RELEASE_VERSION
 #    if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 6)
 #define dev_name(dev)		((dev)->bus_id)
+#define dev_set_name(dev, format, ...) \
+	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__)
+#    else
+#define dev_set_name(dev, format, ...) \
+	do { \
+		kobject_set_name(&(dev)->kobj, format, ## __VA_ARGS__); \
+		snprintf((dev)->bus_id, BUS_ID_SIZE, \
+			kobject_name(&(dev)->kobj));	\
+	} while (0)
 #    endif
 #  else
 #define dev_name(dev)		((dev)->bus_id)
-#  endif
 #define dev_set_name(dev, format, ...) \
-	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__);
+	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__)
+#  endif
 #endif
 
 /*! Default chunk size for conferences and such -- static right now, might make
