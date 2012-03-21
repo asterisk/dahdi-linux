@@ -183,15 +183,44 @@ static void ztdeth_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 		spin_unlock_irqrestore(&zlock, flags);
 }
 
-
-static int ztdeth_flush(void)
+/**
+ * dahdi_dynamic_flush_work_fn - Flush all pending transactions.
+ *
+ * This function is run in a work queue since we can't guarantee interrupts
+ * will be enabled when we're called, and dev_queue_xmit() requires that
+ * interrupts be enabled.
+ *
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void dahdi_dynamic_flush_work_fn(void *data)
+#else
+static void dahdi_dynamic_flush_work_fn(struct work_struct *work)
+#endif
 {
 	struct sk_buff *skb;
-
 	/* Handle all transmissions now */
 	while ((skb = skb_dequeue(&skbs))) {
 		dev_queue_xmit(skb);
 	}
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static DECLARE_WORK(dahdi_dynamic_eth_flush_work,
+		    dahdi_dynamic_flush_work_fn, NULL);
+#else
+static DECLARE_WORK(dahdi_dynamic_eth_flush_work,
+		    dahdi_dynamic_flush_work_fn);
+#endif
+
+/**
+ * ztdeth_flush - Flush all pending transactions.
+ *
+ * This function is called in interrupt context while processing the master
+ * span.
+ */
+static int ztdeth_flush(void)
+{
+	schedule_work(&dahdi_dynamic_eth_flush_work);
 	return 0;
 }
 
@@ -414,6 +443,7 @@ static int __init ztdeth_init(void)
 
 static void __exit ztdeth_exit(void)
 {
+	cancel_work_sync(&dahdi_dynamic_eth_flush_work);
 	dev_remove_pack(&ztdeth_ptype);
 	unregister_netdevice_notifier(&ztdeth_nblock);
 	dahdi_dynamic_unregister_driver(&ztd_eth);
