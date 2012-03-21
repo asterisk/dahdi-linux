@@ -1,6 +1,6 @@
 /* Wildcard TC400B Driver
  *
- * Copyright (C) 2006-2010, Digium, Inc.
+ * Copyright (C) 2006-2012, Digium, Inc.
  *
  * All rights reserved.
  *

@@ -7,7 +7,7 @@
  * Support for Hx8 by Andrew Kohlsmith <akohlsmith@mixdown.ca> and Matthew
  * Fredrickson <creslin@digium.com>
  *
- * Copyright (C) 2005 - 2011 Digium, Inc.
+ * Copyright (C) 2005 - 2012 Digium, Inc.
  * All rights reserved.
  *
  * Sections for QRV cards written by Jim Dixon <jim@lambdatel.com>

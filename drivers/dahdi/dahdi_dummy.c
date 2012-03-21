@@ -10,7 +10,7 @@
  * Converted to use HighResTimers on i386 by Jeffery Palmer <jeff@triggerinc.com>
  *
  * Copyright (C) 2002, Hermes Softlab
- * Copyright (C) 2004-2009, Digium, Inc.
+ * Copyright (C) 2004-2012, Digium, Inc.
  *
  * All rights reserved.
  *

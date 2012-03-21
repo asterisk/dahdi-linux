@@ -2,7 +2,7 @@
  * WCB410P  Quad-BRI PCI Driver
  * Written by Andrew Kohlsmith <akohlsmith@mixdown.ca>
  *
- * Copyright (C) 2009-2011 Digium, Inc.
+ * Copyright (C) 2009-2012 Digium, Inc.
  * All rights reserved.
  *
  */

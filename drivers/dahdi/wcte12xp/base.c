@@ -8,7 +8,7 @@
  *            Matthew Fredrickson <creslin@digium.com>
  *            William Meadows <wmeadows@digium.com>
  *
- * Copyright (C) 2007-2011, Digium, Inc.
+ * Copyright (C) 2007-2012, Digium, Inc.
  *
  * All rights reserved.
  *

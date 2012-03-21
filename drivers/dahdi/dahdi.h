@@ -6,6 +6,7 @@
  *
  * Written by Tzafrir Cohen <tzafrir.cohen@xorcom.com>
  * Copyright (C) 2011, Xorcom
+ * Copyright (C) 2011, Digium, Inc
  *
  * All rights reserved.
  *

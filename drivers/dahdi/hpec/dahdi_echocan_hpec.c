@@ -1,7 +1,7 @@
 /*
  * DAHDI Telephony Interface to Digium High-Performance Echo Canceller
  *
- * Copyright (C) 2006-2008 Digium, Inc.
+ * Copyright (C) 2006-2012 Digium, Inc.
  *
  * All rights reserved.
  *

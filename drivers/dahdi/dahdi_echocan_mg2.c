@@ -5,7 +5,7 @@
  *
  * Based upon kb1ec.h and mec2.h
  * 
- * Copyright (C) 2002, Digium, Inc.
+ * Copyright (C) 2002-2012, Digium, Inc.
  *
  * Additional background on the techniques used in this code can be found in:
  *

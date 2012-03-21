@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005-2006 Digium, Inc.
+ * Copyright (C) 2005-2012 Digium, Inc.
  *
  * Mark Spencer <markster@digium.com>
  *

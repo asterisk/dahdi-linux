@@ -7,7 +7,7 @@
  * This "echo can" will completely hose your audio.
  * Don't use it unless you're absolutely sure you know what you're doing.
  *
- * Copyright (C) 2007-2008, Digium, Inc.
+ * Copyright (C) 2007-2012, Digium, Inc.
  *
  * All rights reserved.
  *
