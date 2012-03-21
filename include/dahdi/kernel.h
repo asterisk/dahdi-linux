@@ -72,6 +72,12 @@
 #define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id, struct pt_regs *regs)
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)
+#ifdef CONFIG_PCI
+#include <linux/pci-aspm.h>
+#endif
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #define HAVE_NET_DEVICE_OPS
 #endif
@@ -1382,6 +1388,16 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 #define fatal_signal_pending(p) \
 	(signal_pending((p)) && sigismember(&(p)->pending.signal, SIGKILL))
 
+#ifdef CONFIG_PCI
+#ifndef PCIE_LINK_STATE_L0S
+#define PCIE_LINK_STATE_L0S	1
+#define PCIE_LINK_STATE_L1	2
+#define PCIE_LINK_STATE_CLKPM	4
+#endif
+#define pci_disable_link_state dahdi_pci_disable_link_state
+void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state);
+#endif /* CONFIG_PCI */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
 
 #ifndef __packed                                                                                         
@@ -1409,60 +1425,6 @@ static inline int strcasecmp(const char *s1, const char *s2)
 	return c1 - c2;
 }
 #endif /* clamp_val */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-static inline void list_replace(struct list_head *old, struct list_head *new)
-{
-        new->next = old->next;
-        new->next->prev = new;
-        new->prev = old->prev;
-        new->prev->next = new;
-}
-
-#ifndef WARN_ON_ONCE
-#define WARN_ON_ONCE(__condition) do {         \
-	static int __once = 1;                 \
-	if (unlikely(__condition)) {           \
-		if (__once) {                  \
-			__once = 0;            \
-			WARN_ON(0);            \
-		}                              \
-	}                                      \
-} while (0)
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 17)
-#ifndef POLLRDHUP
-#define POLLRDHUP 0
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 14)
-#define kzalloc(a, b) kcalloc(1, a, b)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 12)
-#define synchronize_rcu() synchronize_kernel()
-#define kasprintf dahdi_kasprintf
-char *dahdi_kasprintf(gfp_t gfp, const char *fmt, ...);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 11)
-#if !defined(HAVE_WAIT_FOR_COMPLETION_TIMEOUT)
-static inline unsigned long
-wait_for_completion_interruptible_timeout(struct completion *x,
-					  unsigned long timeout)
-{
-	/* There is a race condition here.  If x->done is reset to 0
-	 * before the call to wait_for_completion after this thread wakes.
-	 */
-	timeout = wait_event_interruptible_timeout(x->wait, x->done, timeout);
-	if (timeout)
-		wait_for_completion(x);
-
-	return timeout;
-}
-#endif
-typedef u32 __bitwise pm_message_t;
-#endif /* 2.6.11 */
-#endif /* 2.6.12 */
-#endif /* 2.6.14 */
-#endif /* 2.6.17 */
-#endif /* 2.6.18 */
 #endif /* 2.6.22 */
 #endif /* 2.6.25 */
 #endif /* 2.6.26 */

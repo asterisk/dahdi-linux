@@ -10045,6 +10045,24 @@ failed_driver_init:
 	return res;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+#ifdef CONFIG_PCI
+void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state)
+{
+	u16 reg16;
+	int pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
+	state &= (PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1 |
+		  PCIE_LINK_STATE_CLKPM);
+	if (!pos)
+		return;
+	pci_read_config_word(pdev, pos + PCI_EXP_LNKCTL, &reg16);
+	reg16 &= ~(state);
+	pci_write_config_word(pdev, pos + PCI_EXP_LNKCTL, reg16);
+}
+EXPORT_SYMBOL(dahdi_pci_disable_link_state);
+#endif /* CONFIG_PCI */
+#endif /* 2.6.25 */
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
 static inline void flush_find_master_work(void)
 {
