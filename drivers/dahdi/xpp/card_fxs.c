@@ -161,15 +161,23 @@ struct FXS_priv_data {
 static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 {
 	struct FXS_priv_data *priv;
+	unsigned long *p;
+	int was;
 
 	BUG_ON(!xbus);
 	BUG_ON(!xpd);
 	priv = xpd->priv;
-	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
+	p = (unsigned long *)&priv->vbat_h;
 	if (on)
-		BIT_SET(priv->vbat_h, chan);
+		was = test_and_set_bit(chan, p) != 0;
 	else
-		BIT_CLR(priv->vbat_h, chan);
+		was = test_and_clear_bit(chan, p) != 0;
+	if (was == on) {
+		LINE_DBG(SIGNAL, xpd, chan,
+			"%s (same, ignored)\n", (on) ? "up" : "down");
+		return 0;
+	}
+	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
 	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_BATTERY,
 			(on) ? REG_BATTERY_BATSL : 0x00);
 }
@@ -1561,7 +1569,7 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count, in
 	len += sprintf(page + len, "\n%-12s", "vbat_h:");
 	for_each_line(xpd, i) {
 		len += sprintf(page + len, "%4d",
-			    IS_SET(priv->vbat_h, i));
+			test_bit(i, (unsigned long *)&priv->vbat_h));
 	}
 	len += sprintf(page + len, "\n");
 	for(led = 0; led < NUM_LEDS; led++) {
