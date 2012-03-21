@@ -1116,6 +1116,9 @@ struct dahdi_dynamic_driver {
 
 	struct list_head list;
 	struct module *owner;
+
+	/*! Numberic id of next device created by this driver. */
+	unsigned int id;
 };
 
 /*! \brief Receive a dynamic span message */
