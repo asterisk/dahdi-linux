@@ -600,9 +600,10 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 	strlcpy(d->dname, dds->driver, sizeof(d->dname));
 	strlcpy(d->addr, dds->addr, sizeof(d->addr));
 	d->timing = dds->timing;
-	sprintf(d->span.name, "DYN/%s/%s", dds->driver, dds->addr);
-	sprintf(d->span.desc, "Dynamic '%s' span at '%s'",
-		dds->driver, dds->addr);
+	snprintf(d->span.name, sizeof(d->span.name), "DYN/%s/%s",
+		 dds->driver, dds->addr);
+	snprintf(d->span.desc, sizeof(d->span.desc),
+		 "Dynamic '%s' span at '%s'", dds->driver, dds->addr);
 	d->span.deflaw = DAHDI_LAW_MULAW;
 	d->span.flags |= DAHDI_FLAG_RBS;
 	d->span.chans = d->chans;
@@ -653,6 +654,9 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 		return res;
 	}
 
+	d->ddev->devicetype = d->span.name;
+	d->ddev->hardware_id = d->span.name;
+	dev_set_name(&d->ddev->dev, "dynamic:%s:%d", dds->driver, dtd->id++);
 	list_add_tail(&d->span.device_node, &d->ddev->spans);
 	/* Whee!  We're created.  Now register the span */
 	if (dahdi_register_device(d->ddev, d->dev)) {
