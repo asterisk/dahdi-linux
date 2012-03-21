@@ -99,6 +99,11 @@ static const struct t1_desc te120p = {"Wildcard TE120P"};
 static const struct t1_desc te122 = {"Wildcard TE122"};
 static const struct t1_desc te121 = {"Wildcard TE121"};
 
+static inline bool is_pcie(const struct t1 *t1)
+{
+	return (0 == strcmp(t1->variety, te121.name));
+}
+
 /* names of HWEC modules */
 static const char *vpmadt032_name = "VPMADT032";
 static const char *vpmoct_name = "VPMOCT032";
@@ -2742,6 +2747,13 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 
 	}
 #endif /* CONFIG_VOICEBUS_ECREFERENCE */
+
+#ifdef CONFIG_VOICEBUS_DISABLE_ASPM
+	if (is_pcie(wc)) {
+		pci_disable_link_state(pdev->bus->self, PCIE_LINK_STATE_L0S |
+			PCIE_LINK_STATE_L1 | PCIE_LINK_STATE_CLKPM);
+	};
+#endif
 
 	snprintf(wc->name, sizeof(wc->name)-1, "wcte12xp%d", index);
 	pci_set_drvdata(pdev, wc);
