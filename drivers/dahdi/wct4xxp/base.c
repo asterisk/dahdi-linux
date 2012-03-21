@@ -680,11 +680,12 @@ static unsigned int __t4_framer_in(const struct t4 *wc, int unit,
 
 	val = ((unit & 0x3) << 8) | (addr & 0xff) | haddr;
 	writel(val, wc_laddr);
-	/* readl(wc_version); */
+	readl(wc_version);
 	writel(val | WC_LFRMR_CS | WC_LREAD, wc_laddr);
 	readl(wc_version);
 	ret = readb(wc_ldata);
 	writel(val, wc_laddr);
+	readl(wc_version);
 	return ret;
 }
 
@@ -710,11 +711,13 @@ static void __t4_framer_out(const struct t4 *wc, int unit, const u8 addr,
 
 	val = ((unit & 0x3) << 8) | (addr & 0xff) | haddr;
 	writel(val, wc_laddr);
+	readl(wc_version);
 	writel(value, wc_ldata);
 	readl(wc_version);
 	writel(val | WC_LFRMR_CS | WC_LWRITE, wc_laddr);
-	/* readl(wc_version); */
+	readl(wc_version);
 	writel(val, wc_laddr);
+	readl(wc_version);
 }
 
 static void t4_framer_out(struct t4 *wc, int unit,
