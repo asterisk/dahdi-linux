@@ -796,10 +796,17 @@ int dahdi_sysfs_add_device(struct dahdi_device *ddev, struct device *parent)
 {
 	int ret;
 	struct device *const dev = &ddev->dev;
+	const char *dn;
 
 	dev->parent = parent;
 	dev->bus = &dahdi_device_bus;
-	dev_set_name(dev, "%s:%s", parent->bus->name, dev_name(parent));
+	dn = dev_name(dev);
+	if (!dn || !*dn) {
+		/* Invent default name based on parent */
+		if (!parent)
+			return -EINVAL;
+		dev_set_name(dev, "%s:%s", parent->bus->name, dev_name(parent));
+	}
 	ret = device_add(dev);
 	return ret;
 }

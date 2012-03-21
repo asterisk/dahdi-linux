@@ -358,6 +358,11 @@ static DEFINE_SPINLOCK(zone_lock);
 /* The first zone on the list is the default zone. */
 static LIST_HEAD(tone_zones);
 
+static inline struct device *span_device(struct dahdi_span *span)
+{
+	return &span->parent->dev;
+}
+
 /* Protects the span_list and pseudo_chans lists from concurrent access in
  * process context.  The spin_lock is needed to synchronize with the interrupt
  * handler. */
@@ -6649,7 +6654,7 @@ static void
 set_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 {
 	int i;
-	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+	dahdi_dev_dbg(ASSIGN, span_device(span),
 		"set: spanno=%d, basechan=%d (span->channels=%d)\n",
 		spanno, basechan, span->channels);
 	span->spanno = spanno;
@@ -6673,7 +6678,7 @@ static int _assign_spanno_and_basechan(struct dahdi_span *span)
 	unsigned int spanno = 1;
 	unsigned int basechan = 1;
 
-	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+	dahdi_dev_dbg(ASSIGN, span_device(span),
 		"assign: channels=%d\n", span->channels);
 	list_for_each_entry(pos, &span_list, spans_node) {
 
@@ -6693,7 +6698,7 @@ static int _assign_spanno_and_basechan(struct dahdi_span *span)
 			basechan = pos->chans[0]->channo + pos->channels;
 	}
 
-	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+	dahdi_dev_dbg(ASSIGN, span_device(span),
 		"good: spanno=%d, basechan=%d (span->channels=%d)\n",
 		spanno, basechan, span->channels);
 	set_spanno_and_basechan(span, spanno, basechan);
@@ -6743,20 +6748,20 @@ _check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 	struct dahdi_span *pos;
 	unsigned int next_channo;
 
-	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+	dahdi_dev_dbg(ASSIGN, span_device(span),
 		"check: spanno=%d, basechan=%d (span->channels=%d)\n",
 		spanno, basechan, span->channels);
 	list_for_each_entry(pos, &span_list, spans_node) {
 
 		next_channo = _get_next_channo(pos);
-		dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+		dahdi_dev_dbg(ASSIGN, span_device(span),
 			"pos: spanno=%d channels=%d (next_channo=%d)\n",
 			pos->spanno, pos->channels, next_channo);
 
 		if (pos->spanno <= spanno) {
 			if (basechan < next_channo + pos->channels) {
 				/* Requested basechan breaks channel sorting */
-				dev_notice(span->parent->dev.parent,
+				dev_notice(span_device(span),
 					"[%d] basechan (%d) is too low for wanted span %d\n",
 					local_spanno(span), basechan, spanno);
 				return -EINVAL;
@@ -6771,13 +6776,13 @@ _check_spanno_and_basechan(struct dahdi_span *span, u32 spanno, u32 basechan)
 			break;
 
 		/* Cannot fit the span into the requested location. Abort. */
-		dev_notice(span->parent->dev.parent,
+		dev_notice(span_device(span),
 			"cannot fit span %d (basechan=%d) into requested location\n",
 			spanno, basechan);
 		return -EINVAL;
 	}
 
-	dahdi_dev_dbg(ASSIGN, span->parent->dev.parent,
+	dahdi_dev_dbg(ASSIGN, span_device(span),
 		"good: spanno=%d, basechan=%d (span->channels=%d)\n",
 		spanno, basechan, span->channels);
 	set_spanno_and_basechan(span, spanno, basechan);
@@ -6876,7 +6881,7 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 		return -EFAULT;
 
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
-		dev_notice(span->parent->dev.parent,
+		dev_notice(span_device(span),
 			 "local span %d is already assigned span %d "
 			 "with base channel %d\n", local_spanno(span), span->spanno,
 			 span->chans[0]->channo);
@@ -6887,7 +6892,7 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 	    span->ops->disable_hw_preechocan) {
 		if ((NULL == span->ops->enable_hw_preechocan) ||
 		    (NULL == span->ops->disable_hw_preechocan)) {
-			dev_notice(span->parent->dev.parent,
+			dev_notice(span_device(span),
 				"span with inconsistent enable/disable hw_preechocan");
 			return -EFAULT;
 		}
@@ -7091,7 +7096,7 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 	unsigned long flags;
 
 	if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
-		dev_info(span->parent->dev.parent,
+		dev_info(span_device(span),
 			"local span %d is already unassigned\n",
 			local_spanno(span));
 		return -EINVAL;
