@@ -42,6 +42,8 @@ static DEF_PARM(uint, poll_digital_inputs, 1000, 0644, "Poll Digital Inputs");
 
 static DEF_PARM_BOOL(vmwi_ioctl, 1, 0644, "Asterisk support VMWI notification via ioctl");
 static DEF_PARM_BOOL(ring_trapez, 0, 0664, "Use trapezoid ring type");
+static DEF_PARM_BOOL(lower_ringing_noise, 0, 0664,
+		"Lower ringing noise (may loose CallerID)");
 
 /* Signaling is opposite (fxo signalling for fxs card) */
 #if 1
@@ -184,14 +186,21 @@ static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 
 static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan, enum fxs_state value)
 {
-	struct FXS_priv_data	*priv;
-	bool want_vbat_h = (value == FXS_LINE_RING) ? 1 : 0;
+	struct FXS_priv_data *priv;
+	bool want_vbat_h;
 
 	priv = xpd->priv;
+	/*
+	 * Should we drop vbat_h only during actuall ring?
+	 *   - It would lower the noise caused to other channels by
+	 *     group ringing
+	 *   - But it may also stop CallerID from passing through the SLIC
+	 */
+	want_vbat_h = value == FXS_LINE_RING;
+	if (lower_ringing_noise || want_vbat_h)
+		do_chan_power(xbus, xpd, chan, want_vbat_h);
 	LINE_DBG(SIGNAL, xpd, chan, "value=0x%02X\n", value);
 	priv->lasttxhook[chan] = value;
-	if (IS_SET(priv->vbat_h, chan) != want_vbat_h)
-		do_chan_power(xbus, xpd, chan, want_vbat_h);
 	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x40, value);
 }
 
@@ -672,6 +681,7 @@ static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos)
 	msgs = PHONEDEV(xpd).msg_waiting[pos];
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (msgs) ? "ON" : "OFF");
 	set_vm_led_mode(xbus, xpd, pos, msgs);
+	do_chan_power(xbus, xpd, pos, msgs > 0);
 	linefeed_control(xbus, xpd, pos, (msgs > 0) ?
 			FXS_LINE_RING : priv->idletxhookstate[pos]);
 }
@@ -708,6 +718,7 @@ static int send_ring(xpd_t *xpd, lineno_t chan, bool on)
 	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on)?"on":"off");
 	priv = xpd->priv;
 	set_vm_led_mode(xbus, xpd, chan, 0);
+	do_chan_power(xbus, xpd, chan, on);	/* Power up (for ring) */
 	ret = linefeed_control(xbus, xpd, chan, value);
 	if(on) {
 		MARK_BLINK(priv, chan, LED_GREEN, LED_BLINK_RING);
