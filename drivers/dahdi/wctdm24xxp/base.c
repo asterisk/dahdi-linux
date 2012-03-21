@@ -191,6 +191,11 @@ static const struct wctdm_desc wcaex410 = { "Wildcard AEX410", FLAG_EXPRESS, 4 }
 static const struct wctdm_desc wcha80000 = { "HA8-0000", 0, 8 };
 static const struct wctdm_desc wchb80000 = { "HB8-0000", FLAG_EXPRESS, 8 };
 
+static inline bool is_pcie(const struct wctdm *wc)
+{
+	return (wc->desc->flags & FLAG_EXPRESS) > 0;
+}
+
 /**
  * Returns true if the card is one of the Hybrid Digital Analog Cards.
  */
@@ -5678,6 +5683,13 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	wc->vb.ops = &voicebus_operations;
 	wc->vb.pdev = pdev;
 	wc->vb.debug = &debug;
+
+#ifdef CONFIG_VOICEBUS_DISABLE_ASPM
+	if (is_pcie(wc)) {
+		pci_disable_link_state(pdev->bus->self, PCIE_LINK_STATE_L0S |
+			PCIE_LINK_STATE_L1 | PCIE_LINK_STATE_CLKPM);
+	};
+#endif
 
 	if (is_hx8(wc)) {
 		wc->vb.ops = &hx8_voicebus_operations;

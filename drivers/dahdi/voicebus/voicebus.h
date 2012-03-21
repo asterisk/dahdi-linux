@@ -57,6 +57,15 @@
  * (and not tasklet). */
 #define CONFIG_VOICEBUS_INTERRUPT
 
+/*
+ * Enable the following definition in order to disable Active-State Power
+ * Management on the PCIe bridge for PCIe cards. This has been known to work
+ * around issues where the BIOS enables it on the cards even though the
+ * platform does not support it.
+ *
+ */
+#undef CONFIG_VOICEBUS_DISABLE_ASPM
+
 /* Define this to use a FIFO for the software echocan reference.
  * (experimental) */
 #undef CONFIG_VOICEBUS_ECREFERENCE
