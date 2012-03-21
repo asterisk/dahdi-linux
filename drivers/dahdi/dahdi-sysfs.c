@@ -152,12 +152,6 @@ static int span_hotplug(struct device *dev, char **envp, int envnum,
 			return err;				\
 	} while (0)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
-#define dev_name(dev)		((dev)->bus_id)
-#define dev_set_name(dev, format, ...) \
-	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__);
-#endif
-
 static int span_uevent(struct device *dev, char **envp, int num_envp,
 		char *buffer, int buffer_size)
 {
