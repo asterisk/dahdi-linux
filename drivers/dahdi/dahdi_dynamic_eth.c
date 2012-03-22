@@ -453,7 +453,11 @@ static int __init ztdeth_init(void)
 
 static void __exit ztdeth_exit(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
+	flush_scheduled_work();
+#else
 	cancel_work_sync(&dahdi_dynamic_eth_flush_work);
+#endif
 	dev_remove_pack(&ztdeth_ptype);
 	unregister_netdevice_notifier(&ztdeth_nblock);
 	dahdi_dynamic_unregister_driver(&ztd_eth);
