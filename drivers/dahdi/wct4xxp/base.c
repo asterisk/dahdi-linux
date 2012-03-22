@@ -3784,7 +3784,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 }
 
 #ifdef SUPPORT_GEN1
-DAHDI_IRQ_HANDLER(t4_interrupt)
+static irqreturn_t _t4_interrupt(int irq, void *dev_id)
 {
 	struct t4 *wc = dev_id;
 	unsigned long flags;
@@ -3851,6 +3851,16 @@ DAHDI_IRQ_HANDLER(t4_interrupt)
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
 	return IRQ_RETVAL(1);
+}
+
+DAHDI_IRQ_HANDLER(t4_interrupt)
+{
+	irqreturn_t ret;
+	unsigned long flags;
+	local_irq_save(flags);
+	ret = _t4_interrupt(irq, dev_id);
+	local_irq_restore(flags);
+	return ret;
 }
 #endif
 
@@ -3969,7 +3979,7 @@ static void t4_isr_bh(unsigned long data)
 #endif
 }
 
-DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
+static irqreturn_t _t4_interrupt_gen2(int irq, void *dev_id)
 {
 	struct t4 *wc = dev_id;
 	unsigned int status;
@@ -4163,6 +4173,16 @@ out:
 #endif	
 
 	return IRQ_RETVAL(1);
+}
+
+DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
+{
+	irqreturn_t ret;
+	unsigned long flags;
+	local_irq_save(flags);
+	ret = _t4_interrupt_gen2(irq, dev_id);
+	local_irq_restore(flags);
+	return ret;
 }
 
 #ifdef SUPPORT_GEN1
@@ -5212,7 +5232,7 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 #ifdef SUPPORT_GEN1
 	if (request_irq(pdev->irq, (wc->devtype->flags & FLAG_2NDGEN) ?
 					t4_interrupt_gen2 : t4_interrupt,
-			DAHDI_IRQ_SHARED_DISABLED,
+			DAHDI_IRQ_SHARED,
 			(wc->numspans == 8) ? "wct8xxp" :
 					      (wc->numspans == 2) ? "wct2xxp" :
 								    "wct4xxp",
@@ -5224,7 +5244,7 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 			free_wc(wc);
 			return -ENODEV;
 		}	
-	if (request_irq(pdev->irq, t4_interrupt_gen2, DAHDI_IRQ_SHARED_DISABLED, "t4xxp", wc)) 
+	if (request_irq(pdev->irq, t4_interrupt_gen2, DAHDI_IRQ_SHARED, "t4xxp", wc)) 
 #endif
 	{
 		dev_notice(&wc->dev->dev, "t4xxp: Unable to request IRQ %d\n",
