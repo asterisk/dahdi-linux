@@ -71,6 +71,8 @@ static struct dahdi_span *ztdeth_getspan(unsigned char *addr, unsigned short sub
 	if (z)
 		span = z->span;
 	spin_unlock_irqrestore(&zlock, flags);
+	if (!span || !test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags))
+		return NULL;
 	return span;
 }
 
