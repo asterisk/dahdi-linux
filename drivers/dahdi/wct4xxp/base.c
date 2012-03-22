@@ -5207,18 +5207,19 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 			(wc->numspans == 8) ? "wct8xxp" :
 					      (wc->numspans == 2) ? "wct2xxp" :
 								    "wct4xxp",
-			wc))
+			wc)) {
 #else
-		if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN)) {
-			dev_notice(&wc->dev->dev, "This driver does not "
-					"support 1st gen modules\n");
-			free_wc(wc);
-			return -ENODEV;
-		}	
-	if (request_irq(pdev->irq, t4_interrupt_gen2, DAHDI_IRQ_SHARED, "t4xxp", wc)) 
+	if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN)) {
+		dev_notice(&wc->dev->dev, "This driver does not "
+				"support 1st gen modules\n");
+		free_wc(wc);
+		return -ENODEV;
+	}
+
+	if (request_irq(pdev->irq, t4_interrupt_gen2,
+			DAHDI_IRQ_SHARED, "t4xxp", wc)) {
 #endif
-	{
-		dev_notice(&wc->dev->dev, "t4xxp: Unable to request IRQ %d\n",
+		dev_notice(&wc->dev->dev, "Unable to request IRQ %d\n",
 				pdev->irq);
 		free_wc(wc);
 		return -EIO;
