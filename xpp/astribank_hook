@@ -68,7 +68,34 @@ NUM_WANTED=`clean_lines | sed '/^$/d' | wc -l`
 NUM_GOOD=`matched_devices | wc -l`
 LOCK="/var/lock/twinstar_startup"
 
+# Wait until udev finished processing our requests
+# so we know the device files were actually created
+# before trying dahdi_cfg et-al.
+wait_for_udev() {
+	UDEV_SETTLE_MAX_TIME=10
+
+	echo "Waiting for udev to settle down..."
+	if [ -x /sbin/udevsettle ]; then
+		# Old system, stand-alone udevsettle command
+		time /sbin/udevsettle --timeout="$UDEV_SETTLE_MAX_TIME"
+	elif [ -x /sbin/udevadm ]; then
+		# Assume modern system, udevadm has settle parameter
+		if ! time /sbin/udevadm settle --timeout="$UDEV_SETTLE_MAX_TIME"
+		then
+			echo "udevadm failed ($?)."
+			echo "Fallback to sleep $UDEV_SETTLE_MAX_TIME seconds."
+			sleep "$UDEV_SETTLE_MAX_TIME"
+		fi
+	else
+		echo "No udevsettle/udevadm."
+		echo "Fallback to sleep $UDEV_SETTLE_MAX_TIME seconds."
+		sleep "$UDEV_SETTLE_MAX_TIME"
+	fi
+	sleep 1	# Wait a bit more (races)
+}
+
 start_dahdi() {
+	wait_for_udev
 	script=/etc/init.d/dahdi
 	echo "Starting $script."
 	"$script" start | logger -i -t "$script"
