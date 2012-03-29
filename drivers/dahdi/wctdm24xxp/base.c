@@ -910,9 +910,22 @@ wctdm_isr_getreg(struct wctdm *wc, struct wctdm_module *const mod, u8 address)
 	list_add(&cmd->node, &mod->pending_cmds);
 }
 
+/* Must be called with wc.reglock held and local interrupts disabled */
 static inline void
-wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod,
-		  int addr, int val);
+wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
+{
+	struct wctdm_cmd *cmd;
+
+	cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
+	if (unlikely(!cmd))
+		return;
+
+	cmd->complete = NULL;
+	cmd->cmd = CMD_WR(addr, val);
+
+	list_add_tail(&cmd->node, &mod->pending_cmds);
+}
+
 
 static void cmd_checkisr(struct wctdm *wc, struct wctdm_module *const mod)
 {
@@ -1056,22 +1069,6 @@ static inline void wctdm_transmitprep(struct wctdm *wc, unsigned char *sframe)
 		eframe += (EFRAME_SIZE + EFRAME_GAP);
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
-}
-
-/* Must be called with wc.reglock held and local interrupts disabled */
-static inline void
-wctdm_setreg_intr(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
-{
-	struct wctdm_cmd *cmd;
-
-	cmd = kmalloc(sizeof(*cmd), GFP_ATOMIC);
-	if (unlikely(!cmd))
-		return;
-
-	cmd->complete = NULL;
-	cmd->cmd = CMD_WR(addr, val);
-
-	list_add_tail(&cmd->node, &mod->pending_cmds);
 }
 
 int wctdm_setreg(struct wctdm *wc, struct wctdm_module *mod, int addr, int val)
