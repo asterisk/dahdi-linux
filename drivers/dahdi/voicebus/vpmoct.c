@@ -443,6 +443,47 @@ static void vpmoct_set_defaults(struct vpmoct *vpm)
 	vpmoct_write_dword(vpm, 0x30, 0);
 }
 
+static const char *const FIRMWARE_NAME = "dahdi-fw-vpmoct032.bin";
+#if defined(HOTPLUG_FIRMWARE)
+static int
+vpmoct_request_firmware(const struct firmware **fw, struct device *dev)
+{
+	return request_firmware(fw, FIRMWARE_NAME, dev);
+}
+
+static void vpmoct_release_firmware(const struct firmware *fw)
+{
+	release_firmware(fw);
+}
+#else
+static int
+vpmoct_request_firmware(const struct firmware **fw_p, struct device *dev)
+{
+	struct firmware *fw;
+	extern void _binary_dahdi_fw_vpmoct032_bin_size;
+	extern u8 _binary_dahdi_fw_vpmoct032_bin_start[];
+
+	*fw_p = fw = kzalloc(sizeof(*fw), GFP_KERNEL);
+	if (!fw)
+		return -ENOMEM;
+
+	fw->data = _binary_dahdi_fw_vpmoct032_bin_start;
+	/* Yes... this is weird. objcopy gives us a symbol containing
+	   the size of the firmware, not a pointer a variable containing the
+	   size. The only way we can get the value of the symbol is to take
+	   its address, so we define it as a pointer and then cast that value
+	   to the proper type.  */
+	fw->size = (size_t) &_binary_dahdi_fw_vpmoct032_bin_size;
+
+	return 0;
+}
+
+static void vpmoct_release_firmware(const struct firmware *fw)
+{
+	kfree(fw);
+}
+#endif
+
 /**
  * vpmoct_load_flash - Check the current flash version and possibly load.
  * @vpm:  The VPMOCT032 module to check / load.
@@ -463,10 +504,9 @@ static void vpmoct_load_flash(struct work_struct *data)
 	const struct firmware *fw;
 	const struct vpmoct_header *header;
 	char serial[VPMOCT_SERIAL_SIZE+1];
-	const char *const FIRMWARE_NAME = "dahdi-fw-vpmoct032.bin";
 	int i;
 
-	res = request_firmware(&fw, FIRMWARE_NAME, vpm->dev);
+	res = vpmoct_request_firmware(&fw, vpm->dev);
 	if (res) {
 		dev_warn(vpm->dev,
 			 "vpmoct: Failed to load firmware from userspace! %d\n",
@@ -505,7 +545,7 @@ static void vpmoct_load_flash(struct work_struct *data)
 				 FIRMWARE_NAME);
 
 			/* Just use the old version of the fimware. */
-			release_firmware(fw);
+			vpmoct_release_firmware(fw);
 			vpmoct_set_defaults(vpm);
 			vpmoct_load_complete(work, true);
 			return;
@@ -514,7 +554,7 @@ static void vpmoct_load_flash(struct work_struct *data)
 		if (vpm->minor == header->minor &&
 		    vpm->major == header->major) {
 			/* Proper version is running */
-			release_firmware(fw);
+			vpmoct_release_firmware(fw);
 			vpmoct_set_defaults(vpm);
 			vpmoct_load_complete(work, true);
 			return;
@@ -548,14 +588,14 @@ static void vpmoct_load_flash(struct work_struct *data)
 	if (vpmoct_check_firmware_crc(vpm, fw->size-VPMOCT_FIRM_HEADER_LEN*2,
 					header->major, header->minor))
 		goto error;
-	release_firmware(fw);
+	vpmoct_release_firmware(fw);
 	vpmoct_set_defaults(vpm);
 	vpmoct_load_complete(work, true);
 	return;
 
 error:
 	dev_info(vpm->dev, "Unable to load firmware\n");
-	release_firmware(fw);
+	vpmoct_release_firmware(fw);
 	/* TODO: Should we disable module if the firmware doesn't load? */
 	vpmoct_load_complete(work, false);
 	return;
