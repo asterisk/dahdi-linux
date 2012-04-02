@@ -53,6 +53,7 @@ OBJECT_FILES:=$(ALL_FIRMWARE:FIRMWARE-OCT6114-064=dahdi-fw-oct6114-064.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-OCT6114-128=dahdi-fw-oct6114-128.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-TC400M=dahdi-fw-tc400m.o)
 OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-HX8=dahdi-fw-hx8.o)
+OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032.o)
 
 # Force usage of wget, for now
 DOWNLOAD=wget
@@ -188,3 +189,8 @@ dahdi-fw-oct6114-128.o: dahdi-fw-oct6114-128-$(OCT6114_128_VERSION).tar.gz dahdi
 dahdi-fw-tc400m.o: dahdi-fw-tc400m-$(TC400M_VERSION).tar.gz dahdi-fw-tc400m.bin make_firmware_object
 	@echo Making firmware object file for dahdi-fw-tc400m.bin
 	./make_firmware_object dahdi-fw-tc400m.bin $@
+
+# Build object file of a VPMOCT032 firmware image for linking
+dahdi-fw-vpmoct032.o: dahdi-fw-vpmoct032-$(VPMOCT032_VERSION).tar.gz dahdi-fw-vpmoct032.bin make_firmware_object
+	@echo Making firmware object file for dahdi-fw-vpmoct032.bin
+	./make_firmware_object dahdi-fw-vpmoct032.bin $@

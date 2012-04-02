@@ -2,4 +2,16 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_VOICEBUS) += dahdi_voicebus.o
 
 dahdi_voicebus-objs := voicebus.o GpakCust.o GpakApi.o voicebus_net.o vpmoct.o
 
-EXTRA_CFLAGS := -I$(src)/.. -Wno-undef
+FIRM_DIR	:= ../firmware
+
+ifneq ($(HOTPLUG_FIRMWARE),yes)
+dahdi_voicebus-objs += $(FIRM_DIR)/dahdi-fw-vpmoct032.o
+else
+  EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
+endif
+
+EXTRA_CFLAGS += -I$(src)/.. -Wno-undef
+
+$(obj)/$(FIRM_DIR)/dahdi-fw-vpmoct032.o: $(obj)/voicebus.o
+	$(MAKE) -C $(obj)/$(FIRM_DIR) dahdi-fw-vpmoct032.o
+
