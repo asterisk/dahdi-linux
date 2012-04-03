@@ -2400,12 +2400,11 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 		if ((chan->ec_state) &&
 		    (ECHO_MODE_ACTIVE == chan->ec_state->status.mode) &&
 		    (chan->ec_state->ops->echocan_process_tx)) {
-			struct ec_state *const ec_state = chan->ec_state;
+			struct dahdi_echocan_state *const ec = chan->ec_state;
 			for (x = 0; x < chan->writen[res]; ++x) {
 				short tx;
 				tx = DAHDI_XLAW(chan->writebuf[res][x], chan);
-				ec_state->ops->echocan_process_tx(ec_state,
-								  &tx, 1);
+				ec->ops->echocan_process_tx(ec, &tx, 1);
 				chan->writebuf[res][x] = DAHDI_LIN2X((int) tx,
 								     chan);
 			}
