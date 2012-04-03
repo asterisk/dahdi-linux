@@ -857,6 +857,9 @@ static void dahdi_dynamic_cleanup(void)
 		tasklet_kill(&dahdi_dynamic_tlet);
 	}
 #endif
+	del_timer_sync(&alarmcheck);
+	/* Must call again in case it was running before and rescheduled
+	 * itself. */
 	del_timer(&alarmcheck);
 	printk(KERN_INFO "DAHDI Dynamic Span support unloaded\n");
 }
