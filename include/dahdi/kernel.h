@@ -1260,8 +1260,13 @@ extern u_char __dahdi_lin2mu[16384];
 extern u_char __dahdi_lin2a[16384];
 #endif
 
+struct dahdi_dynamic_ops {
+	struct module *owner;
+	int (*ioctl)(unsigned int cmd, unsigned long data);
+};
+
 /*! \brief Used by dynamic DAHDI -- don't use directly */
-void dahdi_set_dynamic_ioctl(int (*func)(unsigned int cmd, unsigned long data));
+void dahdi_set_dynamic_ops(const struct dahdi_dynamic_ops *ops);
 
 /*! \brief Used by DAHDI HPEC module -- don't use directly */
 void dahdi_set_hpec_ioctl(int (*func)(unsigned int cmd, unsigned long data));
