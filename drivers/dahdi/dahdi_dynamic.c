@@ -823,10 +823,13 @@ static void check_for_red_alarm(unsigned long ignored)
 	mod_timer(&alarmcheck, jiffies + 1 * HZ);
 }
 
+static const struct dahdi_dynamic_ops dahdi_dynamic_ops = {
+	.owner = THIS_MODULE,
+	.ioctl = dahdi_dynamic_ioctl,
+};
+
 static int dahdi_dynamic_init(void)
 {
-	dahdi_set_dynamic_ioctl(dahdi_dynamic_ioctl);
-
 	/* Start process to check for RED ALARM */
 	init_timer(&alarmcheck);
 	alarmcheck.expires = 0;
@@ -837,19 +840,22 @@ static int dahdi_dynamic_init(void)
 #ifdef ENABLE_TASKLETS
 	tasklet_init(&dahdi_dynamic_tlet, dahdi_dynamic_tasklet, 0);
 #endif
+	dahdi_set_dynamic_ops(&dahdi_dynamic_ops);
+
 	printk(KERN_INFO "DAHDI Dynamic Span support LOADED\n");
 	return 0;
 }
 
 static void dahdi_dynamic_cleanup(void)
 {
+	dahdi_set_dynamic_ops(NULL);
+
 #ifdef ENABLE_TASKLETS
 	if (taskletpending) {
 		tasklet_disable(&dahdi_dynamic_tlet);
 		tasklet_kill(&dahdi_dynamic_tlet);
 	}
 #endif
-	dahdi_set_dynamic_ioctl(NULL);
 	del_timer(&alarmcheck);
 	printk(KERN_INFO "DAHDI Dynamic Span support unloaded\n");
 }

@@ -122,7 +122,6 @@ EXPORT_SYMBOL(dahdi_qevent_nolock);
 EXPORT_SYMBOL(dahdi_qevent_lock);
 EXPORT_SYMBOL(dahdi_hooksig);
 EXPORT_SYMBOL(dahdi_alarm_notify);
-EXPORT_SYMBOL(dahdi_set_dynamic_ioctl);
 EXPORT_SYMBOL(dahdi_hdlc_abort);
 EXPORT_SYMBOL(dahdi_hdlc_finish);
 EXPORT_SYMBOL(dahdi_hdlc_getbuf);
@@ -4422,12 +4421,14 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
 	return 0;
 }
 
-static int (*dahdi_dynamic_ioctl)(unsigned int cmd, unsigned long data);
-
-void dahdi_set_dynamic_ioctl(int (*func)(unsigned int cmd, unsigned long data))
+static const struct dahdi_dynamic_ops *dahdi_dynamic_ops;
+void dahdi_set_dynamic_ops(const struct dahdi_dynamic_ops *ops)
 {
-	dahdi_dynamic_ioctl = func;
+	mutex_lock(&registration_mutex);
+	dahdi_dynamic_ops = ops;
+	mutex_unlock(&registration_mutex);
 }
+EXPORT_SYMBOL(dahdi_set_dynamic_ops);
 
 static int (*dahdi_hpec_ioctl)(unsigned int cmd, unsigned long data);
 
@@ -5146,6 +5147,33 @@ static int dahdi_ioctl_maint(unsigned long data)
 	return 0;
 }
 
+static int dahdi_ioctl_dynamic(unsigned int cmd, unsigned long data)
+{
+	bool tried_load = false;
+	int res;
+
+retry_check:
+	mutex_lock(&registration_mutex);
+	if (!dahdi_dynamic_ops) {
+		mutex_unlock(&registration_mutex);
+		if (tried_load)
+			return -ENOSYS;
+
+		request_module("dahdi_dynamic");
+		tried_load = true;
+		goto retry_check;
+	}
+	if (!try_module_get(dahdi_dynamic_ops->owner)) {
+		mutex_unlock(&registration_mutex);
+		return -ENOSYS;
+	}
+	mutex_unlock(&registration_mutex);
+
+	res = dahdi_dynamic_ops->ioctl(cmd, data);
+	module_put(dahdi_dynamic_ops->owner);
+	return res;
+}
+
 static int
 dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
@@ -5180,14 +5208,7 @@ dahdi_ctl_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 		return dahdi_ioctl_maint(data);
 	case DAHDI_DYNAMIC_CREATE:
 	case DAHDI_DYNAMIC_DESTROY:
-		if (dahdi_dynamic_ioctl) {
-			return dahdi_dynamic_ioctl(cmd, data);
-		} else {
-			request_module("dahdi_dynamic");
-			if (dahdi_dynamic_ioctl)
-				return dahdi_dynamic_ioctl(cmd, data);
-		}
-		return -ENOSYS;
+		return dahdi_ioctl_dynamic(cmd, data);
 	case DAHDI_EC_LICENSE_CHALLENGE:
 	case DAHDI_EC_LICENSE_RESPONSE:
 		if (dahdi_hpec_ioctl) {
