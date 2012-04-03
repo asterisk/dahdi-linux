@@ -78,10 +78,11 @@ static LIST_HEAD(dynamic_local_list);
 static void
 dahdi_dynamic_local_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 {
-	struct dahdi_dynamic_local *const d = dyn->pvt;
+	struct dahdi_dynamic_local *d;
 	unsigned long flags;
 
 	spin_lock_irqsave(&local_lock, flags);
+	d = dyn->pvt;
 	if (d && d->peer && d->peer->span) {
 		if (test_bit(DAHDI_FLAGBIT_REGISTERED, &d->peer->span->flags))
 			dahdi_dynamic_receive(d->peer->span, msg, msglen);
@@ -130,11 +131,12 @@ static int digit2int(char d)
 
 static void dahdi_dynamic_local_destroy(struct dahdi_dynamic *dyn)
 {
-	struct dahdi_dynamic_local *d = dyn->pvt;
+	struct dahdi_dynamic_local *d;
 	unsigned long flags;
 	struct dahdi_dynamic_local *cur;
 
 	spin_lock_irqsave(&local_lock, flags);
+	d = dyn->pvt;
 	list_for_each_entry(cur, &dynamic_local_list, node) {
 		if (cur->peer == d)
 			cur->peer = NULL;
