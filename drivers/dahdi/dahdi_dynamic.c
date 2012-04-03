@@ -385,16 +385,6 @@ static void dahdi_dynamic_release(struct kref *kref)
 
 	WARN_ON(test_bit(DAHDI_FLAGBIT_REGISTERED, &d->span.flags));
 
-	if (d->pvt) {
-		if (d->driver && d->driver->destroy) {
-			__module_get(d->driver->owner);
-			d->driver->destroy(d);
-			module_put(d->driver->owner);
-		} else {
-			WARN_ON(1);
-		}
-	}
-
 	kfree(d->msgbuf);
 
 	for (x = 0; x < d->span.channels; x++)
@@ -463,6 +453,24 @@ static int _destroy_dynamic(struct dahdi_dynamic_span *dds)
 	if (atomic_read(&d->kref.refcount) > 2) {
 		dynamic_put(d);
 		return -EBUSY;
+	}
+
+	if (d->pvt) {
+		if (d->driver && d->driver->destroy) {
+			if (!try_module_get(d->driver->owner)) {
+				/* The driver for this device is in the
+				 * process of unloading. Leave this dynamic on
+				 * the list so it's cleaned up when the driver
+				 * unregisters. */
+				 dynamic_put(d);
+				 return -ENXIO;
+			}
+			d->driver->destroy(d);
+			module_put(d->driver->owner);
+		} else {
+			WARN_ON(1);
+		}
+		d->pvt = NULL;
 	}
 
 	dahdi_unregister_device(d->ddev);
@@ -762,19 +770,17 @@ void dahdi_dynamic_unregister_driver(struct dahdi_dynamic_driver *dri)
 	list_for_each_entry_safe(d, n, &dspan_list, list) {
 		if (d->driver == dri) {
 			if (d->pvt) {
-				if (d->driver && d->driver->destroy) {
-					__module_get(d->driver->owner);
+				if (d->driver && d->driver->destroy)
 					d->driver->destroy(d);
-					module_put(d->driver->owner);
-				} else {
+				else
 					WARN_ON(1);
-				}
 			}
 			dahdi_unregister_device(d->ddev);
 			spin_lock_irqsave(&dspan_lock, flags);
 			list_del_rcu(&d->list);
 			spin_unlock_irqrestore(&dspan_lock, flags);
 			synchronize_rcu();
+			d->driver = NULL;
 			dynamic_put(d);
 		}
 	}
