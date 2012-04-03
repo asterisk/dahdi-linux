@@ -4631,7 +4631,6 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 23)
 				SET_MODULE_OWNER(chan->hdlcnetdev->netdev);
 #endif
-				chan->hdlcnetdev->netdev->irq = chan->span->irq;
 				chan->hdlcnetdev->netdev->tx_queue_len = 50;
 #ifdef HAVE_NET_DEVICE_OPS
 				chan->hdlcnetdev->netdev->netdev_ops = &dahdi_netdev_ops;
