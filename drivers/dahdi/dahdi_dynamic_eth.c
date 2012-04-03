@@ -154,7 +154,7 @@ static void ztdeth_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 
 	spin_lock_irqsave(&zlock, flags);
 	z = dyn->pvt;
-	if (z->dev) {
+	if (z && z->dev) {
 		/* Copy fields to local variables to remove spinlock ASAP */
 		dev = z->dev;
 		memcpy(addr, z->addr, sizeof(z->addr));
@@ -315,11 +315,12 @@ static void ztdeth_destroy(struct dahdi_dynamic *dyn)
 		prev = cur;
 		cur = cur->next;
 	}
-	spin_unlock_irqrestore(&zlock, flags);
 	if (cur == z) {	/* Successfully removed */
+		dyn->pvt = NULL;
 		printk(KERN_INFO "TDMoE: Removed interface for %s\n", z->span->name);
 		kfree(z);
 	}
+	spin_unlock_irqrestore(&zlock, flags);
 }
 
 static int ztdeth_create(struct dahdi_dynamic *dyn, const char *addr)
@@ -442,11 +443,11 @@ static struct notifier_block ztdeth_nblock = {
 
 static int __init ztdeth_init(void)
 {
+	skb_queue_head_init(&skbs);
+
 	dev_add_pack(&ztdeth_ptype);
 	register_netdevice_notifier(&ztdeth_nblock);
 	dahdi_dynamic_register_driver(&ztd_eth);
-
-	skb_queue_head_init(&skbs);
 
 	return 0;
 }
@@ -458,9 +459,11 @@ static void __exit ztdeth_exit(void)
 #else
 	cancel_work_sync(&dahdi_dynamic_eth_flush_work);
 #endif
-	dev_remove_pack(&ztdeth_ptype);
-	unregister_netdevice_notifier(&ztdeth_nblock);
 	dahdi_dynamic_unregister_driver(&ztd_eth);
+	unregister_netdevice_notifier(&ztdeth_nblock);
+	dev_remove_pack(&ztdeth_ptype);
+
+	skb_queue_purge(&skbs);
 }
 
 MODULE_DESCRIPTION("DAHDI Dynamic TDMoE Support");
