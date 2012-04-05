@@ -35,7 +35,6 @@
 #include <linux/spinlock.h>
 #include <linux/device.h>	/* dev_err() */
 #include <linux/interrupt.h>
-#include <asm/system.h>		/* cli(), *_flags */
 #include <asm/uaccess.h>	/* copy_*_user */
 #include <linux/workqueue.h>	/* work_struct */
 #include <linux/timer.h>	/* timer_struct */
