@@ -53,7 +53,7 @@
 #if defined(USE_HIGHRESTIMER)
 #include <linux/hrtimer.h>
 #else
-#include <linux/time.h>
+#include <linux/timer.h>
 #endif
 
 #include <dahdi/kernel.h>
