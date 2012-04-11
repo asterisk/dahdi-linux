@@ -9966,7 +9966,7 @@ static void watchdog_check(unsigned long ignored)
 	static int wdcheck=0;
 	struct dahdi_span *s;
 
-	spin_lock_irqsave(&span_list_lock, flags);
+	spin_lock_irqsave(&chan_lock, flags);
 	list_for_each_entry(s, &span_list, spans_node) {
 		if (s->flags & DAHDI_FLAG_RUNNING) {
 			if (s->watchcounter == DAHDI_WATCHDOG_INIT) {
@@ -9974,9 +9974,9 @@ static void watchdog_check(unsigned long ignored)
 				if ((s->watchstate == DAHDI_WATCHSTATE_OK) ||
 					(s->watchstate == DAHDI_WATCHSTATE_UNKNOWN)) {
 					s->watchstate = DAHDI_WATCHSTATE_RECOVERING;
-					if (s->watchdog) {
+					if (s->ops->watchdog) {
 						module_printk(KERN_NOTICE, "Kicking span %s\n", s->name);
-						s->watchdog(spans[x], DAHDI_WATCHDOG_NOINTS);
+						s->ops->watchdog(s, DAHDI_WATCHDOG_NOINTS);
 					} else {
 						module_printk(KERN_NOTICE, "Span %s is dead with no revival\n", s->name);
 						s->watchstate = DAHDI_WATCHSTATE_FAILED;
@@ -9991,7 +9991,7 @@ static void watchdog_check(unsigned long ignored)
 			s->watchcounter = DAHDI_WATCHDOG_INIT;
 		}
 	}
-	spin_unlock_irqrestore(&span_list_lock, flags);
+	spin_unlock_irqrestore(&chan_lock, flags);
 	if (!wdcheck) {
 		module_printk(KERN_NOTICE, "watchdog on duty!\n");
 		wdcheck=1;
