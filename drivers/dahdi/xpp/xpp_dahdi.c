@@ -885,7 +885,7 @@ int xpp_maint(struct dahdi_span *span, int cmd)
  * If the watchdog detects no received data, it will call the
  * watchdog routine
  */
-static int xpp_watchdog(struct dahdi_span *span, int cause)
+int xpp_watchdog(struct dahdi_span *span, int cause)
 {
 	static	int rate_limit = 0;
 
@@ -893,6 +893,7 @@ static int xpp_watchdog(struct dahdi_span *span, int cause)
 		DBG(GENERAL, "\n");
 	return 0;
 }
+EXPORT_SYMBOL(xpp_watchdog);
 #endif
 
 /*
