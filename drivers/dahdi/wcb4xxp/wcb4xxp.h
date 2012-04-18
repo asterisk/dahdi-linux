@@ -376,6 +376,7 @@
 #define HFC_T1					0
 #define HFC_T2					1
 #define HFC_T3					2
+#define HFC_T4					3
 
 #define MAX_SPANS_PER_CARD			8
 
@@ -396,8 +397,8 @@ struct b4xxp_span {
 	unsigned long alarmtimer;
 
 	int te_mode;				/* 1=TE, 0=NT */
-	unsigned long hfc_timers[WCB4XXP_CHANNELS_PER_SPAN];		/* T1, T2, T3 */
-	int hfc_timer_on[WCB4XXP_CHANNELS_PER_SPAN];			/* 1=timer active */
+	unsigned long hfc_timers[4];		/* T1, T2, T3, Fake T4 */
+	int hfc_timer_on[4];			/* 1=timer active */
 	int fifos[WCB4XXP_CHANNELS_PER_SPAN];				/* B1, B2, D <--> host fifo numbers */
 
 	/* HDLC controller fields */

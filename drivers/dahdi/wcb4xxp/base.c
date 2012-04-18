@@ -90,6 +90,7 @@ static int milliwatt = 0;
 static int pedanticpci = 0;
 static int teignorered = 0;
 static int alarmdebounce = 500;
+static int persistentlayer1 = 1;
 static int vpmsupport = 1;
 static int timer_1_ms = 2000;
 static int timer_3_ms = 30000;
@@ -139,7 +140,7 @@ static struct devtype hfc8s_BN = {"BeroNet BN8S0", .ports = 8, .card_type = BN8S
 static struct devtype hfc4s_SW = {"Swyx 4xS0 SX2 QuadBri", .ports = 4, .card_type = BSWYX_SX2 };
 static struct devtype hfc4s_EV = {"CCD HFC-4S Eval. Board", .ports = 4,
 					.card_type = QUADBRI_EVAL };
- 
+
 #define CARD_HAS_EC(card) ((card)->card_type == B410P)
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
@@ -1294,6 +1295,9 @@ static void hfc_force_st_state(struct b4xxp *b4, int port, int state, int resume
 	hfc_handle_state(&b4->spans[port]);
 }
 
+static void hfc_stop_st(struct b4xxp_span *s);
+static void hfc_start_st(struct b4xxp_span *s);
+
 /* figures out what to do when an S/T port's timer expires. */
 static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 {
@@ -1307,10 +1311,15 @@ static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 			 s->hfc_timer_on[t_no]);
 	}
 /*
- * there are three timers associated with every HFC S/T port.
- * T1 is used by the NT state machine, and is the maximum time the NT side should wait for G3 (active) state.
- * T2 is not actually used in the driver, it is handled by the HFC-4S internally.
- * T3 is used by the TE state machine; it is the maximum time the TE side should wait for the INFO4 (activated) signal.
+ * There are four timers associated with every HFC S/T port:
+ * T1 is used by the NT state machine, and is the maximum time the NT side
+ *	should wait for G3 (active) state.
+ * T2 is not actually used in the driver, it is handled by the HFC-4S
+ *	internally.
+ * T3 is used by the TE state machine; it is the maximum time the TE side should
+ *	wait for the INFO4 (activated) signal.
+ * T4 is a special timer used for debug purposes for monitoring of L1 state
+ *	during activation attempt.
  */
 
 /* First, disable the expired timer; hfc_force_st_state() may activate it again. */
@@ -1324,7 +1333,14 @@ static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 		hfc_force_st_state(b4, s->port, 1, 1);
 		break;
 	case HFC_T3:					/* switch to F3 (deactivated), resume auto mode */
-		hfc_force_st_state(b4, s->port, 3, 1);
+		hfc_stop_st(s);
+		if (persistentlayer1)
+			hfc_start_st(s);
+		break;
+	case HFC_T4:
+		hfc_handle_state(s);
+		s->hfc_timers[HFC_T4] = b4->ticks + 1000;
+		s->hfc_timer_on[HFC_T4] = 1;
 		break;
 	default:
 		if (printk_ratelimit()) {
@@ -1347,9 +1363,9 @@ static void hfc_update_st_timers(struct b4xxp *b4)
 	for (i=0; i < b4->numspans; i++) {
 		s = &b4->spans[i];
 
-		for (j=HFC_T1; j <= HFC_T3; j++) {
-
-/* we don't really do timer2, it is expired by the state change handler */
+		for (j = HFC_T1; j < ARRAY_SIZE(s->hfc_timers); j++) {
+			/* we don't really do timer2, it is expired by the
+			 * state change handler */
 			if (j == HFC_T2)
 				continue;
 
@@ -1433,6 +1449,7 @@ static void hfc_handle_state(struct b4xxp_span *s)
 			break;
 		case 0x7:			/* TE state F7: Activated */
 			s->hfc_timer_on[HFC_T3] = 0;
+			s->hfc_timer_on[HFC_T4] = 0;
 			s->newalarm = 0;
 			break;
 		}
@@ -1454,14 +1471,17 @@ static void hfc_handle_state(struct b4xxp_span *s)
 
 /* If we're in F3 and receiving INFO0, start T3 and jump to F4 */
 	if (!nt && (sta == 3) && (state & V_INFO0)) {
-		s->hfc_timers[HFC_T3] = b4->ticks + timer_3_ms;
-		s->hfc_timer_on[HFC_T3] = 1;
-		if (DBG_ST) {
-			dev_info(&b4->pdev->dev,
-				 "port %d: receiving INFO0 in state 3, "
-				 "setting T3 and jumping to F4\n", s->port + 1);
+		if (persistentlayer1) {
+			s->hfc_timers[HFC_T3] = b4->ticks + timer_3_ms;
+			s->hfc_timer_on[HFC_T3] = 1;
+			if (DBG_ST) {
+				dev_info(&b4->pdev->dev,
+					 "port %d: receiving INFO0 in state 3, "
+					 "setting T3 and jumping to F4\n",
+					 s->port + 1);
+			}
+			hfc_start_st(s);
 		}
-		hfc_force_st_state(b4, s->port, 4, 1);
 	}
 
 /* read in R_BERT_STA to determine where our current sync source is */
@@ -1476,6 +1496,24 @@ static void hfc_handle_state(struct b4xxp_span *s)
 	}
 }
 
+static void hfc_stop_all_timers(struct b4xxp_span *s)
+{
+	s->hfc_timer_on[HFC_T4] = 0;
+	s->hfc_timer_on[HFC_T3] = 0;
+	s->hfc_timer_on[HFC_T2] = 0;
+	s->hfc_timer_on[HFC_T1] = 0;
+}
+
+static void hfc_stop_st(struct b4xxp_span *s)
+{
+	struct b4xxp *b4 = s->parent;
+
+	hfc_stop_all_timers(s);
+
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->port, A_ST_WR_STA
+			V_ST_ACT_DEACTIVATE);
+}
+
 /*
  * resets an S/T interface to a given NT/TE mode
  */
@@ -1486,9 +1524,15 @@ static void hfc_reset_st(struct b4xxp_span *s)
 
 	b4 = s->parent;
 
+	hfc_stop_st(s);
+
 /* force state G0/F0 (reset), then force state 1/2 (deactivated/sensing) */
 	b4xxp_setreg_ra(b4, R_ST_SEL, s->port, A_ST_WR_STA, V_ST_LD_STA);
 	flush_pci();			/* make sure write hit hardware */
+
+	s->span.alarms = DAHDI_ALARM_RED;
+	s->newalarm = DAHDI_ALARM_RED;
+	dahdi_alarm_notify(&s->span);
 
 	udelay(10);
 
@@ -1520,9 +1564,13 @@ static void hfc_start_st(struct b4xxp_span *s)
 
 /* start T1 if in NT mode, T3 if in TE mode */
 	if (s->te_mode) {
-		s->hfc_timers[HFC_T3] = b4->ticks + 500;	/* 500ms wait first time, timer_t3_ms afterward. */
+		s->hfc_timers[HFC_T3] = b4->ticks + timer_3_ms;
 		s->hfc_timer_on[HFC_T3] = 1;
 		s->hfc_timer_on[HFC_T1] = 0;
+
+		s->hfc_timers[HFC_T4] = b4->ticks + 1000;
+		s->hfc_timer_on[HFC_T4] = 1;
+
 		if (DBG_ST) {
 			dev_info(&b4->pdev->dev,
 				 "setting port %d t3 timer to %lu\n",
@@ -1539,17 +1587,6 @@ static void hfc_start_st(struct b4xxp_span *s)
 		}
 	}
 }
-
-#if 0 /* TODO: This function is not called anywhere */
-static void hfc_stop_st(struct b4xxp_span *s)
-{
-	b4xxp_setreg_ra(s->parent, R_ST_SEL, s->port, A_ST_WR_STA, V_ST_ACT_DEACTIVATE);
-
-	s->hfc_timer_on[HFC_T1] = 0;
-	s->hfc_timer_on[HFC_T2] = 0;
-	s->hfc_timer_on[HFC_T3] = 0;
-}
-#endif
 
 /*
  * read in the HFC GPIO to determine each port's mode (TE or NT).
@@ -1583,8 +1620,6 @@ static void hfc_init_all_st(struct b4xxp *b4)
 		dev_info(&b4->pdev->dev,
 			 "Port %d: %s mode\n", i + 1, (nt ? "NT" : "TE"));
 
-		hfc_reset_st(s);
-		hfc_start_st(s);
 	}
 }
 
@@ -1841,10 +1876,10 @@ static int hdlc_tx_frame(struct b4xxp_span *bspan)
 	char debugbuf[256];
 	unsigned long irq_flags;
 
-/* if we're ignoring TE red alarms and we are in alarm, restart the S/T state machine */
-	if (bspan->te_mode && teignorered && bspan->newalarm == DAHDI_ALARM_RED) {
-		hfc_force_st_state(b4, bspan->port, 3, 1);
-	}
+	/* if we're ignoring TE red alarms and we are in alarm, restart the
+	 * S/T state machine */
+	if (bspan->te_mode && bspan->newalarm != 0)
+		hfc_start_st(bspan);
 
 	fifo = bspan->fifos[2];
 	res = dahdi_hdlc_getbuf(bspan->sigchan, buf, &size);
@@ -2331,6 +2366,10 @@ static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
 
 	if (lc->sync)
 		b4->spans[lc->sync - 1].sync = (span->offset + 1);
+
+	hfc_reset_st(bspan);
+	if (persistentlayer1)
+		hfc_start_st(bspan);
 
 	b4xxp_reset_span(bspan);
 
@@ -3110,6 +3149,7 @@ module_param(vpmsupport, int, S_IRUGO);
 module_param(timer_1_ms, int, S_IRUGO | S_IWUSR);
 module_param(timer_3_ms, int, S_IRUGO | S_IWUSR);
 module_param(companding, charp, S_IRUGO);
+module_param(persistentlayer1, int, S_IRUGO | S_IWUSR);
 
 MODULE_PARM_DESC(debug, "bitmap: 1=general 2=dtmf 4=regops 8=fops 16=ec 32=st state 64=hdlc 128=alarm");
 MODULE_PARM_DESC(spanfilter, "debug filter for spans. bitmap: 1=port 1, 2=port 2, 4=port 3, 8=port 4");
