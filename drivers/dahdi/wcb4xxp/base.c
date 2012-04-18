@@ -1510,7 +1510,7 @@ static void hfc_stop_st(struct b4xxp_span *s)
 
 	hfc_stop_all_timers(s);
 
-	b4xxp_setreg_ra(b4, R_ST_SEL, s->port, A_ST_WR_STA
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->port, A_ST_WR_STA,
 			V_ST_ACT_DEACTIVATE);
 }
 
