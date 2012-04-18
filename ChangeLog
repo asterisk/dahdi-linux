@@ -1,0 +1,555 @@
+2012-04-18 Shaun Ruffell <sruffell@digium.com>
+
+	* Released 2.6.1 
+
+2012-04-11 20:19 +0000 [r10657-10660]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/xpp/xpp_dahdi.c, drivers/dahdi/xpp/xpp_dahdi.h:
+	  xpp: Fix compilation when CONFIG_DAHDI_WATCHDOG is defined. Looks
+	  like a hold over from when dahdi_span_ops was first implemented
+	  in r8985 "dahdi: Move the callbacks in dahdi_span into its own
+	  structure" [1]. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=8985
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Acked-by:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10658
+
+	* drivers/dahdi/dahdi-base.c: dahdi: Fix compilation when
+	  CONFIG_DAHDI_WATCHDOG is defined. From: Mike Sinkovsky
+	  <msink@trikom.ru> Internal-Issue-ID: DAHLIN-288 Signed-off-by:
+	  Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10655
+
+2012-04-11 09:16 +0000 [r10651-10654]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/firmwares/FPGA_1161.201.hex: FPGA_1161.201.hex
+	  rev 10545: fix reset of XR1000 Previous commit (r10651) included
+	  an incorrect version. Including full message from that commit for
+	  the description. rev. 10502 of the FPGA firmware for the new
+	  E-Main rev. 4 fixes a potential issue when used on Xorcom XR1000
+	  systems: an issue with the power supply may cause the unit to
+	  reset. Note that there is no issue with previous models, with a
+	  normal setup of an Astribank, or other XRx000 systems.
+	  Signed-off-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10652
+
+	* drivers/dahdi/xpp/firmwares/FPGA_1161.201.hex: FPGA_1161.201.hex
+	  rev 10532: fix reset of XR1000 rev. 10502 of the FPGA firmware
+	  for the new E-Main rev. 4 fixes a potential issue when used on
+	  Xorcom XR1000 systems: an issue with the power supply may cause
+	  the unit to reset. Note that there is no issue with previous
+	  models, with a normal setup of an Astribank, or other XRx000
+	  systems. Signed-off-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+	  Origin: http://svnview.digium.com/svn/dahdi?view=rev&rev=10649
+
+2012-04-05 20:34 +0000 [r10644-10648]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/voicebus/Kbuild, drivers/dahdi/wct4xxp/Kbuild:
+	  wcte12xp, wctdm24xxp, wct4xxp: Print warning about potential GPL
+	  violation w/HOTPLUG_FIRMWARE=no. Print a warning message that it
+	  may be a GPL violation to redistribute these binaries if the
+	  firmware for the VPMOCT032/64/128/256 is compiled in.
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10646
+
+	* drivers/dahdi/wcb4xxp/base.c: wcb4xxp: Remove asm/system.h
+	  include. Not needed anymore and will break compilation on Kernel
+	  versions >= 3.4 since commit 0195c00244dc2e [1] [1]
+	  http://git.kernel.org/?p=linux/kernel/git/torvalds/linux.git;a=commit;h=0195c00244dc2e
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10641
+
+	* drivers/dahdi/dahdi_dummy.c: dahdi_dummy: Include timer.h instead
+	  of time.h It appears that some kernel configurations do not
+	  include timer.h in any of the include files that are included by
+	  dahdi_dummy. The timer_structs are defined in timer.h and not
+	  time.h, so this change is correct even though I never could find
+	  a configuation myself that actually failed to compile. This has
+	  negligible impact since dahdi_dummy is not compiled by default.
+	  Internal-Issue-ID: DAHLIN-185 Reported-by: Steve Murphy
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10640
+
+2012-04-03 22:02 +0000 [r10628-10637]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/dahdi-base.c: dahdi: Fix compilation when
+	  CONFIG_DAHDI_NET is defined. 'irq' field was removed from
+	  dahdi_span in r10276 "dahdi: Remove dahdi_span.irq and move
+	  dahdi_span.irqmisses into dahdi_device." [1] which was first
+	  released in dahdi-linux 2.6.0. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=10276
+	  Reported-by: Pavel Selivanov Internal-Issue-ID: DAHLIN-278
+	  Patches: hdlc.patch by Pavel Selivanov (license #5420)
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10634
+
+	* drivers/dahdi/dahdi-base.c: dahdi: Fix compilation when
+	  CONFIG_DAHDI_ECHOCAN_PROCESS_TX is defined. 'ec_state' was
+	  renamed to 'dahdi_echocan_state' in r6529 [1] but support for
+	  CONFIG_DAHDI_ECHOCAN_PROCESS_TX was first committed in r9442 [2].
+	  So it appears that I never compiled tested this exact commit when
+	  it went in for the 2.5.0 release. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=6529
+	  [2]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=9442
+	  Reported-by: Pavel Selivanov Internal-Issue-ID: DAHLIN-279
+	  Patches: ec.patch uploaded by Pavel Selivanov (License #5420) [
+	  edited the patch slightly for minor formatting ] Signed-off-by:
+	  Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10633
+
+	* drivers/dahdi/dahdi_dynamic_loc.c: dahdi_dynamic_loc: Change and
+	  check the dyn->pvt pointer under lock. Fixes a crash on unload if
+	  the sync_tick callback was running at the same time the dynamic
+	  local span was destroyed. It was possible for
+	  dahdi_dynamic_local_transmit to dereference a pointer that may
+	  have already been freed. Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10627
+
+	* drivers/dahdi/dahdi_dynamic_eth.c: dahdi_dynamic_eth: Make
+	  ztdeth_exit() symetrical with ztdeth_init() and fix race on
+	  unload. Minor change to follow generally recommended practice.
+	  Prevents new packets from being queued up for devices when they
+	  are about to be cleaned up. Also clean up any skbs that may still
+	  be on the queue after unloading. Also closes anoter potential
+	  kernel oops on module unload. It was possible to delete the
+	  private structure while the master span process was running. The
+	  result was an attempt to page memory from interrupt context. Make
+	  sure that the pvt function is set and cleared under the zlock.
+	  Also do not assume that the pvt pointer is valid in
+	  ztdeth_transmit. Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10626
+
+	* drivers/dahdi/dahdi_dynamic.c: dahdi_dynamic: Close race on
+	  unload if red alarm timer was running when unloaded. I saw a
+	  kernel oops that was the result of the timer running after the
+	  dahdi_dynamic module was unloaded. Now we wait for the timer to
+	  complete, and then delete it again in case it reactivated itself.
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10625
+
+	* drivers/dahdi/dahdi_dynamic.c: dahdi_dynamic: Remove calls to
+	  __module_get(). The board drivers are the ones calling the
+	  unregister function, and therefore we do not need to worry about
+	  them unloading while calling the destroy callback. When
+	  destroying spans with the ioctl, replace __module_get() with
+	  try_module_get. This avoids hitting a BUG in module_get on kernel
+	  versions < 2.6.29. ALSO move the call to try_module_get out of
+	  the dahdi_dynamic_release function and into destroy. This way if
+	  the destroy callback isn't called because the dynamic driver is
+	  unloading the dynamic device can be left on the list to be
+	  cleaned up by the dahdi_dynamic_unregister_driver function().
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10624
+
+	* drivers/dahdi/dahdi-base.c, include/dahdi/kernel.h,
+	  drivers/dahdi/dahdi_dynamic.c: dahdi_dynamic: Do not call into
+	  dahdi_dynamic without holding reference. Instead of registering a
+	  function pointer, register a dahdi_dynamic_ops structure that
+	  contains the owner as well as the ioctl callback. This way
+	  dahdi.ko can bump up the reference count on dahdi_dynamic.ko
+	  before calling the ioctl callback. Also, use the registration
+	  mutex to guard against the module being unloaded between the time
+	  the structure pointer was checked, and the module reference is
+	  taken. Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10623
+
+2012-04-02 14:05 +0000 [r10620]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/voicebus/vpmoct.c, drivers/dahdi/firmware/Makefile,
+	  drivers/dahdi/voicebus/Kbuild: wctdm24xxp, wcte12xp: Allow
+	  VPMOCT032 firmware to be compiled into driver. Enables the driver
+	  to update firmware on systems that do not have the firmware
+	  loader configured / enabled (Linux config option
+	  CONFIG_FW_LOADER). Compiling the firmware into the driver
+	  increase the memory footprint by around ~440K. Internal-Issue-ID:
+	  DAHDI-963 Reported-and-Tested-by: Guenther Kelleter
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10618
+
+2012-03-29 15:28 +0000 [r10614]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/wctdm24xxp/base.c: wctdm24xxp: Remove forward
+	  declaration of inline for GCC 3.4.4 GCC 3.4.4 does not allow
+	  forward declaration of inline functions. Internal-Issue-ID:
+	  DAHLIN-286 Reported-by: Guenther Kelleter Patches:
+	  wctdm24xxp-inline.patch uploaded by Guenther Kelleter (License
+	  #6372) Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10613
+
+2012-03-28 Shaun Ruffell <sruffell@digium.com>
+
+	* Released 2.6.0-rc1 
+
+2012-03-22 18:36 +0000 [r10591-10594]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/wct4xxp/base.c: wct4xxp: Trivial formatting changes
+	  around request_irq. Quiet some checkpatch warnings introduced by
+	  the last patch. I kept this separate since it may have obscured
+	  the real change made in the previous commit if combined.
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10590
+
+	* drivers/dahdi/wct4xxp/base.c: wct4xxp: Disable all interrupts
+	  explicitly in interrupt handler. The driver makes the assumption
+	  that interrupts are disabled but this cannot be guaranteed. We'll
+	  explicity disable interrupts on the local processor while the
+	  interrupt handler is running. This eliminates the "IRQF_DISABLED
+	  is not guaranteed on shared IRQs" warning when loading the
+	  driver. Signed-off-by: Shaun Ruffell <sruffell@digium.com>
+	  Origin: http://svnview.digium.com/svn/dahdi?view=rev&rev=10589
+
+	* drivers/dahdi/dahdi_dynamic_eth.c: dahdi_dynamic_eth: Fix
+	  compilation on kernels < 2.6.22. Resolves the follwing build
+	  error: drivers/dahdi/dahdi_dynamic_eth.c: In function
+	  ‘ztdeth_exit’: drivers/dahdi/dahdi_dynamic_eth.c:448: error:
+	  implicit declaration of function ‘cancel_work_sync’ RHEL kernel
+	  versions 2.6.18-238 (5.6) and greater had cancel_work_sync()
+	  backported which is what I did my original smoke test on.
+	  Reported-by: Oron Peled <oron.peled@xorcom.com> Signed-off-by:
+	  Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10588
+
+	* drivers/dahdi/dahdi_dynamic_eth.c: dahdi_dynamic_eth: Prevent
+	  crash is packet arrives before span is fully configured. It was
+	  possible after a dynamic ethernet span was created for a packet
+	  to come in before the dahdi_span was fully initialized. The
+	  result would be a NULL pointer dereference. Now just discard any
+	  packets that might come in during this time window.
+	  Internal-Issue-ID: DAHLIN-280 Reported-by: Pavel Selivanov
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10587
+
+2012-03-21 20:35 +0000 [r10575-10576]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/card_fxs.c: xpp: FXS: added a
+	  'lower_ringing_noise' parameter * Adds a new parameter,
+	  'lower_ringing_noise', to module xpd_fxs. * Makes the
+	  "power-down" behaviour that was added in upstream svn r10478,
+	  switchable in runtime. * By default (false), makes the vbat_h
+	  behave like it did before the power-down change. - I.e: vbat_h is
+	  held throughout the ringing period (during both
+	  ring-up/ring-down) - So this patch revert part of r10478 * When
+	  switched to true, activate the "power-down" behaviour. - I.e:
+	  vbat_h follows the ring-up/ring-down. - This behaviour lowers the
+	  noise caused by group ringing of FXS channels in the same unit,
+	  but causes problems with CallerID. Signed-off-by: Oron Peled
+	  <oron.peled@xorcom.com> Acked-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10574
+
+	* drivers/dahdi/xpp/card_fxs.c: xpp: FXS: atomic vbat_h power
+	  handling * In do_chan_power() make vbat_h changes atomic. * As a
+	  result we can ignore duplicate requests. This will allow cleaner
+	  logic in the next commit. * Added proper debug messages.
+	  Signed-off-by: Oron Peled <oron.peled@xorcom.com> Acked-by:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10573
+
+2012-03-21 19:36 +0000 [r10564-10572]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/dahdi-sysfs.c: remove a duplicate dev_set_name()
+	  Remove duplicate definition from dahdi-sysfs.c Signed-off-by:
+	  Oron Peled <oron.peled@xorcom.com> Acked-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10447
+
+	* include/dahdi/kernel.h, drivers/dahdi/dahdi_dynamic.c:
+	  dahdi_dynamic: Since dynamic devices are 'parentless' we must
+	  name them. This in conjunction with r10449 "A parent-less device
+	  should not crash dahdi", this allows dahdi_dynamic spans to work
+	  post the dahdi_devices changes in 2.6.0. The full address of the
+	  device is not used since kernels prior to 2.6.31 limit the length
+	  of a devicename to 20 characters. The full address of the device
+	  can be pulled out of the "hardware_id" and "type" fields of the
+	  span. This patch is just to get things working again.
+	  dahdi_dynamic devices *may* still have issues if the
+	  auto_assign_spans module parameter is 0. Internal-Issue-ID:
+	  DAHLIN-280 Reported-by: Pavel Selivanov Signed-off-by: Shaun
+	  Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10563
+
+	* drivers/dahdi/dahdi_dynamic_eth.c: dahdi_dynamic_eth: Move tx
+	  packet flushing to process context. The masterspan can be, and
+	  often is, called with interrupts disabled but dev_queue_xmit()
+	  needs to be called with interrupts enabled. This potentially
+	  fixes a deadlock. Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10562
+
+	* include/dahdi/kernel.h: dahdi: Update dev_set_name / dev_name for
+	  RHEL 5.6+. This is needed because dev_name() is mapped to
+	  kobject_name() in a backport, but the kobject name isn't set
+	  until after device_add(). The result would be parentless devices
+	  would fail since dahdi would not think a name was set for these
+	  devices. For these systems, we'll set both the bus_id string and
+	  the underlying kobject_name. Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Acked-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10561
+
+	* drivers/dahdi/dahdi-base.c, drivers/dahdi/dahdi-sysfs.c: A
+	  parent-less device should not crash dahdi * A parent-less device
+	  should not crash dahdi: - Access span->parent->dev instead of
+	  span->parent-dev.parent in soem cases. - Access span->parent->dev
+	  via new inline span_device() - Use span_device() in all
+	  dahdi_dev_{dbg,info}() * Allow low-level drivers to set their
+	  device name. - Drivers that don't use this feature get the
+	  default name based on the parent device name - Parent-less
+	  devices which don't set their name, fails to register with
+	  -EINVAL Signed-off-by: Oron Peled <oron.peled@xorcom.com>
+	  Acked-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10449
+
+	* drivers/dahdi/voicebus/voicebus.h, drivers/dahdi/wcte12xp/base.c,
+	  drivers/dahdi/wctdm24xxp/base.c: wcte12xp, wctdm24xxp: Add
+	  compile-time option to disable ASPM for PCIe devices. Certain
+	  BIOSes appear to enable ASPM even though it is not fully
+	  supported by the platform. Also, since the PCIe links for TDM
+	  cards are always in use it does not make sense to allow them to
+	  transition to the disabled state. Just turn off power management
+	  on the PCIe links completely. For more information see
+	  http://lwn.net/Articles/449448/. Internal-Issue-ID: DAHLIN-283
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10557
+
+	* drivers/dahdi/wct4xxp/base.c: wct4xxp: Add compile-time option to
+	  disable ASPM for PCIe devices. Certain BIOSes appear to enable
+	  ASPM even though it is not fully supported by the platform. Also,
+	  since the PCIe links for TDM cards are always in use it does not
+	  make sense to allow them to transition to the disabled state.
+	  Just turn off power management on the PCIe links completely. For
+	  more information see http://lwn.net/Articles/449448/.
+	  Internal-Issue-ID: DAHLIN-283 Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10558
+
+	* drivers/dahdi/wct4xxp/base.c: wct4xxp: __t4_frame_in and
+	  __t4_framer_out slowdowns. This is a partial revert of r10234
+	  "wct4xxp: __t4_framer_in and __t4_framer_out speedups." There
+	  were some platform + firmware version combinations that would
+	  fail to properly configure the framer with the aforementioned
+	  speedups. The originally reported sympton was that interrupts
+	  would fail to start and while troubleshooting I also saw cases
+	  where one of the spans would stay in alarm after starting. By
+	  adding in additional reads to the version register, the overall
+	  process of writing / reading from the framer control registers is
+	  slowed down which increases reliability. This change does *not*
+	  affect the main path of TDM data which is DMAed directly into
+	  buffers in host memory and are not read / written to / from
+	  framer registers directly. Reported-and-Tested-by: Vahan
+	  Yerkanian <vahan@arminco.com> Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10559
+
+	* drivers/dahdi/dahdi-base.c, include/dahdi/kernel.h: dahdi: Add
+	  dahdi_pci_disable_link_state for kernel < 2.6.25. Will allow the
+	  ASPM (Active State Power Management) state to be disabled on PCIe
+	  devices before kernel version 2.6.25. Signed-off-by: Shaun
+	  Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10556
+
+2012-03-20 11:20 +0000 [r10553]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/firmwares/USB_RECOV.hex,
+	  drivers/dahdi/xpp/firmwares/USB_FW.hex,
+	  drivers/dahdi/xpp/firmwares/FPGA_1161.201.hex: xpp: firmwares:
+	  useless 0x1A at EOF Remove a mostly harmless 0x1A (^Z) at the end
+	  of the file. If you add a NL after it, it breaks the firmware
+	  loading. Signed-off-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+	  Origin: http://svnview.digium.com/svn/dahdi?view=rev&rev=10550
+
+2012-03-18 19:00 +0000 [r10537-10538]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/firmwares/Makefile,
+	  drivers/dahdi/xpp/firmwares/FPGA_1161.201.hex (added),
+	  drivers/dahdi/xpp/firmwares/USB_FW.201.hex (added): xpp:
+	  firmwares to support E-Main 4 USB firmware (USB_FW.201.hex 10402)
+	  and FPGA firmware (FPGA_1161.201.hex 10480) with support of the
+	  new E-Main 4 Astribank mainboard. (This was accidentally labeled
+	  as 'E-Main 3' in some previous commit messages) Also includes
+	  Makefile fixes from r10536. Signed-off-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10535
+
+	* drivers/dahdi/xpp/firmwares/USB_FW.hex: xpp: USB_FW rev 10401:
+	  minor 6FXS/2FXO caps issue Fixes an issues with the 6FXS/2FXO
+	  module: if an extra FXS or FXO module is added to a system with
+	  such a module, an excessive number of port licenses was
+	  accidentally required (as if the 6FXS/2FXO module required
+	  8FXS/8FXO licenses). Internal-Issue-ID: #1371 Signed-off-by:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10534
+
+2012-03-16 16:11 +0000 [r10524-10526]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/dahdi_dummy.c: dahdi_dummy: Fix compilation since
+	  dahdi-linux 2.6.0. Even though dahdi_dummy is no longer built by
+	  default, the adoption of dahdi_devices in 2.6 broke the ability
+	  to compile. This was not intended as there are some packagers who
+	  still patch the Kbuild file to enable dahdi_dummy.
+	  Internal-Issue-ID: DAHLIN-274 Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10486
+
+	* drivers/dahdi/xpp/xproto.c: xpp: '%d' -> '%lu' when displaying
+	  module_refcount on kernel versions >= 3.3 Upstream commit
+	  bd77c047 "module: struct module_ref should contains long fields"
+	  changed the return of module_refcount from int to unsigned long.
+	  This change eliminates a warning from the string format
+	  specifier. Signed-off-by: Shaun Ruffell <sruffell@digium.com>
+	  Acked-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10485 Conflicts:
+	  drivers/dahdi/xpp/xproto.c
+
+	* drivers/dahdi/xpp/xpd.h: xpp: Use 'bool' type for boolean module
+	  parameters on kernel versions >= 2.6.31. Eliminates warnings that
+	  are a result of upstream commit 72db395ffa "module_param: check
+	  that bool parameters really are bool." Signed-off-by: Shaun
+	  Ruffell <sruffell@digium.com> Acked-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10484 Conflicts:
+	  drivers/dahdi/xpp/xpd.h
+
+2012-03-15 17:36 +0000 [r10489-10490]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/card_fxs.c: xpp: FXS: better power-down to
+	  lower noise * Now every linefeed control command which is not
+	  RING'ing powers-down the SLIC. This reduce audible noise when
+	  several channels are ringing. * Simplify code by removing
+	  redundant calls to do_chan_power() before linefeed_control() *
+	  Manage vbat_h state so we skip do_chan_power() calls when there
+	  isn't a state change * Export vbat_h state to /proc/.../fxs_info
+	  Signed-off-by: Oron Peled <oron.peled@xorcom.com> Acked-by:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10478
+
+	* drivers/dahdi/xpp/card_global.c, drivers/dahdi/xpp/card_global.h:
+	  xpp: reset Astribank SPI busses * A driver reload should reset
+	  Astribank hardware * This patch send an SPI reset after we get
+	  AB_DESCRIPTION reply from Astribank Signed-off-by: Oron Peled
+	  <oron.peled@xorcom.com> Acked-by: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10474
+
+2012-03-15 15:03 +0000 [r10481]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/wctdm24xxp/base.c: wctdm24xxp: Shorten RINGOFF
+	  debounce interval from 512ms to 128ms. In commit r10168
+	  "wctdm24xxp: Use time interval for debouncing FXO ring detect"
+	  [1], I inadvertently changed the debounce interval of the RINGOFF
+	  event from 128ms to 512ms. The result was a potential failure to
+	  detect CID, depending on line conditions, since Asterisk would
+	  bump the rx gains on the channel in the middle of the CID spill
+	  as opposed to before the CID spill. This fixes a regression first
+	  introduced in DAHDI-Linux 2.6.0. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=10168
+	  Internal-Issue-ID: DAHDI-951 Reported-and-Tested-by: Jack Wilson
+	  <ljwilson@digitalav.com> Signed-off-by: Shaun Ruffell
+	  <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10473
+
+2012-02-07 22:19 +0000 [r10457]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/firmwares/USB_RECOV.hex (added),
+	  drivers/dahdi/xpp/firmwares/Makefile: USB_RECOV.hex: recovering
+	  from xpp hardware issues USB_RECOV.hex, rev. 9760. It may be used
+	  to recover from certain issues of the USB controller of the
+	  Astribank (when an Astribank is not detected as such) by Support
+	  staff. Signed-off-by: Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+	  Origin: http://svnview.digium.com/svn/dahdi?view=rev&rev=10455
+
+2012-01-25 20:51 +0000 [r10445]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* drivers/dahdi/xpp/firmwares/FPGA_FXS.hex,
+	  drivers/dahdi/xpp/firmwares/FPGA_1141.hex,
+	  drivers/dahdi/xpp/firmwares/FPGA_1151.hex: Astribank I firmwares
+	  rev. 7107 A slightly newer firmware (Xorcom rev. 7107) for older
+	  (non Astribank II) Astribank modules. Was accidentally left
+	  uncommited. Includes minor bug fixes. No change for any
+	  relatively recent (Astribank II) Astribank. Signed-off-by:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10443
+
+2012-01-17 14:50 +0000 [r10442]  Tzafrir Cohen <tzafrir.cohen@xorcom.com>
+
+	* README, drivers/dahdi/Kbuild: Build OSLEC EC if in the tree Build
+	  the OSLEC echo canceller (drivers/staging/echo and
+	  dahdi_echocan_oslec) if the code of oslec is present in the tree.
+	  Also closing another issue regarding documentation of building
+	  OSLEC, as it is now even clearer than before. Patch has been used
+	  in the Debian package for quite some time. Signed-off-by: Tzafrir
+	  Cohen <tzafrir.cohen@xorcom.com> (closes issue DAHLIN-110)
+	  Reported by: biohumanoid (Pavel Selivanov) Patches:
+	  oslec_auto.diff uploaded by tzafrir (license 5035) (closes issue
+	  DAHLIN-261) Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10440
+
+2012-01-10 22:09 +0000 [r10415-10419]  Shaun Ruffell <sruffell@digium.com>
+
+	* drivers/dahdi/xpp/xbus-core.c: xpp: handle failures during
+	  dahdi_register_device() * If dahdi_register_device() failed, not
+	  all resources were freed. When dahdi_unregister_device() was
+	  called later (during driver removal) a panic was caused. * Add
+	  proper error handling for possible failures in
+	  xbus_register_dahdi_device(): - new xbus_free_ddev() safely free
+	  an xbus->ddev - This is called from all failures points. - It is
+	  also called from xbus_unregister_dahdi_device() Signed-off-by:
+	  Oron Peled <oron.peled@xorcom.com> Acked-By: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10410
+
+	* drivers/dahdi/xpp/xpp_dahdi.c, drivers/dahdi/xpp/xbus-core.c:
+	  xpp: Don't deactivate XPDs on unregistration * A bug was
+	  introduced during migration to dahdi_device code:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10273 * Marking
+	  XPDs as non-functional (card_present=0, XPD_STATE_NOHW) was moved
+	  from xbus_request_removal() into xpd_dahdi_preunregister() * As a
+	  result, unregistering an Astribank, made it non-functional so
+	  trying to re-register it later caused errors (e.g: "Cannot open"
+	  error message from xpp_open()) * This fix move XPD deactivation
+	  into the proper location (during xbus_deactivate() Signed-off-by:
+	  Oron Peled <oron.peled@xorcom.com> Acked-By: Tzafrir Cohen
+	  <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10409
+
+	* drivers/dahdi/xpp/xpp_dahdi.c: xpp: bugfix: fix bad refcount Code
+	  path called in error condition contained an superflous put_xpd()
+	  call Signed-off-by: Oron Peled <oron.peled@xorcom.com> Acked-By:
+	  Tzafrir Cohen <tzafrir.cohen@xorcom.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10408
+
+	* drivers/dahdi/wct4xxp/vpm450m.c: wct4xxp: VPM module creates
+	  noise on alternate channels on E1 spans. The VPMOCT128 module was
+	  using the VPMOCT256 timeslots assigments which would mean that
+	  channels that should be marked alaw were being set in ulaw. This
+	  only affected E1 spans since by default all spans are configured
+	  for ulaw by default. This fixes a regression introduced in r10290
+	  [1] "wct4xxp: Add support for TE820 and VPMOCT256", first
+	  released in 2.6.0, that only affects E1 spans on a quad and
+	  dual-span card when used with the hardware echocanceler. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=10290
+	  Internal-Issue-ID: DAHDI-945, DAHLIN-275 Signed-off-by: Shaun
+	  Ruffell <sruffell@digium.com> Acked-by: Russ Meyerriecks
+	  <rmeyerriecks@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10414
+
+	* drivers/dahdi/wctdm24xxp/base.c: wctdm24xxp: FXS on-hook
+	  transmission timer incorrect. The DAHDI_ONHOOKTRANSFER ioctl was
+	  incorrectly setting the ohttimer to 0. The result was that an FXS
+	  port was leaving the on-hook transfer state before finishing the
+	  transmission. This was discovered while looking at why ./fxstest
+	  dtmfcid was not able to pass the DTMF callerid digits to an
+	  attached FXO port properly. Fixes a regression introduced in
+	  r10167 "wctdm24xxp: Use interval for checking FXS on hook
+	  transfer timer." [1], first released in 2.6.0. [1]
+	  http://svnview.digium.com/svn/dahdi?view=revision&revision=10167
+	  Signed-off-by: Shaun Ruffell <sruffell@digium.com> Origin:
+	  http://svnview.digium.com/svn/dahdi?view=rev&rev=10413
+
+2012-01-04 22:19 +0000 [r10406]  Shaun Ruffell <sruffell@digium.com>
+
+	* / (added): Creating branch for 2.6.
+
