@@ -2089,6 +2089,8 @@ static int t4_alloc_channels(struct t4 *wc, struct t4_span *ts,
 	for (i = 0; i < ARRAY_SIZE(ts->chans); ++i) {
 		kfree(ts->chans[i]);
 		kfree(ts->ec[i]);
+		ts->chans[i] = NULL;
+		ts->ec[i] = NULL;
 	}
 
 	ts->linemode = linemode;
