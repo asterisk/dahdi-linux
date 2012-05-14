@@ -41,6 +41,7 @@ my %pci_ids = (
 	'd161:0210/0003'	=> { DRIVER => 'wct4xxp', DESCRIPTION => 'Wildcard TE210P (3rd Gen)' },
 	'd161:0205'		=> { DRIVER => 'wct4xxp', DESCRIPTION => 'Wildcard TE205P ' },
 	'd161:0210'		=> { DRIVER => 'wct4xxp', DESCRIPTION => 'Wildcard TE210P ' },
+	'd161:1820'		=> { DRIVER => 'wct4xxp', DESCRIPTION => 'Wildcard TE820 (5th Gen)' },
 
 	# from wctdm24xxp
 	'd161:2400'		=> { DRIVER => 'wctdm24xxp', DESCRIPTION => 'Wildcard TDM2400P' },
