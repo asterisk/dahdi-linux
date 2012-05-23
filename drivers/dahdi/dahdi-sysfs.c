@@ -26,6 +26,7 @@
 #include <dahdi/kernel.h>
 #include <linux/device.h>
 #include <linux/slab.h>
+#include <linux/ctype.h>
 
 #include "dahdi.h"
 #include "dahdi-sysfs.h"
@@ -201,6 +202,27 @@ static BUS_ATTR_READER(lineconfig_show, dev, buf)
 	return len;
 }
 
+static BUS_ATTR_READER(linecompat_show, dev, buf)
+{
+	struct dahdi_span *span;
+	int bit;
+	int len = 0;
+
+	span = dev_to_span(dev);
+	for (bit = 4; bit <= 12; bit++) {
+		if (span->linecompat & (1 << bit)) {
+			const char *name = dahdi_lineconfig_bit_name(bit);
+			if (name)
+				len += sprintf(buf + len, "%s ", name);
+		}
+	}
+	/* chomp */
+	while (len > 0 && isspace(buf[len - 1]))
+		buf[--len] = '\0';
+	len += sprintf(buf + len, "\n");
+	return len;
+}
+
 static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(name),
 	__ATTR_RO(desc),
@@ -214,6 +236,7 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_RO(basechan),
 	__ATTR_RO(channels),
 	__ATTR_RO(lineconfig),
+	__ATTR_RO(linecompat),
 	__ATTR_NULL,
 };
 

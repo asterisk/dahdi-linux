@@ -806,6 +806,7 @@ enum spantypes {
 };
 const char *dahdi_spantype2str(enum spantypes st);
 enum spantypes dahdi_str2spantype(const char *name);
+const char *dahdi_lineconfig_bit_name(int lineconfig_bit);
 
 struct file;
 

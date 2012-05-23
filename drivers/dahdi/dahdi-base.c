@@ -749,6 +749,31 @@ const char *dahdi_spantype2str(enum spantypes st)
 }
 EXPORT_SYMBOL(dahdi_spantype2str);
 
+
+const char *dahdi_lineconfig_bit_name(int lineconfig_bit)
+{
+	static const char * const table[] = {
+			/* These apply to T1 */
+			[4]	= "D4",
+			[5]	= "ESF",
+			[6]	= "AMI",
+			[7]	= "B8ZS",
+			/* These apply to E1 */
+			[8]	= "CCS",
+			[9]	= "HDB3",
+			[10]	= "CRC4",
+			/* These apply to BRI */
+			[11]	= "NTTE",
+			[12]	= "TERM",
+			/* Finish */
+			[16]	= "NOTOPEN",
+		};
+	if (lineconfig_bit < 0 || lineconfig_bit >= ARRAY_SIZE(table))
+		return NULL;
+	return table[lineconfig_bit];
+}
+EXPORT_SYMBOL(dahdi_lineconfig_bit_name);
+
 #ifdef CONFIG_PROC_FS
 static const char *sigstr(int sig)
 {
