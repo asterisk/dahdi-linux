@@ -1000,12 +1000,12 @@ static int t1xxp_software_init(struct t1 *wc)
 		else
 			wc->span.channels = 31;
 		wc->span.deflaw = DAHDI_LAW_ALAW;
-		wc->span.spantype = "E1";
+		wc->span.spantype = SPANTYPE_DIGITAL_E1;
 		wc->span.linecompat = DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
 	} else {
 		wc->span.channels = 24;
 		wc->span.deflaw = DAHDI_LAW_MULAW;
-		wc->span.spantype = "T1";
+		wc->span.spantype = SPANTYPE_DIGITAL_T1;
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
 	}
 	wc->span.chans = wc->chans;

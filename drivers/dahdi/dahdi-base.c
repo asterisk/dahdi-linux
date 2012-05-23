@@ -706,6 +706,49 @@ static int dahdi_q_sig(struct dahdi_chan *chan)
 	return -1; /* not found -- error */
 }
 
+enum spantypes dahdi_str2spantype(const char *name)
+{
+	if (strcasecmp("FXS", name) == 0)
+		return SPANTYPE_ANALOG_FXS;
+	else if (strcasecmp("FXO", name) == 0)
+		return SPANTYPE_ANALOG_FXO;
+	else if (strcasecmp("ANALOG_MIXED", name) == 0)
+		return SPANTYPE_ANALOG_MIXED;
+	else if (strcasecmp("E1", name) == 0)
+		return SPANTYPE_DIGITAL_E1;
+	else if (strcasecmp("T1", name) == 0)
+		return SPANTYPE_DIGITAL_T1;
+	else if (strcasecmp("J1", name) == 0)
+		return SPANTYPE_DIGITAL_J1;
+	else if (strcasecmp("BRI_NT", name) == 0)
+		return SPANTYPE_DIGITAL_BRI_NT;
+	else if (strcasecmp("BRI_TE", name) == 0)
+		return SPANTYPE_DIGITAL_BRI_TE;
+	else if (strcasecmp("BRI_SOFT", name) == 0)
+		return SPANTYPE_DIGITAL_BRI_SOFT;
+	else
+		return SPANTYPE_INVALID;
+}
+EXPORT_SYMBOL(dahdi_str2spantype);
+
+const char *dahdi_spantype2str(enum spantypes st)
+{
+	switch (st) {
+	case SPANTYPE_ANALOG_FXS:	return "FXS";
+	case SPANTYPE_ANALOG_FXO:	return "FXO";
+	case SPANTYPE_ANALOG_MIXED:	return "ANALOG_MIXED";
+	case SPANTYPE_DIGITAL_E1:	return "E1";
+	case SPANTYPE_DIGITAL_T1:	return "T1";
+	case SPANTYPE_DIGITAL_J1:	return "J1";
+	case SPANTYPE_DIGITAL_BRI_NT:	return "BRI_NT";
+	case SPANTYPE_DIGITAL_BRI_TE:	return "BRI_TE";
+	case SPANTYPE_DIGITAL_BRI_SOFT:	return "BRI_SOFT";
+	default:
+	case SPANTYPE_INVALID:		return "INVALID";
+	};
+}
+EXPORT_SYMBOL(dahdi_spantype2str);
+
 #ifdef CONFIG_PROC_FS
 static const char *sigstr(int sig)
 {
@@ -4265,7 +4308,7 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 			sizeof(spaninfo.location));
 	}
 	if (s->spantype) {
-		strlcpy(spaninfo.spantype, s->spantype,
+		strlcpy(spaninfo.spantype, dahdi_spantype2str(s->spantype),
 				  sizeof(spaninfo.spantype));
 	}
 
@@ -4356,7 +4399,7 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 
 	if (s->spantype) {
 		strlcpy(spaninfo_v1.spantype,
-				  s->spantype,
+				  dahdi_spantype2str(s->spantype),
 				  sizeof(spaninfo_v1.spantype));
 	}
 
@@ -6828,6 +6871,11 @@ static void __dahdi_init_span(struct dahdi_span *span)
 			      "law. Assuming mulaw, please fix driver!\n",
 			      span->name);
 		span->deflaw = DAHDI_LAW_MULAW;
+	}
+	if (span->spantype == SPANTYPE_INVALID) {
+		module_printk(KERN_NOTICE,
+			"Warning: Span %s didn't specify a spantype. "
+			"Please fix driver!\n", span->name);
 	}
 
 	for (x = 0; x < span->channels; ++x) {

@@ -586,7 +586,7 @@ static int FXS_card_dahdi_preregistration(xpd_t *xpd, bool on)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on) ? "on" : "off");
-	PHONEDEV(xpd).span.spantype = "FXS";
+	PHONEDEV(xpd).span.spantype = SPANTYPE_ANALOG_FXS;
 	for_each_line(xpd, i) {
 		struct dahdi_chan *cur_chan = XPD_CHAN(xpd, i);
 

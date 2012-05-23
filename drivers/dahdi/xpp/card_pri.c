@@ -101,20 +101,20 @@ static const char *protocol_names[] = {
 	[PRI_PROTO_J1] = "J1"
 };
 
+static enum spantypes pri_protocol2spantype(enum pri_protocol pri_protocol)
+{
+	switch (pri_protocol) {
+	case PRI_PROTO_E1: return SPANTYPE_DIGITAL_E1;
+	case PRI_PROTO_T1: return SPANTYPE_DIGITAL_T1;
+	case PRI_PROTO_J1: return SPANTYPE_DIGITAL_J1;
+	default:
+		return SPANTYPE_INVALID;
+	}
+}
+
 static const char *pri_protocol_name(enum pri_protocol pri_protocol)
 {
 	return protocol_names[pri_protocol];
-}
-
-static enum pri_protocol pri_protocol_bystr(const char *spantype)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(protocol_names); i++) {
-		if (strcasecmp(protocol_names[i], spantype) == 0)
-			return i;
-	}
-	return PRI_PROTO_0;
 }
 
 static int pri_num_channels(enum pri_protocol pri_protocol)
@@ -1077,14 +1077,28 @@ bad_lineconfig:
 	return -EINVAL;
 }
 
-static int pri_set_spantype(struct dahdi_span *span, const char *spantype)
+static int pri_set_spantype(struct dahdi_span *span, enum spantypes spantype)
 {
 	struct phonedev *phonedev = container_of(span, struct phonedev, span);
 	xpd_t *xpd = container_of(phonedev, struct xpd, phonedev);
 	enum pri_protocol set_proto = PRI_PROTO_0;
 
-	XPD_INFO(xpd, "%s: %s\n", __func__, spantype);
-	set_proto = pri_protocol_bystr(spantype);
+	XPD_INFO(xpd, "%s: %s\n", __func__, dahdi_spantype2str(spantype));
+	switch (spantype) {
+	case SPANTYPE_DIGITAL_E1:
+		set_proto = PRI_PROTO_E1;
+		break;
+	case SPANTYPE_DIGITAL_T1:
+		set_proto = PRI_PROTO_T1;
+		break;
+	case SPANTYPE_DIGITAL_J1:
+		set_proto = PRI_PROTO_J1;
+		break;
+	default:
+		XPD_NOTICE(xpd, "%s: bad spantype '%s'\n",
+			__func__, dahdi_spantype2str(spantype));
+		return -EINVAL;
+	}
 	return set_pri_proto(xpd, set_proto);
 }
 
@@ -1361,7 +1375,7 @@ static int apply_pri_protocol(xpd_t *xpd)
 	priv = xpd->priv;
 	BUG_ON(!xbus);
 	XPD_DBG(GENERAL, xpd, "\n");
-	PHONEDEV(xpd).span.spantype = pri_protocol_name(priv->pri_protocol);
+	PHONEDEV(xpd).span.spantype = pri_protocol2spantype(priv->pri_protocol);
 	PHONEDEV(xpd).span.linecompat = pri_linecompat(priv->pri_protocol);
 	PHONEDEV(xpd).span.deflaw = priv->deflaw;
 	PHONEDEV(xpd).span.alarms = DAHDI_ALARM_NONE;

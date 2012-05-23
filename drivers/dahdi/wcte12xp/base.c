@@ -1848,13 +1848,13 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 
 	if (type == E1) {
 		wc->span.channels = 31;
-		wc->span.spantype = "E1";
+		wc->span.spantype = SPANTYPE_DIGITAL_E1;
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_HDB3 |
 			DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
 		wc->span.deflaw = DAHDI_LAW_ALAW;
 	} else {
 		wc->span.channels = 24;
-		wc->span.spantype = "T1";
+		wc->span.spantype = SPANTYPE_DIGITAL_T1;
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS |
 			DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
 		wc->span.deflaw = DAHDI_LAW_MULAW;
@@ -1900,13 +1900,13 @@ error_exit:
  * DAHDI).
  *
  */
-static int t1xxp_set_linemode(struct dahdi_span *span, const char *linemode)
+static int t1xxp_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 {
 	int res;
 	struct t1 *wc = container_of(span, struct t1, span);
 
 	/* We may already be set to the requested type. */
-	if (!strcasecmp(span->spantype, linemode))
+	if (span->spantype == linemode)
 		return 0;
 
 	res = t1_wait_for_ready(wc);
@@ -1920,17 +1920,20 @@ static int t1xxp_set_linemode(struct dahdi_span *span, const char *linemode)
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
 
-	if (!strcasecmp(linemode, "t1")) {
+	switch (linemode) {
+	case SPANTYPE_DIGITAL_T1:
 		dev_info(&wc->vb.pdev->dev,
 			 "Changing from E1 to T1 line mode.\n");
 		res = t1_software_init(wc, T1);
-	} else if (!strcasecmp(linemode, "e1")) {
+		break;
+	case SPANTYPE_DIGITAL_E1:
 		dev_info(&wc->vb.pdev->dev,
 			 "Changing from T1 to E1 line mode.\n");
 		res = t1_software_init(wc, E1);
-	} else {
+		break;
+	default:
 		dev_err(&wc->vb.pdev->dev,
-			"'%s' is an unknown linemode.\n", linemode);
+			"Got invalid linemode %d from dahdi\n", linemode);
 		res = -EINVAL;
 	}
 

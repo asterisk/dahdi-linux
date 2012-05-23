@@ -2150,7 +2150,9 @@ static int b400m_set_ntte(struct b400m_span *bspan, int te_mode, int term_on)
 	int all_modes = 0, all_terms = 0;
 	int i;
 
-	bspan->wspan->span.spantype = (te_mode > 0) ? "TE" : "NT";
+	bspan->wspan->span.spantype = (te_mode > 0)
+		? SPANTYPE_DIGITAL_BRI_TE
+		: SPANTYPE_DIGITAL_BRI_NT;
 
 	bspan->te_mode = te_mode;
 	bspan->term_on = term_on;

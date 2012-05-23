@@ -2130,13 +2130,13 @@ static void t4_init_one_span(struct t4 *wc, struct t4_span *ts)
 
 	switch (ts->linemode) {
 	case T1:
-		ts->span.spantype = "T1";
+		ts->span.spantype = SPANTYPE_DIGITAL_T1;
 		break;
 	case E1:
-		ts->span.spantype = "E1";
+		ts->span.spantype = SPANTYPE_DIGITAL_E1;
 		break;
 	case J1:
-		ts->span.spantype = "J1";
+		ts->span.spantype = SPANTYPE_DIGITAL_J1;
 		break;
 	}
 
@@ -2185,40 +2185,47 @@ static void t4_init_one_span(struct t4 *wc, struct t4_span *ts)
 /**
  * t4_set_linemode - Allows user space to change the linemode before spans are assigned.
  * @span:	span on which to change the linemode.
- * @linemode:	Textual description of the new linemode.
+ * @linemode:	A value from enumerated spantypes
  *
  * This callback is used to override the E1/T1 mode jumper settings and set
  * the linemode on for each span. Called when the "spantype" attribute
  * is written in sysfs under the dahdi_device.
  *
  */
-static int t4_set_linemode(struct dahdi_span *span, const char *linemode)
+static int t4_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 {
 	struct t4_span *ts = container_of(span, struct t4_span, span);
 	struct t4 *wc = ts->owner;
 	int res = 0;
 	enum linemode mode;
+	const char *old_name;
 
-	dev_dbg(&wc->dev->dev, "Setting '%s' to '%s'\n", span->name, linemode);
+	dev_dbg(&wc->dev->dev, "Setting '%s' to '%s'\n", span->name,
+		dahdi_spantype2str(linemode));
 
-	if (!strcasecmp(span->spantype, linemode))
+	if (span->spantype == linemode)
 		return 0;
 
-	if (!strcasecmp(linemode, "t1")) {
+	old_name = dahdi_spantype2str(span->spantype);
+	switch (linemode) {
+	case SPANTYPE_DIGITAL_T1:
 		dev_info(&wc->dev->dev,
-			 "Changing from %s to T1 line mode.\n", span->spantype);
+			 "Changing from %s to T1 line mode.\n", old_name);
 		mode = T1;
-	} else if (!strcasecmp(linemode, "e1")) {
+		break;
+	case SPANTYPE_DIGITAL_E1:
 		dev_info(&wc->dev->dev,
-			 "Changing from %s to E1 line mode.\n", span->spantype);
+			 "Changing from %s to E1 line mode.\n", old_name);
 		mode = E1;
-	} else if (!strcasecmp(linemode, "j1")) {
+		break;
+	case SPANTYPE_DIGITAL_J1:
 		dev_info(&wc->dev->dev,
-			 "Changing from %s to J1 line mode.\n", span->spantype);
+			 "Changing from %s to J1 line mode.\n", old_name);
 		mode = J1;
-	} else {
+		break;
+	default:
 		dev_err(&wc->dev->dev,
-			"'%s' is an unknown linemode.\n", linemode);
+			"Got invalid linemode %d from dahdi\n", linemode);
 		res = -EINVAL;
 	}
 
@@ -2295,13 +2302,13 @@ static void init_spans(struct t4 *wc)
 			 "T%dXXP (PCI) Card %d Span %d", wc->numspans, wc->num, x+1);
 		switch (ts->linemode) {
 		case T1:
-			ts->span.spantype = "T1";
+			ts->span.spantype = SPANTYPE_DIGITAL_T1;
 			break;
 		case E1:
-			ts->span.spantype = "E1";
+			ts->span.spantype = SPANTYPE_DIGITAL_E1;
 			break;
 		case J1:
-			ts->span.spantype = "J1";
+			ts->span.spantype = SPANTYPE_DIGITAL_J1;
 			break;
 		}
 

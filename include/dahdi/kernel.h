@@ -792,6 +792,21 @@ struct dahdi_count {
 #define DAHDI_FLAG_TXUNDERRUN	DAHDI_FLAG(TXUNDERRUN)
 #define DAHDI_FLAG_RXOVERRUN	DAHDI_FLAG(RXOVERRUN)
 
+enum spantypes {
+	SPANTYPE_INVALID	= 0,
+	SPANTYPE_ANALOG_FXS,
+	SPANTYPE_ANALOG_FXO,
+	SPANTYPE_ANALOG_MIXED,
+	SPANTYPE_DIGITAL_E1,
+	SPANTYPE_DIGITAL_T1,
+	SPANTYPE_DIGITAL_J1,
+	SPANTYPE_DIGITAL_BRI_NT,
+	SPANTYPE_DIGITAL_BRI_TE,
+	SPANTYPE_DIGITAL_BRI_SOFT,
+};
+const char *dahdi_spantype2str(enum spantypes st);
+enum spantypes dahdi_str2spantype(const char *name);
+
 struct file;
 
 struct dahdi_span_ops {
@@ -890,7 +905,7 @@ struct dahdi_span_ops {
 
 	/*! Called when the spantype / linemode is changed before the span is
 	 * assigned a number. */
-	int (*set_spantype)(struct dahdi_span *span, const char *spantype);
+	int (*set_spantype)(struct dahdi_span *span, enum spantypes st);
 };
 
 /**
@@ -921,7 +936,7 @@ struct dahdi_span {
 	spinlock_t lock;
 	char name[40];			/*!< Span name */
 	char desc[80];			/*!< Span description */
-	const char *spantype;		/*!< span type in text form */
+	enum spantypes spantype;	/*!< span type */
 	int deflaw;			/*!< Default law (DAHDI_MULAW or DAHDI_ALAW) */
 	int alarms;			/*!< Pending alarms on span */
 	unsigned long flags;

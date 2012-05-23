@@ -290,12 +290,12 @@ static void init_spans(struct tor2 *tor)
 			s->channels = 24;
 			s->deflaw = DAHDI_LAW_MULAW;
 			s->linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
-			s->spantype = "T1";
+			s->spantype = SPANTYPE_DIGITAL_T1;
 		} else {
 			s->channels = 31;
 			s->deflaw = DAHDI_LAW_ALAW;
 			s->linecompat = DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
-			s->spantype = "E1";
+			s->spantype = SPANTYPE_DIGITAL_E1;
 		}
 		s->chans = tor->chans[x];
 		s->flags = DAHDI_FLAG_RBS;

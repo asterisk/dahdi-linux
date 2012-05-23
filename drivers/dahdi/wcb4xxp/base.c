@@ -2505,7 +2505,9 @@ static void init_spans(struct b4xxp *b4)
 		bspan = &b4->spans[i];
 		bspan->parent = b4;
 
-		bspan->span.spantype = (bspan->te_mode) ? "TE" : "NT";
+		bspan->span.spantype = (bspan->te_mode)
+			? SPANTYPE_DIGITAL_BRI_TE
+			: SPANTYPE_DIGITAL_BRI_NT;
 		bspan->span.offset = i;
 		bspan->span.channels = WCB4XXP_CHANNELS_PER_SPAN;
 		bspan->span.flags = 0;

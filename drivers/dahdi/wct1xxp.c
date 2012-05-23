@@ -792,12 +792,12 @@ static int t1xxp_software_init(struct t1xxp *wc)
 		wc->span.channels = 31;
 		wc->span.deflaw = DAHDI_LAW_ALAW;
 		wc->span.linecompat = DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
-		wc->span.spantype = "E1";
+		wc->span.spantype = SPANTYPE_DIGITAL_E1;
 	} else {
 		wc->span.channels = 24;
 		wc->span.deflaw = DAHDI_LAW_MULAW;
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
-		wc->span.spantype = "T1";
+		wc->span.spantype = SPANTYPE_DIGITAL_T1;
 	}
 	for (x=0;x<wc->span.channels;x++) {
 		sprintf(wc->chans[x]->name, "WCT1/%d/%d", wc->num, x + 1);

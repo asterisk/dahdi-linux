@@ -793,7 +793,10 @@ static int BRI_card_dahdi_preregistration(xpd_t *xpd, bool on)
 		/* Nothing to do yet */
 		return 0;
 	}
-	PHONEDEV(xpd).span.spantype = "BRI";
+	PHONEDEV(xpd).span.spantype =
+		(PHONEDEV(xpd).direction == TO_PHONE)
+			? SPANTYPE_DIGITAL_BRI_NT
+			: SPANTYPE_DIGITAL_BRI_TE;
 	PHONEDEV(xpd).span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_CCS;
 	PHONEDEV(xpd).span.deflaw = DAHDI_LAW_ALAW;
 	BIT_SET(PHONEDEV(xpd).digital_signalling, 2);	/* D-Channel */

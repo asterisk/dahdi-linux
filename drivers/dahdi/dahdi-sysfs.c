@@ -118,10 +118,17 @@ static BUS_ATTR_READER(field##_show, dev, buf)			\
 
 span_attr(name, "%s\n");
 span_attr(desc, "%s\n");
-span_attr(spantype, "%s\n");
 span_attr(alarms, "0x%x\n");
 span_attr(lbo, "%d\n");
 span_attr(syncsrc, "%d\n");
+
+static BUS_ATTR_READER(spantype_show, dev, buf)
+{
+	struct dahdi_span *span;
+
+	span = dev_to_span(dev);
+	return sprintf(buf, "%s\n", dahdi_spantype2str(span->spantype));
+}
 
 static BUS_ATTR_READER(local_spanno_show, dev, buf)
 {
@@ -474,7 +481,7 @@ dahdi_spantype_show(struct device *dev,
 	/* TODO: Make sure this doesn't overflow the page. */
 	list_for_each_entry(span, &ddev->spans, device_node) {
 		count = sprintf(buf, "%d:%s\n",
-			local_spanno(span), span->spantype);
+			local_spanno(span), dahdi_spantype2str(span->spantype));
 		buf += count;
 		total += count;
 	}
@@ -490,11 +497,19 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 	int ret;
 	struct dahdi_span *span;
 	unsigned int local_span_number;
-	char desired_spantype[80];
+	char spantype_name[80];
+	enum spantypes spantype;
 
-	ret = sscanf(buf, "%u:%70s", &local_span_number, desired_spantype);
-	if (ret != 2)
+	ret = sscanf(buf, "%u:%70s", &local_span_number, spantype_name);
+	if (ret != 2) {
+		dev_err(&ddev->dev, "Wrong input format: '%s'\n", buf);
 		return -EINVAL;
+	}
+	spantype = dahdi_str2spantype(spantype_name);
+	if (spantype == SPANTYPE_INVALID) {
+		dev_err(&ddev->dev, "Invalid spantype: '%s'\n", buf);
+		return -EINVAL;
+	}
 
 	list_for_each_entry(span, &ddev->spans, device_node) {
 		if (local_spanno(span) == local_span_number)
@@ -520,7 +535,7 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 	}
 
-	ret = span->ops->set_spantype(span, &desired_spantype[0]);
+	ret = span->ops->set_spantype(span, spantype);
 	return (ret < 0) ? ret : count;
 }
 
