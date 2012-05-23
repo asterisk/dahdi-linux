@@ -179,25 +179,7 @@ static BUS_ATTR_READER(lineconfig_show, dev, buf)
 	int len = 0;
 
 	span = dev_to_span(dev);
-	if (span->lineconfig) {
-		/* framing first */
-		if (span->lineconfig & DAHDI_CONFIG_B8ZS)
-			len += sprintf(buf + len, "B8ZS/");
-		else if (span->lineconfig & DAHDI_CONFIG_AMI)
-			len += sprintf(buf + len, "AMI/");
-		else if (span->lineconfig & DAHDI_CONFIG_HDB3)
-			len += sprintf(buf + len, "HDB3/");
-		/* then coding */
-		if (span->lineconfig & DAHDI_CONFIG_ESF)
-			len += sprintf(buf + len, "ESF");
-		else if (span->lineconfig & DAHDI_CONFIG_D4)
-			len += sprintf(buf + len, "D4");
-		else if (span->lineconfig & DAHDI_CONFIG_CCS)
-			len += sprintf(buf + len, "CCS");
-		/* E1's can enable CRC checking */
-		if (span->lineconfig & DAHDI_CONFIG_CRC4)
-			len += sprintf(buf + len, "/CRC4");
-	}
+	len += lineconfig_str(span->lineconfig, buf, 20);
 	len += sprintf(buf + len, "\n");
 	return len;
 }

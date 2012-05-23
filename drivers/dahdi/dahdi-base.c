@@ -774,6 +774,48 @@ const char *dahdi_lineconfig_bit_name(int lineconfig_bit)
 }
 EXPORT_SYMBOL(dahdi_lineconfig_bit_name);
 
+ssize_t lineconfig_str(int lineconfig, char buf[], size_t size)
+{
+	int framing_bit = 0;
+	int coding_bit = 0;
+	int crc4_bit = 0;
+	int len = 0;
+	int bit;
+
+	for (bit = 4; bit <= 12; bit++) {
+		int mask = (1 << bit);
+		if (!(lineconfig & mask))
+			continue;
+		if (!framing_bit) {
+			switch (mask) {
+			case DAHDI_CONFIG_B8ZS:
+			case DAHDI_CONFIG_AMI:
+			case DAHDI_CONFIG_HDB3:
+				framing_bit = bit;
+				len += snprintf(buf + len, size, "%s/",
+					dahdi_lineconfig_bit_name(bit));
+			}
+		}
+		if (!coding_bit) {
+			switch (mask) {
+			case DAHDI_CONFIG_ESF:
+			case DAHDI_CONFIG_D4:
+			case DAHDI_CONFIG_CCS:
+				coding_bit = bit;
+				len += snprintf(buf + len, size, "%s",
+					dahdi_lineconfig_bit_name(bit));
+			}
+		}
+		if (!crc4_bit && mask == DAHDI_CONFIG_CRC4) {
+				crc4_bit = bit;
+				len += snprintf(buf + len, size, "/%s",
+					dahdi_lineconfig_bit_name(bit));
+		}
+	}
+	return len;
+}
+EXPORT_SYMBOL(lineconfig_str);
+
 #ifdef CONFIG_PROC_FS
 static const char *sigstr(int sig)
 {
@@ -873,23 +915,9 @@ static int dahdi_seq_show(struct seq_file *sfile, void *v)
 		seq_printf(sfile, " (MASTER)");
 
 	if (s->lineconfig) {
-		/* framing first */
-		if (s->lineconfig & DAHDI_CONFIG_B8ZS)
-			seq_printf(sfile, " B8ZS/");
-		else if (s->lineconfig & DAHDI_CONFIG_AMI)
-			seq_printf(sfile, " AMI/");
-		else if (s->lineconfig & DAHDI_CONFIG_HDB3)
-			seq_printf(sfile, " HDB3/");
-		/* then coding */
-		if (s->lineconfig & DAHDI_CONFIG_ESF)
-			seq_printf(sfile, "ESF");
-		else if (s->lineconfig & DAHDI_CONFIG_D4)
-			seq_printf(sfile, "D4");
-		else if (s->lineconfig & DAHDI_CONFIG_CCS)
-			seq_printf(sfile, "CCS");
-		/* E1's can enable CRC checking */
-		if (s->lineconfig & DAHDI_CONFIG_CRC4)
-			seq_printf(sfile, "/CRC4");
+		char tmpbuf[20];
+		lineconfig_str(s->lineconfig, tmpbuf, sizeof(tmpbuf));
+		seq_printf(sfile, " %s", tmpbuf);
 	}
 
 	seq_printf(sfile, " ");
