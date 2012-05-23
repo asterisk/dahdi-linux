@@ -4361,8 +4361,39 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 			sizeof(spaninfo.location));
 	}
 	if (s->spantype) {
-		strlcpy(spaninfo.spantype, dahdi_spantype2str(s->spantype),
-				  sizeof(spaninfo.spantype));
+		/*
+		 * The API is brain-damaged, returning fixed length
+		 * null terminated strings via ioctl() is...
+		 *
+		 * This field contain only 6 characters
+		 * (including null termination, 5 effective characters).
+		 *
+		 * For backward compatibility, massage this info for dahdi-scan
+		 * and friends, until:
+		 *    - They either learn to read the info from sysfs
+		 *    - Or this API is broken to return the enum value
+		 */
+		const char *st = dahdi_spantype2str(s->spantype);
+		switch (s->spantype) {
+		case SPANTYPE_DIGITAL_BRI_NT:
+			strlcpy(spaninfo.spantype, "NT",
+					sizeof(spaninfo.spantype));
+			break;
+		case SPANTYPE_DIGITAL_BRI_TE:
+			strlcpy(spaninfo.spantype, "TE",
+					sizeof(spaninfo.spantype));
+			break;
+		default:
+			/*
+			 * The rest are either short (FXS, FXO, E1, T1, J1)
+			 * Or new (BRI_SOFT, ANALOG_MIXED, INVALID),
+			 * so no backward compatibility for this
+			 * broken interface.
+			 */
+			strlcpy(spaninfo.spantype, st,
+					sizeof(spaninfo.spantype));
+			break;
+		}
 	}
 
 	if (copy_to_user((void __user *)data, &spaninfo, size_to_copy))
