@@ -164,7 +164,7 @@ to the script:
 
 
 DKMS
-----
+~~~~
 DKMS, Dynamic Kernel Module Support, is a framework for building Linux
 kernel modules. It is used, among others, by several distributions that
 package the DAHDI kernel modules.
@@ -484,6 +484,9 @@ max_pseudo_channels (dahdi)::
   The maximum number of pseudo channels that dahdi will allow userspace to
   create.  Pseudo channels are used when conferencing channels together.
   The default is 512.
+
+auto_assign_spans (dahdi)::
+  See <<_span_assignments,Span Assignments>> below.
 
 To get a list of parameters supported by a module, use 
 
