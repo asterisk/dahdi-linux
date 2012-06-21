@@ -22,6 +22,7 @@
 
 #include <linux/module.h>
 #include <linux/delay.h>
+#include <linux/kmod.h>
 #include "xdefs.h"
 #include "xpd.h"
 #include "xpp_dahdi.h"
@@ -674,6 +675,15 @@ static void global_packet_dump(const char *msg, xpacket_t *pack)
 
 #define	MAX_PATH_STR	128
 
+#ifndef	UMH_WAIT_PROC
+/*
+ * - UMH_WAIT_PROC was introduced as enum in 2.6.23
+ *   with a value of 1
+ * - It was changed to a macro (and it's value was modified) in 3.3.0
+ */
+#define	UMH_WAIT_PROC	1
+#endif
+
 int run_initialize_registers(xpd_t *xpd)
 {
 	int ret;
@@ -764,7 +774,7 @@ int run_initialize_registers(xpd_t *xpd)
 	}
 	XPD_DBG(DEVICES, xpd, "running '%s' for type=%d revision=%d\n",
 		init_card, xpd->type, xbus->revision);
-	ret = call_usermodehelper(init_card, argv, envp, 1);
+	ret = call_usermodehelper(init_card, argv, envp, UMH_WAIT_PROC);
 	/*
 	 * Carefully report results
 	 */
