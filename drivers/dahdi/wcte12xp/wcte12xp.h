@@ -77,6 +77,7 @@
 enum linemode {
 	T1 = 1,
 	E1,
+	J1,
 };
 
 struct command {
