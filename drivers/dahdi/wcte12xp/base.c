@@ -2933,6 +2933,7 @@ static int __init te12xp_init(void)
 		   strcasecmp(default_linemode, "e1")) {
 		pr_err("'%s' is an unknown span type.", default_linemode);
 		default_linemode = "auto";
+		kmem_cache_destroy(cmd_cache);
 		return -EINVAL;
 	}
 	res = dahdi_pci_module(&te12xp_driver);
