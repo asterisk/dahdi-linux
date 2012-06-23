@@ -27,6 +27,8 @@
  * this program for more details.
  */
 
+#define pr_fmt(fmt)             KBUILD_MODNAME ": " fmt
+
 #include <linux/kernel.h>
 #include <linux/errno.h>
 #include <linux/module.h>
@@ -55,18 +57,14 @@
 #error VOICEBUS_SFRAME_SIZE != SFRAME_SIZE
 #endif
 
-#ifndef pr_fmt
-#define pr_fmt(fmt)             KBUILD_MODNAME ": " fmt
-#endif
-
 static int debug;
-static int j1mode = 0;
+static int j1mode = -1;
 static int alarmdebounce = 2500; /* LOF/LFA def to 2.5s AT&T TR54016*/
 static int losalarmdebounce = 2500; /* LOS def to 2.5s AT&T TR54016*/
 static int aisalarmdebounce = 2500; /* AIS(blue) def to 2.5s AT&T TR54016*/
 static int yelalarmdebounce = 500; /* RAI(yellow) def to 0.5s AT&T devguide */
 static int t1e1override = -1; /* deprecated */
-static char *default_linemode = "auto"; /* 'auto', 'e1', or 't1' */
+static char *default_linemode = "auto"; /* 'auto', 'e1', 't1', or 'j1' */
 static int latency = VOICEBUS_DEFAULT_LATENCY;
 static unsigned int max_latency = VOICEBUS_DEFAULT_MAXLATENCY;
 static int vpmsupport = 1;
@@ -883,7 +881,8 @@ static void t1_configure_t1(struct t1 *wc, int lineconfig, int txlevel)
 	fmr1 = 0x9e; /* FMR1: Mode 0, T1 mode, CRC on for ESF, 2.048 Mhz system data rate, no XAIS */
 	fmr2 = 0x20; /* FMR2: no payload loopback, don't auto yellow alarm */
 
-	if (j1mode)
+
+	if (!strcasecmp("j1", wc->span.spantype))
 		fmr4 = 0x1c;
 	else
 		fmr4 = 0x0c; /* FMR4: Lose sync on 2 out of 5 framing bits, auto resync */
@@ -923,7 +922,7 @@ static void t1_configure_t1(struct t1 *wc, int lineconfig, int txlevel)
 	t1_setreg(wc, 0x38, 0x0a);	/* PCD: LOS after 176 consecutive "zeros" */
 	t1_setreg(wc, 0x39, 0x15);	/* PCR: 22 "ones" clear LOS */
 
-	if (j1mode)
+	if (!strcasecmp("j1", wc->span.spantype))
 		t1_setreg(wc, 0x24, 0x80); /* J1 overide */
 		
 	/* Generate pulse mask for T1 */
@@ -1846,18 +1845,32 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 	memset(chans, 0, sizeof(chans));
 	memset(ec, 0, sizeof(ec));
 
-	if (type == E1) {
+	switch (type) {
+	case E1:
 		wc->span.channels = 31;
 		wc->span.spantype = "E1";
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_HDB3 |
 			DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4;
 		wc->span.deflaw = DAHDI_LAW_ALAW;
-	} else {
+		break;
+	case T1:
 		wc->span.channels = 24;
 		wc->span.spantype = "T1";
 		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS |
 			DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
 		wc->span.deflaw = DAHDI_LAW_MULAW;
+		break;
+	case J1:
+		wc->span.channels = 24;
+		wc->span.spantype = "J1";
+		wc->span.linecompat = DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS |
+			DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF;
+		wc->span.deflaw = DAHDI_LAW_MULAW;
+		break;
+	default:
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		res = -EINVAL;
+		goto error_exit;
 	}
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
@@ -1866,7 +1879,7 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 		return -ENOMEM;
 
 	t1_info(wc, "Setting up global serial parameters for %s\n",
-		(dahdi_is_e1_span(&wc->span) ? "E1" : "T1"));
+		wc->span.spantype);
 
 	t4_serial_setup(wc);
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
@@ -1922,12 +1935,19 @@ static int t1xxp_set_linemode(struct dahdi_span *span, const char *linemode)
 
 	if (!strcasecmp(linemode, "t1")) {
 		dev_info(&wc->vb.pdev->dev,
-			 "Changing from E1 to T1 line mode.\n");
+			 "Changing from %s to T1 line mode.\n",
+			 wc->span.spantype);
 		res = t1_software_init(wc, T1);
 	} else if (!strcasecmp(linemode, "e1")) {
 		dev_info(&wc->vb.pdev->dev,
-			 "Changing from T1 to E1 line mode.\n");
+			 "Changing from %s to E1 line mode.\n",
+			 wc->span.spantype);
 		res = t1_software_init(wc, E1);
+	} else if (!strcasecmp(linemode, "j1")) {
+		dev_info(&wc->vb.pdev->dev,
+			 "Changing from %s to E1 line mode.\n",
+			 wc->span.spantype);
+		res = t1_software_init(wc, J1);
 	} else {
 		dev_err(&wc->vb.pdev->dev,
 			"'%s' is an unknown linemode.\n", linemode);
@@ -1967,14 +1987,15 @@ static int t1_hardware_post_init(struct t1 *wc, enum linemode *type)
 	int x;
 
 	/* T1 or E1 */
-	if (-1 != t1e1override) {
-		pr_info("t1e1override is deprecated. Please use 'default_linemode'.\n");
-		*type = (t1e1override) ? E1 : T1;
+	if ((-1 != t1e1override) || (-1 != j1mode)) {
+		*type = (t1e1override) ? E1 : (j1mode) ? J1 : T1;
 	} else {
 		if (!strcasecmp(default_linemode, "e1")) {
 			*type = E1;
 		} else if (!strcasecmp(default_linemode, "t1")) {
 			*type = T1;
+		} else if (!strcasecmp(default_linemode, "j1")) {
+			*type = J1;
 		} else {
 			u8 pins;
 			res = t1_getpins(wc, &pins);
@@ -1983,7 +2004,8 @@ static int t1_hardware_post_init(struct t1 *wc, enum linemode *type)
 			*type = (pins & 0x01) ? T1 : E1;
 		}
 	}
-	debug_printk(wc, 1, "linemode: %s\n", (*type == T1) ? "T1" : "E1");
+	debug_printk(wc, 1, "linemode: %s\n", (*type == T1) ? "T1" :
+					(J1 == *type) ? "J1" : "E1");
 	
 	/* what version of the FALC are we using? */
 	reg = t1_setreg(wc, 0x4a, 0xaa);
@@ -2932,13 +2954,18 @@ static int __init te12xp_init(void)
 	if (!cmd_cache)
 		return -ENOMEM;
 
-	if (-1 != t1e1override) {
-		pr_info("'t1e1override' is deprecated. "
-			"Please use 'default_linemode' instead\n");
+	if ((-1 != t1e1override) || (-1 != j1mode)) {
+		pr_info("'t1e1override' and 'j1mode' are deprecated. "
+			"Please use 'default_linemode' instead.\n");
+		/* If someone is setting j1mode, then, t1e1override most likely
+		 * needs to be forced to t1 mode */
+		if (j1mode > 0)
+			t1e1override = 0;
 	} else if (strcasecmp(default_linemode, "auto") &&
 		   strcasecmp(default_linemode, "t1") &&
+		   strcasecmp(default_linemode, "j1") &&
 		   strcasecmp(default_linemode, "e1")) {
-		pr_err("'%s' is an unknown span type.", default_linemode);
+		pr_err("'%s' is an unknown span type.\n", default_linemode);
 		default_linemode = "auto";
 		kmem_cache_destroy(cmd_cache);
 		return -EINVAL;
