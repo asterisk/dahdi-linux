@@ -643,21 +643,21 @@ static inline int t1_setreg(struct t1 *wc, int addr, int val)
 	return 0;
 }
 
-static int t1_getreg(struct t1 *wc, int addr)
+static void __t1_getreg(struct t1 *wc, int addr, struct command *cmd)
 {
-	struct command *cmd =  NULL;
-	unsigned long ret;
-	unsigned long flags;
-
-	might_sleep();
-
-	cmd = get_free_cmd(wc);
-	if (!cmd)
-		return -ENOMEM;
 	cmd->address = addr;
 	cmd->data = 0x00;
 	cmd->flags = __CMD_RD;
 	submit_cmd(wc, cmd);
+}
+
+static int __t1_getresult(struct t1 *wc, struct command *cmd)
+{
+	int ret;
+	unsigned long flags;
+
+	might_sleep();
+
 	ret = wait_for_completion_interruptible_timeout(&cmd->complete, HZ*10);
 	if (unlikely(!ret)) {
 		spin_lock_irqsave(&wc->reglock, flags);
@@ -690,6 +690,16 @@ static int t1_getreg(struct t1 *wc, int addr)
 	ret = cmd->data;
 	free_cmd(wc, cmd);
 	return ret;
+}
+
+static int t1_getreg(struct t1 *wc, int addr)
+{
+	struct command *cmd =  NULL;
+	cmd = get_free_cmd(wc);
+	if (!cmd)
+		return -ENOMEM;
+	__t1_getreg(wc, addr, cmd);
+	return __t1_getresult(wc, cmd);
 }
 
 static void t1_setleds(struct t1 *wc, int leds)
@@ -1183,15 +1193,29 @@ static int t1xxp_rbsbits(struct dahdi_chan *chan, int bits)
 	return 0;
 }
 
-static inline void t1_check_sigbits(struct t1 *wc)
+static void t1_check_sigbits(struct t1 *wc)
 {
+	struct command *cmds[15] = {NULL,};
 	int a,i,rxs;
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
 	if (dahdi_is_e1_span(&wc->span)) {
+		/* Send out all the commands first. */
 		for (i = 0; i < 15; i++) {
-			a = t1_getreg(wc, 0x71 + i);
+			if (!(wc->span.chans[i+16]->sig & DAHDI_SIG_CLEAR) ||
+			    !(wc->span.chans[i]->sig & DAHDI_SIG_CLEAR))  {
+				cmds[i] = get_free_cmd(wc);
+				__t1_getreg(wc, 0x71 + i, cmds[i]);
+			}
+		}
+
+		/* Now check the results */
+		for (i = 14; i >= 0; --i) {
+			struct command *cmd = cmds[i];
+			if (!cmd)
+				continue;
+			a = __t1_getresult(wc, cmd);
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0xf);
@@ -1209,8 +1233,19 @@ static inline void t1_check_sigbits(struct t1 *wc)
 			}
 		}
 	} else if (wc->span.lineconfig & DAHDI_CONFIG_D4) {
+		/* First we'll send out the commands */
 		for (i = 0; i < 24; i+=4) {
-			a = t1_getreg(wc, 0x70 + (i>>2));
+			cmds[i] = get_free_cmd(wc);
+			if (!cmds[i]) {
+				WARN_ON(1);
+				return;
+			}
+			__t1_getreg(wc, 0x70 + (i>>2), cmds[i]);
+		}
+
+		/* Now we'll check the results */
+		for (i = 20; i >= 0; i -= 4) {
+			a = __t1_getresult(wc, cmds[i]);
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0x3) << 2;
@@ -1240,8 +1275,18 @@ static inline void t1_check_sigbits(struct t1 *wc)
 			}
 		}
 	} else {
+		/* First send out the commands. */
 		for (i = 0; i < 24; i+=2) {
-			a = t1_getreg(wc, 0x70 + (i>>1));
+			cmds[i] = get_free_cmd(wc);
+			if (!cmds[i]) {
+				WARN_ON(1);
+				return;
+			}
+			__t1_getreg(wc, 0x70 + (i>>1), cmds[i]);
+		}
+		/* Now check the results. */
+		for (i = 22; i >= 0; i -= 2) {
+			a = __t1_getresult(wc, cmds[i]);
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0xf);
@@ -2040,19 +2085,38 @@ static int t1_hardware_post_init(struct t1 *wc, enum linemode *type)
 	return 0;
 }
 
-static inline void t1_check_alarms(struct t1 *wc)
+static void t1_check_alarms(struct t1 *wc)
 {
 	unsigned char c,d;
 	int alarms;
 	int x,j;
 	unsigned char fmr4; /* must read this always */
+	struct command *cmds[3];
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
 
-	c = t1_getreg(wc, 0x4c);
-	fmr4 = t1_getreg(wc, 0x20); /* must read this even if we don't use it */
-	d = t1_getreg(wc, 0x4d);
+	for (x = 0; x < ARRAY_SIZE(cmds); ++x) {
+		cmds[x] = get_free_cmd(wc);
+		if (!cmds[x]) {
+			WARN_ON(1);
+			for (x = 0; x < ARRAY_SIZE(cmds); ++x)
+				free_cmd(wc, cmds[x]);
+			return;
+		}
+	}
+
+	/* Since this is voicebus, if we issue all the reads initially and then
+	 * check the results we can save ourselves some time. Otherwise, each
+	 * read will take a minimum of 3ms to go through the complete pipeline.
+	 */
+	__t1_getreg(wc, 0x4c, cmds[0]);
+	__t1_getreg(wc, 0x20, cmds[1]); /* must read this even if not used */
+	__t1_getreg(wc, 0x4d, cmds[2]);
+
+	d = __t1_getresult(wc, cmds[2]);
+	fmr4 = __t1_getresult(wc, cmds[1]);
+	c = __t1_getresult(wc, cmds[0]);
 
 	/* Assume no alarms */
 	alarms = 0;
@@ -2468,11 +2532,11 @@ static void timer_work_func(struct work_struct *work)
 {
 	struct t1 *wc = container_of(work, struct t1, timer_work);
 #endif
+	if (test_bit(INITIALIZED, &wc->bit_flags))
+		mod_timer(&wc->timer, jiffies + HZ/30);
 	t1_do_counters(wc);
 	t1_check_alarms(wc);
 	t1_check_sigbits(wc);
-	if (test_bit(INITIALIZED, &wc->bit_flags))
-		mod_timer(&wc->timer, jiffies + HZ/10);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
