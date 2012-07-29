@@ -635,7 +635,13 @@ Asterisk Level Information
 
   * the chan_dahdi.so file exists but it is not loaded. Try to load it manually:
 
-       asterisk -rx 'load module chan_dahdi.so'
+       asterisk -rx 'module load chan_dahdi.so'
+
+  * In some cases chan_dahdi failed to load properly and needs to be unloaded
+    before re-loading:
+
+       asterisk -rx 'module unload chan_dahdi.so'
+       asterisk -rx 'module   load chan_dahdi.so'
 
 - You see "pseudo" channel only. It means that you have not configured any
   channels. If you have configured channels in chan_dahdi.conf, you may
