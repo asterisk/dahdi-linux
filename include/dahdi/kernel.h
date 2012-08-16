@@ -65,7 +65,7 @@
 #define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id, struct pt_regs *regs)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #ifdef CONFIG_PCI
 #include <linux/pci-aspm.h>
 #endif
