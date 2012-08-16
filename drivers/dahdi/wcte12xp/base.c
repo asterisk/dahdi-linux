@@ -688,18 +688,20 @@ static int __t1_getresult(struct t1 *wc, struct command *cmd)
 		}
 	}
 	ret = cmd->data;
-	free_cmd(wc, cmd);
 	return ret;
 }
 
 static int t1_getreg(struct t1 *wc, int addr)
 {
+	int res;
 	struct command *cmd =  NULL;
 	cmd = get_free_cmd(wc);
 	if (!cmd)
 		return -ENOMEM;
 	__t1_getreg(wc, addr, cmd);
-	return __t1_getresult(wc, cmd);
+	res = __t1_getresult(wc, cmd);
+	free_cmd(wc, cmd);
+	return res;
 }
 
 static void t1_setleds(struct t1 *wc, int leds)
@@ -1195,27 +1197,45 @@ static int t1xxp_rbsbits(struct dahdi_chan *chan, int bits)
 
 static void t1_check_sigbits(struct t1 *wc)
 {
-	struct command *cmds[15] = {NULL,};
+	struct command_container {
+		struct command *cmd;
+		struct list_head node;
+		unsigned int index;
+	};
+	struct command_container *cont;
+	LIST_HEAD(commands);
 	int a,i,rxs;
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
+
 	if (dahdi_is_e1_span(&wc->span)) {
 		/* Send out all the commands first. */
 		for (i = 0; i < 15; i++) {
 			if (!(wc->span.chans[i+16]->sig & DAHDI_SIG_CLEAR) ||
 			    !(wc->span.chans[i]->sig & DAHDI_SIG_CLEAR))  {
-				cmds[i] = get_free_cmd(wc);
-				__t1_getreg(wc, 0x71 + i, cmds[i]);
+				cont = kzalloc(sizeof(*cont), GFP_KERNEL);
+				if (!cont) {
+					WARN_ON_ONCE(1);
+					goto done;
+				}
+				cont->cmd = get_free_cmd(wc);
+				if (!cont->cmd) {
+					WARN_ON_ONCE(1);
+					goto done;
+				}
+				cont->index = i;
+				list_add_tail(&cont->node, &commands);
+				__t1_getreg(wc, 0x71 + i, cont->cmd);
 			}
 		}
 
 		/* Now check the results */
-		for (i = 14; i >= 0; --i) {
-			struct command *cmd = cmds[i];
-			if (!cmd)
-				continue;
-			a = __t1_getresult(wc, cmd);
+		list_for_each_entry_reverse(cont, &commands, node) {
+			i = cont->index;
+			a = __t1_getresult(wc, cont->cmd);
+			free_cmd(wc, cont->cmd);
+			cont->cmd = NULL;
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0xf);
@@ -1234,18 +1254,28 @@ static void t1_check_sigbits(struct t1 *wc)
 		}
 	} else if (wc->span.lineconfig & DAHDI_CONFIG_D4) {
 		/* First we'll send out the commands */
-		for (i = 0; i < 24; i+=4) {
-			cmds[i] = get_free_cmd(wc);
-			if (!cmds[i]) {
-				WARN_ON(1);
-				return;
+		for (i = 0; i < 24; i += 4) {
+			cont = kzalloc(sizeof(*cont), GFP_KERNEL);
+			if (!cont) {
+				WARN_ON_ONCE(1);
+				goto done;
 			}
-			__t1_getreg(wc, 0x70 + (i>>2), cmds[i]);
+			cont->cmd = get_free_cmd(wc);
+			if (!cont->cmd) {
+				WARN_ON_ONCE(1);
+				goto done;
+			}
+			cont->index = i;
+			list_add_tail(&cont->node, &commands);
+			__t1_getreg(wc, 0x70 + (i>>2), cont->cmd);
 		}
 
 		/* Now we'll check the results */
-		for (i = 20; i >= 0; i -= 4) {
-			a = __t1_getresult(wc, cmds[i]);
+		list_for_each_entry_reverse(cont, &commands, node) {
+			i = cont->index;
+			a = __t1_getresult(wc, cont->cmd);
+			free_cmd(wc, cont->cmd);
+			cont->cmd = NULL;
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0x3) << 2;
@@ -1276,17 +1306,27 @@ static void t1_check_sigbits(struct t1 *wc)
 		}
 	} else {
 		/* First send out the commands. */
-		for (i = 0; i < 24; i+=2) {
-			cmds[i] = get_free_cmd(wc);
-			if (!cmds[i]) {
-				WARN_ON(1);
-				return;
+		for (i = 0; i < 24; i += 2) {
+			cont = kzalloc(sizeof(*cont), GFP_KERNEL);
+			if (!cont) {
+				WARN_ON_ONCE(1);
+				goto done;
 			}
-			__t1_getreg(wc, 0x70 + (i>>1), cmds[i]);
+			cont->cmd = get_free_cmd(wc);
+			if (!cont->cmd) {
+				WARN_ON_ONCE(1);
+				goto done;
+			}
+			cont->index = i;
+			list_add_tail(&cont->node, &commands);
+			__t1_getreg(wc, 0x70 + (i>>1), cont->cmd);
 		}
-		/* Now check the results. */
-		for (i = 22; i >= 0; i -= 2) {
-			a = __t1_getresult(wc, cmds[i]);
+
+		list_for_each_entry_reverse(cont, &commands, node) {
+			i = cont->index;
+			a = __t1_getresult(wc, cont->cmd);
+			free_cmd(wc, cont->cmd);
+			cont->cmd = NULL;
 			if (a > -1) {
 				/* Get high channel in low bits */
 				rxs = (a & 0xf);
@@ -1304,6 +1344,21 @@ static void t1_check_sigbits(struct t1 *wc)
 			}
 		}
 	}
+done:
+	while (!list_empty(&commands)) {
+		cont = container_of(commands.next,
+				    struct command_container, node);
+		if (unlikely(cont->cmd)) {
+			/* We do not care about the result, let's just wait for
+			 * the rest of the system to finish with it. */
+			__t1_getresult(wc, cont->cmd);
+			free_cmd(wc, cont->cmd);
+			cont->cmd = NULL;
+		}
+		list_del(&cont->node);
+		kfree(cont);
+	}
+	return;
 }
 
 struct maint_work_struct {
@@ -2113,6 +2168,9 @@ static void t1_check_alarms(struct t1 *wc)
 	d = __t1_getresult(wc, cmds[2]);
 	fmr4 = __t1_getresult(wc, cmds[1]);
 	c = __t1_getresult(wc, cmds[0]);
+
+	for (x=0; x < ARRAY_SIZE(cmds); ++x)
+		free_cmd(wc, cmds[x]);
 
 	/* Assume no alarms */
 	alarms = 0;
