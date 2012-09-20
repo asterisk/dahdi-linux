@@ -735,18 +735,6 @@ retry_write:
 		return ret;
 	}
 	if (!ret) {
-#if 0
-		FILE	*fp;
-
-		fp = fopen("/tmp/xusb.log", "a");
-		if (!fp) {
-			ERR("%s: Failed writing to /tmp/xusb.log\n", __func__);
-			return -EFAULT;
-		}
-		fprintf(fp, "[%ld] bulk_write to endpoint 0x%x short write[%d]: (%d)\n",
-			time(NULL), EP_OUT(xusb), retries, ret);
-		fclose(fp);
-#endif
 		ERR("bulk_write to endpoint 0x%x short write[%d]: (%d)\n",
 			EP_OUT(xusb), retries, ret);
 		if (retries++ > MAX_RETRIES)
@@ -782,18 +770,6 @@ retry_read:
 		return ret;
 	}
 	if (!ret) {
-#if 0
-		FILE	*fp;
-
-		fp = fopen("/tmp/xusb.log", "a");
-		if (!fp) {
-			ERR("%s: Failed writing to /tmp/xusb.log\n", __func__);
-			return -EFAULT;
-		}
-		fprintf(fp, "[%ld] bulk_read from endpoint 0x%x short read[%d]: (%d)\n",
-			time(NULL), EP_IN(xusb), retries, ret);
-		fclose(fp);
-#endif
 		ERR("bulk_read to endpoint 0x%x short read[%d]: (%d)\n",
 			EP_IN(xusb), retries, ret);
 		if (retries++ > MAX_RETRIES)
