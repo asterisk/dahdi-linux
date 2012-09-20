@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <limits.h>
 #include <regex.h>
 #include <sys/time.h>
 #include "echo_loader.h"
