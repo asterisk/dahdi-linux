@@ -67,7 +67,7 @@ void xusb_init_spec(struct xusb_spec *spec, char *name,
 		uint16_t vendor_id, uint16_t product_id,
 		int nifaces, int iface, int nep, int ep_out, int ep_in)
 {
-	DBG("Initialize %s: interfaces=%d using interface num=%d endpoints=%d (OUT=0x%2X, IN=0x%2X)\n",
+	DBG("Initialize %s: interfaces=%d using interface num=%d endpoints=%d (OUT=0x%02X, IN=0x%02X)\n",
 			name, nifaces, iface, nep, ep_out, ep_in);
 	memset(spec, 0, sizeof(*spec));
 	spec->name = name;
@@ -365,7 +365,11 @@ fail:
 	return NULL;
 }
 
-struct xusb *xusb_find_iface(const char *devpath, int iface_num, int ep_out, int ep_in)
+struct xusb *xusb_find_iface(const char *devpath,
+	int iface_num,
+	int ep_out,
+	int ep_in,
+	struct xusb_spec *dummy_spec)
 {
 	struct usb_bus		*bus;
 
@@ -387,7 +391,6 @@ struct xusb *xusb_find_iface(const char *devpath, int iface_num, int ep_out, int
 			struct usb_device_descriptor	*dev_desc;
 			struct usb_config_descriptor	*config_desc;
 			struct usb_interface		*interface;
-			struct xusb_spec		spec;
 			struct xusb			*xusb;
 			int				device_num;
 
@@ -402,14 +405,15 @@ struct xusb *xusb_find_iface(const char *devpath, int iface_num, int ep_out, int
 			assert(config_desc);
 			interface = config_desc->interface;
 			assert(interface);
-			INFO("Matched device %s: %X:%X\n", tmppath, dev_desc->idVendor, dev_desc->idProduct);
-			xusb_init_spec(&spec, "Astribank",
+			DBG("Matched device %s: %X:%X\n", tmppath, dev_desc->idVendor, dev_desc->idProduct);
+			assert(dummy_spec);
+			xusb_init_spec(dummy_spec, "<none>",
 				dev_desc->idVendor, dev_desc->idProduct,
 				config_desc->bNumInterfaces,
 				iface_num,
 				interface->altsetting->bNumEndpoints,
 				ep_out, ep_in);
-			if((xusb = xusb_new(dev, &spec)) == NULL) {
+			if((xusb = xusb_new(dev, dummy_spec)) == NULL) {
 				ERR("xusb allocation failed\n");
 			}
 			return xusb;
