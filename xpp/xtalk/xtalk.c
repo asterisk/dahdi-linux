@@ -435,7 +435,7 @@ int xtalk_proto_query(struct xtalk_device *xtalk_dev)
 	}
 	xtalk_dev->xtalk_proto_version = CMD_FIELD(reply, XTALK, PROTO_GET_REPLY, proto_version);
 	if(xtalk_dev->xtalk_proto_version != proto_version) {
-		ERR("Got %s protocol version: 0x%02x (expected 0x%02x)\n",
+		DBG("Got %s protocol version: 0x%02x (expected 0x%02x)\n",
 			xtalk_dev->xproto.name,
 			xtalk_dev->xtalk_proto_version,
 			proto_version);
