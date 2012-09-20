@@ -48,7 +48,7 @@ void dump_packet(int loglevel, int mask, const char *msg, const char *buf, int l
 {
 	int	i;
 
-	if(mask & debug_mask) {
+	if(!mask || (mask & debug_mask)) {
 		log_function(loglevel, ~0, "%-15s:", msg);
 		for(i = 0; i < len; i++)
 			log_function(loglevel, ~0, " %02X", (uint8_t)buf[i]);
