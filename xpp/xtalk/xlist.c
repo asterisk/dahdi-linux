@@ -7,7 +7,8 @@ struct xlist_node *xlist_new(void *data)
 {
 	struct xlist_node	*list;
 
-	if((list = malloc(sizeof(*list))) == NULL)
+	list = malloc(sizeof(*list));
+	if (!list)
 		return NULL;
 	list->next = list;
 	list->prev = list;
@@ -20,12 +21,12 @@ void xlist_destroy(struct xlist_node *list, xlist_destructor_t destructor)
 	struct xlist_node	*curr;
 	struct xlist_node	*next;
 
-	if (! list)
+	if (!list)
 		return;
 	curr = list->next;
-	while(curr != list) {
+	while (curr != list) {
 		next = curr->next;
-		if(destructor)
+		if (destructor)
 			destructor(curr->data);
 		memset(curr, 0, sizeof(*curr));
 		free(curr);
@@ -67,9 +68,9 @@ struct xlist_node *xlist_shift(struct xlist_node *list)
 {
 	struct xlist_node	*item;
 
-	if(!list)
+	if (!list)
 		return NULL;
-	if(xlist_empty(list))
+	if (xlist_empty(list))
 		return NULL;
 	item = list->next;
 	xlist_remove_item(item);
@@ -87,7 +88,7 @@ size_t xlist_length(const struct xlist_node *list)
 	struct xlist_node	*curr;
 	size_t			count = 0;
 
-	for(curr = list->next; curr != list; curr = curr->next)
+	for (curr = list->next; curr != list; curr = curr->next)
 		count++;
 	return count;
 }

@@ -29,8 +29,6 @@
 #include <xtalk.h>
 #include <debug.h>
 
-static const char rcsid[] = "$Id$";
-
 #define	DBG_MASK	0x02
 
 #define	TIMEOUT		6000
@@ -97,20 +95,21 @@ struct xtalk_protocol	xtalk_base = {
 
 void free_command(struct xtalk_command *cmd)
 {
-	if(!cmd)
+	if (!cmd)
 		return;
 	memset(cmd, 0, cmd->header.len);
 	free(cmd);
 }
 
-static const struct xtalk_command_desc *get_command_desc(const struct xtalk_protocol *xproto, uint8_t op)
+static const struct xtalk_command_desc *get_command_desc(
+		const struct xtalk_protocol *xproto, uint8_t op)
 {
 	const struct xtalk_command_desc	*desc;
 
-	if(!xproto)
+	if (!xproto)
 		return NULL;
 	desc = &xproto->commands[op];
-	if(!desc->name)
+	if (!desc->name)
 		return NULL;
 #if 0
 	DBG("%s version=%d, op=0x%X (%s)\n",
@@ -120,67 +119,74 @@ static const struct xtalk_command_desc *get_command_desc(const struct xtalk_prot
 	return desc;
 }
 
-static const char *ack_status_msg(const struct xtalk_protocol *xproto, uint8_t status)
+static const char *ack_status_msg(const struct xtalk_protocol *xproto,
+		uint8_t status)
 {
 	const char	*ack_status;
 
-	if(!xproto)
+	if (!xproto)
 		return NULL;
 	ack_status = xproto->ack_statuses[status];
 	DBG("%s status=0x%X (%s)\n", xproto->name, status, ack_status);
 	return ack_status;
 }
 
-int xtalk_set_protocol(struct xtalk_device *xtalk_dev, const struct xtalk_protocol *xproto)
+int xtalk_set_protocol(struct xtalk_device *xtalk_dev,
+		const struct xtalk_protocol *xproto)
 {
 	const char	*protoname = (xproto) ? xproto->name : "GLOBAL";
 	int		i;
 
 	DBG("%s\n", protoname);
 	memset(&xtalk_dev->xproto, 0, sizeof(xtalk_dev->xproto));
-	for(i = 0; i < MAX_OPS; i++) {
+	for (i = 0; i < MAX_OPS; i++) {
 		const struct xtalk_command_desc	*desc;
 
 		desc = get_command_desc(xproto, i);
-		if(desc) {
-			if(!IS_PRIVATE_OP(i)) {
-				ERR("Bad op=0x%X (should be in the range [0x%X-0x%X]\n",
+		if (desc) {
+			if (!IS_PRIVATE_OP(i)) {
+				ERR("Bad op=0x%X "
+					"(should be in the range [0x%X-0x%X]\n",
 					i, PRIVATE_OP_FIRST, PRIVATE_OP_LAST);
 				return -EINVAL;
 			}
 			xtalk_dev->xproto.commands[i] = *desc;
 			DBG("private: op=0x%X (%s)\n", i, desc->name);
 		} else {
-			if(!IS_PRIVATE_OP(i)) {
+			if (!IS_PRIVATE_OP(i)) {
 				const char	*name;
 
-				xtalk_dev->xproto.commands[i] = xtalk_base.commands[i];
+				xtalk_dev->xproto.commands[i] =
+					xtalk_base.commands[i];
 				name = xtalk_dev->xproto.commands[i].name;
-				if(name)
+				if (name)
 					DBG("global: op=0x%X (%s)\n", i, name);
 			}
 		}
 	}
-	for(i = 0; i < MAX_STATUS; i++) {
+	for (i = 0; i < MAX_STATUS; i++) {
 		const char	*stat_msg;
 
 		stat_msg = (xproto) ? xproto->ack_statuses[i] : NULL;
-		if(stat_msg) {
-			if(!IS_PRIVATE_OP(i)) {
-				ERR("Bad status=0x%X (should be in the range [0x%X-0x%X]\n",
+		if (stat_msg) {
+			if (!IS_PRIVATE_OP(i)) {
+				ERR("Bad status=0x%X "
+					"(should be in the range [0x%X-0x%X]\n",
 					i, PRIVATE_OP_FIRST, PRIVATE_OP_LAST);
 				return -EINVAL;
 			}
 			xtalk_dev->xproto.ack_statuses[i] = stat_msg;
 			DBG("private: status=0x%X (%s)\n", i, stat_msg);
 		} else {
-			if(!IS_PRIVATE_OP(i)) {
+			if (!IS_PRIVATE_OP(i)) {
 				const char	*stat_msg;
 
-				xtalk_dev->xproto.ack_statuses[i] = xtalk_base.ack_statuses[i];
+				xtalk_dev->xproto.ack_statuses[i] =
+					xtalk_base.ack_statuses[i];
 				stat_msg = xtalk_dev->xproto.ack_statuses[i];
-				if(stat_msg)
-					DBG("global: status=0x%X (%s)\n", i, stat_msg);
+				if (stat_msg)
+					DBG("global: status=0x%X (%s)\n",
+						i, stat_msg);
 			}
 		}
 	}
@@ -200,17 +206,18 @@ struct xtalk_command *new_command(
 
 	xproto = &xtalk_dev->xproto;
 	desc = get_command_desc(xproto, op);
-	if(!desc) {
+	if (!desc) {
 		ERR("Unknown op=0x%X.\n", op);
 		return NULL;
 	}
 	DBG("OP=0x%X [%s] (extra_data %d)\n", op, desc->name, extra_data);
 	len = desc->len + extra_data;
-	if((cmd = malloc(len)) == NULL) {
+	cmd = malloc(len);
+	if (!cmd) {
 		ERR("Out of memory\n");
 		return NULL;
 	}
-	if(extra_data) {
+	if (extra_data) {
 		uint8_t	*ptr = (uint8_t *)cmd;
 
 		DBG("clear extra_data (%d bytes)\n", extra_data);
@@ -228,18 +235,18 @@ void xtalk_dump_command(struct xtalk_command *cmd)
 	int		i;
 
 	len = cmd->header.len;
-	if(len < sizeof(struct xtalk_header)) {
+	if (len < sizeof(struct xtalk_header)) {
 		ERR("Command too short (%d)\n", len);
 		return;
 	}
 	INFO("DUMP: OP=0x%X len=%d seq=%d\n",
 		cmd->header.op, cmd->header.len, cmd->header.seq);
-	for(i = 0; i < len - sizeof(struct xtalk_header); i++) {
+	for (i = 0; i < len - sizeof(struct xtalk_header); i++)
 		INFO("  %2d. 0x%X\n", i, cmd->alt.raw_data[i]);
-	}
 }
 
-static int send_command(struct xtalk_device *xtalk_dev, struct xtalk_command *cmd, int timeout)
+static int send_command(struct xtalk_device *xtalk_dev,
+		struct xtalk_command *cmd, int timeout)
 {
 	int		ret;
 	int		len;
@@ -248,58 +255,46 @@ static int send_command(struct xtalk_device *xtalk_dev, struct xtalk_command *cm
 	len = cmd->header.len;
 	cmd->header.seq = xtalk_dev->tx_sequenceno;
 
-	//printf("%s: len=%d\n", __FUNCTION__, len);
-#if 0
-	extern	FILE	*fp;
-	char		*buf;
-
-	buf = (char *)cmd;
-	if(fp) {
-		int	i;
-
-		fprintf(fp, "%05d:", cmd->header.seq);
-		for(i = 0; i < len; i++)
-			fprintf(fp, " %02X", (uint8_t)buf[i]);
-		fprintf(fp, "\n");
-	}
-#endif
 	ret = xtalk_dev->ops.send_func(priv, (char *)cmd, len, timeout);
-	if(ret < 0) {
+	if (ret < 0)
 		DBG("send_func failed ret=%d\n", ret);
-	}
 	xtalk_dev->tx_sequenceno++;
 	return ret;
 }
 
-static struct xtalk_command *recv_command(struct xtalk_device *xtalk_dev, int timeout)
+static struct xtalk_command *recv_command(struct xtalk_device *xtalk_dev,
+		int timeout)
 {
 	struct xtalk_command	*reply;
 	void			*priv = xtalk_dev->transport_priv;
+	size_t			psize = xtalk_dev->packet_size;
 	int			ret;
 
-	if((reply = malloc(xtalk_dev->packet_size)) == NULL) {
+	reply = malloc(psize);
+	if (!reply) {
 		ERR("Out of memory\n");
 		goto err;
 	}
 	reply->header.len = 0;
-	ret = xtalk_dev->ops.recv_func(priv, (char *)reply, xtalk_dev->packet_size, timeout);
-	if(ret < 0) {
+	ret = xtalk_dev->ops.recv_func(priv, (char *)reply, psize, timeout);
+	if (ret < 0) {
 		ERR("Receive from usb failed.\n");
 		goto err;
-	} else if(ret == 0) {
+	} else if (ret == 0) {
 		goto err;	/* No reply */
 	}
-	if(ret != reply->header.len) {
-		ERR("Wrong length received: got %d bytes, but length field says %d bytes%s\n",
-				ret, reply->header.len,
-				(ret == 1)? ". Old USB firmware?": "");
+	if (ret != reply->header.len) {
+		ERR("Wrong length received: got %d bytes, "
+			"but length field says %d bytes%s\n",
+			ret, reply->header.len,
+			(ret == 1) ? ". Old USB firmware?" : "");
 		goto err;
 	}
-	//dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, (char *)reply, ret);
+	/* dump_packet(LOG_DEBUG, DBG_MASK, __func__, (char *)reply, ret); */
 	return reply;
 err:
-	if(reply) {
-		memset(reply, 0, xtalk_dev->packet_size);
+	if (reply) {
+		memset(reply, 0, psize);
 		free_command(reply);
 	}
 	return NULL;
@@ -323,78 +318,76 @@ int process_command(
 
 	xproto = &xtalk_dev->xproto;
 	protoname = (xproto) ? xproto->name : "GLOBAL";
-	if(reply_ref)
-		*reply_ref = NULL;	/* So the caller knows if a reply was received */
+	/* So the caller knows if a reply was received */
+	if (reply_ref)
+		*reply_ref = NULL;
 	reply_op = cmd->header.op | XTALK_REPLY_MASK;
 	cmd_desc = get_command_desc(xproto, cmd->header.op);
 	expected = get_command_desc(xproto, reply_op);
-	//printf("%s: len=%d\n", __FUNCTION__, cmd->header.len);
 	ret = send_command(xtalk_dev, cmd, TIMEOUT);
-	if(!reply_ref) {
+	if (!reply_ref) {
 		DBG("No reply requested\n");
 		goto out;
 	}
-	if(ret < 0) {
+	if (ret < 0) {
 		ERR("send_command failed: %d\n", ret);
 		goto out;
 	}
 	reply = recv_command(xtalk_dev, TIMEOUT);
-	if(!reply) {
+	if (!reply) {
 		ERR("recv_command failed\n");
 		ret = -EPROTO;
 		goto out;
 	}
 	*reply_ref = reply;
-	if((reply->header.op & 0x80) != 0x80) {
-		ERR("Unexpected reply op=0x%02X, should have MSB set.\n", reply->header.op);
+	if ((reply->header.op & 0x80) != 0x80) {
+		ERR("Unexpected reply op=0x%02X, should have MSB set.\n",
+			reply->header.op);
 		ret = -EPROTO;
 		goto out;
 	}
 	DBG("REPLY OP: 0x%X\n", reply->header.op);
 	reply_desc = get_command_desc(xproto, reply->header.op);
-	if(!reply_desc) {
-		ERR("Unknown reply (proto=%s) op=0x%02X\n", protoname, reply->header.op);
+	if (!reply_desc) {
+		ERR("Unknown reply (proto=%s) op=0x%02X\n",
+			protoname, reply->header.op);
 		ret = -EPROTO;
 		goto out;
 	}
 	DBG("REPLY NAME: %s\n", reply_desc->name);
-	if(reply->header.op == XTALK_ACK) {
+	if (reply->header.op == XTALK_ACK) {
 		int	status = CMD_FIELD(reply, XTALK, ACK, stat);
 
-		if(expected) {
+		if (expected) {
 			ERR("Expected OP=0x%02X: Got ACK(%d): %s\n",
-				reply_op, status, ack_status_msg(xproto, status));
+				reply_op,
+				status,
+				ack_status_msg(xproto, status));
 			ret = -EPROTO;
 			goto out;
-		} else if(status != STAT_OK) {
+		} else if (status != STAT_OK) {
 
 			ERR("Got ACK (for OP=0x%X [%s]): %d %s\n",
 				cmd->header.op,
 				cmd_desc->name,
 				status, ack_status_msg(xproto, status));
-#if 0
-			extern	FILE	*fp;
-			if(fp) {
-				fprintf(fp, "Got ACK(%d)\n", status);
-			}
-#endif
 			ret = -EPROTO;
 			goto out;
 		}
 		/* Good expected ACK ... */
-	} else if(reply->header.op != reply_op) {
+	} else if (reply->header.op != reply_op) {
 			ERR("Expected OP=0x%02X: Got OP=0x%02X\n",
 				reply_op, reply->header.op);
 			ret = -EPROTO;
 			goto out;
 	}
-	if(expected && expected->len > reply->header.len) {
+	if (expected && expected->len > reply->header.len) {
 			ERR("Expected len=%d: Got len=%d\n",
 				expected->len, reply->header.len);
 			ret = -EPROTO;
 			goto out;
 	}
-	if(cmd->header.seq != reply->header.seq) {
+	if (cmd->header.seq != reply->header.seq) {
 			ERR("Expected seq=%d: Got seq=%d\n",
 				cmd->header.seq, reply->header.seq);
 			ret = -EPROTO;
@@ -404,7 +397,7 @@ int process_command(
 	DBG("returning reply op 0x%X (%d bytes)\n", reply->header.op, ret);
 out:
 	free_command(cmd);
-	if(!reply_ref && reply)
+	if (!reply_ref && reply)
 		free_command(reply);
 	return ret;
 }
@@ -423,18 +416,21 @@ int xtalk_proto_query(struct xtalk_device *xtalk_dev)
 	DBG("\n");
 	assert(xtalk_dev != NULL);
 	proto_version = xtalk_dev->xproto.proto_version;
-	if((cmd = new_command(xtalk_dev, XTALK_PROTO_GET, 0)) == NULL) {
+	cmd = new_command(xtalk_dev, XTALK_PROTO_GET, 0);
+	if (!cmd) {
 		ERR("new_command failed\n");
 		return -ENOMEM;
 	}
-	CMD_FIELD(cmd, XTALK, PROTO_GET, proto_version) = proto_version;	/* Protocol Version */
+	/* Protocol Version */
+	CMD_FIELD(cmd, XTALK, PROTO_GET, proto_version) = proto_version;
 	ret = process_command(xtalk_dev, cmd, &reply);
-	if(ret < 0) {
+	if (ret < 0) {
 		ERR("process_command failed: %d\n", ret);
 		goto out;
 	}
-	xtalk_dev->xtalk_proto_version = CMD_FIELD(reply, XTALK, PROTO_GET_REPLY, proto_version);
-	if(xtalk_dev->xtalk_proto_version != proto_version) {
+	xtalk_dev->xtalk_proto_version =
+		CMD_FIELD(reply, XTALK, PROTO_GET_REPLY, proto_version);
+	if (xtalk_dev->xtalk_proto_version != proto_version) {
 		DBG("Got %s protocol version: 0x%02x (expected 0x%02x)\n",
 			xtalk_dev->xproto.name,
 			xtalk_dev->xtalk_proto_version,
@@ -453,24 +449,27 @@ out:
  * Wrappers
  */
 
-struct xtalk_device *xtalk_new(const struct xtalk_ops *ops, size_t packet_size, void *priv)
+struct xtalk_device *xtalk_new(const struct xtalk_ops *ops,
+	size_t packet_size, void *priv)
 {
 	struct xtalk_device	*xtalk_dev;
 	int			ret;
 
 	DBG("\n");
 	assert(ops != NULL);
-	if((xtalk_dev = malloc(sizeof(*xtalk_dev))) == NULL) {
+	xtalk_dev = malloc(sizeof(*xtalk_dev));
+	if (!xtalk_dev) {
 		ERR("Allocating XTALK device memory failed\n");
 		return NULL;
 	}
 	memset(xtalk_dev, 0, sizeof(*xtalk_dev));
-	memcpy((void *)&xtalk_dev->ops, (const void *)ops, sizeof(xtalk_dev->ops));
+	memcpy((void *)&xtalk_dev->ops, (const void *)ops,
+		sizeof(xtalk_dev->ops));
 	xtalk_dev->transport_priv = priv;
 	xtalk_dev->packet_size = packet_size;
 	xtalk_dev->tx_sequenceno = 1;
 	ret = xtalk_set_protocol(xtalk_dev, NULL);
-	if(ret < 0) {
+	if (ret < 0) {
 		ERR("GLOBAL Protocol registration failed: %d\n", ret);
 		goto err;
 	}
@@ -486,7 +485,7 @@ void xtalk_delete(struct xtalk_device *xtalk_dev)
 {
 	void	*priv;
 
-	if(!xtalk_dev)
+	if (!xtalk_dev)
 		return;
 	DBG("\n");
 	priv = xtalk_dev->transport_priv;

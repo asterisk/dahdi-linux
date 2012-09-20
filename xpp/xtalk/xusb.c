@@ -35,8 +35,6 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 
-static const char rcsid[] = "$Id$";
-
 #define	DBG_MASK	0x01
 #define	TIMEOUT	500
 #define	MAX_RETRIES	10
@@ -67,8 +65,9 @@ void xusb_init_spec(struct xusb_spec *spec, char *name,
 		uint16_t vendor_id, uint16_t product_id,
 		int nifaces, int iface, int nep, int ep_out, int ep_in)
 {
-	DBG("Initialize %s: interfaces=%d using interface num=%d endpoints=%d (OUT=0x%02X, IN=0x%02X)\n",
-			name, nifaces, iface, nep, ep_out, ep_in);
+	DBG("Initialize %s: interfaces=%d using interface num=%d endpoints=%d "
+		"(OUT=0x%02X, IN=0x%02X)\n",
+		name, nifaces, iface, nep, ep_out, ep_in);
 	memset(spec, 0, sizeof(*spec));
 	spec->name = name;
 	spec->num_interfaces = nifaces;
@@ -87,7 +86,7 @@ void xusb_init_spec(struct xusb_spec *spec, char *name,
  * USB handling
  */
 
-static int get_usb_string(struct xusb *xusb, uint8_t item, char *buf, unsigned int len)
+static int get_usb_string(struct xusb *xusb, uint8_t item, char *buf)
 {
 	char	tmp[BUFSIZ];
 	int	ret;
@@ -98,10 +97,13 @@ static int get_usb_string(struct xusb *xusb, uint8_t item, char *buf, unsigned i
 	ret = usb_get_string_simple(xusb->handle, item, tmp, BUFSIZ);
 	if (ret <= 0)
 		return ret;
-	return snprintf(buf, len, "%s", tmp);
+	return snprintf(buf, BUFSIZ, "%s", tmp);
 }
 
-static const struct usb_interface_descriptor *get_interface(const struct usb_device *dev, int my_interface_num, int num_interfaces)
+static const struct usb_interface_descriptor *get_interface(
+		const struct usb_device *dev,
+		int my_interface_num,
+		int num_interfaces)
 {
 	const struct usb_interface		*interface;
 	const struct usb_interface_descriptor	*iface_desc;
@@ -113,7 +115,7 @@ static const struct usb_interface_descriptor *get_interface(const struct usb_dev
 		ERR("No configuration descriptor: strange USB1 controller?\n");
 		return NULL;
 	}
-	if(num_interfaces && config_desc->bNumInterfaces != num_interfaces) {
+	if (num_interfaces && config_desc->bNumInterfaces != num_interfaces) {
 		DBG("Wrong number of interfaces: have %d need %d\n",
 			config_desc->bNumInterfaces, num_interfaces);
 		return NULL;
@@ -127,49 +129,57 @@ static const struct usb_interface_descriptor *get_interface(const struct usb_dev
 	return iface_desc;
 }
 
-static int match_interface(const struct usb_device *dev, const struct xusb_spec *spec)
+static int match_interface(const struct usb_device *dev,
+		const struct xusb_spec *spec)
 {
 	const struct usb_device_descriptor	*dev_desc;
 	const struct usb_interface_descriptor	*iface_desc;
 
-	//debug_mask = 0xFF;
-	//verbose = 1;
 	dev_desc = &dev->descriptor;
 	assert(dev_desc);
-	DBG("Checking: %04X:%04X interfaces=%d interface num=%d endpoints=%d: \"%s\"\n",
+	DBG("Checking: %04X:%04X interfaces=%d interface num=%d endpoints=%d: "
+			"\"%s\"\n",
 			spec->my_vendor_id,
 			spec->my_product_id,
 			spec->num_interfaces,
 			spec->my_interface_num,
 			spec->num_endpoints,
 			spec->name);
-	if(dev_desc->idVendor != spec->my_vendor_id) {
+	if (dev_desc->idVendor != spec->my_vendor_id) {
 		DBG("Wrong vendor id 0x%X\n", dev_desc->idVendor);
 		return 0;
 	}
-	if(dev_desc->idProduct != spec->my_product_id) {
+	if (dev_desc->idProduct != spec->my_product_id) {
 		DBG("Wrong product id 0x%X\n", dev_desc->idProduct);
 		return 0;
 	}
-	if((iface_desc = get_interface(dev, spec->my_interface_num, spec->num_interfaces)) == NULL) {
-		ERR("Could not get interface descriptor of device: %s\n", usb_strerror());
+	iface_desc = get_interface(dev, spec->my_interface_num,
+				spec->num_interfaces);
+	if (!iface_desc) {
+		ERR("Could not get interface descriptor of device: %s\n",
+			usb_strerror());
 		return 0;
 	}
-	if(iface_desc->bInterfaceClass != 0xFF) {
-		DBG("Wrong interface class 0x%X\n", iface_desc->bInterfaceClass);
+	if (iface_desc->bInterfaceClass != 0xFF) {
+		DBG("Wrong interface class 0x%X\n",
+			iface_desc->bInterfaceClass);
 		return 0;
 	}
-	if(iface_desc->bInterfaceNumber != spec->my_interface_num) {
+	if (iface_desc->bInterfaceNumber != spec->my_interface_num) {
 		DBG("Wrong interface number %d (expected %d)\n",
 			iface_desc->bInterfaceNumber, spec->my_interface_num);
 		return 0;
 	}
-	if(iface_desc->bNumEndpoints != spec->num_endpoints) {
-		DBG("Wrong number of endpoints %d\n", iface_desc->bNumEndpoints);
+	if (iface_desc->bNumEndpoints != spec->num_endpoints) {
+		DBG("Wrong number of endpoints %d\n",
+			iface_desc->bNumEndpoints);
 		return 0;
 	}
 	return	1;
 }
+
+#define	GET_USB_STRING(xusb, from, item) \
+		get_usb_string((xusb), (from)->item, xusb->item)
 
 static int xusb_fill_strings(struct xusb *xusb)
 {
@@ -179,23 +189,28 @@ static int xusb_fill_strings(struct xusb *xusb)
 
 	dev_desc = &xusb->dev->descriptor;
 	assert(dev_desc);
-	if(get_usb_string(xusb, dev_desc->iManufacturer, xusb->iManufacturer, BUFSIZ) < 0) {
-		ERR("Failed reading iManufacturer string: %s\n", usb_strerror());
+	if (GET_USB_STRING(xusb, dev_desc, iManufacturer) < 0) {
+		ERR("Failed reading iManufacturer string: %s\n",
+			usb_strerror());
 		return 0;
 	}
-	if(get_usb_string(xusb, dev_desc->iProduct, xusb->iProduct, BUFSIZ) < 0) {
-		ERR("Failed reading iProduct string: %s\n", usb_strerror());
+	if (GET_USB_STRING(xusb, dev_desc, iProduct) < 0) {
+		ERR("Failed reading iProduct string: %s\n",
+			usb_strerror());
 		return 0;
 	}
-	if(get_usb_string(xusb, dev_desc->iSerialNumber, xusb->iSerialNumber, BUFSIZ) < 0) {
-		ERR("Failed reading iSerialNumber string: %s\n", usb_strerror());
+	if (GET_USB_STRING(xusb, dev_desc, iSerialNumber) < 0) {
+		ERR("Failed reading iSerialNumber string: %s\n",
+			usb_strerror());
 		return 0;
 	}
-	if((iface_desc = get_interface(xusb->dev, xusb->interface_num, 0)) == NULL) {
-		ERR("Could not get interface descriptor of device: %s\n", usb_strerror());
+	iface_desc = get_interface(xusb->dev, xusb->interface_num, 0);
+	if (!iface_desc) {
+		ERR("Could not get interface descriptor of device: %s\n",
+			usb_strerror());
 		return 0;
 	}
-	if(get_usb_string(xusb, iface_desc->iInterface, xusb->iInterface, BUFSIZ) < 0) {
+	if (GET_USB_STRING(xusb, iface_desc, iInterface) < 0) {
 		ERR("Failed reading iInterface string: %s\n", usb_strerror());
 		return 0;
 	}
@@ -207,7 +222,8 @@ static int xusb_open(struct xusb *xusb)
 	assert(xusb);
 	if (xusb->is_open)
 		return 1;
-	if((xusb->handle = usb_open(xusb->dev)) == NULL) {
+	xusb->handle = usb_open(xusb->dev);
+	if (!xusb->handle) {
 		ERR("Failed to open usb device '%s': %s\n",
 			xusb->devpath_tail, usb_strerror());
 		return 0;
@@ -223,30 +239,34 @@ int xusb_claim_interface(struct xusb *xusb)
 
 	assert(xusb);
 	xusb_open(xusb);	/* If it's not open yet... */
-	if(usb_claim_interface(xusb->handle, xusb->interface_num) != 0) {
+	if (usb_claim_interface(xusb->handle, xusb->interface_num) != 0) {
 		ERR("usb_claim_interface %d in '%s': %s\n",
-			xusb->interface_num, xusb->devpath_tail, usb_strerror());
+			xusb->interface_num,
+			xusb->devpath_tail,
+			usb_strerror());
 		return 0;
 	}
 	xusb->is_claimed = 1;
 	xusb_fill_strings(xusb);
 	dev_desc = &xusb->dev->descriptor;
-	DBG("ID=%04X:%04X Manufacturer=[%s] Product=[%s] SerialNumber=[%s] Interface=[%s]\n",
+	DBG("ID=%04X:%04X Manufacturer=[%s] Product=[%s] "
+		"SerialNumber=[%s] Interface=[%s]\n",
 		dev_desc->idVendor,
 		dev_desc->idProduct,
 		xusb->iManufacturer,
 		xusb->iProduct,
 		xusb->iSerialNumber,
 		xusb->iInterface);
-	if(usb_clear_halt(xusb->handle, EP_OUT(xusb)) != 0) {
+	if (usb_clear_halt(xusb->handle, EP_OUT(xusb)) != 0) {
 		ERR("Clearing output endpoint: %s\n", usb_strerror());
 		return 0;
 	}
-	if(usb_clear_halt(xusb->handle, EP_IN(xusb)) != 0) {
+	if (usb_clear_halt(xusb->handle, EP_IN(xusb)) != 0) {
 		ERR("Clearing input endpoint: %s\n", usb_strerror());
 		return 0;
 	}
-	if((ret = xusb_flushread(xusb)) < 0) {
+	ret = xusb_flushread(xusb);
+	if (ret < 0) {
 		ERR("xusb_flushread failed: %d\n", ret);
 		return 0;
 	}
@@ -258,7 +278,7 @@ static void xusb_list_dump(struct xlist_node *xusb_list)
 	struct xlist_node	*curr;
 	struct xusb		*xusb;
 
-	for(curr = xusb_list->next; curr != xusb_list; curr = curr->next) {
+	for (curr = xusb_list->next; curr != xusb_list; curr = curr->next) {
 		struct usb_device		*dev;
 		struct usb_bus			*bus;
 		struct usb_device_descriptor	*dev_desc;
@@ -285,14 +305,15 @@ static void xusb_list_dump(struct xlist_node *xusb_list)
 
 void xusb_destroy(struct xusb *xusb)
 {
-	if(xusb) {
+	if (xusb) {
 		xusb_close(xusb);
 		memset(xusb, 0, sizeof(*xusb));
 		free(xusb);
 	}
 }
 
-static struct xusb *xusb_new(struct usb_device *dev, const struct xusb_spec *spec)
+static struct xusb *xusb_new(struct usb_device *dev,
+		const struct xusb_spec *spec)
 {
 	struct usb_device_descriptor	*dev_desc;
 	struct usb_config_descriptor	*config_desc;
@@ -306,11 +327,13 @@ static struct xusb *xusb_new(struct usb_device *dev, const struct xusb_spec *spe
 	/*
 	 * Get information from the usb_device
 	 */
-	if((dev_desc = &dev->descriptor) == NULL) {
+	dev_desc = &dev->descriptor;
+	if (!dev_desc) {
 		ERR("usb device without a device descriptor\n");
 		goto fail;
 	}
-	if((config_desc = dev->config) == NULL) {
+	config_desc = dev->config;
+	if (!config_desc) {
 		ERR("usb device without a configuration descriptor\n");
 		goto fail;
 	}
@@ -319,20 +342,23 @@ static struct xusb *xusb_new(struct usb_device *dev, const struct xusb_spec *spe
 	endpoint = iface_desc->endpoint;
 	/* Calculate max packet size */
 	max_packet_size = PACKET_SIZE;
-	for(i = 0; i < iface_desc->bNumEndpoints; i++, endpoint++) {
-		DBG("Validating endpoint @ %d (interface %d)\n", i, spec->my_interface_num);
-		if(endpoint->bEndpointAddress == spec->my_ep_out || endpoint->bEndpointAddress == spec->my_ep_in) {
-			if(endpoint->wMaxPacketSize > PACKET_SIZE) {
-				ERR("Endpoint #%d wMaxPacketSize too large (%d)\n", i, endpoint->wMaxPacketSize);
+	for (i = 0; i < iface_desc->bNumEndpoints; i++, endpoint++) {
+		DBG("Validating endpoint @ %d (interface %d)\n",
+			i, spec->my_interface_num);
+		if (endpoint->bEndpointAddress == spec->my_ep_out ||
+			endpoint->bEndpointAddress == spec->my_ep_in) {
+			if (endpoint->wMaxPacketSize > PACKET_SIZE) {
+				ERR("EP #%d wMaxPacketSize too large (%d)\n",
+					i, endpoint->wMaxPacketSize);
 				goto fail;
 			}
-			if(endpoint->wMaxPacketSize < max_packet_size) {
+			if (endpoint->wMaxPacketSize < max_packet_size)
 				max_packet_size = endpoint->wMaxPacketSize;
-			}
 		}
 	}
 	/* Fill xusb */
-	if((xusb = malloc(sizeof(*xusb))) == NULL) {
+	xusb = malloc(sizeof(*xusb));
+	if (!xusb) {
 		ERR("Out of memory");
 		goto fail;
 	}
@@ -348,7 +374,7 @@ static struct xusb *xusb_new(struct usb_device *dev, const struct xusb_spec *spe
 	xusb->ep_in = spec->my_ep_in;
 	xusb->packet_size = max_packet_size;
 	xusb->is_usb2 = (max_packet_size == 512);
-	if (! xusb_open(xusb)) {
+	if (!xusb_open(xusb)) {
 		ERR("Failed opening device: %04X:%04X - %s\n",
 			dev_desc->idVendor,
 			dev_desc->idProduct,
@@ -396,7 +422,8 @@ struct xusb *xusb_find_iface(const char *devpath,
 
 			sscanf(dev->filename, "%d", &device_num);
 			DBG("Check device %d\n", device_num);
-			snprintf(tmppath, sizeof(tmppath), "%03d/%03d", bus_num, device_num);
+			snprintf(tmppath, sizeof(tmppath), "%03d/%03d",
+				bus_num, device_num);
 			if (strncmp(tmppath, devpath, strlen(tmppath)) != 0)
 				continue;
 			dev_desc = &dev->descriptor;
@@ -405,7 +432,8 @@ struct xusb *xusb_find_iface(const char *devpath,
 			assert(config_desc);
 			interface = config_desc->interface;
 			assert(interface);
-			DBG("Matched device %s: %X:%X\n", tmppath, dev_desc->idVendor, dev_desc->idProduct);
+			DBG("Matched device %s: %X:%X\n", tmppath,
+				dev_desc->idVendor, dev_desc->idProduct);
 			assert(dummy_spec);
 			xusb_init_spec(dummy_spec, "<none>",
 				dev_desc->idVendor, dev_desc->idProduct,
@@ -413,9 +441,9 @@ struct xusb *xusb_find_iface(const char *devpath,
 				iface_num,
 				interface->altsetting->bNumEndpoints,
 				ep_out, ep_in);
-			if((xusb = xusb_new(dev, dummy_spec)) == NULL) {
+			xusb = xusb_new(dev, dummy_spec);
+			if (!xusb)
 				ERR("xusb allocation failed\n");
-			}
 			return xusb;
 		}
 	}
@@ -424,20 +452,21 @@ struct xusb *xusb_find_iface(const char *devpath,
 
 static const char *path_tail(const char *path)
 {
-	const	char	*p;
+	const char	*p;
 
 	assert(path != NULL);
 	/* Find last '/' */
-	if((p = memrchr(path, '/', strlen(path))) == NULL) {
+	p = memrchr(path, '/', strlen(path));
+	if (!p) {
 		ERR("Missing a '/' in %s\n", path);
 		return NULL;
 	}
 	/* Search for a '/' before that */
-	if((p = memrchr(path, '/', p - path)) == NULL) {
+	p = memrchr(path, '/', p - path);
+	if (!p)
 		p = path;		/* No more '/' */
-	} else {
+	else
 		p++;			/* skip '/' */
-	}
 	return p;
 }
 
@@ -449,25 +478,29 @@ int xusb_filter_bypath(const struct xusb *xusb, void *data)
 	DBG("%s\n", path);
 	assert(path != NULL);
 	p = path_tail(path);
-	if(strcmp(xusb->devpath_tail, p) != 0) {
-		DBG("device path missmatch: '%s' != '%s'\n", xusb->devpath_tail, p);
+	if (strcmp(xusb->devpath_tail, p) != 0) {
+		DBG("device path missmatch: '%s' != '%s'\n",
+			xusb->devpath_tail, p);
 		return 0;
 	}
 	return 1;
 }
 
-struct xusb *xusb_find_bypath(const struct xusb_spec *specs, int numspecs, const char *path)
+struct xusb *xusb_find_bypath(const struct xusb_spec *specs, int numspecs,
+			const char *path)
 {
 	struct xlist_node	*xlist;
 	struct xlist_node	*head;
 	struct xusb		*xusb;
 
-	xlist = xusb_find_byproduct(specs, numspecs, xusb_filter_bypath, (void *)path);
+	xlist = xusb_find_byproduct(specs, numspecs,
+			xusb_filter_bypath, (void *)path);
 	head = xlist_shift(xlist);
 	if (!head)
 		return NULL;
-	if (! xlist_empty(xlist)) {
-		ERR("Too many matches (extra %zd) to '%s'\n", xlist_length(xlist), path);
+	if (!xlist_empty(xlist)) {
+		ERR("Too many matches (extra %zd) to '%s'\n",
+			xlist_length(xlist), path);
 		return NULL;
 	}
 	xusb = head->data;
@@ -475,14 +508,16 @@ struct xusb *xusb_find_bypath(const struct xusb_spec *specs, int numspecs, const
 	return xusb;
 }
 
-struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs, int numspecs, xusb_filter_t filterfunc, void *data)
+struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs,
+		int numspecs, xusb_filter_t filterfunc, void *data)
 {
 	struct xlist_node	*xlist;
 	struct usb_bus		*bus;
 	struct usb_device	*dev;
 
 	DBG("specs(%d)\n", numspecs);
-	if((xlist = xlist_new(NULL)) == NULL) {
+	xlist = xlist_new(NULL);
+	if (!xlist) {
 		ERR("Failed allocation new xlist");
 		goto fail_xlist;
 	}
@@ -500,17 +535,18 @@ struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs, int numspe
 				dev->filename,
 				dev_desc->idVendor,
 				dev_desc->idProduct);
-			for(i = 0; i < numspecs; i++) {
+			for (i = 0; i < numspecs; i++) {
 				struct xusb		*xusb;
 				const struct xusb_spec	*sp = &specs[i];
 
-				if(!match_interface(dev, sp))
+				if (!match_interface(dev, sp))
 					continue;
-				if((xusb = xusb_new(dev, sp)) == NULL) {
+				xusb = xusb_new(dev, sp);
+				if (!xusb) {
 					ERR("xusb allocation failed\n");
 					goto fail_malloc;
 				}
-				if(filterfunc && !filterfunc(xusb, data)) {
+				if (filterfunc && !filterfunc(xusb, data)) {
 					xusb_destroy(xusb);
 					continue;
 				}
@@ -528,7 +564,8 @@ fail_xlist:
 	return NULL;
 }
 
-struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs, xusb_filter_t filterfunc, void *data)
+struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs,
+		xusb_filter_t filterfunc, void *data)
 {
 	struct xlist_node	*xusb_list;
 	struct xlist_node	*curr;
@@ -538,7 +575,7 @@ struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs, xusb_fil
 	xusb_list = xusb_find_byproduct(specs, numspecs, filterfunc, data);
 	num = xlist_length(xusb_list);
 	DBG("total %d devices\n", num);
-	switch(num) {
+	switch (num) {
 	case 0:
 		ERR("No matching device.\n");
 		break;
@@ -547,7 +584,7 @@ struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs, xusb_fil
 		xusb = curr->data;
 		xlist_destroy(curr, NULL);
 		xlist_destroy(xusb_list, NULL);
-		if(!xusb_claim_interface(xusb)) {
+		if (!xusb_claim_interface(xusb)) {
 			xusb_destroy(xusb);
 			return NULL;
 		}
@@ -581,7 +618,7 @@ void xusb_showinfo(const struct xusb *xusb)
 	assert(xusb != NULL);
 	dev = xusb->dev;
 	dev_desc = &dev->descriptor;
-	if(verbose <= LOG_INFO) {
+	if (verbose <= LOG_INFO) {
 		INFO("usb:%s/%s: ID=%04X:%04X [%s / %s / %s]\n",
 			dev->bus->dirname,
 			dev->filename,
@@ -640,20 +677,22 @@ const struct xusb_spec *xusb_spec(const struct xusb *xusb)
 
 int xusb_close(struct xusb *xusb)
 {
-	if(xusb) {
-		if(xusb->handle) {
+	if (xusb) {
+		if (xusb->handle) {
 			assert(xusb->spec);
 			assert(xusb->spec->name);
 			DBG("Closing interface \"%s\"\n", xusb->spec->name);
-			if(xusb->is_claimed) {
-				if(usb_release_interface(xusb->handle, xusb->spec->my_interface_num) != 0) {
-					ERR("Releasing interface: usb: %s\n", usb_strerror());
-				}
+			if (xusb->is_claimed) {
+				if (usb_release_interface(xusb->handle,
+					xusb->spec->my_interface_num) != 0)
+					ERR("Releasing interface: usb: %s\n",
+						usb_strerror());
 				xusb->is_claimed = 0;
 			}
-			if(xusb->is_open) {
-				if(usb_close(xusb->handle) != 0) {
-					ERR("Closing device: usb: %s\n", usb_strerror());
+			if (xusb->is_open) {
+				if (usb_close(xusb->handle) != 0) {
+					ERR("Closing device: usb: %s\n",
+						usb_strerror());
 				}
 				xusb->is_open = 0;
 			}
@@ -669,30 +708,33 @@ int xusb_send(struct xusb *xusb, char *buf, int len, int timeout)
 	int		ret;
 	int		retries = 0;
 
-	dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, buf, len);
-	if(EP_OUT(xusb) & USB_ENDPOINT_IN) {
-		ERR("%s called with an input endpoint 0x%x\n", __FUNCTION__, EP_OUT(xusb));
+	dump_packet(LOG_DEBUG, DBG_MASK, __func__, buf, len);
+	if (EP_OUT(xusb) & USB_ENDPOINT_IN) {
+		ERR("%s called with an input endpoint 0x%x\n",
+			__func__, EP_OUT(xusb));
 		return -EINVAL;
 	}
 retry_write:
 	ret = usb_bulk_write(xusb->handle, EP_OUT(xusb), buf, len, timeout);
-	if(ret < 0) {
+	if (ret < 0) {
 		/*
 		 * If the device was gone, it may be the
 		 * result of renumeration. Ignore it.
 		 */
-		if(ret != -ENODEV) {
+		if (ret != -ENODEV) {
 			ERR("bulk_write to endpoint 0x%x failed: (%d) %s\n",
 				EP_OUT(xusb), ret, usb_strerror());
-			dump_packet(LOG_ERR, DBG_MASK, "xusb_send[ERR]", buf, len);
-			//exit(2);
+			dump_packet(LOG_ERR, DBG_MASK, "xusb_send[ERR]",
+				buf, len);
+			/*exit(2);*/
 		} else {
-			DBG("bulk_write to endpoint 0x%x got ENODEV\n", EP_OUT(xusb));
+			DBG("bulk_write to endpoint 0x%x got ENODEV\n",
+				EP_OUT(xusb));
 			xusb_close(xusb);
 		}
 		return ret;
 	}
-	if(!ret) {
+	if (!ret) {
 #if 0
 		FILE	*fp;
 
@@ -707,13 +749,12 @@ retry_write:
 #endif
 		ERR("bulk_write to endpoint 0x%x short write[%d]: (%d)\n",
 			EP_OUT(xusb), retries, ret);
-		if (retries++ > MAX_RETRIES) {
+		if (retries++ > MAX_RETRIES)
 			return -EFAULT;
-		}
 		usleep(100);
 		goto retry_write;
 	}
-	if(ret != len) {
+	if (ret != len) {
 		ERR("bulk_write to endpoint 0x%x short write: (%d) %s\n",
 			EP_OUT(xusb), ret, usb_strerror());
 		dump_packet(LOG_ERR, DBG_MASK, "xusb_send[ERR]", buf, len);
@@ -727,19 +768,20 @@ int xusb_recv(struct xusb *xusb, char *buf, size_t len, int timeout)
 	int	ret;
 	int	retries = 0;
 
-	if(EP_IN(xusb) & USB_ENDPOINT_OUT) {
-		ERR("%s called with an output endpoint 0x%x\n", __FUNCTION__, EP_IN(xusb));
+	if (EP_IN(xusb) & USB_ENDPOINT_OUT) {
+		ERR("%s called with an output endpoint 0x%x\n",
+			__func__, EP_IN(xusb));
 		return -EINVAL;
 	}
 retry_read:
 	ret = usb_bulk_read(xusb->handle, EP_IN(xusb), buf, len, timeout);
-	if(ret < 0) {
+	if (ret < 0) {
 		DBG("bulk_read from endpoint 0x%x failed: (%d) %s\n",
 			EP_IN(xusb), ret, usb_strerror());
 		memset(buf, 0, len);
 		return ret;
 	}
-	if(!ret) {
+	if (!ret) {
 #if 0
 		FILE	*fp;
 
@@ -754,13 +796,12 @@ retry_read:
 #endif
 		ERR("bulk_read to endpoint 0x%x short read[%d]: (%d)\n",
 			EP_IN(xusb), retries, ret);
-		if (retries++ > MAX_RETRIES) {
+		if (retries++ > MAX_RETRIES)
 			return -EFAULT;
-		}
 		usleep(100);
 		goto retry_read;
 	}
-	dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, buf, ret);
+	dump_packet(LOG_DEBUG, DBG_MASK, __func__, buf, ret);
 	return ret;
 }
 
@@ -772,12 +813,12 @@ int xusb_flushread(struct xusb *xusb)
 	DBG("starting...\n");
 	memset(tmpbuf, 0, BUFSIZ);
 	ret = xusb_recv(xusb, tmpbuf, BUFSIZ, 1);
-	if(ret < 0 && ret != -ETIMEDOUT) {
+	if (ret < 0 && ret != -ETIMEDOUT) {
 		ERR("ret=%d\n", ret);
 		return ret;
-	} else if(ret > 0) {
+	} else if (ret > 0) {
 		DBG("Got %d bytes:\n", ret);
-		dump_packet(LOG_DEBUG, DBG_MASK, __FUNCTION__, tmpbuf, ret);
+		dump_packet(LOG_DEBUG, DBG_MASK, __func__, tmpbuf, ret);
 	}
 	return 0;
 }
@@ -817,9 +858,8 @@ static void xusb_lock_usb()
 	sembuf.sem_num = 0;
 	sembuf.sem_op = -1;
 	sembuf.sem_flg = SEM_UNDO;
-	if (semop(semid, &sembuf, 1) < 0) {
+	if (semop(semid, &sembuf, 1) < 0)
 		ERR("%s: semop() failed: %s\n", __func__, strerror(errno));
-	}
 	DBG("%d: LOCKED\n", getpid());
 }
 
@@ -831,13 +871,12 @@ static void xusb_unlock_usb()
 	sembuf.sem_num = 0;
 	sembuf.sem_op = 1;
 	sembuf.sem_flg = SEM_UNDO;
-	if (semop(semid, &sembuf, 1) < 0) {
+	if (semop(semid, &sembuf, 1) < 0)
 		ERR("%s: semop() failed: %s\n", __func__, strerror(errno));
-	}
 	DBG("%d: UNLOCKED\n", getpid());
 }
 
-static int		initizalized = 0;
+static int		initizalized;
 
 static void xusb_init()
 {

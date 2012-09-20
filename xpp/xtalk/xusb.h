@@ -64,10 +64,14 @@ struct xusb;
  * Prototypes
  */
 typedef int (*xusb_filter_t)(const struct xusb *xusb, void *data);
-struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs, int numspecs, xusb_filter_t filterfunc, void *data);
-struct xusb *xusb_find_bypath(const struct xusb_spec *specs, int numspecs, const char *path);
-struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs, xusb_filter_t filterfunc, void *data);
-struct xusb *xusb_find_iface(const char *devpath, int iface_num, int ep_out, int ep_in, struct xusb_spec *dummy);
+struct xlist_node *xusb_find_byproduct(const struct xusb_spec *specs,
+		int numspecs, xusb_filter_t filterfunc, void *data);
+struct xusb *xusb_find_bypath(const struct xusb_spec *specs, int numspecs,
+		const char *path);
+struct xusb *xusb_open_one(const struct xusb_spec *specs, int numspecs,
+		xusb_filter_t filterfunc, void *data);
+struct xusb *xusb_find_iface(const char *devpath, int iface_num,
+		int ep_out, int ep_in, struct xusb_spec *dummy);
 
 /*
  * A convenience filter

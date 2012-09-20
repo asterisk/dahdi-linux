@@ -35,15 +35,18 @@ extern	int	debug_mask;
 /*
  * Logging
  */
-void log_function(int level, int mask, const char *msg, ...) __attribute__(( format(printf, 3, 4) ));
+void log_function(int level, int mask, const char *msg, ...)
+		__attribute__((format(printf, 3, 4)));
 
-#define	ERR(fmt, arg...) log_function(LOG_ERR, 0, "%s:%d: ERROR(%s): " fmt, __FILE__, __LINE__, __FUNCTION__, ## arg)
+#define	ERR(fmt, arg...) log_function(LOG_ERR, 0, "%s:%d: ERROR(%s): " fmt, \
+		__FILE__, __LINE__, __func__, ## arg)
 #define	WARN(fmt, arg...) log_function(LOG_WARNING, 0, "WARNING: " fmt, ## arg)
 #define	INFO(fmt, arg...) log_function(LOG_INFO, 0, "INFO: " fmt, ## arg)
 #define	DBG(fmt, arg...) log_function(LOG_DEBUG, DBG_MASK,	\
-		"%s:%d: DBG(%s): " fmt, __FILE__, __LINE__, __FUNCTION__, ## arg)
+		"%s:%d: DBG(%s): " fmt, __FILE__, __LINE__, __func__, ## arg)
 
-void dump_packet(int loglevel, int mask, const char *msg, const char *buf, int len);
-void print_backtrace (FILE *fp);
+void dump_packet(int loglevel, int mask, const char *msg,
+		const char *buf, int len);
+void print_backtrace(FILE *fp);
 
 #endif	/* DEBUG_H */

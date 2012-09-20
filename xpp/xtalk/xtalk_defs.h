@@ -8,17 +8,18 @@
 
 #define	PRIVATE_OP_FIRST	0x05
 #define	PRIVATE_OP_LAST		0x7F
-#define	IS_PRIVATE_OP(x)	(	\
-					(((x) & ~(XTALK_REPLY_MASK)) >= PRIVATE_OP_FIRST) &&	\
-					(((x) & ~(XTALK_REPLY_MASK)) <= PRIVATE_OP_LAST)	\
-				)
+#define	IS_PRIVATE_OP(x)	( \
+		(((x) & ~(XTALK_REPLY_MASK)) >= PRIVATE_OP_FIRST) &&	\
+		(((x) & ~(XTALK_REPLY_MASK)) <= PRIVATE_OP_LAST)	\
+	)
 
 #define	XTALK_ACK		0x80
 #define	XTALK_PROTO_GET		0x01
 #define	XTALK_PROTO_GET_REPLY	(XTALK_PROTO_GET | XTALK_REPLY_MASK)
 #define	XTALK_FWVERS_GET	0x11
 #define	XTALK_FWVERS_GET_REPLY	(XTALK_FWVERS_GET | XTALK_REPLY_MASK)
-#define XTALK_CAPS_GET		0x0E	/* Get EEPROM table contents Product/Vendor Id ... */
+/* Get EEPROM table contents Product/Vendor Id ... */
+#define XTALK_CAPS_GET		0x0E
 #define XTALK_CAPS_GET_REPLY	(XTALK_CAPS_GET | XTALK_REPLY_MASK)
 
 /*------------- XTALK: statuses in ACK ---------------------------------------*/

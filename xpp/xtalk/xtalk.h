@@ -93,9 +93,11 @@ struct xtalk_command {
  *   cmd	- A pointer to struct xtalk_command
  *   field	- field name (e.g: raw_data)
  */
-#define XTALK_STRUCT(p,o)	p ## _struct_ ## o
+#define XTALK_STRUCT(p, o)	p ## _struct_ ## o
 #define XTALK_PDATA(o)		xtalk_privdata_ ## o
-#define	CMD_FIELD(cmd, p, o, field)	(((union XTALK_PDATA(p) *)&((cmd)->alt))->XTALK_STRUCT(p, o).field)
+#define	XTALK_CMD_PTR(cmd, p)	((union XTALK_PDATA(p)*)&((cmd)->alt))
+#define	CMD_FIELD(cmd, p, o, field) \
+		(XTALK_CMD_PTR(cmd, p)->XTALK_STRUCT(p, o).field)
 #define CMD_DEF(p, o, ...)	struct XTALK_STRUCT(p, o) {	\
 					__VA_ARGS__		\
 				} PACKED XTALK_STRUCT(p, o)
@@ -103,8 +105,10 @@ struct xtalk_command {
 
 /* Wrappers for transport (xusb) functions */
 struct xtalk_ops {
-	int	(*send_func)(void *transport_priv, void *data, size_t len, int timeout);
-	int	(*recv_func)(void *transport_priv, void *data, size_t maxlen, int timeout);
+	int	(*send_func)(void *transport_priv, void *data, size_t len,
+			int timeout);
+	int	(*recv_func)(void *transport_priv, void *data, size_t maxlen,
+			int timeout);
 	int	(*close_func)(void *transport_priv);
 };
 
@@ -116,9 +120,11 @@ struct xtalk_ops {
 struct xtalk_device;
 
 /* high-level */
-struct xtalk_device *xtalk_new(const struct xtalk_ops *ops, size_t packet_size, void *transport_priv);
+struct xtalk_device *xtalk_new(const struct xtalk_ops *ops,
+		size_t packet_size, void *transport_priv);
 void xtalk_delete(struct xtalk_device *dev);
-int xtalk_set_protocol(struct xtalk_device *xtalk_dev, const struct xtalk_protocol *xproto);
+int xtalk_set_protocol(struct xtalk_device *xtalk_dev,
+		const struct xtalk_protocol *xproto);
 int xtalk_proto_query(struct xtalk_device *dev);
 void xtalk_dump_command(struct xtalk_command *cmd);
 
@@ -138,24 +144,24 @@ void free_command(struct xtalk_command *cmd);
  *   o		- signify command op (e.g: ACK)
  *   cb		- A callback function (type xtalk_cmd_callback_t)
  */
-#define	CMD_RECV(p,o,cb)	\
-	[p ## _ ## o | XTALK_REPLY_MASK] {		\
-		.op = p ## _ ## o | XTALK_REPLY_MASK,	\
-		.name = #o "_reply",			\
-		.callback = (cb), 			\
+#define	CMD_RECV(p, o, cb)	\
+	[p ## _ ## o | XTALK_REPLY_MASK] = {		\
+		.op = (p ## _ ## o) | XTALK_REPLY_MASK,	\
+		.name = (#o "_reply"),			\
+		.callback = (cb),			\
 		.len =					\
 			sizeof(struct xtalk_header) +	\
-			sizeof(struct XTALK_STRUCT(p,o)),	\
+			sizeof(struct XTALK_STRUCT(p, o)),	\
 	}
 
-#define	CMD_SEND(p,o)	\
-	[p ## _ ## o] {		\
-		.op = p ## _ ## o,	\
-		.name = #o,		\
-		.callback = NULL, 	\
+#define	CMD_SEND(p, o)	\
+	[p ## _ ## o] = {		\
+		.op = (p ## _ ## o),	\
+		.name = (#o),		\
+		.callback = NULL,	\
 		.len =					\
 			sizeof(struct xtalk_header) +	\
-			sizeof(struct XTALK_STRUCT(p,o)),	\
+			sizeof(struct XTALK_STRUCT(p, o)),	\
 	}
 
 /*
@@ -163,7 +169,7 @@ void free_command(struct xtalk_command *cmd);
  *   x		- status code (e.g: OK)
  *   m		- status message (const char *)
  */
-#define	ACK_STAT(x,m)	[ STAT_ ## x ] = (m)
+#define	ACK_STAT(x, m)	[STAT_ ## x] = (m)
 
 #ifdef __cplusplus
 }
