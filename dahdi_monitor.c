@@ -427,6 +427,14 @@ int main(int argc, char *argv[])
 				exit(EXIT_FAILURE);
 			}
 			fprintf(stderr, "Writing pre-echo combined stream to %s\n", optarg);
+			file_is_wav[MON_PRE_BRX] = filename_is_wav(optarg);
+			if (file_is_wav[MON_PRE_BRX]) {
+				wavheader_init(&wavheaders[MON_PRE_BRX], 1);
+				if (fwrite(&wavheaders[MON_PRE_BRX], 1, sizeof(struct wavheader), ofh[MON_PRE_BRX]) != sizeof(struct wavheader)) {
+					fprintf(stderr, "Could not write wav header to %s: %s\n", optarg, strerror(errno));
+					exit(EXIT_FAILURE);
+				}
+			}
 			preecho = 1;
 			savefile = 1;
 			break;
@@ -762,12 +770,6 @@ int main(int argc, char *argv[])
 			continue;
 		if (!(file_is_wav[i]))
 			continue;
-
-		rewind(ofh[i]);
-
-		if (fread(&wavheaders[i], 1, sizeof(struct wavheader), ofh[i]) != sizeof(struct wavheader)) {
-			fprintf(stderr, "Failed to read in a full wav header.  Expect bad things.\n");
-		}
 
 		wavheaders[i].riff_chunk_size = (bytes_written[i]) + sizeof(struct wavheader) - 8; /* filesize - 8 */
 		wavheaders[i].data_data_size = bytes_written[i];
