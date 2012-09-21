@@ -211,7 +211,7 @@ fi
 
 AC_SUBST(PPPD_VERSION)
 
-AC_CONFIG_FILES([build_tools/menuselect-deps makeopts])
+AC_CONFIG_FILES([makeopts])
 AC_OUTPUT
 
 AC_MSG_NOTICE(*** dahdi-tools build successfully configured ***)

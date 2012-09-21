@@ -73,9 +73,9 @@ This can be useful for any partial install target from the list above.
 
 Options For ./configure
 ^^^^^^^^^^^^^^^^^^^^^^^
-The configure script various several tests and based on them generates
-some files ( build_tools/menuselect-deps and makeopts). You can pass it
---with options and variable settings, for instance:
+The configure script executes various tests and based on them generates
+makeopts. You can pass it --with options and variable settings, for
+instance:
 
   ./configure --without-ncurses CC="gcc-4.10"
 
