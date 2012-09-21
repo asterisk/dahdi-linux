@@ -1833,19 +1833,22 @@ static void wctdm_qrvdri_check_hook(struct wctdm *wc, int card)
 static inline bool is_fxo_ringing(const struct fxo *const fxo)
 {
 	return ((fxo->hook_ring_shadow & 0x60) &&
-		(fxo->battery_state == BATTERY_PRESENT));
+		((fxo->battery_state == BATTERY_PRESENT) ||
+		 (fxo->battery_state == BATTERY_DEBOUNCING_LOST)));
 }
 
 static inline bool is_fxo_ringing_positive(const struct fxo *const fxo)
 {
 	return (((fxo->hook_ring_shadow & 0x60) == 0x20) &&
-		(fxo->battery_state == BATTERY_PRESENT));
+		((fxo->battery_state == BATTERY_PRESENT) ||
+		 (fxo->battery_state == BATTERY_DEBOUNCING_LOST)));
 }
 
 static inline bool is_fxo_ringing_negative(const struct fxo *const fxo)
 {
 	return (((fxo->hook_ring_shadow & 0x60) == 0x40) &&
-		(fxo->battery_state == BATTERY_PRESENT));
+		((fxo->battery_state == BATTERY_PRESENT) ||
+		 (fxo->battery_state == BATTERY_DEBOUNCING_LOST)));
 }
 
 static inline void set_ring(struct fxo *fxo, enum ring_detector_state new)
@@ -1856,19 +1859,21 @@ static inline void set_ring(struct fxo *fxo, enum ring_detector_state new)
 static void wctdm_fxo_ring_detect(struct wctdm *wc, struct wctdm_module *mod)
 {
 	struct fxo *const fxo = &mod->mod.fxo;
+	static const unsigned int POLARITY_CHANGES_NEEDED = 2;
 
 	/* Look for ring status bits (Ring Detect Signal Negative and Ring
-	 * Detect Signal Positive) to transition back and forth some number of
-	 * times to indicate that a ring is occurring.  Provide some number of
-	 * samples to allow for the transitions to occur before giving up.
-	 * NOTE: neon mwi voltages will trigger one of these bits to go active
-	 * but not to have transitions between the two bits (i.e. no negative
-	 * to positive or positive to negative traversals) */
+	 * Detect Signal Positive) to transition back and forth
+	 * POLARITY_CHANGES_NEEDED times to indicate that a ring is occurring.
+	 * Provide some number of samples to allow for the transitions to occur
+	 * before giving up.  NOTE: neon mwi voltages will trigger one of these
+	 * bits to go active but not to have transitions between the two bits
+	 * (i.e. no negative to positive or positive to negative traversals) */
 
 	switch (fxo->ring_state) {
 	case DEBOUNCING_RINGING_POSITIVE:
 		if (is_fxo_ringing_negative(fxo)) {
-			if (++fxo->ring_polarity_change_count > 4) {
+			if (++fxo->ring_polarity_change_count >
+						POLARITY_CHANGES_NEEDED) {
 				mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
 				set_ring(fxo, RINGING);
 				if (debug) {
@@ -1886,7 +1891,8 @@ static void wctdm_fxo_ring_detect(struct wctdm *wc, struct wctdm_module *mod)
 		break;
 	case DEBOUNCING_RINGING_NEGATIVE:
 		if (is_fxo_ringing_positive(fxo)) {
-			if (++fxo->ring_polarity_change_count > 4) {
+			if (++fxo->ring_polarity_change_count >
+						POLARITY_CHANGES_NEEDED) {
 				mod_hooksig(wc, mod, DAHDI_RXSIG_RING);
 				set_ring(fxo, RINGING);
 				if (debug) {
