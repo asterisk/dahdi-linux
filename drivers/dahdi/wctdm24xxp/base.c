@@ -4530,6 +4530,7 @@ wctdm_init_span(struct wctdm *wc, int spanno, int chanoffset, int chancount,
 	} else {
 		s->span.ops = &wctdm24xxp_analog_span_ops;
 		s->span.flags = DAHDI_FLAG_RBS;
+		s->span.spantype = SPANTYPE_ANALOG_MIXED;
 		/* analog sigcap handled in fixup_analog_span() */
 	}
 
