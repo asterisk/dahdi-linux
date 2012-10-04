@@ -107,7 +107,7 @@
 #define DAHDI_MIN_CHUNKSIZE	 DAHDI_CHUNKSIZE
 #define DAHDI_DEFAULT_CHUNKSIZE	 DAHDI_CHUNKSIZE
 #define DAHDI_MAX_CHUNKSIZE 	 DAHDI_CHUNKSIZE
-#define DAHDI_CB_SIZE		 2
+#define DAHDI_CB_SIZE		 (1 << 3)
 
 /* DAHDI operates at 8Khz by default */
 #define DAHDI_MS_TO_SAMPLES(ms) ((ms) * 8)
