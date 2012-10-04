@@ -7762,8 +7762,6 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			ms->ec_state->status.mode = ECHO_MODE_AWAITINGECHO;
 		}
 	}
-	/* save value from last chunk */
-	memcpy(ms->getlin_lastchunk, ms->getlin, DAHDI_CHUNKSIZE * sizeof(short));
 	/* save value from current */
 	memcpy(ms->getlin, getlin, DAHDI_CHUNKSIZE * sizeof(short));
 	/* save value from current */

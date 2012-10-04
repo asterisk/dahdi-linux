@@ -536,7 +536,6 @@ struct dahdi_chan {
 
 	short	getlin[DAHDI_MAX_CHUNKSIZE];			/*!< Last transmitted samples */
 	unsigned char getraw[DAHDI_MAX_CHUNKSIZE];		/*!< Last received raw data */
-	short	getlin_lastchunk[DAHDI_MAX_CHUNKSIZE];	/*!< Last transmitted samples from last chunk */
 	short	putlin[DAHDI_MAX_CHUNKSIZE];			/*!< Last received samples */
 	unsigned char putraw[DAHDI_MAX_CHUNKSIZE];		/*!< Last received raw data */
 	short	conflast[DAHDI_MAX_CHUNKSIZE];			/*!< Last conference sample -- base part of channel */
