@@ -436,6 +436,7 @@ static const struct dahdi_echocan_ops vpm_ec_ops = {
 #endif
 
 static void __set_clear(struct t4 *wc, int span);
+static int _t4_startup(struct file *file, struct dahdi_span *span);
 static int t4_startup(struct file *file, struct dahdi_span *span);
 static int t4_shutdown(struct dahdi_span *span);
 static int t4_rbsbits(struct dahdi_chan *chan, int bits);
@@ -1693,7 +1694,7 @@ static void t4_chan_set_sigcap(struct dahdi_span *span, int x)
 }
 
 static int
-t4_spanconfig(struct file *file, struct dahdi_span *span,
+_t4_spanconfig(struct file *file, struct dahdi_span *span,
 	      struct dahdi_lineconfig *lc)
 {
 	int i;
@@ -1733,11 +1734,34 @@ t4_spanconfig(struct file *file, struct dahdi_span *span,
 
 	/* If we're already running, then go ahead and apply the changes */
 	if (span->flags & DAHDI_FLAG_RUNNING)
-		return t4_startup(file, span);
+		return _t4_startup(file, span);
 
 	if (debug)
 		dev_info(&wc->dev->dev, "Done with spanconfig!\n");
 	return 0;
+}
+
+static int
+t4_spanconfig(struct file *file, struct dahdi_span *span,
+	      struct dahdi_lineconfig *lc)
+{
+	int ret;
+	struct dahdi_device *const ddev = span->parent;
+	struct dahdi_span *s;
+
+	ret = _t4_spanconfig(file, span, lc);
+
+	/* Make sure all the spans have a basic configuration in case they are
+	 * not all specified in the configuration files. */
+	lc->sync = 0;
+	list_for_each_entry(s, &ddev->spans, device_node) {
+		WARN_ON(!s->channels);
+		if (!s->channels)
+			continue;
+		if (!s->chans[0]->sigcap)
+			_t4_spanconfig(file, s, lc);
+	}
+	return ret;
 }
 
 static int
@@ -2833,7 +2857,7 @@ static int t4_check_for_interrupts(struct t4 *wc)
 	return 0;
 }
 
-static int t4_startup(struct file *file, struct dahdi_span *span)
+static int _t4_startup(struct file *file, struct dahdi_span *span)
 {
 #ifdef SUPPORT_GEN1
 	int i;
@@ -2964,6 +2988,21 @@ static int t4_startup(struct file *file, struct dahdi_span *span)
 		dev_info(&wc->dev->dev, "Completed startup!\n");
 	clear_bit(T4_IGNORE_LATENCY, &wc->checkflag);
 	return 0;
+}
+
+static int t4_startup(struct file *file, struct dahdi_span *span)
+{
+	int ret;
+	struct dahdi_device *const ddev = span->parent;
+	struct dahdi_span *s;
+
+	ret = _t4_startup(file, span);
+	list_for_each_entry(s, &ddev->spans, device_node) {
+		if (!test_bit(DAHDI_FLAGBIT_RUNNING, &s->flags)) {
+			_t4_startup(file, s);
+		}
+	}
+	return ret;
 }
 
 #ifdef SUPPORT_GEN1
