@@ -491,10 +491,7 @@ struct dahdi_chan {
 	
 	int		numbufs;			/*!< How many buffers in channel */
 	int		txbufpolicy;			/*!< Buffer policy */
-	int		rxbufpolicy;			/*!< Buffer policy */
 	int		txdisable;				/*!< Disable transmitter */
-	int 	rxdisable;				/*!< Disable receiver */
-	
 	
 	/* Tone zone stuff */
 	struct dahdi_zone *curzone;		/*!< Zone for selecting tones */

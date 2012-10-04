@@ -1229,11 +1229,6 @@ static int dahdi_reallocbufs(struct dahdi_chan *ss, int blocksize, int numbufs)
 	else
 		ss->txdisable = 0;
 
-	if (ss->rxbufpolicy == DAHDI_POLICY_WHEN_FULL)
-		ss->rxdisable = 1;
-	else
-		ss->rxdisable = 0;
-
 	spin_unlock_irqrestore(&ss->lock, flags);
 
 	kfree(oldtxbuf);
@@ -2353,8 +2348,6 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 			return -ELAST /* - chan->eventbuf[chan->eventoutidx]*/;
 		}
 		res = chan->outreadbuf;
-		if (chan->rxdisable)
-			res = -1;
 		spin_unlock_irqrestore(&chan->lock, flags);
 		if (res >= 0)
 			break;
@@ -2409,8 +2402,6 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 	if (chan->outreadbuf == chan->inreadbuf) {
 		/* Out of stuff */
 		chan->outreadbuf = -1;
-		if (chan->rxbufpolicy == DAHDI_POLICY_WHEN_FULL)
-			chan->rxdisable = 1;
 	}
 	if (chan->inreadbuf < 0) {
 		/* Notify interrupt handler that we have some space now */
@@ -2864,7 +2855,6 @@ static int initialize_channel(struct dahdi_chan *chan)
 
 	spin_lock_irqsave(&chan->lock, flags);
 
-	chan->rxbufpolicy = DAHDI_POLICY_IMMEDIATE;
 	chan->txbufpolicy = DAHDI_POLICY_IMMEDIATE;
 
 	ec_state = chan->ec_state;
@@ -2873,7 +2863,6 @@ static int initialize_channel(struct dahdi_chan *chan)
 	chan->ec_current = NULL;
 
 	chan->txdisable = 0;
-	chan->rxdisable = 0;
 
 	chan->digitmode = DIGIT_MODE_DTMF;
 	chan->dialing = 0;
@@ -4114,9 +4103,10 @@ static int dahdi_ioctl_chandiag(struct file *file, unsigned long data)
 	module_printk(KERN_INFO, "inreadbuf: %d, outreadbuf: %d, inwritebuf: %d, outwritebuf: %d\n",
 		      temp->inreadbuf, temp->outreadbuf, temp->inwritebuf, temp->outwritebuf);
 	module_printk(KERN_INFO, "blocksize: %d, numbufs: %d, txbufpolicy: %d, txbufpolicy: %d\n",
-		      temp->blocksize, temp->numbufs, temp->txbufpolicy, temp->rxbufpolicy);
+		      temp->blocksize, temp->numbufs, temp->txbufpolicy,
+		      DAHDI_POLICY_IMMEDIATE);
 	module_printk(KERN_INFO, "txdisable: %d, rxdisable: %d, iomask: %d\n",
-		      temp->txdisable, temp->rxdisable, temp->iomask);
+		      temp->txdisable, 0, temp->iomask);
 	module_printk(KERN_INFO, "curzone: %p, tonezone: %d, curtone: %p, tonep: %d\n",
 		      temp->curzone,
 		      ((temp->curzone) ? temp->curzone->num : -1),
@@ -5691,7 +5681,7 @@ static int dahdi_ioctl_iomux(struct file *file, unsigned long data)
 		spin_lock_irqsave(&chan->lock, flags);
 		chan->iomask = iomask;
 		if (iomask & DAHDI_IOMUX_READ) {
-			if ((chan->outreadbuf > -1)  && !chan->rxdisable)
+			if (chan->outreadbuf > -1)
 				wait_result |= DAHDI_IOMUX_READ;
 		}
 		if (iomask & DAHDI_IOMUX_WRITE) {
@@ -5855,7 +5845,7 @@ dahdi_chanandpseudo_ioctl(struct file *file, unsigned int cmd,
 		return ioctl_dahdi_dial(chan, data);
 	case DAHDI_GET_BUFINFO:
 		memset(&stack.bi, 0, sizeof(stack.bi));
-		stack.bi.rxbufpolicy = chan->rxbufpolicy;
+		stack.bi.rxbufpolicy = DAHDI_POLICY_IMMEDIATE;
 		stack.bi.txbufpolicy = chan->txbufpolicy;
 		stack.bi.numbufs = chan->numbufs;
 		stack.bi.bufsize = chan->blocksize;
@@ -9045,16 +9035,12 @@ static void __putbuf_chunk(struct dahdi_chan *ss, unsigned char *rxb, int bytes)
 							module_printk(KERN_NOTICE, "Out of storage space\n");
 #endif
 							ms->inreadbuf = -1;
-							/* Enable the receiver in case they've got POLICY_WHEN_FULL */
-							ms->rxdisable = 0;
 						}
 						if (ms->outreadbuf < 0) { /* start out buffer if not already */
 							ms->outreadbuf = oldbuf;
 							/* if there are processes waiting in poll() on this channel,
 							   wake them up */
-							if (!ms->rxdisable) {
-								wake_up_interruptible(&ms->waitq);
-							}
+							wake_up_interruptible(&ms->waitq);
 						}
 /* In the very orignal driver, it was quite well known to me (Jim) that there
 was a possibility that a channel sleeping on a receive block needed to
@@ -9069,14 +9055,12 @@ out in the later versions, and is put back now. Note that this is *NOT*
 needed for poll() waiters, because the poll_wait() function that is used there
 is atomic enough for this purpose; it will not go to sleep before ensuring
 that the waitqueue is empty. */
-						if (!ms->rxdisable) { /* if receiver enabled */
-							/* Notify a blocked reader that there is data available
-							to be read, unless we're waiting for it to be full */
+						/* Notify a blocked reader that there is data available
+						to be read, unless we're waiting for it to be full */
 #ifdef CONFIG_DAHDI_DEBUG
-							module_printk(KERN_NOTICE, "Notifying reader data in block %d\n", oldbuf);
+						module_printk(KERN_NOTICE, "Notifying reader data in block %d\n", oldbuf);
 #endif
-							wake_up_interruptible(&ms->waitq);
-						}
+						wake_up_interruptible(&ms->waitq);
 					}
 				}
 			}
@@ -9250,14 +9234,12 @@ void dahdi_hdlc_finish(struct dahdi_chan *ss)
 #ifdef CONFIG_DAHDI_DEBUG
 		module_printk(KERN_NOTICE, "Notifying reader data in block %d\n", oldreadbuf);
 #endif
-		ss->rxdisable = 0;
 	}
 	if (ss->outreadbuf < 0) {
 		ss->outreadbuf = oldreadbuf;
 	}
 
-	if (!ss->rxdisable)
-		wake_up_interruptible(&ss->waitq);
+	wake_up_interruptible(&ss->waitq);
 	spin_unlock_irqrestore(&ss->lock, flags);
 }
 
@@ -9385,7 +9367,7 @@ dahdi_chan_poll(struct file *file, struct poll_table_struct *wait_table)
 
 	spin_lock_irqsave(&c->lock, flags);
 	ret |= (c->inwritebuf > -1) ? POLLOUT|POLLWRNORM : 0;
-	ret |= ((c->outreadbuf > -1) && !c->rxdisable) ?  POLLIN|POLLRDNORM : 0;
+	ret |= (c->outreadbuf > -1) ?  POLLIN|POLLRDNORM : 0;
 	ret |= (c->eventoutidx != c->eventinidx) ? POLLPRI : 0;
 	spin_unlock_irqrestore(&c->lock, flags);
 
