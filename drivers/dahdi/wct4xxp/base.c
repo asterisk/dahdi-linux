@@ -1236,9 +1236,11 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 		else
 			clear_bit(chan->chanpos - 1, &ts->dtmfmutemask);
 
-		channel = (chan->chanpos) << 3;
-		if (!has_e1_span(wc))
-			channel += (4 << 3);
+		channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
+		if (is_octal(wc))
+			channel = channel << 3;
+		else
+			channel = channel << 2;
 		channel |= chan->span->offset;
 		vpm450m_setdtmf(wc->vpm, channel, j & DAHDI_TONEDETECT_ON,
 				j & DAHDI_TONEDETECT_MUTE);
