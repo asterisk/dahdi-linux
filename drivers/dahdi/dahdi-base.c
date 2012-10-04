@@ -5137,19 +5137,57 @@ static int dahdi_ioctl_sfconfig(unsigned long data)
 	return res;
 }
 
+/* Returns true if there are any hardware echocan on any span. */
+static bool dahdi_any_hwec_available(void)
+{
+	int i;
+	bool hwec_available = false;
+	struct dahdi_span *s;
+
+	mutex_lock(&registration_mutex);
+	list_for_each_entry(s, &span_list, spans_node) {
+		for (i = 0; i < s->channels; ++i) {
+			struct dahdi_chan *const chan = s->chans[i];
+			if (dahdi_is_hwec_available(chan)) {
+				hwec_available = true;
+				break;
+			}
+		}
+	}
+	mutex_unlock(&registration_mutex);
+
+	return hwec_available;
+}
+
 static int dahdi_ioctl_get_version(unsigned long data)
 {
 	struct dahdi_versioninfo vi;
 	struct ecfactory *cur;
 	size_t space = sizeof(vi.echo_canceller) - 1;
+	bool have_hwec = dahdi_any_hwec_available();
 
 	memset(&vi, 0, sizeof(vi));
 	strlcpy(vi.version, dahdi_version, sizeof(vi.version));
 	spin_lock(&ecfactory_list_lock);
 	list_for_each_entry(cur, &ecfactory_list, list) {
+		const char * const ec_name = cur->ec->get_name(NULL);
+		if ((ec_name == hwec_def_name) && !have_hwec) {
+			/*
+			 * The hardware echocan factory is always registered so
+			 * that hwec can be configured on the channels as if it
+			 * was a software echocan. However, it can be confusing
+			 * to list it as one of the available options in the
+			 * output of dahdi_cfg if there isn't a REAL hardware
+			 * echocanceler attached to any of the spans. In that
+			 * case, do not report the presence of the hardware
+			 * echocan factory to userspace.
+			 *
+			 */
+			 continue;
+		}
 		strncat(vi.echo_canceller + strlen(vi.echo_canceller),
-			cur->ec->get_name(NULL), space);
-		space -= strlen(cur->ec->get_name(NULL));
+			ec_name, space);
+		space -= strlen(ec_name);
 		if (space < 1)
 			break;
 		if (cur->list.next && (cur->list.next != &ecfactory_list)) {
