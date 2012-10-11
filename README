@@ -248,6 +248,15 @@ be reported on the
 https://lists.sourceforge.net/lists/listinfo/freetel-oslec[OSLEC mailing
 list].
 
+Alternatively you can also get the OSLEC code from the dahdi-linux-extra
+GIT repository:
+
+  git clone git://gitorious.org/dahdi-extra/dahdi-linux-extra.git
+  cd dahdi-linux-extra
+  git archive extra-2.6 drivers/staging | (cd ..; tar xf -)
+  cd ..; rm -rf dahdi-linux-extra
+
+
 Live Install
 ~~~~~~~~~~~~
 In many cases you already have DAHDI installed on your system but would
