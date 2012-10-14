@@ -26,6 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/ctype.h>
 #include <dahdi/kernel.h>
 #include "dahdi.h"
 #include "dahdi-sysfs.h"
@@ -63,11 +64,48 @@ static BUS_ATTR_READER(field##_show, dev, buf)	\
 chan_attr(name, "%s\n");
 chan_attr(channo, "%d\n");
 chan_attr(chanpos, "%d\n");
-chan_attr(sigcap, "0x%x\n");
 chan_attr(blocksize, "%d\n");
 #ifdef OPTIMIZE_CHANMUTE
 chan_attr(chanmute, "%d\n");
 #endif
+
+static BUS_ATTR_READER(sigcap_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+	int len = 0;
+	int i;
+	uint sigtypes[] = {
+		DAHDI_SIG_FXSLS,
+		DAHDI_SIG_FXSGS,
+		DAHDI_SIG_FXSKS,
+		DAHDI_SIG_FXOLS,
+		DAHDI_SIG_FXOGS,
+		DAHDI_SIG_FXOKS,
+		DAHDI_SIG_EM,
+		DAHDI_SIG_CLEAR,
+		DAHDI_SIG_HDLCRAW,
+		DAHDI_SIG_HDLCFCS,
+		DAHDI_SIG_HDLCNET,
+		DAHDI_SIG_SLAVE,
+		DAHDI_SIG_SF,
+		DAHDI_SIG_CAS,
+		DAHDI_SIG_EM_E1,
+		DAHDI_SIG_DACS_RBS,
+		DAHDI_SIG_HARDHDLC,
+		DAHDI_SIG_MTP2,
+	};
+	chan = dev_to_chan(dev);
+
+	for (i = 0; i < ARRAY_SIZE(sigtypes); i++) {
+		uint x = chan->sigcap & sigtypes[i];
+		if (x == sigtypes[i])
+			len += sprintf(buf + len, "%s ", sigstr(x));
+	}
+	while (len > 0 && isspace(buf[len - 1])) /* trim */
+		len--;
+	len += sprintf(buf + len, "\n");
+	return len;
+}
 
 static BUS_ATTR_READER(sig_show, dev, buf)
 {
