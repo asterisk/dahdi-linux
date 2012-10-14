@@ -38,6 +38,8 @@
 
 static struct class *dahdi_class;
 
+static dev_t dahdi_channels_devt;	/*!< Device number of first channel */
+static struct cdev dahdi_channels_cdev;	/*!< Channels chardev's */
 
 /*
  * Flags to remember what initializations already
@@ -46,6 +48,7 @@ static struct class *dahdi_class;
 static struct {
 	int channel_driver:1;
 	int channels_bus:1;
+	int cdev:1;
 } should_cleanup;
 
 static struct device_attribute chan_dev_attrs[] = {
@@ -247,6 +250,17 @@ cleanup:
  */
 static void sysfs_channels_cleanup(void)
 {
+	if (should_cleanup.cdev) {
+		dahdi_dbg(DEVICES, "removing channels cdev\n");
+		cdev_del(&dahdi_channels_cdev);
+		should_cleanup.cdev = 0;
+	}
+	if (dahdi_channels_devt) {
+		dahdi_dbg(DEVICES, "unregistering chrdev_region\n");
+		unregister_chrdev_region(dahdi_channels_devt,
+			DAHDI_MAX_CHANNELS);
+	}
+
 	fixed_devfiles_remove();
 	if (dahdi_class) {
 		dahdi_dbg(DEVICES, "Destroying DAHDI class:\n");
@@ -297,6 +311,24 @@ int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 	res = fixed_devfiles_create();
 	if (res)
 		goto cleanup;
+	dahdi_dbg(DEVICES, "allocating chrdev_region\n");
+	res = alloc_chrdev_region(&dahdi_channels_devt,
+			0,
+			DAHDI_MAX_CHANNELS,
+			"dahdi_channels");
+	if (res) {
+		dahdi_err("%s: Failed allocating chrdev for %d channels (%d)",
+			__func__, DAHDI_MAX_CHANNELS, res);
+		goto cleanup;
+	}
+	dahdi_dbg(DEVICES, "adding channels cdev\n");
+	res = cdev_add(&dahdi_channels_cdev, dahdi_channels_devt,
+		DAHDI_MAX_CHANNELS);
+	if (res) {
+		dahdi_err("%s: cdev_add() failed (%d)", __func__, res);
+		goto cleanup;
+	}
+	should_cleanup.cdev = 1;
 	return 0;
 cleanup:
 	sysfs_channels_cleanup();
