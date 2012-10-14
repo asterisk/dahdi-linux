@@ -134,6 +134,29 @@ static BUS_ATTR_READER(alarms_show, dev, buf)
 	return len;
 }
 
+static BUS_ATTR_READER(ec_factory_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+	int len = 0;
+
+	chan = dev_to_chan(dev);
+	if (chan->ec_factory)
+		len += sprintf(buf, "%s", chan->ec_factory->get_name(chan));
+	buf[len++] = '\n';
+	return len;
+}
+
+static BUS_ATTR_READER(ec_state_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+	int len = 0;
+
+	chan = dev_to_chan(dev);
+	if (chan->ec_factory)
+		len += sprintf(buf, "%sACTIVE", (chan->ec_state) ? "" : "IN");
+	buf[len++] = '\n';
+	return len;
+}
 
 static struct device_attribute chan_dev_attrs[] = {
 	__ATTR_RO(name),
@@ -142,6 +165,8 @@ static struct device_attribute chan_dev_attrs[] = {
 	__ATTR_RO(sig),
 	__ATTR_RO(sigcap),
 	__ATTR_RO(alarms),
+	__ATTR_RO(ec_factory),
+	__ATTR_RO(ec_state),
 	__ATTR_RO(blocksize),
 #ifdef OPTIMIZE_CHANMUTE
 	__ATTR_RO(chanmute),
