@@ -40,6 +40,7 @@
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/cdev.h>
 #include <linux/module.h>
 #include <linux/ioctl.h>
 
@@ -605,6 +606,8 @@ struct dahdi_chan {
 #else
 	unsigned char *lin2x;
 #endif
+	struct device chan_device;	/*!< Kernel object for this chan */
+#define dev_to_chan(dev)    container_of(dev, struct dahdi_chan, chan_device)
 };
 
 #ifdef CONFIG_DAHDI_NET

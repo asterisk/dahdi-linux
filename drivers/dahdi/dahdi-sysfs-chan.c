@@ -38,6 +38,72 @@
 
 static struct class *dahdi_class;
 
+
+/*
+ * Flags to remember what initializations already
+ * succeeded.
+ */
+static struct {
+	int channel_driver:1;
+	int channels_bus:1;
+} should_cleanup;
+
+static struct device_attribute chan_dev_attrs[] = {
+       __ATTR_NULL,
+};
+
+static void chan_release(struct device *dev)
+{
+	struct dahdi_chan *chan;
+
+	BUG_ON(!dev);
+	chan = dev_to_chan(dev);
+	chan_dbg(DEVICES, chan, "SYSFS\n");
+}
+
+static int chan_match(struct device *dev, struct device_driver *driver)
+{
+	struct dahdi_chan *chan;
+
+	chan = dev_to_chan(dev);
+	chan_dbg(DEVICES, chan, "SYSFS\n");
+	return 1;
+}
+
+static struct bus_type chan_bus_type = {
+	.name		= "dahdi_channels",
+	.match		= chan_match,
+	.dev_attrs	= chan_dev_attrs,
+};
+
+static int chan_probe(struct device *dev)
+{
+	struct dahdi_chan *chan;
+
+	chan = dev_to_chan(dev);
+	chan_dbg(DEVICES, chan, "SYSFS\n");
+	return 0;
+}
+
+static int chan_remove(struct device *dev)
+{
+	struct dahdi_chan *chan;
+
+	chan = dev_to_chan(dev);
+	chan_dbg(DEVICES, chan, "SYSFS\n");
+	return 0;
+}
+
+static struct device_driver chan_driver = {
+	.name = "dahdi",
+	.bus = &chan_bus_type,
+#ifndef OLD_HOTPLUG_SUPPORT
+	.owner = THIS_MODULE,
+#endif
+	.probe = chan_probe,
+	.remove = chan_remove
+};
+
 int chan_sysfs_create(struct dahdi_chan *chan)
 {
 	char chan_name[32];
@@ -187,17 +253,45 @@ static void sysfs_channels_cleanup(void)
 		class_destroy(dahdi_class);
 		dahdi_class = NULL;
 	}
+	if (should_cleanup.channel_driver) {
+		dahdi_dbg(DEVICES, "Removing channel driver\n");
+		driver_unregister(&chan_driver);
+		should_cleanup.channel_driver = 0;
+	}
+	if (should_cleanup.channels_bus) {
+		dahdi_dbg(DEVICES, "Removing channels bus\n");
+		bus_unregister(&chan_bus_type);
+		should_cleanup.channels_bus = 0;
+	}
 }
 
 int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 {
 	int res = 0;
 
+	dahdi_dbg(DEVICES, "Registering channels bus\n");
+	res = bus_register(&chan_bus_type);
+	if (res) {
+		dahdi_err("%s: bus_register(%s) failed. Error number %d\n",
+				__func__, chan_bus_type.name, res);
+		goto cleanup;
+	}
+	should_cleanup.channels_bus = 1;
+
+	dahdi_dbg(DEVICES, "Registering channel driver\n");
+	res = driver_register(&chan_driver);
+	if (res) {
+		dahdi_err("%s: driver_register(%s) failed. Error number %d",
+				__func__, chan_driver.name, res);
+		goto cleanup;
+	}
+	should_cleanup.channel_driver = 1;
+
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
 	if (IS_ERR(dahdi_class)) {
 		res = PTR_ERR(dahdi_class);
 		dahdi_err("%s: class_create(dahi_chan) failed. Error: %d\n",
-			__func__, res);
+				__func__, res);
 		goto cleanup;
 	}
 	res = fixed_devfiles_create();
