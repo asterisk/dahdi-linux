@@ -109,20 +109,32 @@ static struct device_driver chan_driver = {
 
 int chan_sysfs_create(struct dahdi_chan *chan)
 {
-	char chan_name[32];
-	void *dummy;
-	int res = 0;
+	struct device *dev;
+	struct dahdi_span *span;
+	int res;
+	dev_t devt;
 
-	if (chan->channo >= 250)
-		return 0;
+	chan_dbg(DEVICES, chan, "Creating channel %d\n", chan->channo);
 	if (test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
 		return 0;
-	snprintf(chan_name, sizeof(chan_name), "dahdi!%d", chan->channo);
-	dummy = (void *)MAKE_DAHDI_DEV(chan->channo, chan_name);
-	if (IS_ERR(dummy)) {
-		res = PTR_ERR(dummy);
-		chan_err(chan, "Failed creating sysfs device: %d\n",
-				res);
+	span = chan->span;
+	devt = MKDEV(MAJOR(dahdi_channels_devt), chan->channo);
+	dev = &chan->chan_device;
+	dev->devt = devt;
+	dev->class = dahdi_class;
+	dev->bus = &chan_bus_type;
+	dev->parent = span->span_device;
+	/*
+	 * FIXME: the name cannot be longer than KOBJ_NAME_LEN
+	 */
+	dev_set_name(dev, "dahdi!channels!%d!%d", span->spanno, chan->chanpos);
+	dev_set_drvdata(dev, chan);
+	dev->release = chan_release;
+	res = device_register(dev);
+	if (res) {
+		chan_err(chan, "%s: device_register failed: %d\n",
+				__func__, res);
+		dev_set_drvdata(dev, NULL);
 		return res;
 	}
 	set_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
@@ -131,9 +143,19 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 
 void chan_sysfs_remove(struct dahdi_chan *chan)
 {
+	struct device   *dev = &chan->chan_device;
+
+	chan_dbg(DEVICES, chan, "Destroying channel %d\n", chan->channo);
+	if (!dev_get_drvdata(dev))
+		return;
 	if (!test_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags))
 		return;
-	DEL_DAHDI_DEV(chan->channo);
+	dev = &chan->chan_device;
+	BUG_ON(dev_get_drvdata(dev) != chan);
+	device_unregister(dev);
+	dev_set_drvdata(dev, NULL);
+	/* FIXME: should have been done earlier in dahdi_chan_unreg */
+	chan->channo = -1;
 	clear_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
 }
 
