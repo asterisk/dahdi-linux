@@ -51,8 +51,65 @@ static struct {
 	int cdev:1;
 } should_cleanup;
 
+#define chan_attr(field, format_string)		\
+static BUS_ATTR_READER(field##_show, dev, buf)	\
+{						\
+	struct dahdi_chan *chan;		\
+						\
+	chan = dev_to_chan(dev);		\
+	return sprintf(buf, format_string, chan->field); \
+}
+
+chan_attr(name, "%s\n");
+chan_attr(channo, "%d\n");
+chan_attr(chanpos, "%d\n");
+chan_attr(sigcap, "0x%x\n");
+chan_attr(blocksize, "%d\n");
+#ifdef OPTIMIZE_CHANMUTE
+chan_attr(chanmute, "%d\n");
+#endif
+
+static BUS_ATTR_READER(sig_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+
+	chan = dev_to_chan(dev);
+	return sprintf(buf, "%s\n", sigstr(chan->sig));
+}
+
+static BUS_ATTR_READER(in_use_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+
+	chan = dev_to_chan(dev);
+	return sprintf(buf, "%d\n", test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags));
+}
+
+static BUS_ATTR_READER(alarms_show, dev, buf)
+{
+	struct dahdi_chan *chan;
+	int len;
+
+	chan = dev_to_chan(dev);
+	len = fill_alarm_string(buf, PAGE_SIZE, chan->chan_alarms);
+	buf[len++] = '\n';
+	return len;
+}
+
+
 static struct device_attribute chan_dev_attrs[] = {
-       __ATTR_NULL,
+	__ATTR_RO(name),
+	__ATTR_RO(channo),
+	__ATTR_RO(chanpos),
+	__ATTR_RO(sig),
+	__ATTR_RO(sigcap),
+	__ATTR_RO(alarms),
+	__ATTR_RO(blocksize),
+#ifdef OPTIMIZE_CHANMUTE
+	__ATTR_RO(chanmute),
+#endif
+	__ATTR_RO(in_use),
+	__ATTR_NULL,
 };
 
 static void chan_release(struct device *dev)
@@ -143,7 +200,7 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 
 void chan_sysfs_remove(struct dahdi_chan *chan)
 {
-	struct device   *dev = &chan->chan_device;
+	struct device *dev = &chan->chan_device;
 
 	chan_dbg(DEVICES, chan, "Destroying channel %d\n", chan->channo);
 	if (!dev_get_drvdata(dev))
@@ -168,7 +225,7 @@ int dahdi_register_chardev(struct dahdi_chardev *dev)
 	char *udevname;
 
 	udevname = kzalloc(strlen(dev->name) + sizeof(DAHDI_STRING) + 1,
-			   GFP_KERNEL);
+			GFP_KERNEL);
 	if (!udevname)
 		return -ENOMEM;
 
