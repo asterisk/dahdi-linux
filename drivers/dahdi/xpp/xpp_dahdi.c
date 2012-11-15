@@ -1125,7 +1125,7 @@ int xpd_dahdi_postregister(xpd_t *xpd)
  */
 void xpd_dahdi_preunregister(xpd_t *xpd)
 {
-	if (!xpd)
+	if (!xpd || !IS_PHONEDEV(xpd))
 		return;
 	XPD_DBG(DEVICES, xpd, "\n");
 	update_xpd_status(xpd, DAHDI_ALARM_NOTOPEN);
@@ -1148,7 +1148,7 @@ void xpd_dahdi_preunregister(xpd_t *xpd)
 
 void xpd_dahdi_postunregister(xpd_t *xpd)
 {
-	if (!xpd)
+	if (!xpd || !IS_PHONEDEV(xpd))
 		return;
 	atomic_dec(&PHONEDEV(xpd).dahdi_registered);
 	atomic_dec(&num_registered_spans);
