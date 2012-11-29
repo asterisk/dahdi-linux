@@ -8353,7 +8353,6 @@ void dahdi_rbsbits(struct dahdi_chan *chan, int cursig)
 			break;
 		}
 		/* Fall through */
-	    case DAHDI_SIG_EM:  /* E and M */
 	    case DAHDI_SIG_EM_E1:
 	    case DAHDI_SIG_FXOLS: /* FXO Loopstart */
 	    case DAHDI_SIG_FXOKS: /* FXO Kewlstart */
@@ -8362,7 +8361,13 @@ void dahdi_rbsbits(struct dahdi_chan *chan, int cursig)
 		else /* on hook */
 			__dahdi_hooksig_pvt(chan,DAHDI_RXSIG_ONHOOK);
 		break;
-
+	    case DAHDI_SIG_EM:  /* E and M */
+		/* Watch only the ABIT for changes. */
+		if ((cursig & DAHDI_ABIT) == (chan->rxsig & DAHDI_ABIT))
+			break;
+		__dahdi_hooksig_pvt(chan, (cursig & DAHDI_ABIT) ?
+				      DAHDI_RXSIG_OFFHOOK : DAHDI_RXSIG_ONHOOK);
+		break;
 	   case DAHDI_SIG_FXSKS:  /* FXS Kewlstart */
 	   case DAHDI_SIG_FXSGS:  /* FXS Groundstart */
 		/* Fall through */
