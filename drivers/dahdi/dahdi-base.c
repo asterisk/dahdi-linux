@@ -811,7 +811,7 @@ ssize_t lineconfig_str(int lineconfig, char buf[], size_t size)
 EXPORT_SYMBOL(lineconfig_str);
 
 #ifdef CONFIG_PROC_FS
-static const char *sigstr(int sig)
+const char *sigstr(int sig)
 {
 	switch (sig) {
 	case DAHDI_SIG_FXSLS:
@@ -858,7 +858,7 @@ static const char *sigstr(int sig)
 	}
 }
 
-static int fill_alarm_string(char *buf, int count, int alarms)
+int fill_alarm_string(char *buf, int count, int alarms)
 {
 	int len;
 
