@@ -14,6 +14,7 @@ cscope.*
 *.markers
 .*.o.d
 
+README.html
 modules.order
 Module.markers
 build_tools/checkpatch.pl
