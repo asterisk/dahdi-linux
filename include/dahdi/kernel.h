@@ -741,16 +741,16 @@ static inline int dahdi_have_netdev(const struct dahdi_chan *chan) { return 0; }
 #endif
 
 struct dahdi_count {
-	__u32 fe;		/*!< Framing error counter */
-	__u32 cv;		/*!< Coding violations counter */
-	__u32 bpv;		/*!< Bipolar Violation counter */
-	__u32 crc4;		/*!< CRC4 error counter */
-	__u32 ebit;		/*!< current E-bit error count */
-	__u32 fas;		/*!< current FAS error count */
-	__u32 be;		/*!< current bit error count */
-	__u32 prbs;		/*!< current PRBS detected pattern */
-	__u32 errsec;		/*!< errored seconds */
-	__u32 timingslips;	/*!< Clock slips */
+	u32 fe;			/*!< Framing error counter */
+	u32 cv;			/*!< Coding violations counter */
+	u32 bpv;		/*!< Bipolar Violation counter */
+	u32 crc4;		/*!< CRC4 error counter */
+	u32 ebit;		/*!< current E-bit error count */
+	u32 fas;		/*!< current FAS error count */
+	u32 be;			/*!< current bit error count */
+	u32 prbs;		/*!< current PRBS detected pattern */
+	u32 errsec;		/*!< errored seconds */
+	u32 timingslips;	/*!< Clock slips */
 };
 
 /* map flagbits to flag masks */
