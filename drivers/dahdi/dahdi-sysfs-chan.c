@@ -47,9 +47,9 @@ static struct cdev dahdi_channels_cdev;	/*!< Channels chardev's */
  * succeeded.
  */
 static struct {
-	int channel_driver:1;
-	int channels_bus:1;
-	int cdev:1;
+	u32 channel_driver:1;
+	u32 channels_bus:1;
+	u32 cdev:1;
 } should_cleanup;
 
 #define chan_attr(field, format_string)		\
