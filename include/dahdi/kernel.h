@@ -750,6 +750,7 @@ struct dahdi_count {
 	__u32 be;		/*!< current bit error count */
 	__u32 prbs;		/*!< current PRBS detected pattern */
 	__u32 errsec;		/*!< errored seconds */
+	__u32 timingslips;	/*!< Clock slips */
 };
 
 /* map flagbits to flag masks */
@@ -954,8 +955,6 @@ struct dahdi_span {
 
 	int maintstat;			/*!< Maintenance state */
 	int mainttimer;			/*!< Maintenance timer */
-
-	int timingslips;		/*!< Clock slips */
 
 	struct dahdi_chan **chans;	/*!< Member channel structures */
 

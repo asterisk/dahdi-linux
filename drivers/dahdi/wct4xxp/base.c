@@ -3682,7 +3682,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 	}
 	if (!ts->span.alarms) {
 		if ((isr3 & 0x3) || (isr4 & 0xc0))
-			ts->span.timingslips++;
+			ts->span.count.timingslips++;
 
 		if (debug & DEBUG_MAIN) {
 			if (isr3 & 0x02)
@@ -3703,7 +3703,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 					wc->numspans, span + 1);
 		}
 	} else
-		ts->span.timingslips = 0;
+		ts->span.count.timingslips = 0;
 
 	spin_lock_irqsave(&wc->reglock, flags);
 	/* HDLC controller checks - receive side */

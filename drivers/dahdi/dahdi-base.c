@@ -932,8 +932,8 @@ static int dahdi_seq_show(struct seq_file *sfile, void *v)
 		seq_printf(sfile, "\tFAS error count: %d\n", s->count.fas);
 	if (s->parent->irqmisses)
 		seq_printf(sfile, "\tIRQ misses: %d\n", s->parent->irqmisses);
-	if (s->timingslips)
-		seq_printf(sfile, "\tTiming slips: %d\n", s->timingslips);
+	if (s->count.timingslips)
+		seq_printf(sfile, "\tTiming slips: %d\n", s->count.timingslips);
 	seq_printf(sfile, "\n");
 
 	for (x = 0; x < s->channels; x++) {
