@@ -2039,7 +2039,7 @@ static void t4_span_assigned(struct dahdi_span *span)
 	/* We use this to make sure all the spans are assigned before
 	 * running the serial setup. */
 	list_for_each_entry(pos, &wc->ddev->spans, device_node) {
-		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags))
+		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &pos->flags))
 			++unassigned_spans;
 	}
 
