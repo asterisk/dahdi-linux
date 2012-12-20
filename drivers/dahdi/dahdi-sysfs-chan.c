@@ -241,7 +241,6 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 	devt = MKDEV(MAJOR(dahdi_channels_devt), chan->channo);
 	dev = &chan->chan_device;
 	dev->devt = devt;
-	dev->class = dahdi_class;
 	dev->bus = &chan_bus_type;
 	dev->parent = span->span_device;
 	/*
