@@ -283,6 +283,7 @@ static inline void dahdi_kernel_fpu_end(void)
 #endif
 
 struct dahdi_timer {
+	spinlock_t lock;
 	int ms;			/* Countdown */
 	int pos;		/* Position */
 	int ping;		/* Whether we've been ping'd */
@@ -2959,48 +2960,36 @@ static int initialize_channel(struct dahdi_chan *chan)
 
 static int dahdi_timing_open(struct file *file)
 {
-	struct dahdi_timer *t;
-	unsigned long flags;
-
-	if (!(t = kzalloc(sizeof(*t), GFP_KERNEL)))
+	struct dahdi_timer *t = kzalloc(sizeof(*t), GFP_KERNEL);
+	if (!t)
 		return -ENOMEM;
-
-	init_waitqueue_head(&t->sel);
 	INIT_LIST_HEAD(&t->list);
+	init_waitqueue_head(&t->sel);
 	file->private_data = t;
-
-	spin_lock_irqsave(&dahdi_timer_lock, flags);
-	list_add(&t->list, &dahdi_timers);
-	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-
+	spin_lock_init(&t->lock);
 	return 0;
 }
 
 static int dahdi_timer_release(struct file *file)
 {
-	struct dahdi_timer *t, *cur, *next;
+	struct dahdi_timer *timer = file->private_data;
 	unsigned long flags;
 
-	if (!(t = file->private_data))
+	if (!timer)
 		return 0;
 
-	spin_lock_irqsave(&dahdi_timer_lock, flags);
-
-	list_for_each_entry_safe(cur, next, &dahdi_timers, list) {
-		if (t == cur) {
-			list_del(&cur->list);
-			break;
-		}
+	spin_lock_irqsave(&timer->lock, flags);
+	if (!list_empty(&timer->list)) {
+		spin_unlock(&timer->lock);
+		spin_lock(&dahdi_timer_lock);
+		spin_lock(&timer->lock);
+		list_del_init(&timer->list);
+		spin_unlock(&dahdi_timer_lock);
 	}
+	file->private_data = NULL;
+	spin_unlock_irqrestore(&timer->lock, flags);
 
-	spin_unlock_irqrestore(&dahdi_timer_lock, flags);
-
-	if (!cur) {
-		module_printk(KERN_NOTICE, "Timer: Not on list??\n");
-		return 0;
-	}
-
-	kfree(cur);
+	kfree(timer);
 
 	return 0;
 }
@@ -3899,39 +3888,61 @@ static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long 
 		get_user(j, (int __user *)data);
 		if (j < 0)
 			j = 0;
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
-		timer->ms = timer->pos = j;
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
+		if (timer->ms != j) {
+			if (j && list_empty(&timer->list)) {
+				/* The timer is being activated so add to the
+				 * global timer list. */
+				spin_unlock(&timer->lock);
+				spin_lock(&dahdi_timer_lock);
+				spin_lock(&timer->lock);
+				timer->ms = timer->pos = j;
+				list_add(&timer->list, &dahdi_timers);
+				spin_unlock(&dahdi_timer_lock);
+			} else if (!j && !list_empty(&timer->list)) {
+				/* The timer is being disabled so we can remove
+				 * from the global timer list. */
+				spin_unlock(&timer->lock);
+				spin_lock(&dahdi_timer_lock);
+				spin_lock(&timer->lock);
+				list_del_init(&timer->list);
+				timer->ms = timer->pos = j;
+				spin_unlock(&dahdi_timer_lock);
+			} else {
+				timer->ms = timer->pos = j;
+			}
+		}
+		spin_unlock_irqrestore(&timer->lock, flags);
 		break;
 	case DAHDI_TIMERACK:
 		get_user(j, (int __user *)data);
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
 		if ((j < 1) || (j > timer->tripped))
 			j = timer->tripped;
 		timer->tripped -= j;
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_unlock_irqrestore(&timer->lock, flags);
 		break;
 	case DAHDI_GETEVENT:  /* Get event on queue */
 		j = DAHDI_EVENT_NONE;
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
 		  /* set up for no event */
 		if (timer->tripped)
 			j = DAHDI_EVENT_TIMER_EXPIRED;
 		if (timer->ping)
 			j = DAHDI_EVENT_TIMER_PING;
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_unlock_irqrestore(&timer->lock, flags);
 		put_user(j, (int __user *)data);
 		break;
 	case DAHDI_TIMERPING:
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
 		timer->ping = 1;
 		wake_up_interruptible(&timer->sel);
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_unlock_irqrestore(&timer->lock, flags);
 		break;
 	case DAHDI_TIMERPONG:
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
 		timer->ping = 0;
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_unlock_irqrestore(&timer->lock, flags);
 		break;
 	default:
 		return -ENOTTY;
@@ -9300,14 +9311,14 @@ static void process_timers(void)
 
 	spin_lock(&dahdi_timer_lock);
 	list_for_each_entry(cur, &dahdi_timers, list) {
-		if (cur->ms) {
-			cur->pos -= DAHDI_CHUNKSIZE;
-			if (cur->pos <= 0) {
-				cur->tripped++;
-				cur->pos = cur->ms;
-				wake_up_interruptible(&cur->sel);
-			}
+		spin_lock(&cur->lock);
+		cur->pos -= DAHDI_CHUNKSIZE;
+		if (cur->pos <= 0) {
+			cur->tripped++;
+			cur->pos = cur->ms;
+			wake_up_interruptible(&cur->sel);
 		}
+		spin_unlock(&cur->lock);
 	}
 	spin_unlock(&dahdi_timer_lock);
 }
@@ -9319,10 +9330,10 @@ static unsigned int dahdi_timer_poll(struct file *file, struct poll_table_struct
 	int ret = 0;
 	if (timer) {
 		poll_wait(file, &timer->sel, wait_table);
-		spin_lock_irqsave(&dahdi_timer_lock, flags);
+		spin_lock_irqsave(&timer->lock, flags);
 		if (timer->tripped || timer->ping)
 			ret |= POLLPRI;
-		spin_unlock_irqrestore(&dahdi_timer_lock, flags);
+		spin_unlock_irqrestore(&timer->lock, flags);
 	} else {
 		/*
 		 * This should never happen. Surprise device removal
