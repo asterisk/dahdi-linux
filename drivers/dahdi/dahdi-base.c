@@ -6707,13 +6707,9 @@ dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	struct dahdi_timer *timer;
 	int ret;
 
-#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
-	lock_kernel();
-#endif
-
 	if (unit == DAHDI_CTL) {
 		ret = dahdi_ctl_ioctl(file, cmd, data);
-		goto unlock_exit;
+		goto exit;
 	}
 
 	if (unit == DAHDI_TRANSCODE) {
@@ -6721,7 +6717,7 @@ dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 		 * this file object on open, so we shouldn't be here. */
 		WARN_ON(1);
 		ret = -EFAULT;
-		goto unlock_exit;
+		goto exit;
 	}
 
 	if (unit == DAHDI_TIMER) {
@@ -6730,36 +6726,33 @@ dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 			ret = dahdi_timer_ioctl(file, cmd, data, timer);
 		else
 			ret = -EINVAL;
-		goto unlock_exit;
+		goto exit;
 	}
 	if (unit == DAHDI_CHANNEL) {
 		if (file->private_data)
 			ret = dahdi_chan_ioctl(file, cmd, data);
 		else
 			ret = dahdi_prechan_ioctl(file, cmd, data);
-		goto unlock_exit;
+		goto exit;
 	}
 	if (unit == DAHDI_PSEUDO) {
 		if (!file->private_data) {
 			module_printk(KERN_NOTICE, "No pseudo channel structure to read?\n");
 			ret = -EINVAL;
-			goto unlock_exit;
+			goto exit;
 		}
 		ret = dahdi_chanandpseudo_ioctl(file, cmd, data);
-		goto unlock_exit;
+		goto exit;
 	}
 
 	if (!file->private_data) {
 		ret = -ENXIO;
-		goto unlock_exit;
+		goto exit;
 	}
 
 	ret = dahdi_chan_ioctl(file, cmd, data);
 
-unlock_exit:
-#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
-	unlock_kernel();
-#endif
+exit:
 	return ret;
 }
 
