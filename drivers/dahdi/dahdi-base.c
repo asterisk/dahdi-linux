@@ -2958,7 +2958,9 @@ static int initialize_channel(struct dahdi_chan *chan)
 	return 0;
 }
 
-static int dahdi_timing_open(struct file *file)
+static const struct file_operations dahdi_timer_fops;
+
+static int dahdi_timer_open(struct file *file)
 {
 	struct dahdi_timer *t = kzalloc(sizeof(*t), GFP_KERNEL);
 	if (!t)
@@ -2967,10 +2969,12 @@ static int dahdi_timing_open(struct file *file)
 	init_waitqueue_head(&t->sel);
 	file->private_data = t;
 	spin_lock_init(&t->lock);
+	file->f_op = &dahdi_timer_fops;
+
 	return 0;
 }
 
-static int dahdi_timer_release(struct file *file)
+static int dahdi_timer_release(struct inode *inode, struct file *file)
 {
 	struct dahdi_timer *timer = file->private_data;
 	unsigned long flags;
@@ -3227,7 +3231,7 @@ static int dahdi_open(struct inode *inode, struct file *file)
 	}
 	if (unit == DAHDI_TIMER) {
 		if (can_open_timer()) {
-			return dahdi_timing_open(file);
+			return dahdi_timer_open(file);
 		} else {
 			return -ENXIO;
 		}
@@ -3729,7 +3733,7 @@ static int dahdi_release(struct inode *inode, struct file *file)
 	if (unit == DAHDI_CTL)
 		return dahdi_ctl_release(file);
 	if (unit == DAHDI_TIMER) {
-		return dahdi_timer_release(file);
+		return dahdi_timer_release(inode, file);
 	}
 	if (unit == DAHDI_TRANSCODE) {
 		/* We should not be here because the dahdi_transcode.ko module
@@ -3879,10 +3883,14 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 	}
 }
 
-static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long data, struct dahdi_timer *timer)
+static long
+dahdi_timer_unlocked_ioctl(struct file *file, unsigned int cmd,
+			   unsigned long data)
 {
 	int j;
 	unsigned long flags;
+	struct dahdi_timer *const timer = file->private_data;
+
 	switch(cmd) {
 	case DAHDI_TIMERCONFIG:
 		get_user(j, (int __user *)data);
@@ -3949,6 +3957,14 @@ static int dahdi_timer_ioctl(struct file *file, unsigned int cmd, unsigned long 
 	}
 	return 0;
 }
+
+#ifndef HAVE_UNLOCKED_IOCTL
+static int dahdi_timer_ioctl(struct inode *inode, struct file *file,
+		unsigned int cmd, unsigned long data)
+{
+	return dahdi_timer_unlocked_ioctl(file, cmd, data);
+}
+#endif
 
 static int dahdi_ioctl_getgains(struct file *file, unsigned long data)
 {
@@ -6715,7 +6731,6 @@ static long
 dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 {
 	int unit = UNIT(file);
-	struct dahdi_timer *timer;
 	int ret;
 
 	if (unit == DAHDI_CTL) {
@@ -6732,11 +6747,10 @@ dahdi_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	}
 
 	if (unit == DAHDI_TIMER) {
-		timer = file->private_data;
-		if (timer)
-			ret = dahdi_timer_ioctl(file, cmd, data, timer);
-		else
-			ret = -EINVAL;
+		/* The file operations for a timer device should have been
+		 * updated. */
+		WARN_ON(1);
+		ret = -EFAULT;
 		goto exit;
 	}
 	if (unit == DAHDI_CHANNEL) {
@@ -10003,6 +10017,20 @@ static const struct file_operations dahdi_fops = {
 	.ioctl   = dahdi_ioctl,
 #endif
 	.poll    = dahdi_poll,
+};
+
+static const struct file_operations dahdi_timer_fops = {
+	.owner   = THIS_MODULE,
+	.release = dahdi_timer_release,
+#ifdef HAVE_UNLOCKED_IOCTL
+	.unlocked_ioctl  = dahdi_timer_unlocked_ioctl,
+#ifdef HAVE_COMPAT_IOCTL
+	.compat_ioctl = dahdi_timer_unlocked_ioctl,
+#endif
+#else
+	.ioctl   = dahdi_timer_ioctl,
+#endif
+	.poll    = dahdi_timer_poll,
 };
 
 /*
