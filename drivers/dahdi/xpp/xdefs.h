@@ -144,12 +144,14 @@ typedef unsigned char		byte;
 #define	SET_PROC_DIRENTRY_OWNER(p)	do { } while(0);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,19)
-/* Also don't define this for later RHEL >= 5.2 . hex_asc is from the 
- * same linux-2.6-net-infrastructure-updates-to-mac80211-iwl4965.patch
- * as is the bool typedef. */
-#if LINUX_VERSION_CODE != KERNEL_VERSION(2,6,18)  || !  defined(hex_asc)
-typedef int			bool;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
+/* Also don't define this for later RHEL >= 5.2. */
+#if defined(RHEL_RELEASE_CODE) && defined(RHEL_RELEASE_VERSION)
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 3)
+typedef int bool;
+#endif
+#else
+typedef int bool;
 #endif
 #endif
 #else
