@@ -637,6 +637,11 @@ struct dahdi_confinfo {
 #define DAHDI_SETCONF			_IOWR(DAHDI_CODE, 13, struct dahdi_confinfo)
 
 /*
+ * Setup or Remove Conference Link
+ */
+#define DAHDI_CONFLINK			_IOW(DAHDI_CODE, 14, struct dahdi_confinfo)
+
+/*
  * Display Conference Diagnostic Information on Console
  */
 #define DAHDI_CONFDIAG_V1		_IOR(DAHDI_CODE, 15, int)

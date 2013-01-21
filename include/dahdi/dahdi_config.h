@@ -190,4 +190,10 @@
  */
 /* #define CONFIG_DAHDI_MIRROR */
 
+/*
+ * Adds support for conference links. There are some non-Asterisk users of this
+ * functionality.
+ */
+/* #define CONFIG_DAHDI_CONFLINK */
+
 #endif

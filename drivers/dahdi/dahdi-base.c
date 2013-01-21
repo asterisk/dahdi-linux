@@ -176,6 +176,17 @@ static sumtype *conf_sums_prev;
 static struct dahdi_span *master;
 struct file_operations *dahdi_transcode_fops = NULL;
 
+
+#ifdef CONFIG_DAHDI_CONFLINK
+static struct {
+	int	src;	/* source conf number */
+	int	dst;	/* dst conf number */
+} conf_links[DAHDI_MAX_CONF + 1];
+
+static int maxlinks;
+
+#endif
+
 #ifdef CONFIG_DAHDI_CORE_TIMER
 
 static struct core_timer {
@@ -4507,6 +4518,104 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	return ret;
 }
 
+#ifdef CONFIG_DAHDI_CONFLINK
+static void recalc_maxlinks(void)
+{
+	int x;
+
+	for (x = DAHDI_MAX_CONF - 1; x > 0; x--) {
+		if (conf_links[x].src || conf_links[x].dst) {
+			maxlinks = x + 1;
+			return;
+		}
+	}
+
+	maxlinks = 0;
+}
+
+static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
+{
+	struct dahdi_chan *chan;
+	struct dahdi_confinfo conf;
+	unsigned long flags;
+	int res = 0;
+	int i;
+
+	chan = chan_from_file(file);
+	if (!chan)
+		return -EINVAL;
+	if (!(chan->flags & DAHDI_FLAG_AUDIO))
+		return -EINVAL;
+	if (copy_from_user(&conf, (void __user *)data, sizeof(conf)))
+		return -EFAULT;
+	/* check sanity of arguments */
+	if ((conf.chan < 0) || (conf.chan > DAHDI_MAX_CONF))
+		return -EINVAL;
+	if ((conf.confno < 0) || (conf.confno > DAHDI_MAX_CONF))
+		return -EINVAL;
+	/* cant listen to self!! */
+	if (conf.chan && (conf.chan == conf.confno))
+		return -EINVAL;
+
+	spin_lock_irqsave(&chan_lock, flags);
+	spin_lock(&chan->lock);
+
+	/* if to clear all links */
+	if ((!conf.chan) && (!conf.confno)) {
+		/* clear all the links */
+		memset(conf_links, 0, sizeof(conf_links));
+		recalc_maxlinks();
+		spin_unlock(&chan->lock);
+		spin_unlock_irqrestore(&chan_lock, flags);
+		return 0;
+	}
+	/* look for already existant specified combination */
+	for (i = 1; i <= DAHDI_MAX_CONF; i++) {
+		/* if found, exit */
+		if ((conf_links[i].src == conf.chan) &&
+		    (conf_links[i].dst == conf.confno))
+			break;
+	}
+	if (i <= DAHDI_MAX_CONF) { /* if found */
+		if (!conf.confmode) { /* if to remove link */
+			conf_links[i].src = 0;
+			conf_links[i].dst = 0;
+		} else { /* if to add and already there, error */
+			res = -EEXIST;
+		}
+	} else { /* if not found */
+		if (conf.confmode) { /* if to add link */
+			/* look for empty location */
+			for (i = 1; i <= DAHDI_MAX_CONF; i++) {
+				/* if empty, exit loop */
+				if ((!conf_links[i].src) &&
+				    (!conf_links[i].dst))
+					break;
+			}
+			/* if empty spot found */
+			if (i <= DAHDI_MAX_CONF) {
+				conf_links[i].src = conf.chan;
+				conf_links[i].dst = conf.confno;
+			} else { /* if no empties -- error */
+				res = -ENOSPC;
+			 }
+		} else { /* if to remove, and not found -- error */
+			res = -ENOENT;
+		}
+	}
+	recalc_maxlinks();
+	spin_unlock(&chan->lock);
+	spin_unlock_irqrestore(&chan_lock, flags);
+	return res;
+}
+#else
+static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
+{
+	return -ENOSYS;
+}
+#endif
+
+
 static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
 			      unsigned long data)
 {
@@ -4535,6 +4644,10 @@ static int dahdi_common_ioctl(struct file *file, unsigned int cmd,
 	case DAHDI_CHANDIAG_V1: /* Intentional drop through. */
 	case DAHDI_CHANDIAG:
 		return dahdi_ioctl_chandiag(file, data);
+
+	case DAHDI_CONFLINK:
+		return dahdi_ioctl_conflink(file, data);
+
 	default:
 		return -ENOTTY;
 	}
@@ -5607,10 +5720,10 @@ static int dahdi_ioctl_confdiag(struct file *file, unsigned long data)
 	for (i = ((j) ? j : 1); i <= ((j) ? j : DAHDI_MAX_CONF); i++) {
 		struct dahdi_span *s;
 		struct pseudo_chan *pseudo;
+		int k;
 		c = 0;
 		spin_lock_irqsave(&chan_lock, flags);
 		list_for_each_entry(s, &span_list, spans_node) {
-			int k;
 			for (k = 0; k < s->channels; k++) {
 				chan = s->chans[k];
 				if (chan->confna != i)
@@ -5632,6 +5745,29 @@ static int dahdi_ioctl_confdiag(struct file *file, unsigned long data)
 			module_printk(KERN_NOTICE, "chan %d, mode %x\n",
 				      pseudo->chan.channo, pseudo->chan.confmode);
 		}
+
+#ifdef CONFIG_DAHDI_CONFLINK
+		{
+			int rv;
+			rv = 0;
+			for (k = 1; k <= DAHDI_MAX_CONF; k++) {
+				if (conf_links[k].dst == i) {
+					if (!c) {
+						c = 1;
+						module_printk(KERN_NOTICE,
+							      "Conf #%d:\n", i);
+					}
+					if (!rv) {
+						rv = 1;
+						module_printk(KERN_NOTICE,
+							      "Snooping on:\n");
+					}
+					module_printk(KERN_NOTICE, "conf %d\n",
+						      conf_links[k].src);
+				}
+			}
+		}
+#endif
 		spin_unlock_irqrestore(&chan_lock, flags);
 		if (c)
 			module_printk(KERN_NOTICE, "\n");
@@ -9713,6 +9849,29 @@ static void _process_masterspan(void)
 		__dahdi_transmit_chunk(&pseudo->chan, NULL);
 		spin_unlock(&pseudo->chan.lock);
 	}
+
+#ifdef CONFIG_DAHDI_CONFLINK
+	if (maxlinks) {
+		int z;
+		int y;
+#ifdef CONFIG_DAHDI_MMX
+		dahdi_kernel_fpu_begin();
+#endif
+		/* process all the conf links */
+		for (x = 1; x <= maxlinks; x++) {
+			/* if we have a destination conf */
+			z = confalias[conf_links[x].dst];
+			if (z) {
+				y = confalias[conf_links[x].src];
+				if (y)
+					ACSS(conf_sums[z], conf_sums[y]);
+			}
+		}
+#ifdef CONFIG_DAHDI_MMX
+		dahdi_kernel_fpu_end();
+#endif
+	}
+#endif /* CONFIG_DAHDI_CONFLINK */
 
 	/* do all the pseudo/conferenced channel transmits (putbuf's) */
 	list_for_each_entry(pseudo, &pseudo_chans, node) {
