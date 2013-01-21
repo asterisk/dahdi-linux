@@ -1072,10 +1072,27 @@ static unsigned long _chan_in_conf(struct dahdi_chan *chan, unsigned long x)
 	     confmode == DAHDI_CONF_REALANDPSEUDO)) ? 1 : 0;
 }
 
+#ifdef CONFIG_DAHDI_CONFLINK
+static void recalc_maxlinks(void)
+{
+	int x;
+
+	for (x = DAHDI_MAX_CONF - 1; x > 0; x--) {
+		if (conf_links[x].src || conf_links[x].dst) {
+			maxlinks = x + 1;
+			return;
+		}
+	}
+
+	maxlinks = 0;
+}
+#endif
+
 static void dahdi_check_conf(int x)
 {
 	unsigned long res;
 	unsigned long flags;
+	int i;
 
 	/* return if no valid conf number */
 	if (x <= 0)
@@ -1098,6 +1115,17 @@ static void dahdi_check_conf(int x)
 
 	/* Highest conference may have changed */
 	recalc_maxconfs();
+
+#ifdef CONFIG_DAHDI_CONFLINK
+	/* And unlink it from any conflinks */
+	for (i = DAHDI_MAX_CONF - 1; i > 0; i--) {
+		if (conf_links[i].src == x)
+			conf_links[i].src = 0;
+		if (conf_links[i].dst == x)
+			conf_links[i].dst = 0;
+	}
+	recalc_maxlinks();
+#endif
 }
 
 /* enqueue an event on a channel */
@@ -4519,20 +4547,6 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 }
 
 #ifdef CONFIG_DAHDI_CONFLINK
-static void recalc_maxlinks(void)
-{
-	int x;
-
-	for (x = DAHDI_MAX_CONF - 1; x > 0; x--) {
-		if (conf_links[x].src || conf_links[x].dst) {
-			maxlinks = x + 1;
-			return;
-		}
-	}
-
-	maxlinks = 0;
-}
-
 static int dahdi_ioctl_conflink(struct file *file, unsigned long data)
 {
 	struct dahdi_chan *chan;
