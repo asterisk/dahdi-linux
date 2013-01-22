@@ -463,6 +463,7 @@ int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 		goto cleanup;
 	}
 	dahdi_dbg(DEVICES, "adding channels cdev\n");
+	cdev_init(&dahdi_channels_cdev, fops);
 	res = cdev_add(&dahdi_channels_cdev, dahdi_channels_devt,
 		DAHDI_MAX_CHANNELS);
 	if (res) {
