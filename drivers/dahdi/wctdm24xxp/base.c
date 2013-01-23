@@ -2023,7 +2023,7 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 
 	switch (fxo->battery_state) {
 	case BATTERY_DEBOUNCING_PRESENT:
-		if (time_after(jiffies, fxo->battdebounce_timer)) {
+		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->vb.pdev->dev,
 					 "BATTERY on %d/%d (%s)!\n",
@@ -2048,12 +2048,12 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 			 * of its time period has already passed while
 			 * debouncing occurred */
 			fxo->battery_state = BATTERY_DEBOUNCING_PRESENT_ALARM;
-			fxo->battdebounce_timer = jiffies +
-				msecs_to_jiffies(battalarm - battdebounce);
+			fxo->battdebounce_timer = wc->framecount +
+						   battalarm - battdebounce;
 		}
 		break;
 	case BATTERY_DEBOUNCING_PRESENT_ALARM:
-		if (time_after(jiffies, fxo->battdebounce_timer)) {
+		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			fxo->battery_state = BATTERY_PRESENT;
 			dahdi_alarm_channel(get_dahdi_chan(wc, mod),
 					    DAHDI_ALARM_NONE);
@@ -2071,8 +2071,7 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 	case BATTERY_LOST: /* intentional drop through */
 	case BATTERY_DEBOUNCING_LOST_ALARM:
 		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
-		fxo->battdebounce_timer = jiffies +
-						msecs_to_jiffies(battdebounce);
+		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
 	}
 }
