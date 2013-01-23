@@ -1242,7 +1242,8 @@ static char *hfc_decode_st_state(struct b4xxp *b4, int port, unsigned char state
 			"?", "?", "?", "?", "?", "?", "?", "?" }
 	};
 
-	if (!(str = kmalloc(256, GFP_KERNEL))) {
+	str = kmalloc(256, GFP_ATOMIC);
+	if (!str) {
 		dev_warn(&b4->pdev->dev, "could not allocate mem for ST state decode string!\n");
 		return NULL;
 	}
