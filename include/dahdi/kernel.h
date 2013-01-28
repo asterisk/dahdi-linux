@@ -120,6 +120,14 @@
 #  endif
 #endif
 
+/* __dev* were removed in 3.8. They still have effect in 2.6.18. */
+#ifndef __devinit
+#  define __devinit
+#  define __devinitdata
+#  define __devexit
+#  define __devexit_p(x) x
+#endif
+
 /*! Default chunk size for conferences and such -- static right now, might make
    variable sometime.  8 samples = 1 ms = most frequent service interval possible
    for a USB device */
