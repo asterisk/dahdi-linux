@@ -59,7 +59,7 @@ elif [ -d ${1}/.git ]; then
     MODIFIED=""
     SVN_REV=`git log --pretty=full -1 | grep -F "git-svn-id:" | sed -e "s/.*\@\([^\s]*\)\s.*/\1/g"`
     if [ -z "$SVN_REV" ]; then
-        VERSION=`git describe --tags --dirty=M 2> /dev/null`
+        VERSION=`git describe --tags --dirty=M 2> /dev/null | sed -e "s/^v//"`
         if [ $? -ne 0 ]; then
             if [ "`git ls-files -m | wc -l`" != "0" ]; then
                 MODIFIED="M"
