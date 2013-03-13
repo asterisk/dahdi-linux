@@ -1092,7 +1092,9 @@ static void dahdi_check_conf(int x)
 {
 	unsigned long res;
 	unsigned long flags;
+#ifdef CONFIG_DAHDI_CONFLINK
 	int i;
+#endif
 
 	/* return if no valid conf number */
 	if (x <= 0)
