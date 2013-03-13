@@ -38,7 +38,7 @@ obj-m += $(DAHDI_MODULES_EXTRA)
 # well:
 ifneq (,$(wildcard $(src)/../staging/echo/echo.c))
 obj-m += dahdi_echocan_oslec.o
-obj-m += ../staging/echo/
+obj-m += ../staging/echo/echo.o
 endif
 
 CFLAGS_MODULE += -I$(DAHDI_INCLUDE) -I$(src)
