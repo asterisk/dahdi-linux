@@ -45,7 +45,11 @@ static DEF_PARM(uint, poll_metering_interval, 500, 0644,
 static DEF_PARM(int, ring_debounce, 50, 0644,
 		"Number of ticks to debounce a false RING indication");
 static DEF_PARM(int, caller_id_style, 0, 0444,
-		"Caller-Id detection style: 0 - [BELL], 1 - [ETSI_FSK], 2 - [ETSI_DTMF]");
+		"Caller-Id detection style: "
+		"0 - [BELL], "
+		"1 - [ETSI_FSK], "
+		"2 - [ETSI_DTMF], "
+		"3 - [PASSTHROUGH]");
 static DEF_PARM(int, power_denial_safezone, 650, 0644,
 		"msec after offhook to ignore power-denial ( (0 - disable power-denial)");
 static DEF_PARM(int, power_denial_minlen, 80, 0644,
@@ -59,6 +63,8 @@ enum cid_style {
 	CID_STYLE_BELL = 0,	/* E.g: US (Bellcore) */
 	CID_STYLE_ETSI_FSK = 1,	/* E.g: UK (British Telecom) */
 	CID_STYLE_ETSI_DTMF = 2,	/* E.g: DK, Russia */
+	CID_STYLE_PASSTHROUGH = 3,	/* No change: Let asterisk  */
+					/* (>= 1.8) DSP handle this */
 };
 
 /* Signaling is opposite (fxs signalling for fxo card) */
@@ -393,8 +399,14 @@ static int do_sethook(xpd_t *xpd, int pos, bool to_offhook)
 	    DAA_DIRECT_REQUEST(xbus, xpd, pos, DAA_WRITE, REG_DAA_CONTROL1,
 			       value);
 	mark_offhook(xpd, pos, to_offhook);
-	if (caller_id_style != CID_STYLE_ETSI_DTMF)
+	switch (caller_id_style) {
+	case CID_STYLE_ETSI_DTMF:
+	case CID_STYLE_PASSTHROUGH:
+		break;
+	default:
 		oht_pcm(xpd, pos, 0);
+		break;
+	}
 #ifdef	WITH_METERING
 	priv->metering_count[pos] = 0;
 	priv->metering_tone_state = 0L;
@@ -524,8 +536,12 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 		priv->battery[i] = BATTERY_UNKNOWN;
 		/* will be updated on next battery sample */
 		priv->power[i] = POWER_UNKNOWN;
-		if (caller_id_style == CID_STYLE_ETSI_DTMF)
+		switch (caller_id_style) {
+		case CID_STYLE_ETSI_DTMF:
+		case CID_STYLE_PASSTHROUGH:
 			oht_pcm(xpd, i, 1);
+			break;
+		}
 		priv->polarity_last_interval[i] = POLARITY_LAST_INTERVAL_NONE;
 	}
 	XPD_DBG(GENERAL, xpd, "done\n");
