@@ -34,7 +34,10 @@
 static const char rcsid[] = "$Id$";
 
 static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
-static DEF_PARM(uint, poll_battery_interval, 500, 0644, "Poll battery interval in milliseconds (0 - disable)");
+static DEF_PARM(uint, poll_battery_interval, 500, 0644,
+		"Poll battery interval in milliseconds (0 - disable)");
+static DEF_PARM_BOOL(use_polrev_firmware, 1, 0444,
+		"Use firmware reports of polarity reversal");
 #ifdef	WITH_METERING
 static DEF_PARM(uint, poll_metering_interval, 500, 0644, "Poll metering interval in milliseconds (0 - disable)");
 #endif
@@ -92,12 +95,17 @@ static int proc_xpd_metering_read(char *page, char **start, off_t off, int count
 #endif
 #endif
 static void dahdi_report_battery(xpd_t *xpd, lineno_t chan);
+static void report_polarity_reversal(xpd_t *xpd, xportno_t portno);
 
 #define	PROC_REGISTER_FNAME	"slics"
 #define	PROC_FXO_INFO_FNAME	"fxo_info"
 #ifdef	WITH_METERING
 #define	PROC_METERING_FNAME	"metering_read"
 #endif
+
+#define	REG_INTERRUPT_SRC	0x04	/*  4 -  Interrupt Source  */
+#define	REG_INTERRUPT_SRC_POLI	BIT(0)	/*  Polarity Reversal Detect Interrupt*/
+#define	REG_INTERRUPT_SRC_RING	BIT(7)	/*  Ring Detect Interrupt */
 
 #define	REG_DAA_CONTROL1	0x05	/*  5 -  DAA Control 1	*/
 #define	REG_DAA_CONTROL1_OH	BIT(0)	/* Off-Hook.		*/
@@ -137,6 +145,9 @@ struct FXO_priv_data {
 	ushort			nobattery_debounce[CHANNELS_PERXPD];
 	enum polarity_state	polarity[CHANNELS_PERXPD];
 	ushort			polarity_debounce[CHANNELS_PERXPD];
+	int			polarity_last_interval[CHANNELS_PERXPD];
+#define	POLARITY_LAST_INTERVAL_NONE	(-1)
+#define	POLARITY_LAST_INTERVAL_MAX	40
 	enum power_state	power[CHANNELS_PERXPD];
 	ushort			power_denial_delay[CHANNELS_PERXPD];
 	ushort			power_denial_length[CHANNELS_PERXPD];
@@ -315,6 +326,7 @@ static void mark_ring(xpd_t *xpd, lineno_t pos, bool on, bool update_dahdi)
 			MARK_BLINK(priv, pos, LED_GREEN, 0);
 		if(update_dahdi)
 			update_dahdi_ring(xpd, pos, on);
+		priv->polarity_last_interval[pos] = POLARITY_LAST_INTERVAL_NONE;
 	}
 }
 
@@ -467,6 +479,7 @@ static int FXO_card_init(xbus_t *xbus, xpd_t *xpd)
 		priv->power[i] = POWER_UNKNOWN;	/* will be updated on next battery sample */
 		if(caller_id_style == CID_STYLE_ETSI_DTMF)
 			oht_pcm(xpd, i, 1);
+		priv->polarity_last_interval[i] = POLARITY_LAST_INTERVAL_NONE;
 	}
 	XPD_DBG(GENERAL, xpd, "done\n");
 	for_each_line(xpd, i) {
@@ -633,7 +646,22 @@ static void handle_fxo_ring(xpd_t *xpd)
 
 	priv = xpd->priv;
 	for_each_line(xpd, i) {
-		if(atomic_read(&priv->ring_debounce[i]) > 0) {
+		if (use_polrev_firmware) {
+			int *t = &priv->polarity_last_interval[i];
+			if (*t != POLARITY_LAST_INTERVAL_NONE) {
+				(*t)++;
+				if (*t > POLARITY_LAST_INTERVAL_MAX) {
+					LINE_DBG(SIGNAL, xpd, i,
+						"polrev(GOOD): %d msec\n", *t);
+					*t = POLARITY_LAST_INTERVAL_NONE;
+					if (use_polrev_firmware) {
+						report_polarity_reversal(xpd,
+								i);
+					}
+				}
+			}
+		}
+		if (atomic_read(&priv->ring_debounce[i]) > 0) {
 			/* Maybe start ring */
 			if(atomic_dec_and_test(&priv->ring_debounce[i]))
 				mark_ring(xpd, i, 1, 1);
@@ -845,8 +873,8 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	for_each_line(xpd, i) {
 		int	debounce;
 
-		if(IS_SET(sig_toggles, i)) {
-			if(priv->battery[i] == BATTERY_OFF) {
+		if (IS_SET(sig_toggles, i)) {
+			if (priv->battery[i] == BATTERY_OFF) {
 				/*
 				 * With poll_battery_interval==0 we cannot have BATTERY_OFF
 				 * so we won't get here
@@ -868,6 +896,23 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);
 	return 0;
+}
+
+static void report_polarity_reversal(xpd_t *xpd, xportno_t portno)
+{
+	/*
+	 * Inform dahdi/Asterisk:
+	 * 1. Maybe used for hangup detection during offhook
+	 * 2. In some countries used to report caller-id
+	 *    during onhook but before first ring.
+	 */
+	if (caller_id_style == CID_STYLE_ETSI_FSK)
+		/* will be cleared on ring/offhook */
+		oht_pcm(xpd, portno, 1);
+	if (SPAN_REGISTERED(xpd)) {
+		LINE_DBG(SIGNAL, xpd, portno, "Send DAHDI_EVENT_POLARITY\n");
+		dahdi_qevent_lock(XPD_CHAN(xpd, portno), DAHDI_EVENT_POLARITY);
+	}
 }
 
 static void update_battery_voltage(xpd_t *xpd, byte data_low, xportno_t portno)
@@ -961,20 +1006,9 @@ static void update_battery_voltage(xpd_t *xpd, byte data_low, xportno_t portno)
 			else
 				BUG();
 			LINE_DBG(SIGNAL, xpd, portno,
-				"Polarity changed to %s\n", polname);
-			/*
-			 * Inform dahdi/Asterisk:
-			 * 1. Maybe used for hangup detection during offhook
-			 * 2. In some countries used to report caller-id during onhook
-			 *    but before first ring.
-			 */
-			if(caller_id_style == CID_STYLE_ETSI_FSK)
-				oht_pcm(xpd, portno, 1);	/* will be cleared on ring/offhook */
-			if(SPAN_REGISTERED(xpd)) {
-				LINE_DBG(SIGNAL, xpd, portno,
-					"Send DAHDI_EVENT_POLARITY: %s\n", polname);
-				dahdi_qevent_lock(XPD_CHAN(xpd, portno), DAHDI_EVENT_POLARITY);
-			}
+				 "Polarity changed to %s\n", polname);
+			if (!use_polrev_firmware)
+				report_polarity_reversal(xpd, portno);
 		}
 		priv->polarity[portno] = pol;
 	}
@@ -1054,6 +1088,50 @@ static void update_metering_state(xpd_t *xpd, byte data_low, lineno_t portno)
 }
 #endif
 
+static void got_chip_interrupt(xpd_t *xpd, __u8 data_low,
+	xportno_t portno)
+{
+	struct FXO_priv_data *priv;
+
+	if (!use_polrev_firmware)
+		return;
+	priv = xpd->priv;
+	LINE_DBG(SIGNAL, xpd, portno, "mask=0x%X\n", data_low);
+	if (!(data_low & REG_INTERRUPT_SRC_POLI))
+		return;
+
+	int t = priv->polarity_last_interval[portno];
+	if (PHONEDEV(xpd).ringing[portno]) {
+		priv->polarity_last_interval[portno] =
+			POLARITY_LAST_INTERVAL_NONE;
+		LINE_DBG(SIGNAL, xpd, portno,
+			"polrev(false): %d msec (while ringing)\n", t);
+	} else if (data_low & REG_INTERRUPT_SRC_RING) {
+		priv->polarity_last_interval[portno] =
+			POLARITY_LAST_INTERVAL_NONE;
+		LINE_DBG(SIGNAL, xpd, portno,
+			"polrev(false): %d msec (with chip-interrupt ring)\n",
+			t);
+	} else if (t == POLARITY_LAST_INTERVAL_NONE) {
+		priv->polarity_last_interval[portno] = 0;
+		LINE_DBG(SIGNAL, xpd, portno,
+			"polrev(start)\n");
+	} else if (t < POLARITY_LAST_INTERVAL_MAX) {
+		/*
+		 * Start counting upward from -POLARITY_LAST_INTERVAL_MAX
+		 * Until we reach POLARITY_LAST_INTERVAL_NONE.
+		 * This way we filter bursts of false reports we get
+		 * during ringing
+		 */
+		priv->polarity_last_interval[portno] =
+			POLARITY_LAST_INTERVAL_NONE -
+			POLARITY_LAST_INTERVAL_MAX;
+		LINE_DBG(SIGNAL, xpd, portno,
+			"polrev(false): %d msec (interval shorter than %d)\n",
+			t, POLARITY_LAST_INTERVAL_MAX);
+	}
+}
+
 static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 {
 	struct FXO_priv_data	*priv;
@@ -1063,6 +1141,10 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	BUG_ON(!priv);
 	portno = info->portnum;
 	switch(REG_FIELD(info, regnum)) {
+		case REG_INTERRUPT_SRC:
+			got_chip_interrupt(xpd, REG_FIELD(info, data_low),
+					portno);
+			break;
 		case DAA_REG_VBAT:
 			update_battery_voltage(xpd, REG_FIELD(info, data_low), portno);
 			break;

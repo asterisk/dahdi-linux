@@ -415,6 +415,9 @@ close STDERR;
 exit 0;
 
 __DATA__
+*	WD	12	02	# Full wave rectified ring detection
+*	WD	03	01	# Polarity reversal detect mask
+*	WD	04	00	# Clear interrupt status
 *	WD	21	08	# Disable PCM transfers
 *	WD	18	99
 *	WD	06	00
