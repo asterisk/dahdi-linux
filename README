@@ -604,7 +604,9 @@ bandwidth). This parameter allows fine-tuning the behaviour here:
 * 0 (default) - Don't pass extra PCM when on-hook.
 * 1 ETSI-FSK: Wait for polarity reversal to come before a ring and
   then start passing PCM until the caller ID has been passed.
-* 2 Always: Always pass PCM.
+* 2 ETSI-DTMF: Always pass PCM and generate a DTMF if polarity reversal is
+  detected before ring.
+* 3 Passthrough: Always pass PCM as-is.
 
 This parameter is read-only. It cannot be changed at run-time.
 
