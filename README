@@ -493,6 +493,10 @@ in README.Astribank .
         logs.
   * 128: DEVICES - Device instantiation, destruction and such.
   * 256 - COMMANDS - Protocol commands. Tends to flood logs.
+  +
+  +
+  The script xpp_debug in the source tree can help settting them at run
+  time.
 
 === deftaps
 (dahdi)
@@ -515,6 +519,108 @@ The default is 512.
 (dahdi)
 
 See <<_span_assignments,Span Assignments>> below.
+
+XPP (Astribank) module parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+==== debug
+(all modules) - see above.
+
+==== dahdi_autoreg
+(xpp)
+
+Register spans automatically (1) or not (0). Default: 0.
+Setting it simplifies operations with a single Astribank and no other
+DAHDI hardware. However if you have such systems, automatic
+registration can cause the order of spans to be unpredictable.
+The standard startup scripts use 'dahdi_registration on' instead of this.
+
+==== initdir
+(xpp)
+
+This is the directory containing the initialization scripts.
+The default is /usr/share/dahdi .
+Setting this value could be useful if that location is inconvenient for you.
+
+==== rx_tasklet
+(xpp)
+
+Enable (1) or disable (0) doing most of the packets processing in
+separate tasklets. This should probably help on higher-end systems with
+multiple Astribanks.
+
+==== vmwi_ioctl
+(xpd_fxs)
+
+Does userspace support VMWI notification via ioctl? Default: 1 (yes).
+
+Disable this (0) to have the driver attempt to detect the voicemail
+message waiting indication status for this port from FSK messages
+userspace (Asterisk) sends. Set the ports to use AC neon-lamp style
+message waiting indication. The detection from the FSK messages takes
+extra CPU cycles but is required with e.g. Asterisk < 1.6.0 .
+
+Also note that in order for this parameter to take effect, it must be
+set before the span is registered. This practically means that it
+should be set through modprobe.d files.
+
+See also Voicemail Indication in README.Astribank.
+
+==== usb1
+(xpp_usb)
+
+Enable (1) or disable (0) support of USB1 devices. Disabled by default.
+
+USB1 devices are not well-tested. It seems that they don't work at all
+for Astribank BRI. Generally they should work with the current code, but
+we expect the voice quality issues. Hence we would like to make it
+very clear that you if you have a USB1 port (rather than a USB2 one, as
+recommended) you will have to take an action to enable the device.
+
+==== poll intervals
+(various)
+
+There are various values which the driver occasionally polls the
+device for. For instance, the parameter poll_battery_interval for
+xpd_fxo to poll the battery, in order to know if the telco line is
+actually connected.
+
+The value of those parameters is typically a number in milliseconds.
+0 is used to disable polling. Under normal operation there should be
+no reason to play with those parameters.
+
+==== dtmf_detection
+(xpd_fxs)
+
+Enable (1) or disable (0) support of hardware DTMF detection by the
+Astribank.
+
+==== caller_id_style
+(xpd_fxo)
+
+Various types of caller ID signalling styles require knowing the PCM
+even when the line is on-hook (which is usually a waste of CPU and
+bandwidth). This parameter allows fine-tuning the behaviour here:
+
+* 0 (default) - Don't pass extra PCM when on-hook.
+* 1 ETSI-FSK: Wait for polarity reversal to come before a ring and
+  then start passing PCM until the caller ID has been passed.
+* 2 Always: Always pass PCM.
+
+This parameter is read-only. It cannot be changed at run-time.
+
+==== battery_threshold
+(xpd_fxo)
+
+Minimum voltage that shows there is battery. Defaults to 3. Normally you
+should not need to change this, unless dealing with a funky PSTN
+provider.
+
+==== battery_debounce
+(xpd_fxo)
+
+Minimum interval (msec) for detection of battery off (as opposed to e.g.
+a temporary power denial to signal a hangup). Defaults to 1000. As with
+battery_threshold above, there's normally no need to tweak it.
 
 
 Internals
