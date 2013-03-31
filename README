@@ -445,57 +445,17 @@ reside directly under /sys/module/'module_name' .
 
 Useful module parameters:
 
-debug (most modules)::
-  Sets debug mode / debug level. With most modules 'debug' can be either
-  disabled (0, the default value) or enabled (any other value). 
-  +
-  +
-  wctdm and wcte1xp print several extra debugging messages if the value
-  of debug is more than 1.
-  +
-  +
-  Some modules have "debugging flags" bits - the value of debug is a
-  bitmask and several messages are printed if some bits are set:
-  - wctdm24xxp:
-    * 1: DEBUG_CARD
-    * 2: DEBUG_ECHOCAN
-  - wct4xxp:
-    * 1: DEBUG_MAIN
-    * 2: DEBUG_DTMF
-    * 4: DEBUG_REGS
-    * 8: DEBUG_TSI
-    * 16: DEBUG_ECHOCAN
-    * 32: DEBUG_RBS
-    * 64: DEBUG_FRAMER
-  - xpp: See also README.Astribank:
-    * 1: GENERAL - General debug comments.
-    * 2: PCM - PCM-related messages. Tend to flood logs.
-    * 4: LEDS - Anything related to the LEDs status control. The driver
-      produces a lot of messages when the option is enabled.
-    * 8: SYNC - Synchronization related messages.
-    * 16: SIGNAL - DAHDI signalling related messages.
-    * 32: PROC - Messages related to the procfs interface.
-    * 64: REGS - Reading and writing to chip registers. Tends to flood
-          logs.
-    * 128: DEVICES - Device instantiation, destruction and such.
-    * 256 - COMMANDS - Protocol commands. Tends to flood logs.
+=== debug
+(most modules)
 
-deftaps (dahdi)::
-  The default size for the echo canceller. The number is in "taps", that
-  is "samples", 1/8 ms. The default is 64 - for a tail size of 8 ms.
-  +
-  +
-  Asterisk's chan_dahdi tends to pass its own value anyway, with a
-  different default size. So normally setting this doesn't change
-  anything.
+Sets debug mode / debug level. With most modules 'debug' can be either
+disabled (0, the default value) or enabled (any other value). 
 
-max_pseudo_channels (dahdi)::
-  The maximum number of pseudo channels that dahdi will allow userspace to
-  create.  Pseudo channels are used when conferencing channels together.
-  The default is 512.
+wctdm and wcte1xp print several extra debugging messages if the value
+of debug is more than 1.
 
-auto_assign_spans (dahdi)::
-  See <<_span_assignments,Span Assignments>> below.
+Some modules have "debugging flags" bits - the value of debug is a
+bitmask and several messages are printed if some bits are set:
 
 To get a list of parameters supported by a module, use 
 
@@ -503,11 +463,58 @@ To get a list of parameters supported by a module, use
 
 Or, for a module you have just built:
 
-  modinfo ./module_name.ko
+  modinfo ./drivers/dahdi/module_name.ko
 
 For the xpp modules this will also include the description and default
 value of the module. You can find a list of useful xpp module parameters
 in README.Astribank .
+
+
+- wctdm24xxp:
+  * 1: DEBUG_CARD
+  * 2: DEBUG_ECHOCAN
+- wct4xxp:
+  * 1: DEBUG_MAIN
+  * 2: DEBUG_DTMF
+  * 4: DEBUG_REGS
+  * 8: DEBUG_TSI
+  * 16: DEBUG_ECHOCAN
+  * 32: DEBUG_RBS
+  * 64: DEBUG_FRAMER
+- xpp: See also README.Astribank:
+  * 1: GENERAL - General debug comments.
+  * 2: PCM - PCM-related messages. Tend to flood logs.
+  * 4: LEDS - Anything related to the LEDs status control. The driver
+    produces a lot of messages when the option is enabled.
+  * 8: SYNC - Synchronization related messages.
+  * 16: SIGNAL - DAHDI signalling related messages.
+  * 32: PROC - Messages related to the procfs interface.
+  * 64: REGS - Reading and writing to chip registers. Tends to flood
+        logs.
+  * 128: DEVICES - Device instantiation, destruction and such.
+  * 256 - COMMANDS - Protocol commands. Tends to flood logs.
+
+=== deftaps
+(dahdi)
+
+The default size for the echo canceller. The number is in "taps", that
+is "samples", 1/8 ms. The default is 64 - for a tail size of 8 ms.
+
+Asterisk's chan_dahdi tends to pass its own value anyway, with a
+different default size. So normally setting this doesn't change
+anything.
+
+=== max_pseudo_channels
+(dahdi)
+
+The maximum number of pseudo channels that dahdi will allow userspace to
+create.  Pseudo channels are used when conferencing channels together.
+The default is 512.
+
+=== auto_assign_spans
+(dahdi)
+
+See <<_span_assignments,Span Assignments>> below.
 
 
 Internals
