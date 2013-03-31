@@ -624,6 +624,16 @@ Minimum interval (msec) for detection of battery off (as opposed to e.g.
 a temporary power denial to signal a hangup). Defaults to 1000. As with
 battery_threshold above, there's normally no need to tweak it.
 
+==== use_polrev_firmware
+(xpd_fxo)
+
+Enable (1, default) or disable (0) support for polarity reversal
+detection in the hardware. Only has effect with PIC_TYPE_2.hex rev. >=
+11039 and with the initialization changes (init_card_2_30) in rev.
+949aa49.
+
+This parameter is read-only. It cannot be changed at run-time.
+
 
 Internals
 ---------
