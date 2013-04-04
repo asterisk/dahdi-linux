@@ -1457,10 +1457,6 @@ static inline int strcasecmp(const char *s1, const char *s2)
 #endif /* 2.6.26 */
 #endif /* 2.6.31 */
 
-#ifndef CONFIG_TRACING
-#define trace_printk printk
-#endif
-
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED
 #endif
