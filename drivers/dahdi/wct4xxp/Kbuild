@@ -14,7 +14,7 @@ ifeq ($(HOTPLUG_FIRMWARE),yes)
   EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
 endif
 
-wct4xxp-objs := base.o vpm450m.o $(shell $(src)/../oct612x/octasic-helper objects ../oct612x)
+wct4xxp-objs := base.o vpm450m.o ../oct612x/lib.a
 
 ifneq ($(HOTPLUG_FIRMWARE),yes)
 wct4xxp-objs += $(FIRM_DIR)/dahdi-fw-oct6114-064.o $(FIRM_DIR)/dahdi-fw-oct6114-128.o $(FIRM_DIR)/dahdi-fw-oct6114-256.o

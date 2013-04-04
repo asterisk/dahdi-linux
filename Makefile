@@ -86,7 +86,7 @@ include/dahdi/version.h: FORCE
 	fi
 	@rm -f $@.tmp
 
-prereq: include/dahdi/version.h firmware-loaders
+prereq: include/dahdi/version.h firmware-loaders oct612x-lib
 
 stackcheck: $(CHECKSTACK) modules
 	objdump -d drivers/dahdi/*.ko drivers/dahdi/*/*.ko | $(CHECKSTACK)
@@ -121,6 +121,9 @@ uninstall-firmware:
 
 firmware-loaders:
 	$(MAKE) -C drivers/dahdi/firmware firmware-loaders
+
+oct612x-lib:
+	$(MAKE) -C $(KSRC) M='$(PWD)/drivers/dahdi/oct612x'
 
 install-include:
 	for hdr in $(INST_HEADERS); do \
@@ -189,6 +192,7 @@ ifneq (no,$(HAS_KSRC))
 endif
 	@rm -f $(GENERATED_DOCS)
 	$(MAKE) -C drivers/dahdi/firmware clean
+	$(MAKE) -C $(KSRC) M='$(PWD)/drivers/dahdi/oct612x' clean
 
 distclean: dist-clean
 
