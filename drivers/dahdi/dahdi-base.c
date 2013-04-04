@@ -5366,7 +5366,8 @@ static int dahdi_ioctl_maint(unsigned long data)
 	spin_lock_irqsave(&s->lock, flags);
 	  /* save current maint state */
 	i = s->maintstat;
-
+	  /* set maint mode */
+	s->maintstat = maint.command;
 	switch (maint.command) {
 	case DAHDI_MAINT_NONE:
 	case DAHDI_MAINT_LOCALLOOP:
@@ -5379,6 +5380,8 @@ static int dahdi_ioctl_maint(unsigned long data)
 		spin_unlock_irqrestore(&s->lock, flags);
 		if (rv) {
 			put_span(s);
+			/* Restore the state on error */
+			s->maintstat = i;
 			return rv;
 		}
 		spin_lock_irqsave(&s->lock, flags);
@@ -5390,6 +5393,8 @@ static int dahdi_ioctl_maint(unsigned long data)
 		spin_unlock_irqrestore(&s->lock, flags);
 		if (rv) {
 			put_span(s);
+			/* Restore the state on error */
+			s->maintstat = i;
 			return rv;
 		}
 		spin_lock_irqsave(&s->lock, flags);
@@ -5413,6 +5418,8 @@ static int dahdi_ioctl_maint(unsigned long data)
 		spin_unlock_irqrestore(&s->lock, flags);
 		if (rv) {
 			put_span(s);
+			/* Restore the state on error */
+			s->maintstat = i;
 			return rv;
 		}
 		spin_lock_irqsave(&s->lock, flags);
@@ -5423,12 +5430,10 @@ static int dahdi_ioctl_maint(unsigned long data)
 			      "Unknown maintenance event: %d\n",
 			      maint.command);
 		put_span(s);
+		/* Restore the state on error */
+		s->maintstat = i;
 		return -ENOSYS;
 	}
-
-	/* set maint mode */
-	s->maintstat = maint.command;
-
 	dahdi_alarm_notify(s);  /* process alarm-related events */
 	spin_unlock_irqrestore(&s->lock, flags);
 	put_span(s);
