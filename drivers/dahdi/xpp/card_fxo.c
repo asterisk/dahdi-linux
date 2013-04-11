@@ -111,7 +111,7 @@ static int proc_xpd_metering_read(char *page, char **start, off_t off,
 #endif
 #endif
 static void dahdi_report_battery(xpd_t *xpd, lineno_t chan);
-static void report_polarity_reversal(xpd_t *xpd, xportno_t portno);
+static void report_polarity_reversal(xpd_t *xpd, xportno_t portno, char *msg);
 
 #define	PROC_REGISTER_FNAME	"slics"
 #define	PROC_FXO_INFO_FNAME	"fxo_info"
@@ -712,7 +712,7 @@ static void handle_fxo_ring(xpd_t *xpd)
 
 	priv = xpd->priv;
 	for_each_line(xpd, i) {
-		if (use_polrev_firmware) {
+		if (likely(use_polrev_firmware)) {
 			int *t = &priv->polarity_last_interval[i];
 			if (*t != POLARITY_LAST_INTERVAL_NONE) {
 				(*t)++;
@@ -720,9 +720,8 @@ static void handle_fxo_ring(xpd_t *xpd)
 					LINE_DBG(SIGNAL, xpd, i,
 						"polrev(GOOD): %d msec\n", *t);
 					*t = POLARITY_LAST_INTERVAL_NONE;
-					if (use_polrev_firmware)
-						report_polarity_reversal(xpd,
-								i);
+					report_polarity_reversal(xpd,
+								i, "firmware");
 				}
 			}
 		}
@@ -841,9 +840,9 @@ static void check_etsi_dtmf(xpd_t *xpd)
 					priv->cidtimer[portno] = timer_count;
 					BIT_SET(priv->cidfound, portno);
 					LINE_DBG(SIGNAL, xpd, portno,
-						 "Found DTMF CLIP (%d)\n", i);
-					dahdi_qevent_lock(chan,
-							  DAHDI_EVENT_POLARITY);
+						"Found DTMF CLIP (%d)\n", i);
+					report_polarity_reversal(xpd, portno,
+							"fake");
 					break;
 				}
 			}
@@ -993,7 +992,7 @@ HANDLER_DEF(FXO, SIG_CHANGED)
 	return 0;
 }
 
-static void report_polarity_reversal(xpd_t *xpd, xportno_t portno)
+static void report_polarity_reversal(xpd_t *xpd, xportno_t portno, char *msg)
 {
 	/*
 	 * Inform dahdi/Asterisk:
@@ -1005,7 +1004,8 @@ static void report_polarity_reversal(xpd_t *xpd, xportno_t portno)
 		/* will be cleared on ring/offhook */
 		oht_pcm(xpd, portno, 1);
 	if (SPAN_REGISTERED(xpd)) {
-		LINE_DBG(SIGNAL, xpd, portno, "Send DAHDI_EVENT_POLARITY\n");
+		LINE_DBG(SIGNAL, xpd, portno,
+			"Send DAHDI_EVENT_POLARITY (%s)\n", msg);
 		dahdi_qevent_lock(XPD_CHAN(xpd, portno), DAHDI_EVENT_POLARITY);
 	}
 }
@@ -1108,7 +1108,7 @@ static void update_battery_voltage(xpd_t *xpd, __u8 data_low,
 			LINE_DBG(SIGNAL, xpd, portno,
 				 "Polarity changed to %s\n", polname);
 			if (!use_polrev_firmware)
-				report_polarity_reversal(xpd, portno);
+				report_polarity_reversal(xpd, portno, polname);
 		}
 		priv->polarity[portno] = pol;
 	}
