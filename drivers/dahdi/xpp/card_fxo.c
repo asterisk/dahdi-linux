@@ -38,6 +38,8 @@ static DEF_PARM(uint, poll_battery_interval, 500, 0644,
 		"Poll battery interval in milliseconds (0 - disable)");
 static DEF_PARM_BOOL(use_polrev_firmware, 1, 0444,
 		"Use firmware reports of polarity reversal");
+static DEF_PARM_BOOL(squelch_polrev, 0, 0644,
+		"Never report polarity reversal");
 #ifdef	WITH_METERING
 static DEF_PARM(uint, poll_metering_interval, 500, 0644,
 		"Poll metering interval in milliseconds (0 - disable)");
@@ -1005,8 +1007,12 @@ static void report_polarity_reversal(xpd_t *xpd, xportno_t portno, char *msg)
 		oht_pcm(xpd, portno, 1);
 	if (SPAN_REGISTERED(xpd)) {
 		LINE_DBG(SIGNAL, xpd, portno,
-			"Send DAHDI_EVENT_POLARITY (%s)\n", msg);
-		dahdi_qevent_lock(XPD_CHAN(xpd, portno), DAHDI_EVENT_POLARITY);
+			"%s DAHDI_EVENT_POLARITY (%s)\n",
+			(squelch_polrev) ? "Squelch" : "Send",
+			msg);
+		if (!squelch_polrev)
+			dahdi_qevent_lock(XPD_CHAN(xpd, portno),
+				DAHDI_EVENT_POLARITY);
 	}
 }
 
