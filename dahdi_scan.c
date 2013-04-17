@@ -42,12 +42,35 @@ static inline int is_digital_span(struct dahdi_spaninfo *s)
 	return (s->linecompat > 0);
 }
 
+static int get_basechan(unsigned int spanno)
+{
+	int res;
+	int basechan;
+	char filename[256];
+	FILE *fp;
+
+	snprintf(filename, sizeof(filename),
+		 "/sys/bus/dahdi_spans/devices/span-%u/basechan", spanno);
+	fp = fopen(filename, "r");
+	if (NULL == fp) {
+		return -1;
+	}
+	res = fscanf(fp, "%d", &basechan);
+	fclose(fp);
+	if (EOF == res) {
+		return -1;
+	}
+	return basechan;
+}
+
+
 int main(int argc, char *argv[])
 {
 	int ctl;
 	int x, y, z;
 	struct dahdi_params params;
 	unsigned int basechan = 1;
+	int direct_basechan;
 	struct dahdi_spaninfo s;
 	char buf[100];
 	char alarms[50];
@@ -85,6 +108,14 @@ int main(int argc, char *argv[])
 				basechan += s.totalchans;
 				continue;
 			}
+		}
+
+		/* DAHDI-Linux 2.5.x exposes the base channel in sysfs. Let's
+		 * try to look for it there in case there are holes in the span
+		 * numbering. */
+		direct_basechan = get_basechan(x);
+		if (-1 != direct_basechan) {
+			basechan = direct_basechan;
 		}
 
 		alarms[0] = '\0';
