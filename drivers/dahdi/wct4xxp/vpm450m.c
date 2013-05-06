@@ -177,6 +177,7 @@ struct vpm450m {
 #define FLAG_DTMF	 (1 << 0)
 #define FLAG_MUTE	 (1 << 1)
 #define FLAG_ECHO	 (1 << 2)
+#define FLAG_ALAW	 (1 << 3)
 
 static unsigned int tones[] = {
 	SOUT_DTMF_1,
@@ -216,6 +217,50 @@ static unsigned int tones[] = {
 	ROUT_G168_1100GB_ON,
 };
 
+void vpm450m_set_alaw_companding(struct vpm450m *vpm450m, int channel,
+					bool alaw)
+{
+	tOCT6100_CHANNEL_MODIFY *modify;
+	UINT32 ulResult;
+	UINT32		law_to_use = (alaw) ? cOCT6100_PCM_A_LAW :
+					      cOCT6100_PCM_U_LAW;
+
+	if (channel >= ARRAY_SIZE(vpm450m->chanflags)) {
+		pr_err("Channel out of bounds in %s\n", __func__);
+		return;
+	}
+	/* If we're already in this companding mode, no need to do anything. */
+	if (alaw == ((vpm450m->chanflags[channel] & FLAG_ALAW) > 0))
+		return;
+
+	modify = kzalloc(sizeof(tOCT6100_CHANNEL_MODIFY), GFP_ATOMIC);
+	if (!modify) {
+		pr_notice("Unable to allocate memory for setec!\n");
+		return;
+	}
+
+	Oct6100ChannelModifyDef(modify);
+	modify->ulChannelHndl =		      vpm450m->aulEchoChanHndl[channel];
+	modify->fTdmConfigModified =		TRUE;
+	modify->TdmConfig.ulSinPcmLaw =		law_to_use;
+	modify->TdmConfig.ulRinPcmLaw =		law_to_use;
+	modify->TdmConfig.ulSoutPcmLaw =	law_to_use;
+	modify->TdmConfig.ulRoutPcmLaw =	law_to_use;
+	ulResult = Oct6100ChannelModify(vpm450m->pApiInstance, modify);
+	if (ulResult != GENERIC_OK) {
+		pr_notice("Failed to apply echo can changes on channel %d %d %08x!\n",
+			  vpm450m->aulEchoChanHndl[channel], channel, ulResult);
+	} else {
+		pr_info("Changed companding on channel %d to %s.\n", channel,
+			(alaw) ? "alaw" : "ulaw");
+		if (alaw)
+			vpm450m->chanflags[channel] |= FLAG_ALAW;
+		else
+			vpm450m->chanflags[channel] &= ~(FLAG_ALAW);
+	}
+	kfree(modify);
+}
+
 static void vpm450m_setecmode(struct vpm450m *vpm450m, int channel, int mode)
 {
 	tOCT6100_CHANNEL_MODIFY *modify;
@@ -247,6 +292,11 @@ void vpm450m_setdtmf(struct vpm450m *vpm450m, int channel, int detect, int mute)
 {
 	tOCT6100_CHANNEL_MODIFY *modify;
 	UINT32 ulResult;
+
+	if (channel >= ARRAY_SIZE(vpm450m->chanflags)) {
+		pr_err("Channel out of bounds in %s\n", __func__);
+		return;
+	}
 
 	modify = kmalloc(sizeof(tOCT6100_CHANNEL_MODIFY), GFP_KERNEL);
 	if (!modify) {
@@ -286,6 +336,11 @@ void vpm450m_setdtmf(struct vpm450m *vpm450m, int channel, int detect, int mute)
 
 void vpm450m_setec(struct vpm450m *vpm450m, int channel, int eclen)
 {
+	if (channel >= ARRAY_SIZE(vpm450m->chanflags)) {
+		pr_err("Channel out of bounds in %s\n", __func__);
+		return;
+	}
+
 	if (eclen) {
 		vpm450m->chanflags[channel] |= FLAG_ECHO;
 		vpm450m_setecmode(vpm450m, channel, cOCT6100_ECHO_OP_MODE_HT_RESET);
@@ -524,10 +579,13 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		 	*  therefore, the lower 2 bits tell us which span this 
 			*  timeslot/channel
 		 	*/
-			if (isalaw[x & mask])
+			if (isalaw[x & mask]) {
 				law = cOCT6100_PCM_A_LAW;
-			else
+				vpm450m->chanflags[x] |= FLAG_ALAW;
+			} else {
 				law = cOCT6100_PCM_U_LAW;
+				vpm450m->chanflags[x] &= ~(FLAG_ALAW);
+			}
 			Oct6100ChannelOpenDef(ChannelOpen);
 			ChannelOpen->pulChannelHndl = &vpm450m->aulEchoChanHndl[x];
 			ChannelOpen->ulUserChanId = x;

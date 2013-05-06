@@ -39,5 +39,7 @@ void vpm450m_setdtmf(struct vpm450m *instance, int channel, int dtmfdetect, int 
 int vpm450m_checkirq(struct vpm450m *vpm450m);
 int vpm450m_getdtmf(struct vpm450m *vpm450m, int *channel, int *tone, int *start);
 void release_vpm450m(struct vpm450m *instance);
+void vpm450m_set_alaw_companding(struct vpm450m *vpm450m,
+				 int channel, bool alaw);
 
 #endif
