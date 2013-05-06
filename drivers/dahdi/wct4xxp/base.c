@@ -394,7 +394,7 @@ static inline bool is_pcie(const struct t4 *wc)
 
 static inline bool has_e1_span(const struct t4 *wc)
 {
-	return (wc->t1e1) != 0;
+	return (wc->t1e1 > 0);
 }
 
 static inline bool is_octal(const struct t4 *wc)
@@ -1125,6 +1125,7 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	int channel;
 	const struct dahdi_echocan_ops *ops;
 	const struct dahdi_echocan_features *features;
+	const bool alaw = (chan->span->deflaw == 2);
 
 	if (!vpmsupport || !wc->vpm)
 		return -ENODEV;
@@ -1145,19 +1146,19 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
-	if (wc->vpm) {
-		if (is_octal(wc))
-			channel = channel << 3;
-		else
-			channel = channel << 2;
-		channel |= chan->span->offset;
-		if (debug & DEBUG_ECHOCAN)
-			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
-				"Channel is %d, Span is %d, offset is %d "
-				"length %d\n", wc->num, chan->chanpos,
-				chan->span->offset, channel, ecp->tap_length);
-		vpm450m_setec(wc->vpm, channel, ecp->tap_length);
+	if (is_octal(wc))
+		channel = channel << 3;
+	else
+		channel = channel << 2;
+	channel |= chan->span->offset;
+	if (debug & DEBUG_ECHOCAN) {
+		dev_notice(&wc->dev->dev,
+			   "echocan: Card is %d, Channel is %d, Span is %d, offset is %d length %d\n",
+			   wc->num, chan->chanpos, chan->span->offset,
+			   channel, ecp->tap_length);
 	}
+	vpm450m_set_alaw_companding(wc->vpm, channel, alaw);
+	vpm450m_setec(wc->vpm, channel, ecp->tap_length);
 	return 0;
 }
 
@@ -1166,23 +1167,23 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 	struct t4 *wc = chan->pvt;
 	int channel;
 
-	memset(ec, 0, sizeof(*ec));
+	if (!wc->vpm)
+		return;
 
+	memset(ec, 0, sizeof(*ec));
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
-	if (wc->vpm) {
-		if (is_octal(wc))
-			channel = channel << 3;
-		else
-			channel = channel << 2;
-		channel |= chan->span->offset;
-		if (debug & DEBUG_ECHOCAN)
-			dev_notice(&wc->dev->dev, "echocan: Card is %d, "
-				"Channel is %d, Span is %d, offset is %d "
-				"length 0\n", wc->num, chan->chanpos,
-				chan->span->offset, channel);
-		vpm450m_setec(wc->vpm, channel, 0);
+	if (is_octal(wc))
+		channel = channel << 3;
+	else
+		channel = channel << 2;
+	channel |= chan->span->offset;
+	if (debug & DEBUG_ECHOCAN) {
+		dev_notice(&wc->dev->dev,
+			   "echocan: Card is %d, Channel is %d, Span is %d, offset is %d length 0\n",
+			   wc->num, chan->chanpos, chan->span->offset, channel);
 	}
+	vpm450m_setec(wc->vpm, channel, 0);
 }
 #endif
 
@@ -2228,23 +2229,28 @@ static int t4_set_linemode(struct dahdi_span *span, const char *linemode)
 	struct t4 *wc = ts->owner;
 	int res = 0;
 	enum linemode mode;
+	static DEFINE_MUTEX(linemode_lock);
 
 	dev_dbg(&wc->dev->dev, "Setting '%s' to '%s'\n", span->name, linemode);
 
 	if (!strcasecmp(span->spantype, linemode))
 		return 0;
 
+	mutex_lock(&linemode_lock);
 	if (!strcasecmp(linemode, "t1")) {
 		dev_info(&wc->dev->dev,
 			 "Changing from %s to T1 line mode.\n", span->spantype);
+		wc->t1e1 &= ~(1UL << span->offset);
 		mode = T1;
 	} else if (!strcasecmp(linemode, "e1")) {
 		dev_info(&wc->dev->dev,
 			 "Changing from %s to E1 line mode.\n", span->spantype);
+		wc->t1e1 |= (1UL << span->offset);
 		mode = E1;
 	} else if (!strcasecmp(linemode, "j1")) {
 		dev_info(&wc->dev->dev,
 			 "Changing from %s to J1 line mode.\n", span->spantype);
+		wc->t1e1 &= ~(1UL << span->offset);
 		mode = J1;
 	} else {
 		dev_err(&wc->dev->dev,
@@ -2258,6 +2264,7 @@ static int t4_set_linemode(struct dahdi_span *span, const char *linemode)
 		dahdi_init_span(span);
 	}
 
+	mutex_unlock(&linemode_lock);
 	return res;
 }
 
