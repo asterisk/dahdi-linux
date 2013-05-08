@@ -240,6 +240,7 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 	span = chan->span;
 	devt = MKDEV(MAJOR(dahdi_channels_devt), chan->channo);
 	dev = &chan->chan_device;
+	memset(dev, 0, sizeof(*dev));
 	dev->devt = devt;
 	dev->bus = &chan_bus_type;
 	dev->parent = span->span_device;
@@ -253,7 +254,7 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 	if (res) {
 		chan_err(chan, "%s: device_register failed: %d\n",
 				__func__, res);
-		dev_set_drvdata(dev, NULL);
+		put_device(dev);
 		return res;
 	}
 	set_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
@@ -272,7 +273,6 @@ void chan_sysfs_remove(struct dahdi_chan *chan)
 	dev = &chan->chan_device;
 	BUG_ON(dev_get_drvdata(dev) != chan);
 	device_unregister(dev);
-	dev_set_drvdata(dev, NULL);
 	/* FIXME: should have been done earlier in dahdi_chan_unreg */
 	chan->channo = -1;
 	clear_bit(DAHDI_FLAGBIT_DEVFILE, &chan->flags);
