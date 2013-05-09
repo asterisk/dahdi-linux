@@ -19,11 +19,16 @@
  * this program for more details.
  */
 
+#define pr_fmt(fmt)             KBUILD_MODNAME ": " fmt
+
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/time.h>
 #include <linux/version.h>
+
+#include <dahdi/kernel.h>
+#include <stdbool.h>
 
 #include "vpm450m.h"
 #include "oct6100api/oct6100_api.h"
