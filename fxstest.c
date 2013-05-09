@@ -33,6 +33,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <dahdi/user.h>
 #include <dahdi/wctdm_user.h>
 
@@ -101,6 +102,41 @@ static int dahdi_ring_phone(int fd)
 	return res;
 }
 
+int channel_open(const char *name)
+{
+	int	channo, fd;
+	struct	stat filestat;
+	const char *DEVICE = "/dev/dahdi/channel";
+
+	/* stat file, if character device, open it */
+	channo = strtoul(name, NULL, 10);
+	fd = stat(name, &filestat);
+	if (!fd && S_ISCHR(filestat.st_mode)) {
+		fd = open(name, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(name);
+			return -1;
+		}
+	/* try out the dahdi_specify interface */
+	} else if (channo > 0) {
+		fd = open(DEVICE, O_RDWR, 0600);
+		if (fd < 0) {
+			perror(DEVICE);
+			return -1;
+		}
+		if (ioctl(fd, DAHDI_SPECIFY, &channo) < 0) {
+			perror("DAHDI_SPECIFY ioctl failed");
+			return -1;
+		}
+	/* die */
+	} else {
+		fprintf(stderr, "Specified channel is not a valid character "
+			"device or channel number");
+		return -1;
+	}
+	return fd;
+}
+
 int main(int argc, char *argv[])
 {
 	int fd;
@@ -121,7 +157,7 @@ int main(int argc, char *argv[])
 		       "       dtmfcid - create a dtmf cid spill without polarity reversal\n");
 		exit(1);
 	}
-	fd = open(argv[1], O_RDWR);
+	fd = channel_open(argv[1]);
 	if (fd < 0) {
 		fprintf(stderr, "Unable to open %s: %s\n", argv[1], strerror(errno));
 		exit(1);
