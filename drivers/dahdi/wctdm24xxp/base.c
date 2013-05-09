@@ -1961,11 +1961,17 @@ wctdm_check_battery_lost(struct wctdm *wc, struct wctdm_module *const mod)
 	   battery present or unknown, debounce timer (going to battery lost)
 	*/
 	switch (fxo->battery_state) {
+	case BATTERY_DEBOUNCING_PRESENT_ALARM:
+		fxo->battery_state = BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM;
+		fxo->battdebounce_timer = wc->framecount + battdebounce;
+		break;
 	case BATTERY_DEBOUNCING_PRESENT:
-	case BATTERY_DEBOUNCING_PRESENT_ALARM: /* intentional drop through */
-		/* we were going to BATTERY_PRESENT, but
-		 * battery was lost again. */
 		fxo->battery_state = BATTERY_LOST;
+		break;
+	case BATTERY_DEBOUNCING_PRESENT_FROM_LOST_ALARM:
+		fxo->battery_state = BATTERY_DEBOUNCING_LOST_ALARM;
+		fxo->battdebounce_timer = wc->framecount +
+						battalarm - battdebounce;
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
@@ -1973,7 +1979,8 @@ wctdm_check_battery_lost(struct wctdm *wc, struct wctdm_module *const mod)
 		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
-	case BATTERY_DEBOUNCING_LOST:
+	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
+	case BATTERY_DEBOUNCING_LOST: /* Intentional drop through */
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->vb.pdev->dev,
@@ -2022,7 +2029,8 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 	struct fxo *const fxo = &mod->mod.fxo;
 
 	switch (fxo->battery_state) {
-	case BATTERY_DEBOUNCING_PRESENT:
+	case BATTERY_DEBOUNCING_PRESENT_FROM_LOST_ALARM:
+	case BATTERY_DEBOUNCING_PRESENT: /* intentional drop through */
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->vb.pdev->dev,
@@ -2061,10 +2069,16 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 		break;
 	case BATTERY_PRESENT:
 		break;
-	case BATTERY_DEBOUNCING_LOST:
 	case BATTERY_DEBOUNCING_LOST_ALARM:
-		/* we were going to BATTERY_LOST, but battery appeared again,
-		 * so clear the debounce timer */
+		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT_FROM_LOST_ALARM;
+		fxo->battdebounce_timer = wc->framecount + battdebounce;
+		break;
+	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
+		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT_ALARM;
+		fxo->battdebounce_timer = wc->framecount +
+						battalarm - battdebounce;
+		break;
+	case BATTERY_DEBOUNCING_LOST:
 		fxo->battery_state = BATTERY_PRESENT;
 		break;
 	case BATTERY_UNKNOWN:
