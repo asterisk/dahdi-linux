@@ -2206,27 +2206,32 @@ static void t1_check_alarms(struct t1 *wc)
 		/* Detect loopup code if we're not sending one */
 		if ((!wc->span.mainttimer) && (d & 0x08)) {
 			/* Loop-up code detected */
-			if ((wc->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
+			if ((++wc->loopupcnt > 80) &&
+			    (wc->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
 				t1_notice(wc, "Loopup detected,"\
 					" enabling remote loop\n");
 				t1_setreg(wc, 0x36, 0x08);	/* LIM0: Disable any local loop */
 				t1_setreg(wc, 0x37, 0xf6);	/* LIM1: Enable remote loop */
 				wc->span.maintstat = DAHDI_MAINT_REMOTELOOP;
 			}
-		} else
+		} else {
 			wc->loopupcnt = 0;
+		}
+
 		/* Same for loopdown code */
 		if ((!wc->span.mainttimer) && (d & 0x10)) {
 			/* Loop-down code detected */
-			if ((wc->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
+			if ((++wc->loopdowncnt > 80) &&
+			    (wc->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
 				t1_notice(wc, "Loopdown detected,"\
 					" disabling remote loop\n");
 				t1_setreg(wc, 0x36, 0x08);	/* LIM0: Disable any local loop */
 				t1_setreg(wc, 0x37, 0xf0);	/* LIM1: Disable remote loop */
 				wc->span.maintstat = DAHDI_MAINT_NONE;
 			}
-		} else
+		} else {
 			wc->loopdowncnt = 0;
+		}
 	}
 
 	if (wc->span.lineconfig & DAHDI_CONFIG_NOTOPEN) {
