@@ -1271,7 +1271,7 @@ static void printconfig(int fd)
 	       "Configuration\n"
 	       "======================\n\n", vi.version, vi.echo_canceller);
 	for (x = 0; x < spans; x++) {
-		if (only_span && only_span != x)
+		if (only_span && only_span != lc[x].span)
 			continue;
 		printf("SPAN %d: %3s/%4s Build-out: %s\n",
 		       lc[x].span,
@@ -1564,7 +1564,7 @@ finish:
 	}
 	if (stopmode) {
 		for (x=0;x<spans;x++) {
-			if (only_span && x != only_span)
+			if (only_span && lc[x].span != only_span)
 				continue;
 			if (ioctl(fd, DAHDI_SHUTDOWN, &lc[x].span)) {
 				fprintf(stderr, "DAHDI shutdown failed: %s\n", strerror(errno));
@@ -1575,7 +1575,7 @@ finish:
 		exit(1);
 	}
 	for (x=0;x<spans;x++) {
-		if (only_span && x != only_span)
+		if (only_span && lc[x].span != only_span)
 			continue;
 		if (ioctl(fd, DAHDI_SPANCONFIG, lc + x)) {
 			fprintf(stderr, "DAHDI_SPANCONFIG failed on span %d: %s (%d)\n", lc[x].span, strerror(errno), errno);
@@ -1754,7 +1754,7 @@ finish:
 		}
 	}
 	for (x=0;x<spans;x++) {
-		if (only_span && x != only_span)
+		if (only_span && lc[x].span != only_span)
 			continue;
 		if (ioctl(fd, DAHDI_STARTUP, &lc[x].span)) {
 			fprintf(stderr, "DAHDI startup failed: %s\n", strerror(errno));
