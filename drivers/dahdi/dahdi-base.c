@@ -7018,7 +7018,7 @@ static int _assign_spanno_and_basechan(struct dahdi_span *span)
 		}
 
 		next_channo = _get_next_channo(pos);
-		if ((basechan + span->channels) >= next_channo)
+		if ((basechan + span->channels) <= next_channo)
 			break;
 
 		/* We can't fit here, let's look at the next location. */
