@@ -4887,11 +4887,28 @@ static int dahdi_ioctl_startup(struct file *file, unsigned long data)
 	return res;
 }
 
+static int dahdi_shutdown_span(struct dahdi_span *s)
+{
+	int res = 0;
+	int x;
+
+	/* Unconfigure channels */
+	for (x = 0; x < s->channels; x++)
+		s->chans[x]->sig = 0;
+
+	if (s->ops->shutdown)
+		res = s->ops->shutdown(s);
+
+	clear_bit(DAHDI_FLAGBIT_RUNNING, &s->flags);
+	return res;
+}
+
 static int dahdi_ioctl_shutdown(unsigned long data)
 {
+	int res;
 	/* I/O CTL's for control interface */
 	int j;
-	int x;
+
 	struct dahdi_span *s;
 
 	if (get_user(j, (int __user *)data))
@@ -4899,22 +4916,9 @@ static int dahdi_ioctl_shutdown(unsigned long data)
 	s = span_find_and_get(j);
 	if (!s)
 		return -ENXIO;
-
-	/* Unconfigure channels */
-	for (x = 0; x < s->channels; x++)
-		s->chans[x]->sig = 0;
-
-	if (s->ops->shutdown) {
-		int res = s->ops->shutdown(s);
-		if (res) {
-			put_span(s);
-			return res;
-		}
-	}
-
-	s->flags &= ~DAHDI_FLAG_RUNNING;
+	res = dahdi_shutdown_span(s);
 	put_span(s);
-	return 0;
+	return res;
 }
 
 /**
@@ -7110,6 +7114,7 @@ static void disable_span(struct dahdi_span *span)
  */
 static int _dahdi_unassign_span(struct dahdi_span *span)
 {
+	int res;
 	int x;
 	struct dahdi_span *new_master, *s;
 	unsigned long flags;
@@ -7126,9 +7131,11 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 	span->spanno = 0;
 	clear_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags);
 
-	/* Shutdown the span if it's running */
-	if ((span->flags & DAHDI_FLAG_RUNNING) && span->ops->shutdown)
-		span->ops->shutdown(span);
+	res = dahdi_shutdown_span(span);
+	if (res) {
+		dev_err(span_device(span),
+			"Failed to shutdown when unassigning.\n");
+	}
 
 	if (debug & DEBUG_MAIN)
 		module_printk(KERN_NOTICE, "Unassigning Span '%s' with %d channels\n", span->name, span->channels);
