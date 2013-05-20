@@ -11,6 +11,14 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT4XXP)		+= wct4xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTC4XXP)		+= wctc4xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTDM24XXP)	+= wctdm24xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE12XP)		+= wcte12xp/
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE13XP)		+= wcte13xp.o
+
+wcte13xp-objs := wcte13xp-base.o oct612x/lib.a
+CFLAGS_wcte13xp-base.o += -I$(src)/oct612x/include -I$(src)/oct612x/octdeviceapi -I$(src)/oct612x/octdeviceapi/oct6100api
+ifeq ($(HOTPLUG_FIRMWARE),yes)
+  CFLAGS_wcte13xp-base.o += -DHOTPLUG_FIRMWARE
+endif
+
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTDM)		+= wctdm.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_VOICEBUS)		+= voicebus/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCB4XXP)		+= wcb4xxp/
