@@ -123,6 +123,10 @@ firmware-loaders:
 	$(MAKE) -C drivers/dahdi/firmware firmware-loaders
 
 oct612x-lib:
+ifeq (no,$(HAS_KSRC))
+	@echo "You do not appear to have the sources for the $(KVERS) kernel installed."
+	@exit 1
+endif
 	$(MAKE) -C $(KSRC) M='$(PWD)/drivers/dahdi/oct612x'
 
 install-include:
