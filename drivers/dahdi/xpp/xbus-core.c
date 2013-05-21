@@ -25,6 +25,7 @@
 #include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #ifdef	PROTOCOL_DEBUG
 #include <linux/ctype.h>
 #endif
@@ -47,8 +48,7 @@ static const char rcsid[] = "$Id$";
 #ifdef	PROTOCOL_DEBUG
 #ifdef	CONFIG_PROC_FS
 #define	PROC_XBUS_COMMAND	"command"
-static int proc_xbus_command_write(struct file *file,
-		const char __user *buffer, unsigned long count, void *data);
+static const struct file_operations proc_xbus_command_ops;
 #endif
 #endif
 
@@ -63,8 +63,7 @@ static DEF_PARM_BOOL(dahdi_autoreg, 0, 0644,
 		     "Register devices automatically (1) or not (0)");
 
 #ifdef	CONFIG_PROC_FS
-static int xbus_read_proc(char *page, char **start, off_t off, int count,
-			  int *eof, void *data);
+static const struct file_operations xbus_read_proc_ops;
 #endif
 static void transport_init(xbus_t *xbus, struct xbus_ops *ops,
 			   ushort max_send_size,
@@ -1532,29 +1531,26 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size,
 		err = -EIO;
 		goto nobus;
 	}
-	xbus->proc_xbus_summary =
-	    create_proc_read_entry(PROC_XBUS_SUMMARY, 0444, xbus->proc_xbus_dir,
-				   xbus_read_proc,
-				   (void *)((unsigned long)(xbus->num)));
+	xbus->proc_xbus_summary = proc_create_data(PROC_XBUS_SUMMARY, 0444,
+					xbus->proc_xbus_dir,
+					&xbus_read_proc_ops,
+					(void *)((unsigned long)xbus->num));
 	if (!xbus->proc_xbus_summary) {
 		XBUS_ERR(xbus, "Failed to create proc file '%s'\n",
 			 PROC_XBUS_SUMMARY);
 		err = -EIO;
 		goto nobus;
 	}
-	SET_PROC_DIRENTRY_OWNER(xbus->proc_xbus_summary);
 #ifdef	PROTOCOL_DEBUG
-	xbus->proc_xbus_command =
-	    create_proc_entry(PROC_XBUS_COMMAND, 0200, xbus->proc_xbus_dir);
+	xbus->proc_xbus_command = proc_create_data(PROC_XBUS_COMMAND, 0200,
+					xbus->proc_xbus_dir,
+					&proc_xbus_command_ops, xbus);
 	if (!xbus->proc_xbus_command) {
 		XBUS_ERR(xbus, "Failed to create proc file '%s'\n",
 			 PROC_XBUS_COMMAND);
 		err = -EIO;
 		goto nobus;
 	}
-	xbus->proc_xbus_command->write_proc = proc_xbus_command_write;
-	xbus->proc_xbus_command->data = xbus;
-	SET_PROC_DIRENTRY_OWNER(xbus->proc_xbus_command);
 #endif
 #endif
 	xframe_queue_init(&xbus->command_queue, 10, command_queue_length,
@@ -1668,106 +1664,96 @@ out:
 
 #ifdef CONFIG_PROC_FS
 
-static int xbus_fill_proc_queue(char *p, struct xframe_queue *q)
+static void xbus_fill_proc_queue(struct seq_file *sfile, struct xframe_queue *q)
 {
-	int len;
-
-	len = sprintf(p,
+	seq_printf(sfile,
 		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d "
 		"worst_lag %02ld.%ld ms\n",
 		q->name, q->steady_state_count, q->count, q->max_count,
 		q->worst_count, q->overflows, q->worst_lag_usec / 1000,
 		q->worst_lag_usec % 1000);
 	xframe_queue_clearstats(q);
-	return len;
 }
 
-static int xbus_read_proc(char *page, char **start, off_t off, int count,
-			  int *eof, void *data)
+static int xbus_proc_show(struct seq_file *sfile, void *data)
 {
 	xbus_t *xbus;
 	unsigned long flags;
 	int len = 0;
-	int i = (int)((unsigned long)data);
+	int i = (int)((unsigned long)sfile->private);
 
-	xbus = get_xbus(__func__, i);	/* until end of xbus_read_proc */
+	xbus = get_xbus(__func__, i);	/* until end of xbus_proc_show() */
 	if (!xbus)
-		goto out;
+		return -EINVAL;
 	spin_lock_irqsave(&xbus->lock, flags);
 
-	len +=
-	    sprintf(page + len, "%s: CONNECTOR=%s LABEL=[%s] STATUS=%s\n",
+	seq_printf(sfile, "%s: CONNECTOR=%s LABEL=[%s] STATUS=%s\n",
 		    xbus->busname, xbus->connector, xbus->label,
 		    (XBUS_FLAGS(xbus, CONNECTED)) ? "connected" : "missing");
-	len += xbus_fill_proc_queue(page + len, &xbus->send_pool);
-	len += xbus_fill_proc_queue(page + len, &xbus->receive_pool);
-	len += xbus_fill_proc_queue(page + len, &xbus->command_queue);
-	len += xbus_fill_proc_queue(page + len, &xbus->receive_queue);
-	len += xbus_fill_proc_queue(page + len, &xbus->pcm_tospan);
+	xbus_fill_proc_queue(sfile, &xbus->send_pool);
+	xbus_fill_proc_queue(sfile, &xbus->receive_pool);
+	xbus_fill_proc_queue(sfile, &xbus->command_queue);
+	xbus_fill_proc_queue(sfile, &xbus->receive_queue);
+	xbus_fill_proc_queue(sfile, &xbus->pcm_tospan);
 	if (rx_tasklet) {
-		len += sprintf(page + len, "\ncpu_rcv_intr:    ");
+		seq_printf(sfile, "\ncpu_rcv_intr:    ");
 		for_each_online_cpu(i)
-		    len += sprintf(page + len, "%5d ", xbus->cpu_rcv_intr[i]);
-		len += sprintf(page + len, "\ncpu_rcv_tasklet: ");
+		    seq_printf(sfile, "%5d ", xbus->cpu_rcv_intr[i]);
+		seq_printf(sfile, "\ncpu_rcv_tasklet: ");
 		for_each_online_cpu(i)
-		    len +=
-		    sprintf(page + len, "%5d ", xbus->cpu_rcv_tasklet[i]);
-		len += sprintf(page + len, "\n");
+		    seq_printf(sfile, "%5d ", xbus->cpu_rcv_tasklet[i]);
+		seq_printf(sfile, "\n");
 	}
-	len +=
-	    sprintf(page + len, "self_ticking: %d (last_tick at %ld)\n",
+	seq_printf(sfile, "self_ticking: %d (last_tick at %ld)\n",
 		    xbus->self_ticking, xbus->ticker.last_sample.tv.tv_sec);
-	len +=
-	    sprintf(page + len, "command_tick: %d\n",
+	seq_printf(sfile, "command_tick: %d\n",
 		    xbus->command_tick_counter);
-	len += sprintf(page + len, "usec_nosend: %d\n", xbus->usec_nosend);
-	len +=
-	    sprintf(page + len, "xbus: pcm_rx_counter = %d, frag = %d\n",
+	seq_printf(sfile, "usec_nosend: %d\n", xbus->usec_nosend);
+	seq_printf(sfile, "xbus: pcm_rx_counter = %d, frag = %d\n",
 		    atomic_read(&xbus->pcm_rx_counter), xbus->xbus_frag_count);
-	len +=
-	    sprintf(page + len, "max_rx_process = %2ld.%ld ms\n",
+	seq_printf(sfile, "max_rx_process = %2ld.%ld ms\n",
 		    xbus->max_rx_process / 1000, xbus->max_rx_process % 1000);
 	xbus->max_rx_process = 0;
-	len +=
-	    sprintf(page + len, "\nTRANSPORT: max_send_size=%d refcount=%d\n",
+	seq_printf(sfile, "\nTRANSPORT: max_send_size=%d refcount=%d\n",
 		    MAX_SEND_SIZE(xbus),
 		    atomic_read(&xbus->transport.transport_refcount)
 	    );
-	len += sprintf(page + len, "PCM Metrices:\n");
-	len +=
-	    sprintf(page + len, "\tPCM TX: min=%ld  max=%ld\n",
+	seq_printf(sfile, "PCM Metrices:\n");
+	seq_printf(sfile, "\tPCM TX: min=%ld  max=%ld\n",
 		    xbus->min_tx_sync, xbus->max_tx_sync);
-	len +=
-	    sprintf(page + len, "\tPCM RX: min=%ld  max=%ld\n",
+	seq_printf(sfile, "\tPCM RX: min=%ld  max=%ld\n",
 		    xbus->min_rx_sync, xbus->max_rx_sync);
-	len += sprintf(page + len, "COUNTERS:\n");
+	seq_printf(sfile, "COUNTERS:\n");
 	for (i = 0; i < XBUS_COUNTER_MAX; i++) {
-		len +=
-		    sprintf(page + len, "\t%-15s = %d\n", xbus_counters[i].name,
+		seq_printf(sfile, "\t%-15s = %d\n", xbus_counters[i].name,
 			    xbus->counters[i]);
 	}
-	len += sprintf(page + len, "<-- len=%d\n", len);
+	seq_printf(sfile, "<-- len=%d\n", len);
 	spin_unlock_irqrestore(&xbus->lock, flags);
-	put_xbus(__func__, xbus);	/* from xbus_read_proc() */
-out:
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
+	put_xbus(__func__, xbus);	/* from xbus_proc_show() */
+	return 0;
 
 }
 
+static int xbus_read_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xbus_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations xbus_read_proc_ops = {
+	.owner		= THIS_MODULE,
+	.open		= xbus_read_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 #ifdef	PROTOCOL_DEBUG
-static int proc_xbus_command_write(struct file *file,
-		const char __user *buffer, unsigned long count, void *data)
+static ssize_t proc_xbus_command_write(struct file *file,
+		const char __user *buffer, size_t count, loff_t *offset)
 {
 	char *buf;
-	xbus_t *xbus = data;
+	xbus_t *xbus = file->private_data;
 	char *p;
 	__u8 *pack_start;
 	__u8 *q;
@@ -1777,7 +1763,7 @@ static int proc_xbus_command_write(struct file *file,
 	const size_t max_text = max_len * 3 + 10;
 
 	if (count > max_text) {
-		XBUS_ERR(xbus, "%s: line too long (%ld > %zd)\n", __func__,
+		XBUS_ERR(xbus, "%s: line too long (%zd > %zd)\n", __func__,
 			 count, max_len);
 		return -EFBIG;
 	}
@@ -1790,7 +1776,7 @@ static int proc_xbus_command_write(struct file *file,
 		goto out;
 	}
 	buf[count] = '\0';
-	XBUS_DBG(GENERAL, xbus, "count=%ld\n", count);
+	XBUS_DBG(GENERAL, xbus, "count=%zd\n", count);
 	/*
 	 * We replace the content of buf[] from
 	 * ascii representation to packet content
@@ -1846,20 +1832,29 @@ out:
 	kfree(buf);
 	return count;
 }
+
+static int proc_xbus_command_open(struct inode *inode, struct file *file)
+{
+	file->private_data = PDE_DATA(inode);
+	return 0;
+}
+
+static const struct file_operations proc_xbus_command_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_xbus_command_open,
+	.write		= proc_xbus_command_write,
+};
 #endif
 
-static int read_proc_xbuses(char *page, char **start, off_t off, int count,
-			    int *eof, void *data)
+static int xpp_proc_read_show(struct seq_file *sfile, void *data)
 {
-	int len = 0;
 	int i;
 
 	for (i = 0; i < MAX_BUSES; i++) {
 		xbus_t *xbus = get_xbus(__func__, i);
 
 		if (xbus) {
-			len +=
-			    sprintf(page + len,
+			seq_printf(sfile,
 				    "%s: CONNECTOR=%s LABEL=[%s] STATUS=%s\n",
 				    xbus->busname, xbus->connector, xbus->label,
 				    (XBUS_FLAGS(xbus, CONNECTED)) ? "connected"
@@ -1868,19 +1863,24 @@ static int read_proc_xbuses(char *page, char **start, off_t off, int count,
 		}
 	}
 #if 0
-	len += sprintf(page + len, "<-- len=%d\n", len);
+	seq_printf(sfile, "<-- len=%d\n", len);
 #endif
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-
+	return 0;
 }
+
+static int xpp_proc_read_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xpp_proc_read_show, PDE_DATA(inode));
+}
+
+static const struct file_operations xpp_proc_read_ops = {
+	.owner		= THIS_MODULE,
+	.open		= xpp_proc_read_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 #endif
 
 static void transport_init(xbus_t *xbus, struct xbus_ops *ops,
@@ -1971,15 +1971,13 @@ int __init xbus_core_init(void)
 	INFO("FEATURE: with PROTOCOL_DEBUG\n");
 #endif
 #ifdef CONFIG_PROC_FS
-	proc_xbuses =
-	    create_proc_read_entry(PROC_XBUSES, 0444, xpp_proc_toplevel,
-				   read_proc_xbuses, NULL);
+	proc_xbuses = proc_create_data(PROC_XBUSES, 0444, xpp_proc_toplevel,
+				       &xpp_proc_read_ops, NULL);
 	if (!proc_xbuses) {
 		ERR("Failed to create proc file %s\n", PROC_XBUSES);
 		ret = -EFAULT;
 		goto err;
 	}
-	SET_PROC_DIRENTRY_OWNER(proc_xbuses);
 #endif
 	if ((ret = xpp_driver_init()) < 0)
 		goto err;

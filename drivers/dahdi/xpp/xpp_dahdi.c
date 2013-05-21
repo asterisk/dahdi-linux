@@ -34,6 +34,7 @@
 #include <linux/delay.h>	/* for udelay */
 #include <linux/interrupt.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <dahdi/kernel.h>
 #include "xbus-core.h"
 #include "xproto.h"
@@ -102,8 +103,7 @@ int total_registered_spans(void)
 }
 
 #ifdef	CONFIG_PROC_FS
-static int xpd_read_proc(char *page, char **start, off_t off, int count,
-			 int *eof, void *data);
+static const struct file_operations xpd_read_proc_ops;
 #endif
 
 /*------------------------- XPD Management -------------------------*/
@@ -169,9 +169,9 @@ static int xpd_proc_create(xbus_t *xbus, xpd_t *xpd)
 		XPD_ERR(xpd, "Failed to create proc directory\n");
 		goto err;
 	}
-	xpd->proc_xpd_summary =
-	    create_proc_read_entry(PROC_XPD_SUMMARY, 0444, xpd->proc_xpd_dir,
-				   xpd_read_proc, xpd);
+	xpd->proc_xpd_summary = proc_create_data(PROC_XPD_SUMMARY, 0444,
+						 xpd->proc_xpd_dir,
+						 &xpd_read_proc_ops, xpd);
 	if (!xpd->proc_xpd_summary) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_XPD_SUMMARY);
@@ -254,89 +254,72 @@ EXPORT_SYMBOL(create_xpd);
 
 /**
  * Prints a general procfs entry for the bus, under xpp/BUSNAME/summary
- * @page TODO: figure out procfs
- * @start TODO: figure out procfs
- * @off TODO: figure out procfs
- * @count TODO: figure out procfs
- * @eof TODO: figure out procfs
- * @data an xbus_t pointer with the bus data.
  */
-static int xpd_read_proc(char *page, char **start, off_t off, int count,
-			 int *eof, void *data)
+static int xpd_read_proc_show(struct seq_file *sfile, void *data)
 {
 	int len = 0;
-	xpd_t *xpd = data;
+	xpd_t *xpd = sfile->private;
 	int i;
 
 	if (!xpd)
-		goto out;
+		return -EINVAL;
 
-	len +=
-	    sprintf(page + len,
+	seq_printf(sfile,
 		    "%s (%s, card %s, span %d)\n" "timing_priority: %d\n"
 		    "timer_count: %d span->mainttimer=%d\n", xpd->xpdname,
 		    xpd->type_name, (xpd->card_present) ? "present" : "missing",
 		    (SPAN_REGISTERED(xpd)) ? PHONEDEV(xpd).span.spanno : 0,
 		    PHONEDEV(xpd).timing_priority, xpd->timer_count,
 		    PHONEDEV(xpd).span.mainttimer);
-	len +=
-	    sprintf(page + len, "xpd_state: %s (%d)\n",
+	seq_printf(sfile, "xpd_state: %s (%d)\n",
 		    xpd_statename(xpd->xpd_state), xpd->xpd_state);
-	len +=
-	    sprintf(page + len, "open_counter=%d refcount=%d\n",
+	seq_printf(sfile, "open_counter=%d refcount=%d\n",
 		    atomic_read(&PHONEDEV(xpd).open_counter),
 		    refcount_xpd(xpd));
-	len +=
-	    sprintf(page + len, "Address: U=%d S=%d\n", xpd->addr.unit,
+	seq_printf(sfile, "Address: U=%d S=%d\n", xpd->addr.unit,
 		    xpd->addr.subunit);
-	len += sprintf(page + len, "Subunits: %d\n", xpd->subunits);
-	len += sprintf(page + len, "Type: %d.%d\n\n", xpd->type, xpd->subtype);
-	len += sprintf(page + len, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
-	len +=
-	    sprintf(page + len, "wanted_pcm_mask=0x%04X\n\n",
+	seq_printf(sfile, "Subunits: %d\n", xpd->subunits);
+	seq_printf(sfile, "Type: %d.%d\n\n", xpd->type, xpd->subtype);
+	seq_printf(sfile, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
+	seq_printf(sfile, "wanted_pcm_mask=0x%04X\n\n",
 		    PHONEDEV(xpd).wanted_pcm_mask);
-	len +=
-	    sprintf(page + len, "mute_dtmf=0x%04X\n\n",
+	seq_printf(sfile, "mute_dtmf=0x%04X\n\n",
 		    PHONEDEV(xpd).mute_dtmf);
-	len += sprintf(page + len, "STATES:");
-	len += sprintf(page + len, "\n\t%-17s: ", "output_relays");
+	seq_printf(sfile, "STATES:");
+	seq_printf(sfile, "\n\t%-17s: ", "output_relays");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%d ",
+		seq_printf(sfile, "%d ",
 			    IS_SET(PHONEDEV(xpd).digital_outputs, i));
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "input_relays");
+	seq_printf(sfile, "\n\t%-17s: ", "input_relays");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%d ",
+		seq_printf(sfile, "%d ",
 			    IS_SET(PHONEDEV(xpd).digital_inputs, i));
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "offhook");
+	seq_printf(sfile, "\n\t%-17s: ", "offhook");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", IS_OFFHOOK(xpd, i));
+		seq_printf(sfile, "%d ", IS_OFFHOOK(xpd, i));
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "oht_pcm_pass");
+	seq_printf(sfile, "\n\t%-17s: ", "oht_pcm_pass");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%d ",
+		seq_printf(sfile, "%d ",
 			    IS_SET(PHONEDEV(xpd).oht_pcm_pass, i));
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "msg_waiting");
+	seq_printf(sfile, "\n\t%-17s: ", "msg_waiting");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", PHONEDEV(xpd).msg_waiting[i]);
+		seq_printf(sfile, "%d ", PHONEDEV(xpd).msg_waiting[i]);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "ringing");
+	seq_printf(sfile, "\n\t%-17s: ", "ringing");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%d ", PHONEDEV(xpd).ringing[i]);
+		seq_printf(sfile, "%d ", PHONEDEV(xpd).ringing[i]);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "no_pcm");
+	seq_printf(sfile, "\n\t%-17s: ", "no_pcm");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%d ", IS_SET(PHONEDEV(xpd).no_pcm, i));
+		seq_printf(sfile, "%d ", IS_SET(PHONEDEV(xpd).no_pcm, i));
 	}
 #if 1
 	if (SPAN_REGISTERED(xpd)) {
-		len += sprintf(page + len,
+		seq_printf(sfile,
 			"\nPCM:\n            |"
 			"         [readchunk]       |"
 			"         [writechunk]      | W D");
@@ -358,16 +341,16 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count,
 			wp = chan->writechunk;
 			memcpy(rchunk, rp, DAHDI_CHUNKSIZE);
 			memcpy(wchunk, wp, DAHDI_CHUNKSIZE);
-			len += sprintf(page + len, "\n  port %2d>  |  ", i);
+			seq_printf(sfile, "\n  port %2d>  |  ", i);
 			for (j = 0; j < DAHDI_CHUNKSIZE; j++)
-				len += sprintf(page + len, "%02X ", rchunk[j]);
-			len += sprintf(page + len, " |  ");
+				seq_printf(sfile, "%02X ", rchunk[j]);
+			seq_printf(sfile, " |  ");
 			for (j = 0; j < DAHDI_CHUNKSIZE; j++)
-				len += sprintf(page + len, "%02X ", wchunk[j]);
-			len += sprintf(page + len, " | %c",
+				seq_printf(sfile, "%02X ", wchunk[j]);
+			seq_printf(sfile, " | %c",
 				(IS_SET(PHONEDEV(xpd).wanted_pcm_mask, i))
 					?  '+' : ' ');
-			len += sprintf(page + len, " %c",
+			seq_printf(sfile, " %c",
 				(IS_SET(PHONEDEV(xpd).mute_dtmf, i))
 					? '-' : ' ');
 		}
@@ -375,35 +358,36 @@ static int xpd_read_proc(char *page, char **start, off_t off, int count,
 #endif
 #if 0
 	if (SPAN_REGISTERED(xpd)) {
-		len += sprintf(page + len, "\nSignalling:\n");
+		seq_printf(sfile, "\nSignalling:\n");
 		for_each_line(xpd, i) {
 			struct dahdi_chan *chan = XPD_CHAN(xpd, i);
-			len +=
-			    sprintf(page + len,
+			seq_printf(sfile,
 				    "\t%2d> sigcap=0x%04X sig=0x%04X\n", i,
 				    chan->sigcap, chan->sig);
 		}
 	}
 #endif
-	len += sprintf(page + len, "\nCOUNTERS:\n");
+	seq_printf(sfile, "\nCOUNTERS:\n");
 	for (i = 0; i < XPD_COUNTER_MAX; i++) {
-		len +=
-		    sprintf(page + len, "\t\t%-20s = %d\n",
+		seq_printf(sfile, "\t\t%-20s = %d\n",
 			    xpd_counters[i].name, xpd->counters[i]);
 	}
-	len += sprintf(page + len, "<-- len=%d\n", len);
-out:
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-
+	seq_printf(sfile, "<-- len=%d\n", len);
+	return 0;
 }
+
+static int xpd_read_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xpd_read_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations xpd_read_proc_ops = {
+	.owner		= THIS_MODULE,
+	.open		= xpd_read_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
 #endif
 

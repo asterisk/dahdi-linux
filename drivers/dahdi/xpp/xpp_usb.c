@@ -231,8 +231,7 @@ static int xusb_probe(struct usb_interface *interface,
 		      const struct usb_device_id *id);
 static void xusb_disconnect(struct usb_interface *interface);
 #ifdef	CONFIG_PROC_FS
-static int xusb_read_proc(char *page, char **start, off_t off, int count,
-			  int *eof, void *data);
+static const struct file_operations xusb_read_proc_ops;
 #endif
 
 /*------------------------------------------------------------------*/
@@ -743,9 +742,9 @@ static int xusb_probe(struct usb_interface *interface,
 #ifdef CONFIG_PROC_FS
 	DBG(PROC,
 	    "Creating proc entry " PROC_USBXPP_SUMMARY " in bus proc dir.\n");
-	procsummary =
-	    create_proc_read_entry(PROC_USBXPP_SUMMARY, 0444,
-				   xbus->proc_xbus_dir, xusb_read_proc, xusb);
+	procsummary = proc_create_data(PROC_USBXPP_SUMMARY, 0444,
+				   xbus->proc_xbus_dir, &xusb_read_proc_ops,
+				   xusb);
 	if (!procsummary) {
 		XBUS_ERR(xbus, "Failed to create proc file '%s'\n",
 			 PROC_USBXPP_SUMMARY);
@@ -753,7 +752,6 @@ static int xusb_probe(struct usb_interface *interface,
 		retval = -EIO;
 		goto probe_failed;
 	}
-	SET_PROC_DIRENTRY_OWNER(procsummary);
 #endif
 	bus_count++;
 	xusb->xbus_num = xbus->num;
@@ -1020,89 +1018,82 @@ static void __exit xpp_usb_shutdown(void)
 
 #ifdef CONFIG_PROC_FS
 
-static int xusb_read_proc(char *page, char **start, off_t off, int count,
-			  int *eof, void *data)
+static int xusb_read_proc_show(struct seq_file *sfile, void *data)
 {
-	int len = 0;
 	unsigned long flags;
 	int i;
 	//unsigned long stamp = jiffies;
-	xusb_t *xusb = data;
+	xusb_t *xusb = sfile->private;
 	uint usb_tx_delay[NUM_BUCKETS];
 	const int mark_limit = tx_sluggish / USEC_BUCKET;
 
 	if (!xusb)
-		goto out;
+		return 0;
+
 	// TODO: probably needs a per-xusb lock:
 	spin_lock_irqsave(&xusb_lock, flags);
-	len +=
-	    sprintf(page + len, "Device: %03d/%03d\n", xusb->udev->bus->busnum,
+	seq_printf(sfile, "Device: %03d/%03d\n", xusb->udev->bus->busnum,
 		    xusb->udev->devnum);
-	len +=
-	    sprintf(page + len, "USB: manufacturer=%s\n", xusb->manufacturer);
-	len += sprintf(page + len, "USB: product=%s\n", xusb->product);
-	len += sprintf(page + len, "USB: serial=%s\n", xusb->serial);
-	len +=
-	    sprintf(page + len, "Minor: %d\nModel Info: %s\n", xusb->minor,
+	seq_printf(sfile, "USB: manufacturer=%s\n", xusb->manufacturer);
+	seq_printf(sfile, "USB: product=%s\n", xusb->product);
+	seq_printf(sfile, "USB: serial=%s\n", xusb->serial);
+	seq_printf(sfile, "Minor: %d\nModel Info: %s\n", xusb->minor,
 		    xusb->model_info->desc);
-	len +=
-	    sprintf(page + len,
+	seq_printf(sfile,
 		    "Endpoints:\n" "\tIn:  0x%02X  - Size: %d)\n"
 		    "\tOut: 0x%02X  - Size: %d)\n",
 		    xusb->endpoints[XUSB_RECV].ep_addr,
 		    xusb->endpoints[XUSB_RECV].max_size,
 		    xusb->endpoints[XUSB_SEND].ep_addr,
 		    xusb->endpoints[XUSB_SEND].max_size);
-	len +=
-	    sprintf(page + len, "\npending_writes=%d\n",
+	seq_printf(sfile, "\npending_writes=%d\n",
 		    atomic_read(&xusb->pending_writes));
-	len +=
-	    sprintf(page + len, "pending_reads=%d\n",
+	seq_printf(sfile, "pending_reads=%d\n",
 		    atomic_read(&xusb->pending_reads));
-	len += sprintf(page + len, "max_tx_delay=%d\n", xusb->max_tx_delay);
+	seq_printf(sfile, "max_tx_delay=%d\n", xusb->max_tx_delay);
 	xusb->max_tx_delay = 0;
 #ifdef	DEBUG_PCM_TIMING
-	len +=
-	    sprintf(page + len,
+	seq_printf(sfile,
 		    "\nstamp_last_pcm_read=%lld accumulate_diff=%lld\n",
 		    stamp_last_pcm_read, accumulate_diff);
 #endif
 	memcpy(usb_tx_delay, xusb->usb_tx_delay, sizeof(usb_tx_delay));
-	len +=
-	    sprintf(page + len, "usb_tx_delay[%d,%d,%d]: ", USEC_BUCKET,
+	seq_printf(sfile, "usb_tx_delay[%d,%d,%d]: ", USEC_BUCKET,
 		    BUCKET_START, NUM_BUCKETS);
 	for (i = BUCKET_START; i < NUM_BUCKETS; i++) {
-		len += sprintf(page + len, "%6d ", usb_tx_delay[i]);
+		seq_printf(sfile, "%6d ", usb_tx_delay[i]);
 		if (i == mark_limit)
-			len += sprintf(page + len, "| ");
+			seq_printf(sfile, "| ");
 	}
-	len +=
-	    sprintf(page + len, "\nPCM_TX_DROPS: %5d (sluggish: %d)\n",
+	seq_printf(sfile, "\nPCM_TX_DROPS: %5d (sluggish: %d)\n",
 		    atomic_read(&xusb->pcm_tx_drops),
 		    atomic_read(&xusb->usb_sluggish_count)
 	    );
-	len += sprintf(page + len, "\nCOUNTERS:\n");
+	seq_printf(sfile, "\nCOUNTERS:\n");
 	for (i = 0; i < XUSB_COUNTER_MAX; i++) {
-		len +=
-		    sprintf(page + len, "\t%-15s = %d\n", xusb_counters[i].name,
+		seq_printf(sfile, "\t%-15s = %d\n", xusb_counters[i].name,
 			    xusb->counters[i]);
 	}
 #if 0
-	len += sprintf(page + len, "<-- len=%d\n", len);
+	seq_printf(sfile, "<-- len=%d\n", len);
 #endif
 	spin_unlock_irqrestore(&xusb_lock, flags);
-out:
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
-
+	return 0;
 }
+
+static int xusb_read_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, xusb_read_proc_show, PDE_DATA(inode));
+}
+
+static const struct file_operations xusb_read_proc_ops = {
+	.owner		= THIS_MODULE,
+	.open		= xusb_read_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 
 #endif
 

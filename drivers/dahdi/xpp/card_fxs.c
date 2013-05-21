@@ -24,6 +24,7 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/delay.h>
+#include <linux/seq_file.h>
 #include "xpd.h"
 #include "xproto.h"
 #include "xpp_dahdi.h"
@@ -120,11 +121,9 @@ enum fxs_state {
 static bool fxs_packet_is_valid(xpacket_t *pack);
 static void fxs_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef CONFIG_PROC_FS
-static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data);
+static const struct file_operations proc_fxs_info_ops;
 #ifdef	WITH_METERING
-static int proc_xpd_metering_write(struct file *file,
-	const char __user *buffer, unsigned long count, void *data);
+static const struct file_operations proc_xpd_metering_ops;
 #endif
 #endif
 static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos);
@@ -399,7 +398,6 @@ static void fxs_proc_remove(xbus_t *xbus, xpd_t *xpd)
 #ifdef	WITH_METERING
 	if (priv->meteringfile) {
 		XPD_DBG(PROC, xpd, "Removing xpd metering tone file\n");
-		priv->meteringfile->data = NULL;
 		remove_proc_entry(PROC_METERING_FNAME, xpd->proc_xpd_dir);
 		priv->meteringfile = NULL;
 	}
@@ -421,9 +419,9 @@ static int fxs_proc_create(xbus_t *xbus, xpd_t *xpd)
 
 #ifdef	CONFIG_PROC_FS
 	XPD_DBG(PROC, xpd, "Creating FXS_INFO file\n");
-	priv->fxs_info =
-	    create_proc_read_entry(PROC_FXS_INFO_FNAME, 0444, xpd->proc_xpd_dir,
-				   proc_fxs_info_read, xpd);
+	priv->fxs_info = proc_create_data(PROC_FXS_INFO_FNAME, 0444,
+					  xpd->proc_xpd_dir,
+					  &proc_fxs_info_ops, xpd);
 	if (!priv->fxs_info) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_FXS_INFO_FNAME);
@@ -433,18 +431,15 @@ static int fxs_proc_create(xbus_t *xbus, xpd_t *xpd)
 	SET_PROC_DIRENTRY_OWNER(priv->fxs_info);
 #ifdef	WITH_METERING
 	XPD_DBG(PROC, xpd, "Creating Metering tone file\n");
-	priv->meteringfile =
-	    create_proc_entry(PROC_METERING_FNAME, 0200, xpd->proc_xpd_dir);
+	priv->meteringfile = proc_create_data(PROC_METERING_FNAME, 0200,
+					      xpd->proc_xpd_dir,
+					      &proc_xpd_metering_ops, xpd);
 	if (!priv->meteringfile) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_METERING_FNAME);
 		fxs_proc_remove(xbus, xpd);
 		return -EINVAL;
 	}
-	SET_PROC_DIRENTRY_OWNER(priv->meteringfile);
-	priv->meteringfile->write_proc = proc_xpd_metering_write;
-	priv->meteringfile->read_proc = NULL;
-	priv->meteringfile->data = xpd;
 #endif
 #endif
 	return 0;
@@ -1691,12 +1686,10 @@ static void fxs_packet_dump(const char *msg, xpacket_t *pack)
 /*------------------------- SLIC Handling --------------------------*/
 
 #ifdef	CONFIG_PROC_FS
-static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data)
+static int proc_fxs_info_show(struct seq_file *sfile, void *not_used)
 {
-	int len = 0;
 	unsigned long flags;
-	xpd_t *xpd = data;
+	xpd_t *xpd = sfile->private;
 	struct FXS_priv_data *priv;
 	int i;
 	int led;
@@ -1706,11 +1699,11 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	len += sprintf(page + len, "%-12s", "Channel:");
+	seq_printf(sfile, "%-12s", "Channel:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d", i);
+		seq_printf(sfile, "%4d", i);
 	}
-	len += sprintf(page + len, "\n%-12s", "");
+	seq_printf(sfile, "\n%-12s", "");
 	for_each_line(xpd, i) {
 		char *chan_type;
 
@@ -1720,84 +1713,85 @@ static int proc_fxs_info_read(char *page, char **start, off_t off, int count,
 			chan_type = "in";
 		else
 			chan_type = "";
-		len += sprintf(page + len, "%4s", chan_type);
+		seq_printf(sfile, "%4s", chan_type);
 	}
-	len += sprintf(page + len, "\n%-12s", "idletxhook:");
+	seq_printf(sfile, "\n%-12s", "idletxhook:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d", priv->idletxhookstate[i]);
+		seq_printf(sfile, "%4d", priv->idletxhookstate[i]);
 	}
-	len += sprintf(page + len, "\n%-12s", "lasttxhook:");
+	seq_printf(sfile, "\n%-12s", "lasttxhook:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d", priv->lasttxhook[i]);
+		seq_printf(sfile, "%4d", priv->lasttxhook[i]);
 	}
-	len += sprintf(page + len, "\n%-12s", "ohttimer:");
+	seq_printf(sfile, "\n%-12s", "ohttimer:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d", priv->ohttimer[i]);
+		seq_printf(sfile, "%4d", priv->ohttimer[i]);
 	}
-	len += sprintf(page + len, "\n%-12s", "neon_blink:");
+	seq_printf(sfile, "\n%-12s", "neon_blink:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d",
+		seq_printf(sfile, "%4d",
 			    IS_SET(priv->neon_blinking, i));
 	}
-	len += sprintf(page + len, "\n%-12s", "search_fsk:");
+	seq_printf(sfile, "\n%-12s", "search_fsk:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d",
+		seq_printf(sfile, "%4d",
 			    IS_SET(priv->search_fsk_pattern, i));
 	}
-	len += sprintf(page + len, "\n%-12s", "vbat_h:");
+	seq_printf(sfile, "\n%-12s", "vbat_h:");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d",
+		seq_printf(sfile, "%4d",
 			test_bit(i, (unsigned long *)&priv->vbat_h));
 	}
-	len += sprintf(page + len, "\n");
+	seq_printf(sfile, "\n");
 	for (led = 0; led < NUM_LEDS; led++) {
-		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+		seq_printf(sfile, "\nLED #%d\t%-12s: ",
 			led, "ledstate");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-				len +=
-				    sprintf(page + len, "%d ",
+				seq_printf(sfile, "%d ",
 					    IS_SET(priv->ledstate[led], i));
 		}
-		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+		seq_printf(sfile, "\nLED #%d\t%-12s: ",
 			led, "ledcontrol");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-				len +=
-				    sprintf(page + len, "%d ",
+				seq_printf(sfile, "%d ",
 					    IS_SET(priv->ledcontrol[led], i));
 		}
-		len += sprintf(page + len, "\nLED #%d\t%-12s: ",
+		seq_printf(sfile, "\nLED #%d\t%-12s: ",
 			led, "led_counter");
 		for_each_line(xpd, i) {
 			if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
 			    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-				len +=
-				    sprintf(page + len, "%d ",
+				seq_printf(sfile, "%d ",
 					    LED_COUNTER(priv, i, led));
 		}
 	}
-	len += sprintf(page + len, "\n");
+	seq_printf(sfile, "\n");
 	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
+	return 0;
 }
-#endif
+
+static int proc_fxs_info_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, proc_fxs_info_show, PDE_DATA(inode));
+}
+
+static const struct file_operations proc_fxs_info_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_fxs_info_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
 #ifdef	WITH_METERING
-static int proc_xpd_metering_write(struct file *file, const char
-		__user *buffer, unsigned long count, void *data)
+static ssize_t proc_xpd_metering_write(struct file *file,
+		const char __user *buffer, size_t count, loff_t *offset)
 {
-	xpd_t *xpd = data;
+	xpd_t *xpd = file->private_data;
 	char buf[MAX_PROC_WRITE];
 	lineno_t chan;
 	int num;
@@ -1806,7 +1800,7 @@ static int proc_xpd_metering_write(struct file *file, const char
 	if (!xpd)
 		return -ENODEV;
 	if (count >= MAX_PROC_WRITE - 1) {
-		XPD_ERR(xpd, "Metering string too long (%lu)\n", count);
+		XPD_ERR(xpd, "Metering string too long (%zu)\n", count);
 		return -EINVAL;
 	}
 	if (copy_from_user(&buf, buffer, count))
@@ -1829,6 +1823,19 @@ static int proc_xpd_metering_write(struct file *file, const char
 	}
 	return count;
 }
+
+static int proc_xpd_metering_open(struct inode *inode, struct file *file)
+{
+	file->private_data = PDE_DATA(inode);
+}
+
+static const struct file_operations proc_xpd_metering_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_xpd_metering_open,
+	.write		= proc_xpd_metering_write,
+	.release	= single_release,
+};
+#endif
 #endif
 
 static int fxs_xpd_probe(struct device *dev)

@@ -26,6 +26,7 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/delay.h>
+#include <linux/seq_file.h>
 #include "xpd.h"
 #include "xproto.h"
 #include "xpp_dahdi.h"
@@ -152,8 +153,7 @@ static int write_state_register(xpd_t *xpd, __u8 value);
 static bool bri_packet_is_valid(xpacket_t *pack);
 static void bri_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef	CONFIG_PROC_FS
-static int proc_bri_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data);
+static const struct file_operations proc_bri_info_ops;
 #endif
 static int bri_spanconfig(struct file *file, struct dahdi_span *span,
 			  struct dahdi_lineconfig *lc);
@@ -673,9 +673,8 @@ static int bri_proc_create(xbus_t *xbus, xpd_t *xpd)
 	XPD_DBG(PROC, xpd, "\n");
 #ifdef	CONFIG_PROC_FS
 	XPD_DBG(PROC, xpd, "Creating '%s'\n", PROC_BRI_INFO_FNAME);
-	priv->bri_info =
-	    create_proc_read_entry(PROC_BRI_INFO_FNAME, 0444, xpd->proc_xpd_dir,
-				   proc_bri_info_read, xpd);
+	priv->bri_info = proc_create_data(PROC_BRI_INFO_FNAME, 0444,
+				 xpd->proc_xpd_dir, &proc_bri_info_ops, xpd);
 	if (!priv->bri_info) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_BRI_INFO_FNAME);
@@ -1667,12 +1666,10 @@ static void bri_packet_dump(const char *msg, xpacket_t *pack)
 /*------------------------- REGISTER Handling --------------------------*/
 
 #ifdef	CONFIG_PROC_FS
-static int proc_bri_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data)
+static int proc_bri_info_show(struct seq_file *sfile, void *not_used)
 {
-	int len = 0;
 	unsigned long flags;
-	xpd_t *xpd = data;
+	xpd_t *xpd = sfile->private;
 	struct BRI_priv_data *priv;
 
 	DBG(PROC, "\n");
@@ -1681,69 +1678,65 @@ static int proc_bri_info_read(char *page, char **start, off_t off, int count,
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	len += sprintf(page + len, "%05d Layer 1: ", priv->poll_counter);
+	seq_printf(sfile, "%05d Layer 1: ", priv->poll_counter);
 	if (priv->reg30_good) {
-		len +=
-		    sprintf(page + len, "%-5s ",
-			    (priv->layer1_up) ? "UP" : "DOWN");
-		len +=
-		    sprintf(page + len,
-			    "%c%d %-15s -- fr_sync=%d t2_exp=%d info0=%d g2_g3=%d\n",
-			    IS_NT(xpd) ? 'G' : 'F',
-			    priv->state_register.bits.v_su_sta,
-			    xhfc_state_name(IS_NT(xpd),
-					    priv->state_register.bits.v_su_sta),
-			    priv->state_register.bits.v_su_fr_sync,
-			    priv->state_register.bits.v_su_t2_exp,
-			    priv->state_register.bits.v_su_info0,
-			    priv->state_register.bits.v_g2_g3);
-	} else
-		len += sprintf(page + len, "Unknown\n");
+		seq_printf(sfile, "%-5s ", (priv->layer1_up) ? "UP" : "DOWN");
+		seq_printf(sfile,
+			   "%c%d %-15s -- fr_sync=%d t2_exp=%d info0=%d g2_g3=%d\n",
+			   IS_NT(xpd) ? 'G' : 'F',
+			   priv->state_register.bits.v_su_sta,
+			   xhfc_state_name(IS_NT(xpd),
+				    priv->state_register.bits.v_su_sta),
+			   priv->state_register.bits.v_su_fr_sync,
+			   priv->state_register.bits.v_su_t2_exp,
+			   priv->state_register.bits.v_su_info0,
+			   priv->state_register.bits.v_g2_g3);
+	} else {
+		seq_printf(sfile, "Unknown\n");
+	}
 	if (IS_NT(xpd))
-		len += sprintf(page + len, "T1 Timer: %d\n", priv->t1);
+		seq_printf(sfile, "T1 Timer: %d\n", priv->t1);
 	else
-		len += sprintf(page + len, "T3 Timer: %d\n", priv->t3);
-	len += sprintf(page + len, "Tick Counter: %d\n", priv->tick_counter);
-	len +=
-	    sprintf(page + len, "Last Poll Reply: %d ticks ago\n",
+		seq_printf(sfile, "T3 Timer: %d\n", priv->t3);
+	seq_printf(sfile, "Tick Counter: %d\n", priv->tick_counter);
+	seq_printf(sfile, "Last Poll Reply: %d ticks ago\n",
 		    priv->reg30_ticks);
-	len += sprintf(page + len, "reg30_good=%d\n", priv->reg30_good);
-	len +=
-	    sprintf(page + len, "D-Channel: TX=[%5d]    RX=[%5d]    BAD=[%5d] ",
+	seq_printf(sfile, "reg30_good=%d\n", priv->reg30_good);
+	seq_printf(sfile, "D-Channel: TX=[%5d]    RX=[%5d]    BAD=[%5d] ",
 		    priv->dchan_tx_counter, priv->dchan_rx_counter,
 		    priv->dchan_rx_drops);
 	if (priv->dchan_alive) {
-		len +=
-		    sprintf(page + len, "(alive %d K-ticks)\n",
+		seq_printf(sfile, "(alive %d K-ticks)\n",
 			    priv->dchan_alive_ticks / 1000);
 	} else {
-		len += sprintf(page + len, "(dead)\n");
+		seq_printf(sfile, "(dead)\n");
 	}
-	len +=
-	    sprintf(page + len, "dchan_notx_ticks: %d\n",
+	seq_printf(sfile, "dchan_notx_ticks: %d\n",
 		    priv->dchan_notx_ticks);
-	len +=
-	    sprintf(page + len, "dchan_norx_ticks: %d\n",
+	seq_printf(sfile, "dchan_norx_ticks: %d\n",
 		    priv->dchan_norx_ticks);
-	len +=
-	    sprintf(page + len, "LED: %-10s = %d\n", "GREEN",
+	seq_printf(sfile, "LED: %-10s = %d\n", "GREEN",
 		    priv->ledstate[GREEN_LED]);
-	len +=
-	    sprintf(page + len, "LED: %-10s = %d\n", "RED",
+	seq_printf(sfile, "LED: %-10s = %d\n", "RED",
 		    priv->ledstate[RED_LED]);
-	len += sprintf(page + len, "\nDCHAN:\n");
-	len += sprintf(page + len, "\n");
+	seq_printf(sfile, "\nDCHAN:\n");
+	seq_printf(sfile, "\n");
 	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
+	return 0;
 }
+
+static int proc_bri_info_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, proc_bri_info_show, PDE_DATA(inode));
+}
+
+static const struct file_operations proc_bri_info_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_bri_info_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 #endif
 
 static int bri_xpd_probe(struct device *dev)

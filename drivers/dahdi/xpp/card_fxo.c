@@ -24,6 +24,8 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/delay.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include "xpd.h"
 #include "xproto.h"
 #include "xpp_dahdi.h"
@@ -105,11 +107,9 @@ enum fxo_leds {
 static bool fxo_packet_is_valid(xpacket_t *pack);
 static void fxo_packet_dump(const char *msg, xpacket_t *pack);
 #ifdef CONFIG_PROC_FS
-static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data);
+static const struct file_operations proc_fxo_info_ops;
 #ifdef	WITH_METERING
-static int proc_xpd_metering_read(char *page, char **start, off_t off,
-				  int count, int *eof, void *data);
+static const struct file_operations proc_xpd_metering_ops;
 #endif
 #endif
 static void dahdi_report_battery(xpd_t *xpd, lineno_t chan);
@@ -440,7 +440,6 @@ static void fxo_proc_remove(xbus_t *xbus, xpd_t *xpd)
 #ifdef	WITH_METERING
 	if (priv->meteringfile) {
 		XPD_DBG(PROC, xpd, "Removing xpd metering tone file\n");
-		priv->meteringfile->data = NULL;
 		remove_proc_entry(PROC_METERING_FNAME, xpd->proc_xpd_dir);
 		priv->meteringfile = NULL;
 	}
@@ -461,9 +460,9 @@ static int fxo_proc_create(xbus_t *xbus, xpd_t *xpd)
 	priv = xpd->priv;
 #ifdef	CONFIG_PROC_FS
 	XPD_DBG(PROC, xpd, "Creating FXO_INFO file\n");
-	priv->fxo_info =
-	    create_proc_read_entry(PROC_FXO_INFO_FNAME, 0444, xpd->proc_xpd_dir,
-				   proc_fxo_info_read, xpd);
+	priv->fxo_info = proc_create_data(PROC_FXO_INFO_FNAME, 0444,
+					  xpd->proc_xpd_dir,
+					  &proc_fxo_info_ops, xpd);
 	if (!priv->fxo_info) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_FXO_INFO_FNAME);
@@ -473,9 +472,9 @@ static int fxo_proc_create(xbus_t *xbus, xpd_t *xpd)
 	SET_PROC_DIRENTRY_OWNER(priv->fxo_info);
 #ifdef	WITH_METERING
 	XPD_DBG(PROC, xpd, "Creating Metering tone file\n");
-	priv->meteringfile =
-	    create_proc_read_entry(PROC_METERING_FNAME, 0444, xpd->proc_xpd_dir,
-				   proc_xpd_metering_read, xpd);
+	priv->meteringfile = proc_create_data(PROC_METERING_FNAME, 0444,
+					      xpd->proc_xpd_dir,
+					      &proc_xpd_metering_ops, xpd);
 	if (!priv->meteringfile) {
 		XPD_ERR(xpd, "Failed to create proc file '%s'\n",
 			PROC_METERING_FNAME);
@@ -1347,12 +1346,10 @@ static void fxo_packet_dump(const char *msg, xpacket_t *pack)
 /*------------------------- DAA Handling --------------------------*/
 
 #ifdef	CONFIG_PROC_FS
-static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
-			      int *eof, void *data)
+static int proc_fxo_info_show(struct seq_file *sfile, void *not_used)
 {
-	int len = 0;
 	unsigned long flags;
-	xpd_t *xpd = data;
+	xpd_t *xpd = sfile->private;
 	struct FXO_priv_data *priv;
 	int i;
 
@@ -1361,42 +1358,43 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	len += sprintf(page + len, "\t%-17s: ", "Channel");
+	seq_printf(sfile, "\t%-17s: ", "Channel");
 	for_each_line(xpd, i) {
 		if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
-		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-			len += sprintf(page + len, "%4d ", i % 10);
+		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i)) {
+			seq_printf(sfile, "%4d ", i % 10);
+		}
 	}
-	len += sprintf(page + len, "\nLeds:");
-	len += sprintf(page + len, "\n\t%-17s: ", "state");
+	seq_printf(sfile, "\nLeds:");
+	seq_printf(sfile, "\n\t%-17s: ", "state");
 	for_each_line(xpd, i) {
 		if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
-		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-			len +=
-			    sprintf(page + len, "  %d%d ",
-				    IS_SET(priv->ledstate[LED_GREEN], i),
-				    IS_SET(priv->ledstate[LED_RED], i));
+		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i)) {
+			seq_printf(sfile, "  %d%d ",
+				   IS_SET(priv->ledstate[LED_GREEN], i),
+				   IS_SET(priv->ledstate[LED_RED], i));
+		}
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "blinking");
+	seq_printf(sfile, "\n\t%-17s: ", "blinking");
 	for_each_line(xpd, i) {
 		if (!IS_SET(PHONEDEV(xpd).digital_outputs, i)
-		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i))
-			len +=
-			    sprintf(page + len, "  %d%d ",
-				    IS_BLINKING(priv, i, LED_GREEN),
-				    IS_BLINKING(priv, i, LED_RED));
+		    && !IS_SET(PHONEDEV(xpd).digital_inputs, i)) {
+			seq_printf(sfile, "  %d%d ",
+				   IS_BLINKING(priv, i, LED_GREEN),
+				   IS_BLINKING(priv, i, LED_RED));
+		}
 	}
-	len += sprintf(page + len, "\nBattery-Data:");
-	len += sprintf(page + len, "\n\t%-17s: ", "voltage");
+	seq_printf(sfile, "\nBattery-Data:");
+	seq_printf(sfile, "\n\t%-17s: ", "voltage");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->battery_voltage[i]);
+		seq_printf(sfile, "%4d ", priv->battery_voltage[i]);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "current");
+	seq_printf(sfile, "\n\t%-17s: ", "current");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->battery_current[i]);
+		seq_printf(sfile, "%4d ", priv->battery_current[i]);
 	}
-	len += sprintf(page + len, "\nBattery:");
-	len += sprintf(page + len, "\n\t%-17s: ", "on");
+	seq_printf(sfile, "\nBattery:");
+	seq_printf(sfile, "\n\t%-17s: ", "on");
 	for_each_line(xpd, i) {
 		char *bat;
 
@@ -1406,14 +1404,14 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
 			bat = "-";
 		else
 			bat = ".";
-		len += sprintf(page + len, "%4s ", bat);
+		seq_printf(sfile, "%4s ", bat);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "debounce");
+	seq_printf(sfile, "\n\t%-17s: ", "debounce");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->nobattery_debounce[i]);
+		seq_printf(sfile, "%4d ", priv->nobattery_debounce[i]);
 	}
-	len += sprintf(page + len, "\nPolarity-Reverse:");
-	len += sprintf(page + len, "\n\t%-17s: ", "polarity");
+	seq_printf(sfile, "\nPolarity-Reverse:");
+	seq_printf(sfile, "\n\t%-17s: ", "polarity");
 	for_each_line(xpd, i) {
 		char *polname;
 
@@ -1423,14 +1421,14 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
 			polname = "-";
 		else
 			polname = ".";
-		len += sprintf(page + len, "%4s ", polname);
+		seq_printf(sfile, "%4s ", polname);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "debounce");
+	seq_printf(sfile, "\n\t%-17s: ", "debounce");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->polarity_debounce[i]);
+		seq_printf(sfile, "%4d ", priv->polarity_debounce[i]);
 	}
-	len += sprintf(page + len, "\nPower-Denial:");
-	len += sprintf(page + len, "\n\t%-17s: ", "power");
+	seq_printf(sfile, "\nPower-Denial:");
+	seq_printf(sfile, "\n\t%-17s: ", "power");
 	for_each_line(xpd, i) {
 		char *curr;
 
@@ -1440,45 +1438,46 @@ static int proc_fxo_info_read(char *page, char **start, off_t off, int count,
 			curr = "-";
 		else
 			curr = ".";
-		len += sprintf(page + len, "%4s ", curr);
+		seq_printf(sfile, "%4s ", curr);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "safezone");
+	seq_printf(sfile, "\n\t%-17s: ", "safezone");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%4d ", priv->power_denial_safezone[i]);
+		seq_printf(sfile, "%4d ", priv->power_denial_safezone[i]);
 	}
-	len += sprintf(page + len, "\n\t%-17s: ", "delay");
+	seq_printf(sfile, "\n\t%-17s: ", "delay");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->power_denial_delay[i]);
+		seq_printf(sfile, "%4d ", priv->power_denial_delay[i]);
 	}
 #ifdef	WITH_METERING
-	len += sprintf(page + len, "\nMetering:");
-	len += sprintf(page + len, "\n\t%-17s: ", "count");
+	seq_printf(sfile, "\nMetering:");
+	seq_printf(sfile, "\n\t%-17s: ", "count");
 	for_each_line(xpd, i) {
-		len += sprintf(page + len, "%4d ", priv->metering_count[i]);
+		seq_printf(sfile, "%4d ", priv->metering_count[i]);
 	}
 #endif
-	len += sprintf(page + len, "\n");
+	seq_printf(sfile, "\n");
 	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
-	return len;
+	return 0;
 }
-#endif
+
+static int proc_fxo_info_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, proc_fxo_info_show, PDE_DATA(inode));
+}
+
+static const struct file_operations proc_fxo_info_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_fxo_info_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
 
 #ifdef	WITH_METERING
-static int proc_xpd_metering_read(char *page, char **start, off_t off,
-				  int count, int *eof, void *data)
+static int proc_xpd_metering_show(struct seq_file *sfile, void *not_used)
 {
-	int len = 0;
 	unsigned long flags;
-	xpd_t *xpd = data;
+	xpd_t *xpd = sfile->private;
 	struct FXO_priv_data *priv;
 	int i;
 
@@ -1487,25 +1486,31 @@ static int proc_xpd_metering_read(char *page, char **start, off_t off,
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	spin_lock_irqsave(&xpd->lock, flags);
-	len += sprintf(page + len, "# Chan\tMeter (since last read)\n");
+	seq_printf(sfile, "# Chan\tMeter (since last read)\n");
 	for_each_line(xpd, i) {
-		len +=
-		    sprintf(page + len, "%d\t%d\n", i, priv->metering_count[i]);
+		seq_printf(sfile, "%d\t%d\n", i, priv->metering_count[i]);
 	}
 	spin_unlock_irqrestore(&xpd->lock, flags);
-	if (len <= off + count)
-		*eof = 1;
-	*start = page + off;
-	len -= off;
-	if (len > count)
-		len = count;
-	if (len < 0)
-		len = 0;
 	/* Zero meters */
 	for_each_line(xpd, i)
 	    priv->metering_count[i] = 0;
-	return len;
+	return 0;
 }
+
+static int proc_xpd_metering_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, proc_xpd_metering_show, PDE_DATA(inode));
+}
+
+static const struct file_operations proc_xpd_metering_ops = {
+	.owner		= THIS_MODULE,
+	.open		= proc_xpd_metering_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+#endif
 #endif
 
 static DEVICE_ATTR_READER(fxo_battery_show, dev, buf)
