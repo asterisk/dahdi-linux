@@ -1401,9 +1401,33 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+#ifdef CONFIG_PROC_FS
+#include <linux/proc_fs.h>
+static inline void *PDE_DATA(const struct inode *inode)
+{
+	return PDE(inode)->data;
+}
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31)
 #define KERN_CONT ""
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
+#ifdef CONFIG_PROC_FS
+#include <linux/proc_fs.h>
+static inline struct proc_dir_entry *proc_create_data(const char *name,
+					mode_t mode,
+					struct proc_dir_entry *parent,
+					const struct file_operations *proc_fops,
+					void *data)
+{
+	struct proc_dir_entry *pde = create_proc_entry(name, mode, parent);
+	if (!pde)
+		return NULL;
+	pde->proc_fops = proc_fops;
+	pde->data = data;
+	return pde;
+}
+#endif /* CONFIG_PROC_FS */
 #ifndef clamp
 #define clamp(x, low, high) min(max(low, x), high)
 #endif
@@ -1456,6 +1480,7 @@ static inline int strcasecmp(const char *s1, const char *s2)
 #endif /* 2.6.25 */
 #endif /* 2.6.26 */
 #endif /* 2.6.31 */
+#endif /* 3.10.0 */
 
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED

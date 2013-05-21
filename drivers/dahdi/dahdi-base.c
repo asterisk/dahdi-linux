@@ -900,7 +900,7 @@ static void seq_fill_alarm_string(struct seq_file *sfile, int alarms)
 		seq_printf(sfile, "%s", tmp);
 }
 
-static int dahdi_seq_show(struct seq_file *sfile, void *v)
+static int dahdi_seq_show(struct seq_file *sfile, void *data)
 {
 	long spanno = (long)sfile->private;
 	int x;
@@ -992,7 +992,7 @@ static int dahdi_seq_show(struct seq_file *sfile, void *v)
 
 static int dahdi_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, dahdi_seq_show, PDE(inode)->data);
+	return single_open(file, dahdi_seq_show, PDE_DATA(inode));
 }
 
 static const struct file_operations dahdi_proc_ops = {
@@ -7260,15 +7260,14 @@ static int _dahdi_assign_span(struct dahdi_span *span, unsigned int spanno,
 	{
 		char tempfile[17];
 		snprintf(tempfile, sizeof(tempfile), "%d", span->spanno);
-		span->proc_entry = create_proc_entry(tempfile, 0444,
-					root_proc_entry);
+		span->proc_entry = proc_create_data(tempfile, 0444,
+					root_proc_entry, &dahdi_proc_ops,
+					(void *)((unsigned long)span->spanno));
 		if (!span->proc_entry) {
 			res = -EFAULT;
 			span_err(span, "Error creating procfs entry\n");
 			goto cleanup;
 		}
-		span->proc_entry->data = (void *)(long)span->spanno;
-		span->proc_entry->proc_fops = &dahdi_proc_ops;
 	}
 #endif
 
@@ -7416,6 +7415,15 @@ static void disable_span(struct dahdi_span *span)
 	module_printk(KERN_INFO, "%s: span %d\n", __func__, span->spanno);
 }
 
+#ifdef CONFIG_PROC_FS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
+static inline void proc_remove(struct proc_dir_entry *proc_entry)
+{
+	remove_proc_entry(proc_entry->name, root_proc_entry);
+}
+#endif
+#endif
+
 /**
  * _dahdi_unassign_span() - unassign a DAHDI span
  * @span:	the DAHDI span
@@ -7454,8 +7462,10 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 	if (debug & DEBUG_MAIN)
 		module_printk(KERN_NOTICE, "Unassigning Span '%s' with %d channels\n", span->name, span->channels);
 #ifdef CONFIG_PROC_FS
-	if (span->proc_entry)
-		remove_proc_entry(span->proc_entry->name, root_proc_entry);
+	if (span->proc_entry) {
+		proc_remove(span->proc_entry);
+		span->proc_entry = NULL;
+	}
 #endif /* CONFIG_PROC_FS */
 
 	span_sysfs_remove(span);
