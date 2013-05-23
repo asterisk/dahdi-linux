@@ -227,6 +227,11 @@ load_modules() {
 	echo ""
 }
 
+# Make sure that either dahdi is loaded or modprobe-able
+dahdi_modules_loadable() {
+	modinfo dahdi >/dev/null 2>&1 || lsmod | grep -q -w ^dahdi
+}
+
 if [ ! -x "$DAHDI_CFG" ]; then
        echo "dahdi_cfg not executable"
        exit 0
@@ -242,6 +247,10 @@ RETVAL=0
 # See how we were called.
 case "$1" in
   start)
+	if ! dahdi_modules_loadable; then
+		echo "No DAHDI modules on the system. Not starting"
+		exit 0
+	fi
   	if hotplug_should_load_modules; then
 		load_modules
 	fi
