@@ -88,6 +88,7 @@ BIN_DIR:=$(sbindir)
 LIB_DIR:=$(libdir)
 INC_DIR:=$(includedir)/dahdi
 MAN_DIR:=$(mandir)/man8
+DATA_DIR:=${datadir}/dahdi
 CONFIG_DIR:=$(sysconfdir)/dahdi
 CONFIG_FILE:=$(CONFIG_DIR)/system.conf
 
@@ -108,6 +109,11 @@ ifeq	(1,$(PBX_HDLC))
 	BINS	+= sethdlc
 endif
 MAN_PAGES:=$(wildcard $(BINS:%=doc/%.8))
+
+PINNED_DATA_SCRIPTS:=dahdi_cfg_device_args handle_device \
+	span_assignments span_types
+PINNED_UTILS:=dahdi_map
+PINNED_CONF:=pinned-spans.conf spantype.conf
 
 TEST_BINS:=patgen pattest patlooptest hdlcstress hdlctest hdlcgen hdlcverify timertest dahdi_maint
 # All the man pages. Not just installed ones:
@@ -226,6 +232,12 @@ endif
 ifeq (,$(wildcard $(DESTDIR)$(CONFIG_FILE)))
 	$(INSTALL) -d $(DESTDIR)$(CONFIG_DIR)
 	$(INSTALL) -m 644 system.conf.sample $(DESTDIR)$(CONFIG_FILE)
+endif
+ifeq ($(DAHDI_PINNED),yes)
+	install -d $(DESTDIR)$(DATA_DIR)
+	install $(PINNED_DATA_SCRIPTS) $(DESTDIR)$(DATA_DIR)/
+	install $(PINNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
+	install -m 644 $(PINNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
 endif
 
 install-libs: libs

@@ -79,6 +79,15 @@ AC_ARG_ENABLE(dev-mode,
 	esac])
 AC_SUBST(DAHDI_DEVMODE)
 
+AC_ARG_ENABLE(pinned,
+	[  --enable-pinned    Install pinned-spans support],
+	[case "${enableval}" in
+	      y|ye|yes) DAHDI_PINNED=yes ;;
+	      n|no)  DAHDI_PINNED=no ;;
+	      *) AC_MSG_ERROR(bad value ${enableval} for --enable-pinned)  ;;
+	esac])
+AC_SUBST(DAHDI_PINNED)
+
 AC_MSG_CHECKING(for -Wdeclaration-after-statement support)
 if $(${CC} -Wdeclaration-after-statement -S -o /dev/null -xc /dev/null > /dev/null 2>&1); then
 	AC_MSG_RESULT(yes)
