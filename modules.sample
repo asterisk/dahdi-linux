@@ -18,6 +18,10 @@ wct4xxp
 # Digium TE122: PCI single-port T1/E1/J1
 wcte12xp
 
+# Digium TE131: PCI-Express single-port T1/E1/J1
+# Digium TE132: PCI single-port T1/E1/J1
+wcte13xp
+
 # Digium T100P: PCI single-port T1
 # Digium E100P: PCI single-port E1
 wct1xxp
