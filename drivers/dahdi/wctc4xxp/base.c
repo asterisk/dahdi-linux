@@ -877,6 +877,7 @@ wctc4xxp_initialize_descriptor_ring(struct pci_dev *pdev,
 	memset(dr->desc, 0, (sizeof(*d) + dr->padding) * DRING_SIZE);
 	for (i = 0; i < DRING_SIZE; ++i) {
 		d = wctc4xxp_descriptor(dr, i);
+		memset(d, 0, sizeof(*d));
 		d->des1 = cpu_to_le32(des1);
 	}
 
