@@ -64,11 +64,7 @@ ASCIIDOC_CMD:=$(ASCIIDOC) -n -a toc -a toclevels=4
 
 GENERATED_DOCS:=README.html
 
-ifneq ($(wildcard .version),)
-  DAHDIVERSION:=$(shell cat .version)
-else
-  DAHDIVERSION:=$(shell build_tools/make_version . dahdi/linux)
-endif
+DAHDIVERSION:=$(shell build_tools/make_version . dahdi/linux)
 
 all: modules
 
