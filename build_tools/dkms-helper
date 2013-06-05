@@ -1,0 +1,123 @@
+#!/bin/sh
+
+set -e
+
+DKMS=$(which dkms)
+
+usage() {
+    echo "$(basename $0): Helper functions for DKMS (Dynamic Kernel Module Support)"
+    echo "Usage: $0 [add|remove|generate_conf]"
+    echo "Options:"
+    echo "   remove -a  : Remove all versions of DAHDI for all kernels."
+    echo ""
+    echo "Examples:"
+    echo ""
+    echo "  build_tools/dkms-helper add"
+    echo "            Installs the current version of DAHDI into the DKMS system."
+    echo ""
+    echo "  build_tools/dkms-helper remove"
+    echo "            Removes the current version of DAHDI from all kernels."
+    echo ""
+    echo "  build_tools/dkms-helper generate_conf > dkms.conf"
+    echo "            Create a dkms.conf based on the currently compiled kernel"
+    echo "            modules. This is also done as part of add and is not"
+    echo "            normally needed as a separate step."
+    echo ""
+    echo "NOTE: Because firmware files could be different between different"
+    echo "versions of DAHDI, and the firmware files are installed into the common"
+    echo "/lib/firmware directory, you should remove a given version of DAHDI from all"
+    echo "kernels before installing a new version of DAHDI to avoid potential"
+    echo "conflicts."
+    echo ""
+}
+
+generate_configuration() {
+    echo 'PACKAGE_NAME="dahdi-linux"'
+    echo "PACKAGE_VERSION=\"$(build_tools/make_version .)\""
+    echo 'MAKE="make KSRC=/lib/modules/${kernelver}/build"'
+    echo 'CLEAN="make clean"'
+    echo 'AUTOINSTALL="yes"'
+    let "module_number=0" || true
+    for file in $(find ./ -type f -name "*.ko"); do
+        MODULE_LOCATION=$(dirname $file | cut -d\/ -f 2-)
+        echo "BUILT_MODULE_NAME[$module_number]=\"$(basename $file .ko)\""
+        echo "BUILT_MODULE_LOCATION[$module_number]=\"$MODULE_LOCATION\""
+        echo "DEST_MODULE_LOCATION[$module_number]=\"/kernel/dahdi/$(echo $MODULE_LOCATION | cut -d\/ -f 3-)\""
+        let "module_number=${module_number}+1" || true
+    done
+    if [ $module_number -eq 0 ]; then
+        echo "WARNING: You should build the modules before generating a config." >&2
+        exit 1
+    fi
+}
+
+add() {
+    GIT=$(which git)
+    VERSION="$(build_tools/make_version .)"
+    if [ $(id -u) != "0" ]; then
+        echo "You must run $0 as root."
+        exit 1
+    fi
+    echo "Building for version ${VERSION}"
+    make > /dev/null
+    echo "Copying to /usr/src/dahdi-linux-${VERSION}"
+    if [ ! -d /usr/src/dahdi-linux-${VERSION} ]; then
+        if [ -d .git ]; then
+            ${GIT} checkout-index -a --prefix=/usr/src/dahdi-linux-${VERSION}/
+        else
+            cp -f -r * /usr/src/dahdi-linux-${VERSION}/
+        fi
+    fi
+    make -C /usr/src/dahdi-linux-${VERSION} install-firmware firmware-loaders
+    build_tools/dkms-helper generate_conf > /usr/src/dahdi-linux-${VERSION}/dkms.conf
+    echo $VERSION > /usr/src/dahdi-linux-${VERSION}/.version
+    ${DKMS} add -m dahdi-linux -v ${VERSION}
+    ${DKMS} build -m dahdi-linux -v ${VERSION}
+    ${DKMS} install --force -m dahdi-linux -v ${VERSION}
+}
+
+remove() {
+    if [ $(id -u) != "0" ]; then
+        echo "You must run $0 as root."
+        exit 1
+    fi
+    REMOVE_ALL=false
+    shift
+    while getopts "a" opt; do
+        case $opt in
+        a) REMOVE_ALL=true ;;
+        *) echo "Unknown option to remove" ; exit 1;;
+        esac    
+    done
+    if [ $REMOVE_ALL == true ]; then
+        # Remove all installed dahdi versions for all kernels.
+        for version in $(${DKMS} status -m dahdi-linux | cut -d, -f 2 | sed -e "s/^\s\+//"); do
+	    echo "Removing version ${version}"
+            ${DKMS} remove -m dahdi-linux -v ${version} --all
+	    rm -f -r /usr/src/dahdi-linux-${version}
+        done
+    else
+        # Just remove the version for the current tree.
+        GIT=$(which git)
+        VERSION="$(build_tools/make_version .)"
+        ${DKMS} remove -m dahdi-linux -v ${VERSION} --all
+        if [ -e /usr/src/dahdi-linux-${VERSION}/dkms.conf ]; then
+            rm -f -r /usr/src/dahdi-linux-${VERSION}
+        else
+            echo "/usr/src/dahdi-linux-${VERSION} not a dkms dir?"
+            exit 1
+        fi
+    fi
+}
+
+# Run the command...
+shift $(($OPTIND-1))
+COMMAND=$1
+case $COMMAND in 
+    add) add $*; exit $? ;;
+    remove) remove $* ; exit $? ;; 
+    generate_conf) generate_configuration; exit $? ;;
+    *) echo "unknown command $0" ; usage; exit 1;;
+esac
+
+exit 0
