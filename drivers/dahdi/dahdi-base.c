@@ -1964,7 +1964,6 @@ static int dahdi_net_open(struct net_device *dev)
 		return -EINVAL;
 	}
 	ms->txbufpolicy = DAHDI_POLICY_IMMEDIATE;
-	ms->rxbufpolicy = DAHDI_POLICY_IMMEDIATE;
 
 	res = dahdi_reallocbufs(ms, DAHDI_DEFAULT_MTU_MRU, DAHDI_DEFAULT_NUM_BUFS);
 	if (res)
