@@ -67,13 +67,7 @@ ifneq (,$(NETSCR_DIR))
   COPY_NETSCR	:= install -D ifup-hdlc $(NETSCR_TARGET)
 endif
 
-ifneq ($(wildcard .version),)
-  TOOLSVERSION:=$(shell cat .version)
-else
-ifneq ($(wildcard .svn),)
-  TOOLSVERSION=$(shell build_tools/make_version . dahdi/tools)
-endif
-endif
+TOOLSVERSION=$(shell build_tools/make_version . dahdi/tools)
 
 LTZ_A:=libtonezone.a
 LTZ_A_OBJS:=zonedata.o tonezone.o version.o
