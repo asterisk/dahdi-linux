@@ -3053,7 +3053,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
 
 	/* Span is in red alarm by default */
-	wc->span.alarms = DAHDI_ALARM_RED;
+	wc->span.alarms = DAHDI_ALARM_NONE;
 
 	res = dahdi_register_device(wc->ddev, &wc->dev->dev);
 	if (res) {
