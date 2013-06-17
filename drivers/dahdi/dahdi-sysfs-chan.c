@@ -247,7 +247,7 @@ int chan_sysfs_create(struct dahdi_chan *chan)
 	/*
 	 * FIXME: the name cannot be longer than KOBJ_NAME_LEN
 	 */
-	dev_set_name(dev, "dahdi!channels!%d!%d", span->spanno, chan->chanpos);
+	dev_set_name(dev, "dahdi!chan!%03d!%03d", span->spanno, chan->chanpos);
 	dev_set_drvdata(dev, chan);
 	dev->release = chan_release;
 	res = device_register(dev);
