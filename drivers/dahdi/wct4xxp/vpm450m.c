@@ -31,99 +31,62 @@
 #include <stdbool.h>
 
 #include "vpm450m.h"
-#include "oct6100api/oct6100_api.h"
+#include <oct612x.h>
 
-/* API for Octasic access */
-UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
+static int wct4xxp_oct612x_write(struct oct612x_context *context,
+				 u32 address, u16 value)
 {
-	/* Why couldn't they just take a timeval like everyone else? */
-	struct timeval tv;
-	unsigned long long total_usecs;
-	unsigned int mask = ~0;
-	
-	do_gettimeofday(&tv);
-	total_usecs = (((unsigned long long)(tv.tv_sec)) * 1000000) + 
-				  (((unsigned long long)(tv.tv_usec)));
-	f_pTime->aulWallTimeUs[0] = (total_usecs & mask);
-	f_pTime->aulWallTimeUs[1] = (total_usecs >> 32);
-	return cOCT6100_ERR_OK;
+	struct t4 *wc = dev_get_drvdata(context->dev);
+	oct_set_reg(wc, address, value);
+	return 0;
 }
 
-UINT32 Oct6100UserMemSet(PVOID f_pAddress, UINT32 f_ulPattern, UINT32 f_ulLength)
+static int wct4xxp_oct612x_read(struct oct612x_context *context, u32 address,
+				u16 *value)
 {
-	memset(f_pAddress, f_ulPattern, f_ulLength);
-	return cOCT6100_ERR_OK;
+	struct t4 *wc = dev_get_drvdata(context->dev);
+	*value = (u16)oct_get_reg(wc, address);
+	return 0;
 }
 
-UINT32 Oct6100UserMemCopy(PVOID f_pDestination, const void *f_pSource, UINT32 f_ulLength)
+static int wct4xxp_oct612x_write_smear(struct oct612x_context *context,
+				       u32 address, u16 value, size_t count)
 {
-	memcpy(f_pDestination, f_pSource, f_ulLength);
-	return cOCT6100_ERR_OK;
+	struct t4 *wc = dev_get_drvdata(context->dev);
+	int i;
+	for (i = 0; i < count; ++i)
+		oct_set_reg(wc, address + (i << 1), value);
+	return 0;
 }
 
-UINT32 Oct6100UserCreateSerializeObject(tPOCT6100_CREATE_SERIALIZE_OBJECT f_pCreate)
+static int wct4xxp_oct612x_write_burst(struct oct612x_context *context,
+				       u32 address, const u16 *buffer,
+				       size_t count)
 {
-	return cOCT6100_ERR_OK;
+	struct t4 *wc = dev_get_drvdata(context->dev);
+	int i;
+	for (i = 0; i < count; ++i)
+		oct_set_reg(wc, address + (i << 1), buffer[i]);
+	return 0;
 }
 
-UINT32 Oct6100UserDestroySerializeObject(tPOCT6100_DESTROY_SERIALIZE_OBJECT f_pDestroy)
+static int wct4xxp_oct612x_read_burst(struct oct612x_context *context,
+				      u32 address, u16 *buffer, size_t count)
 {
-#ifdef OCTASIC_DEBUG
-	printk(KERN_DEBUG "I should never be called! (destroy serialize object)\n");
-#endif
-	return cOCT6100_ERR_OK;
+	struct t4 *wc = dev_get_drvdata(context->dev);
+	int i;
+	for (i = 0; i < count; ++i)
+		buffer[i] = oct_get_reg(wc, address + (i << 1));
+	return 0;
 }
 
-UINT32 Oct6100UserSeizeSerializeObject(tPOCT6100_SEIZE_SERIALIZE_OBJECT f_pSeize)
-{
-	/* Not needed */
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserReleaseSerializeObject(tPOCT6100_RELEASE_SERIALIZE_OBJECT f_pRelease)
-{
-	/* Not needed */
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteApi(tPOCT6100_WRITE_PARAMS f_pWriteParams)
-{
-	oct_set_reg(f_pWriteParams->pProcessContext, f_pWriteParams->ulWriteAddress, f_pWriteParams->usWriteData);
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteSmearApi(tPOCT6100_WRITE_SMEAR_PARAMS f_pSmearParams)
-{
-	unsigned int x;
-	for (x=0;x<f_pSmearParams->ulWriteLength;x++) {
-		oct_set_reg(f_pSmearParams->pProcessContext, f_pSmearParams->ulWriteAddress + (x << 1), f_pSmearParams->usWriteData);
-	}
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteBurstApi(tPOCT6100_WRITE_BURST_PARAMS f_pBurstParams)
-{
-	unsigned int x;
-	for (x=0;x<f_pBurstParams->ulWriteLength;x++) {
-		oct_set_reg(f_pBurstParams->pProcessContext, f_pBurstParams->ulWriteAddress + (x << 1), f_pBurstParams->pusWriteData[x]);
-	}
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverReadApi(tPOCT6100_READ_PARAMS f_pReadParams)
-{
-	*(f_pReadParams->pusReadData) = oct_get_reg(f_pReadParams->pProcessContext, f_pReadParams->ulReadAddress);
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
-{
-	unsigned int x;
-	for (x=0;x<f_pBurstParams->ulReadLength;x++) {
-		f_pBurstParams->pusReadData[x] = oct_get_reg(f_pBurstParams->pProcessContext, f_pBurstParams->ulReadAddress + (x << 1));
-	}
-	return cOCT6100_ERR_OK;
-}
+static const struct oct612x_ops wct4xxp_oct612x_ops = {
+	.write = wct4xxp_oct612x_write,
+	.read = wct4xxp_oct612x_read,
+	.write_smear = wct4xxp_oct612x_write_smear,
+	.write_burst = wct4xxp_oct612x_write_burst,
+	.read_burst = wct4xxp_oct612x_read_burst,
+};
 
 #define SOUT_G168_1100GB_ON 0x40000004
 #define SOUT_DTMF_1 0x40000011
@@ -173,6 +136,7 @@ UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
 
 struct vpm450m {
 	tPOCT6100_INSTANCE_API pApiInstance;
+	struct oct612x_context context;
 	UINT32 aulEchoChanHndl[256];
 	int chanflags[256];
 	int ecmode[256];
@@ -453,14 +417,18 @@ int vpm450m_getdtmf(struct vpm450m *vpm450m, int *channel, int *tone, int *start
 	return 0;
 }
 
-unsigned int get_vpm450m_capacity(void *wc)
+unsigned int get_vpm450m_capacity(struct device *device)
 {
+	struct oct612x_context context;
 	UINT32 ulResult;
 
 	tOCT6100_API_GET_CAPACITY_PINS CapacityPins;
 
+	context.dev = device;
+	context.ops = &wct4xxp_oct612x_ops;
+
 	Oct6100ApiGetCapacityPinsDef(&CapacityPins);
-	CapacityPins.pProcessContext = wc;
+	CapacityPins.pProcessContext = &context;
 	CapacityPins.ulMemoryType = cOCT6100_MEM_TYPE_DDR;
 	CapacityPins.fEnableMemClkOut = TRUE;
 	CapacityPins.ulMemClkFreq = cOCT6100_MCLK_FREQ_133_MHZ;
@@ -474,7 +442,8 @@ unsigned int get_vpm450m_capacity(void *wc)
 	return CapacityPins.ulCapacityValue;
 }
 
-struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct firmware *firmware)
+struct vpm450m *init_vpm450m(struct device *device, int *isalaw,
+			     int numspans, const struct firmware *firmware)
 {
 	tOCT6100_CHIP_OPEN *ChipOpen;
 	tOCT6100_GET_INSTANCE_SIZE InstanceSize;
@@ -489,6 +458,8 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 		return NULL;
 
 	memset(vpm450m, 0, sizeof(struct vpm450m));
+	vpm450m->context.dev = device;
+	vpm450m->context.ops = &wct4xxp_oct612x_ops;
 
 	if (!(ChipOpen = kmalloc(sizeof(tOCT6100_CHIP_OPEN), GFP_KERNEL))) {
 		kfree(vpm450m);
@@ -517,7 +488,7 @@ struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct f
 	ChipOpen->ulUpclkFreq = cOCT6100_UPCLK_FREQ_33_33_MHZ;
 	Oct6100GetInstanceSizeDef(&InstanceSize);
 
-	ChipOpen->pProcessContext = wc;
+	ChipOpen->pProcessContext = &vpm450m->context;
 
 	ChipOpen->pbyImageFile = firmware->data;
 	ChipOpen->ulImageSize = firmware->size;

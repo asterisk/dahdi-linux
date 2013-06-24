@@ -205,7 +205,8 @@ struct t13x_firm_header {
 #include <linux/time.h>
 #include <linux/version.h>
 #include <linux/firmware.h>
-#include "oct6100api/oct6100_api.h"
+
+#include <oct612x.h>
 
 #define ECHOCAN_NUM_CHANS 32
 
@@ -219,8 +220,8 @@ struct t13x_firm_header {
 #define OCT_TONEEVENT_BUFFER_SIZE	128
 #define SOUT_STREAM			1
 #define RIN_STREAM			0
-#define SIN_STREAM			2
 
+#define SIN_STREAM			2
 #define OCT_OFFSET		(wc->membase + 0x10000)
 #define OCT_CONTROL_REG		(OCT_OFFSET + 0)
 #define OCT_DATA_REG		(OCT_OFFSET + 0x4)
@@ -247,6 +248,7 @@ static const struct dahdi_echocan_ops vpm_ec_ops = {
 
 struct vpm450m {
 	tPOCT6100_INSTANCE_API pApiInstance;
+	struct oct612x_context context;
 	UINT32 aulEchoChanHndl[ECHOCAN_NUM_CHANS];
 	int ecmode[ECHOCAN_NUM_CHANS];
 	unsigned long chanflags[ECHOCAN_NUM_CHANS];
@@ -334,115 +336,58 @@ static void oct_set_reg_indirect(void *data, uint32_t address, uint16_t val)
 	WARN_ON_ONCE(time_after_eq(jiffies, stop));
 }
 
-/* API for Octasic access */
-UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
+static int t13x_oct612x_write(struct oct612x_context *context,
+			      u32 address, u16 value)
 {
-	/* Why couldn't they just take a timeval like everyone else? */
-	struct timeval tv;
-	unsigned long long total_usecs;
-	unsigned int mask = ~0;
-
-	do_gettimeofday(&tv);
-	total_usecs = (((unsigned long long)(tv.tv_sec)) * 1000000) +
-				  (((unsigned long long)(tv.tv_usec)));
-	f_pTime->aulWallTimeUs[0] = (total_usecs & mask);
-	f_pTime->aulWallTimeUs[1] = (total_usecs >> 32);
-	return cOCT6100_ERR_OK;
+	oct_set_reg_indirect(dev_get_drvdata(context->dev), address, value);
+	return 0;
 }
 
-UINT32 Oct6100UserMemSet(PVOID f_pAddress, UINT32 f_ulPattern,
-		UINT32 f_ulLength)
+static int t13x_oct612x_read(struct oct612x_context *context, u32 address,
+			     u16 *value)
 {
-	memset(f_pAddress, f_ulPattern, f_ulLength);
-	return cOCT6100_ERR_OK;
+	*value = oct_get_reg_indirect(dev_get_drvdata(context->dev), address);
+	return 0;
 }
 
-UINT32 Oct6100UserMemCopy(PVOID f_pDestination, const void *f_pSource,
-		UINT32 f_ulLength)
+static int t13x_oct612x_write_smear(struct oct612x_context *context,
+				    u32 address, u16 value, size_t count)
 {
-	memcpy(f_pDestination, f_pSource, f_ulLength);
-	return cOCT6100_ERR_OK;
+	unsigned int i;
+	struct t13x *wc = dev_get_drvdata(context->dev);
+	for (i = 0; i < count; ++i)
+		oct_set_reg_indirect(wc, address + (i << 1), value);
+	return 0;
 }
 
-UINT32 Oct6100UserCreateSerializeObject(
-		tPOCT6100_CREATE_SERIALIZE_OBJECT f_pCreate)
+static int t13x_oct612x_write_burst(struct oct612x_context *context,
+				    u32 address, const u16 *buffer,
+				    size_t count)
 {
-	return cOCT6100_ERR_OK;
+	unsigned int i;
+	struct t13x *wc = dev_get_drvdata(context->dev);
+	for (i = 0; i < count; ++i)
+		oct_set_reg_indirect(wc, address + (i << 1), buffer[i]);
+	return 0;
 }
 
-UINT32 Oct6100UserDestroySerializeObject(
-		tPOCT6100_DESTROY_SERIALIZE_OBJECT f_pDestroy)
+static int t13x_oct612x_read_burst(struct oct612x_context *context,
+				   u32 address, u16 *buffer, size_t count)
 {
-#ifdef OCTASIC_DEBUG
-	pr_debug("I should never be called! (destroy serialize object)\n");
-#endif
-	return cOCT6100_ERR_OK;
+	unsigned int i;
+	struct t13x *wc = dev_get_drvdata(context->dev);
+	for (i = 0; i < count; ++i)
+		buffer[i] = oct_get_reg_indirect(wc, address + (i << 1));
+	return 0;
 }
 
-UINT32 Oct6100UserSeizeSerializeObject(
-		tPOCT6100_SEIZE_SERIALIZE_OBJECT f_pSeize)
-{
-	/* Not needed */
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserReleaseSerializeObject(
-		tPOCT6100_RELEASE_SERIALIZE_OBJECT f_pRelease)
-{
-	/* Not needed */
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteApi(tPOCT6100_WRITE_PARAMS f_pWriteParams)
-{
-	oct_set_reg_indirect(f_pWriteParams->pProcessContext,
-				f_pWriteParams->ulWriteAddress,
-				f_pWriteParams->usWriteData);
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteSmearApi(
-		tPOCT6100_WRITE_SMEAR_PARAMS f_pSmearParams)
-{
-	unsigned int x;
-	for (x = 0; x < f_pSmearParams->ulWriteLength; x++) {
-		oct_set_reg_indirect(f_pSmearParams->pProcessContext,
-				f_pSmearParams->ulWriteAddress + (x << 1),
-				f_pSmearParams->usWriteData);
-	}
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverWriteBurstApi(
-		tPOCT6100_WRITE_BURST_PARAMS f_pBurstParams)
-{
-	unsigned int x;
-	for (x = 0; x < f_pBurstParams->ulWriteLength; x++) {
-		oct_set_reg_indirect(f_pBurstParams->pProcessContext,
-				f_pBurstParams->ulWriteAddress + (x << 1),
-				f_pBurstParams->pusWriteData[x]);
-	}
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverReadApi(tPOCT6100_READ_PARAMS f_pReadParams)
-{
-	*(f_pReadParams->pusReadData) = oct_get_reg_indirect(
-			f_pReadParams->pProcessContext,
-			f_pReadParams->ulReadAddress);
-	return cOCT6100_ERR_OK;
-}
-
-UINT32 Oct6100UserDriverReadBurstApi(tPOCT6100_READ_BURST_PARAMS f_pBurstParams)
-{
-	unsigned int x;
-	for (x = 0; x < f_pBurstParams->ulReadLength; x++) {
-		f_pBurstParams->pusReadData[x] = oct_get_reg_indirect(
-				f_pBurstParams->pProcessContext,
-				f_pBurstParams->ulReadAddress + (x << 1));
-	}
-	return cOCT6100_ERR_OK;
-}
+static const struct oct612x_ops t13x_oct612x_ops = {
+	.write = t13x_oct612x_write,
+	.read = t13x_oct612x_read,
+	.write_smear = t13x_oct612x_write_smear,
+	.write_burst = t13x_oct612x_write_burst,
+	.read_burst = t13x_oct612x_read_burst,
+};
 
 static void vpm450m_setecmode(struct vpm450m *vpm450m, int channel, int mode)
 {
@@ -615,6 +560,9 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 		return NULL;
 	}
 
+	vpm450m->context.dev = &wc->dev->dev;
+	vpm450m->context.ops = &t13x_oct612x_ops;
+
 	ChipOpen = kzalloc(sizeof(tOCT6100_CHIP_OPEN), GFP_KERNEL);
 	if (!ChipOpen) {
 		dev_info(&wc->dev->dev, "Unable to allocate ChipOpen\n");
@@ -637,7 +585,7 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 		 ECHOCAN_NUM_CHANS);
 
 	Oct6100ChipOpenDef(ChipOpen);
-	ChipOpen->pProcessContext = (void *)wc;
+	ChipOpen->pProcessContext = &vpm450m->context;
 
 	/* Change default parameters as needed */
 	/* upclk oscillator is at 33.33 Mhz */

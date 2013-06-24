@@ -82,7 +82,7 @@ include/dahdi/version.h: FORCE
 	fi
 	@rm -f $@.tmp
 
-prereq: include/dahdi/version.h firmware-loaders oct612x-lib
+prereq: include/dahdi/version.h firmware-loaders
 
 stackcheck: $(CHECKSTACK) modules
 	objdump -d drivers/dahdi/*.ko drivers/dahdi/*/*.ko | $(CHECKSTACK)
@@ -117,13 +117,6 @@ uninstall-firmware:
 
 firmware-loaders:
 	$(MAKE) -C drivers/dahdi/firmware firmware-loaders
-
-oct612x-lib:
-ifeq (no,$(HAS_KSRC))
-	@echo "You do not appear to have the sources for the $(KVERS) kernel installed."
-	@exit 1
-endif
-	$(MAKE) -C $(KSRC) M='$(PWD)/drivers/dahdi/oct612x'
 
 install-include:
 	for hdr in $(INST_HEADERS); do \

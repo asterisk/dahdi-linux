@@ -2,7 +2,7 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT4XXP) += wct4xxp.o
 
 FIRM_DIR	:= ../firmware
 
-EXTRA_CFLAGS += -I$(src)/.. $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
+EXTRA_CFLAGS += -I$(src)/.. -I$(src)/../oct612x/ $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
 
 # The OCT612X source files are from a vendor drop and we do not want to edit
 # them to make this warning go away. Therefore, turn off the
@@ -14,7 +14,7 @@ ifeq ($(HOTPLUG_FIRMWARE),yes)
   EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
 endif
 
-wct4xxp-objs := base.o vpm450m.o ../oct612x/lib.a
+wct4xxp-objs := base.o vpm450m.o
 
 ifneq ($(HOTPLUG_FIRMWARE),yes)
 wct4xxp-objs += $(FIRM_DIR)/dahdi-fw-oct6114-064.o $(FIRM_DIR)/dahdi-fw-oct6114-128.o $(FIRM_DIR)/dahdi-fw-oct6114-256.o

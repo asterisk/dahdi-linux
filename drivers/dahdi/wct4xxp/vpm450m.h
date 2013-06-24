@@ -25,6 +25,7 @@
 
 #include <linux/firmware.h>
 
+struct t4;
 struct vpm450m;
 
 /* From driver */
@@ -32,8 +33,9 @@ unsigned int oct_get_reg(void *data, unsigned int reg);
 void oct_set_reg(void *data, unsigned int reg, unsigned int val);
 
 /* From vpm450m */
-struct vpm450m *init_vpm450m(void *wc, int *isalaw, int numspans, const struct firmware *firmware);
-unsigned int get_vpm450m_capacity(void *wc);
+struct vpm450m *init_vpm450m(struct device *device, int *isalaw,
+			     int numspans, const struct firmware *firmware);
+unsigned int get_vpm450m_capacity(struct device *device);
 void vpm450m_setec(struct vpm450m *instance, int channel, int eclen);
 void vpm450m_setdtmf(struct vpm450m *instance, int channel, int dtmfdetect, int dtmfmute);
 int vpm450m_checkirq(struct vpm450m *vpm450m);

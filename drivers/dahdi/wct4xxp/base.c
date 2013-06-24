@@ -4363,7 +4363,7 @@ static void t4_vpm_init(struct t4 *wc)
 			laws[x] = 1;
 	}
 
-	vpm_capacity = get_vpm450m_capacity(wc);
+	vpm_capacity = get_vpm450m_capacity(&wc->dev->dev);
 	if (vpm_capacity != wc->numspans * 32) {
 		dev_info(&wc->dev->dev, "Disabling VPMOCT%03d. TE%dXXP"\
 				" requires a VPMOCT%03d", vpm_capacity,
@@ -4435,7 +4435,8 @@ static void t4_vpm_init(struct t4 *wc)
 		return;
 	}
 
-	if (!(wc->vpm = init_vpm450m(wc, laws, wc->numspans, firmware))) {
+	wc->vpm = init_vpm450m(&wc->dev->dev, laws, wc->numspans, firmware);
+	if (!wc->vpm) {
 		dev_notice(&wc->dev->dev, "VPM450: Failed to initialize\n");
 		if (firmware != &embedded_firmware)
 			release_firmware(firmware);

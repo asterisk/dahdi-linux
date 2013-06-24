@@ -1,0 +1,32 @@
+#
+# Produces the oct612x library
+#
+octapi_files = octdeviceapi/oct6100api/oct6100_api/oct6100_adpcm_chan.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_channel.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_chip_open.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_chip_stats.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_conf_bridge.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_debug.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_events.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_interrupts.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_memory.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_miscellaneous.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_mixer.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_phasing_tsst.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_playout_buf.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_remote_debug.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_tlv.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_tone_detection.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_tsi_cnct.o \
+		octdeviceapi/oct6100api/oct6100_api/oct6100_tsst.o \
+		apilib/bt/octapi_bt0.o \
+		apilib/largmath/octapi_largmath.o \
+		apilib/llman/octapi_llman.o \
+		oct612x-user.o
+
+# TODO: ccflags was added in 2.6.24 in commit f77bf01425b11947eeb3b5b54. This
+# should be changed to a conditional compilation based on the Kernel Version.
+# ccflags-y := -I$(src)/.. -Wno-undef -I$(src)/include -I$(src)/octdeviceapi -I$(src)/octdeviceapi/oct6100api
+EXTRA_CFLAGS = -I$(src)/.. -Wno-undef -I$(src)/include -I$(src)/octdeviceapi -I$(src)/octdeviceapi/oct6100api
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_OCT612X) := oct612x.o
+oct612x-objs := $(octapi_files)
