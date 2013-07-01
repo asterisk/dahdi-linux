@@ -3,7 +3,7 @@
 # 
 # Makefile for firmware downloading/installation
 #
-# Copyright (C) 2007-2010, Digium, Inc.
+# Copyright (C) 2007-2013, Digium, Inc.
 #
 # Joshua Colp <jcolp@digium.com>
 #
@@ -33,10 +33,16 @@ VPMOCT032_VERSION:=1.12.0
 WCT820_VERSION:=1.76
 TE133_VERSION:=6f0017
 TE134_VERSION:=6f0017
+A8A_VERSION:=1d0017
+A8B_VERSION:=1d0017
+A4A_VERSION:=a0017
+A4B_VERSION:=a0017
 
 FIRMWARE_URL:=http://downloads.digium.com/pub/telephony/firmware/releases
 
-ALL_FIRMWARE=FIRMWARE-OCT6114-032 FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-OCT6114-256 FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032 FIRMWARE-TE820 FIRMWARE-TE133 FIRMWARE-TE134
+ALL_FIRMWARE=FIRMWARE-OCT6114-032 FIRMWARE-OCT6114-064 FIRMWARE-OCT6114-128 FIRMWARE-OCT6114-256
+ALL_FIRMWARE+=FIRMWARE-TC400M FIRMWARE-HX8 FIRMWARE-VPMOCT032 FIRMWARE-TE820 FIRMWARE-TE133 FIRMWARE-TE134
+ALL_FIRMWARE+=FIRMWARE-A8A FIRMWARE-A8B FIRMWARE-A4A FIRMWARE-A4B
 
 # Firmware files should use the naming convention: dahdi-fw-<base name>-<sub name>-<version> or dahdi-fw-<base name>-<version>
 # First example: dahdi-fw-oct6114-064-1.05.01
@@ -55,6 +61,10 @@ FIRMWARE:=$(FIRMWARE:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032-$(VPMOCT032_VERSION).
 FIRMWARE:=$(FIRMWARE:FIRMWARE-TE820=dahdi-fw-te820-$(WCT820_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-TE133=dahdi-fw-te133-$(TE133_VERSION).tar.gz)
 FIRMWARE:=$(FIRMWARE:FIRMWARE-TE134=dahdi-fw-te134-$(TE134_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-A8A=dahdi-fw-a8b-$(A8B_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-A8B=dahdi-fw-a8a-$(A8A_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-A4A=dahdi-fw-a4b-$(A4B_VERSION).tar.gz)
+FIRMWARE:=$(FIRMWARE:FIRMWARE-A4B=dahdi-fw-a4a-$(A4A_VERSION).tar.gz)
 
 FWLOADERS:=dahdi-fwload-vpmadt032-$(VPMADT032_VERSION).tar.gz
 
@@ -224,6 +234,50 @@ ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te134-$(TE
 	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te134-$(TE134_VERSION)
 else
 	@echo "Firmware dahdi-fw-te134.bin is already installed with required version $(TE134_VERSION)"
+endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-$(A8A_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-$(A8A_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-a8a.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-a8a.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-$(A8A_VERSION)
+	@install -m 644 dahdi-fw-a8a.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-$(A8A_VERSION)
+else
+	@echo "Firmware dahdi-fw-a8a.bin is already installed with required version $(A8A_VERSION)"
+endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-$(A8B_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-$(A8B_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-a8b.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-a8b.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-$(A8B_VERSION)
+	@install -m 644 dahdi-fw-a8b.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-$(A8B_VERSION)
+else
+	@echo "Firmware dahdi-fw-a8b.bin is already installed with required version $(A8B_VERSION)"
+endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-$(A4A_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-$(A4A_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-a4a.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-a4a.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-$(A4A_VERSION)
+	@install -m 644 dahdi-fw-a4a.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-$(A4A_VERSION)
+else
+	@echo "Firmware dahdi-fw-a4a.bin is already installed with required version $(A4A_VERSION)"
+endif
+ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-$(A4B_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-$(A4B_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
+	@echo "Installing dahdi-fw-a4b.bin to hotplug firmware directories"
+	@install -m 644 dahdi-fw-a4b.bin $(DESTDIR)/usr/lib/hotplug/firmware
+	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-*
+	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-$(A4B_VERSION)
+	@install -m 645 dahdi-fw-a4b.bin $(DESTDIR)/lib/firmware
+	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-*
+	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-$(A4B_VERSION)
+else
+	@echo "Firmware dahdi-fw-a4b.bin is already installed with required version $(A4B_VERSION)"
 endif
 
 # Uninstall any installed dahdi firmware images from hotplug firmware directories
