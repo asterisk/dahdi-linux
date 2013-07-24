@@ -811,6 +811,7 @@ enum spantypes {
 	SPANTYPE_DIGITAL_BRI_NT,
 	SPANTYPE_DIGITAL_BRI_TE,
 	SPANTYPE_DIGITAL_BRI_SOFT,
+	SPANTYPE_DIGITAL_DYNAMIC,
 };
 const char *dahdi_spantype2str(enum spantypes st);
 enum spantypes dahdi_str2spantype(const char *name);

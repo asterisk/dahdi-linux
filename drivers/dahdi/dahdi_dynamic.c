@@ -630,6 +630,10 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 	d->span.deflaw = DAHDI_LAW_MULAW;
 	d->span.flags |= DAHDI_FLAG_RBS;
 	d->span.chans = d->chans;
+	d->span.spantype = SPANTYPE_DIGITAL_DYNAMIC; 
+	d->span.linecompat = DAHDI_CONFIG_D4 | DAHDI_CONFIG_ESF	| 
+		DAHDI_CONFIG_AMI | DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_CCS |
+		DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CRC4 | DAHDI_CONFIG_NOTOPEN;
 	d->span.ops = &dynamic_ops;
 	for (x = 0; x < d->span.channels; x++) {
 		sprintf(d->chans[x]->name, "DYN/%s/%s/%d",

@@ -732,6 +732,8 @@ enum spantypes dahdi_str2spantype(const char *name)
 		return SPANTYPE_DIGITAL_BRI_TE;
 	else if (strcasecmp("BRI_SOFT", name) == 0)
 		return SPANTYPE_DIGITAL_BRI_SOFT;
+	else if (strcasecmp("DYNAMIC", name) == 0)
+		return SPANTYPE_DIGITAL_DYNAMIC;
 	else
 		return SPANTYPE_INVALID;
 }
@@ -749,6 +751,7 @@ const char *dahdi_spantype2str(enum spantypes st)
 	case SPANTYPE_DIGITAL_BRI_NT:	return "BRI_NT";
 	case SPANTYPE_DIGITAL_BRI_TE:	return "BRI_TE";
 	case SPANTYPE_DIGITAL_BRI_SOFT:	return "BRI_SOFT";
+	case SPANTYPE_DIGITAL_DYNAMIC:	return "DYNAMIC";
 	default:
 	case SPANTYPE_INVALID:		return "INVALID";
 	};
