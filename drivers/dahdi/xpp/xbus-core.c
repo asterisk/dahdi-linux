@@ -1592,8 +1592,6 @@ static bool xpds_done(xbus_t *xbus)
 {
 	if (XBUS_IS(xbus, FAIL))
 		return 1;	/* Nothing to wait for */
-	if (!XBUS_IS(xbus, RECVD_DESC))
-		return 1;	/* We are not in the initialization phase */
 	if (xbus->worker.xpds_init_done)
 		return 1;	/* All good */
 	/* Keep waiting */
@@ -1622,14 +1620,9 @@ int waitfor_xpds(xbus_t *xbus, char *buf)
 		len = -ENODEV;
 		goto out;
 	}
-	if (worker->num_units == 0) {
-		XBUS_ERR(xbus, "No cards. Skipping.\n");
-		goto out;
-	}
 	XBUS_DBG(DEVICES, xbus,
-		 "Waiting for card init of %d XPD's max %d seconds (%p)\n",
-		 worker->num_units, INITIALIZATION_TIMEOUT / HZ,
-		 &worker->wait_for_xpd_initialization);
+		 "Waiting for card init of XPDs max %d seconds\n",
+		 INITIALIZATION_TIMEOUT / HZ);
 	ret =
 	    wait_event_interruptible_timeout(worker->
 					     wait_for_xpd_initialization,
