@@ -126,20 +126,20 @@ struct t13x {
 		unsigned int sendingyellow:1;
 	} flags;
 	unsigned char txsigs[16];	/* Copy of tx sig registers */
-	int alarmcount;			/* How much red alarm we've seen */
-	int losalarmcount;
-	int aisalarmcount;
-	int yelalarmcount;
-	const char *name;
+	unsigned long lofalarmtimer;
+	unsigned long losalarmtimer;
+	unsigned long aisalarmtimer;
+	unsigned long yelalarmtimer;
+	unsigned long recoverytimer;
 	unsigned long blinktimer;
-	int loopupcnt;
-	int loopdowncnt;
+	unsigned long loopuptimer;
+	unsigned long loopdntimer;
+	const char *name;
 #define INITIALIZED    1
 #define SHUTDOWN       2
 #define READY	       3
 #define LATENCY_LOCKED 4
 	unsigned long bit_flags;
-	unsigned long alarmtimer;
 	u32 ledstate;
 	struct dahdi_device *ddev;
 	struct dahdi_span span;			/* Span */
@@ -171,6 +171,26 @@ static void reset_dring(struct t13x *);
 #define CCB2		0x30
 #define CCB3		0x31
 
+#define FECL_T		0x50	/* Framing Error Counter Lower Byte */
+#define FECH_T		0x51	/* Framing Error Counter Higher Byte */
+#define CVCL_T		0x52	/* Code Violation Counter Lower Byte */
+#define CVCH_T		0x53	/* Code Violation Counter Higher Byte */
+#define CEC1L_T		0x54	/* CRC Error Counter 1 Lower Byte */
+#define CEC1H_T		0x55	/* CRC Error Counter 1 Higher Byte */
+#define EBCL_T		0x56	/* E-Bit Error Counter Lower Byte */
+#define EBCH_T		0x57	/* E-Bit Error Counter Higher Byte */
+#define BECL_T		0x58	/* Bit Error Counter Lower Byte */
+#define BECH_T		0x59	/* Bit Error Counter Higher Byte */
+#define COEC_T		0x5A	/* COFA Event Counter */
+#define PRBSSTA_T	0xDA	/* PRBS Status Register */
+#define FRS1_T		0x4D	/* Framer Receive Status Reg 1 */
+
+#define ISR3_SEC (1 << 6)	/* Internal one-second interrupt bit mask */
+#define ISR3_ES (1 << 7)	/* Errored Second interrupt bit mask */
+
+#define IMR0		0x14
+#define CCR1		0x09
+
 /* pci memory map offsets */
 #define DMA1		0x00	/* dma addresses */
 #define DMA2		0x04
@@ -197,6 +217,10 @@ struct t13x_firm_header {
 	u8	pad[18];
 	__le32	version;
 } __packed;
+
+
+static void t1_check_alarms(struct t13x *wc);
+static void t1_check_sigbits(struct t13x *wc);
 
 #ifdef VPM_SUPPORT
 #include <linux/slab.h>
@@ -915,8 +939,9 @@ static void t1_setleds(struct t13x *wc, u32 leds)
 static void __t1xxp_set_clear(struct t13x *wc)
 {
 	int i, offset;
-	int ret;
-	unsigned short reg[3] = {0, 0, 0};
+	int reg;
+	unsigned char ccb[3] = {0, 0, 0};
+	unsigned long flags;
 
 	/* Calculate all states on all 24 channels using the channel
 	   flags, then write all 3 clear channel registers at once */
@@ -924,22 +949,28 @@ static void __t1xxp_set_clear(struct t13x *wc)
 	for (i = 0; i < wc->span.channels; i++) {
 		offset = i/8;
 		if (wc->span.chans[i]->flags & DAHDI_FLAG_CLEAR)
-			reg[offset] |= 1 << (7 - (i % 8));
+			ccb[offset] |= 1 << (7 - (i % 8));
 		else
-			reg[offset] &= ~(1 << (7 - (i % 8)));
+			ccb[offset] &= ~(1 << (7 - (i % 8)));
 	}
 
-	ret = t1_framer_set(wc, CCB1, reg[0]);
-	if (ret < 0)
-		dev_info(&wc->dev->dev, "Unable to set clear/rbs mode!\n");
+	spin_lock_irqsave(&wc->reglock, flags);
 
-	ret = t1_framer_set(wc, CCB2, reg[1]);
-	if (ret < 0)
-		dev_info(&wc->dev->dev, "Unable to set clear/rbs mode!\n");
+	__t1_framer_set(wc, CCB1, ccb[0]);
+	__t1_framer_set(wc, CCB2, ccb[1]);
+	__t1_framer_set(wc, CCB3, ccb[2]);
 
-	ret = t1_framer_set(wc, CCB3, reg[2]);
-	if (ret < 0)
-		dev_info(&wc->dev->dev, "Unable to set clear/rbs mode!\n");
+	reg = __t1_framer_get(wc, IMR0);
+	if ((~ccb[0]) | (~ccb[1]) | (~ccb[2]))
+		__t1_framer_set(wc, IMR0, reg & ~0x08);
+	else
+		__t1_framer_set(wc, IMR0, reg | 0x08);
+
+	/* set RSCC */
+	reg = __t1_framer_get(wc, CCR1);
+	__t1_framer_set(wc, CCR1, reg | 0x80);
+
+	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 /**
@@ -980,7 +1011,7 @@ static void free_wc(struct t13x *wc)
 	kfree(wc);
 }
 
-static void t4_serial_setup(struct t13x *wc)
+static void t1_serial_setup(struct t13x *wc)
 {
 	unsigned long flags;
 
@@ -1141,6 +1172,14 @@ static void t1_configure_t1(struct t13x *wc, int lineconfig, int txlevel)
 		break;
 	}
 
+	__t1_framer_set(wc, 0x14, 0xff);	/* IMR0 */
+	__t1_framer_set(wc, 0x15, 0xff);	/* IMR1 */
+
+	__t1_framer_set(wc, 0x16, 0x00);	/* IMR2: All the alarms */
+	__t1_framer_set(wc, 0x17, 0x34);	/* IMR3:
+						   ES, SEC, LLBSC, rx slips */
+	__t1_framer_set(wc, 0x18, 0x3f);	/* IMR4: Slips on transmit */
+
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	dev_info(&wc->dev->dev, "Span configured for %s/%s\n", framing, line);
 }
@@ -1149,6 +1188,7 @@ static void t1_configure_e1(struct t13x *wc, int lineconfig)
 {
 	unsigned int fmr2, fmr1, fmr0;
 	unsigned int cas = 0;
+	unsigned int imr3extra = 0;
 	char *crc4 = "";
 	char *framing, *line;
 	unsigned long flags;
@@ -1179,6 +1219,7 @@ static void t1_configure_e1(struct t13x *wc, int lineconfig)
 	}
 	if (lineconfig & DAHDI_CONFIG_CCS) {
 		framing = "CCS";
+		imr3extra = 0x28;
 	} else {
 		framing = "CAS";
 		cas = 0x40;
@@ -1229,8 +1270,16 @@ static void t1_configure_e1(struct t13x *wc, int lineconfig)
 	__t1_framer_set(wc, 0x27, 0x02);	/* XPM1 */
 	__t1_framer_set(wc, 0x28, 0x00);	/* XPM2 */
 
-	spin_unlock_irqrestore(&wc->reglock, flags);
+	__t1_framer_set(wc, 0x14, 0xff);		/* IMR0 */
+	__t1_framer_set(wc, 0x15, 0xff);		/* IMR1 */
 
+	__t1_framer_set(wc, 0x16, 0x00);		/* IMR2: all the
+							   alarm stuff! */
+	__t1_framer_set(wc, 0x17, 0x04 | imr3extra);	/* IMR3: AIS */
+	__t1_framer_set(wc, 0x18, 0x3f);		/* IMR4: slips on
+							   transmit */
+
+	spin_unlock_irqrestore(&wc->reglock, flags);
 	dev_info(&wc->dev->dev,
 			"Span configured for %s/%s%s\n", framing, line, crc4);
 }
@@ -1269,6 +1318,7 @@ static void set_span_devicetype(struct t13x *wc)
 static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 {
 	struct t13x *wc = container_of(span, struct t13x, span);
+	unsigned long flags;
 
 	set_span_devicetype(wc);
 
@@ -1276,6 +1326,12 @@ static int t1xxp_startup(struct file *file, struct dahdi_span *span)
 	t1xxp_framer_start(wc);
 	dev_info(&wc->dev->dev,
 			"Calling startup (flags is %lu)\n", span->flags);
+
+	/* Get this party started */
+	local_irq_save(flags);
+	t1_check_alarms(wc);
+	t1_check_sigbits(wc);
+	local_irq_restore(flags);
 
 	return 0;
 }
@@ -1373,7 +1429,7 @@ static int t1xxp_rbsbits(struct dahdi_chan *chan, int bits)
 	return 0;
 }
 
-static inline void t1_check_sigbits(struct t13x *wc)
+static void t1_check_sigbits(struct t13x *wc)
 {
 	int a, i, rxs;
 
@@ -1573,6 +1629,13 @@ static void t1xxp_maint_work(struct work_struct *work)
 			return;
 		}
 	}
+
+	/* update DAHDI_ALARM_LOOPBACK status bit and check timing source */
+	spin_lock_irqsave(&wc->reglock, flags);
+	if (!span->maintstat)
+		span->alarms &= ~DAHDI_ALARM_LOOPBACK;
+	dahdi_alarm_notify(span);
+	spin_unlock_irqrestore(&wc->reglock, flags);
 
 cleanup:
 	kfree(w);
@@ -1840,7 +1903,7 @@ static int t1_software_init(struct t13x *wc, enum linemode type)
 	dev_info(&wc->dev->dev, "Setting up global serial parameters for %s\n",
 		dahdi_spantype2str(wc->span.spantype));
 
-	t4_serial_setup(wc);
+	t1_serial_setup(wc);
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
 	for (x = 0; x < wc->span.channels; x++) {
 		sprintf(wc->chans[x]->name, "%s/%d", wc->span.name, x + 1);
@@ -1899,7 +1962,7 @@ static int t1xxp_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 	flush_workqueue(wc->wq);
 
 	t1_framer_reset(wc);
-	t4_serial_setup(wc);
+	t1_serial_setup(wc);
 
 	switch (linemode) {
 	case SPANTYPE_DIGITAL_T1:
@@ -2000,26 +2063,22 @@ static int t1_hardware_post_init(struct t13x *wc, enum linemode *type)
 	return 0;
 }
 
-static inline void t1_check_alarms(struct t13x *wc)
+static void t1_check_alarms(struct t13x *wc)
 {
 	unsigned char c, d;
 	int alarms;
 	int x, j;
-	unsigned char fmr4; /* must read this always */
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
 
-	c = t1_framer_get(wc, 0x4c);
-	fmr4 = t1_framer_get(wc, 0x20); /* must read this */
-	d = t1_framer_get(wc, 0x4d);
+	spin_lock(&wc->reglock);
 
-	/* Assume no alarms */
-	alarms = 0;
+	c = __t1_framer_get(wc, 0x4c);
+	d = __t1_framer_get(wc, 0x4d);
 
-	/* And consider only carrier alarms */
-	wc->span.alarms &= (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE |
-				DAHDI_ALARM_NOTOPEN);
+	/* start with existing span alarms */
+	alarms = wc->span.alarms;
 
 	if (dahdi_is_e1_span(&wc->span)) {
 		if (c & 0x04) {
@@ -2028,56 +2087,21 @@ static inline void t1_check_alarms(struct t13x *wc)
 			 * frame */
 			if (!wc->flags.nmf) {
 				/* LIM0: Force RAI High */
-				t1_framer_set(wc, 0x20, 0x9f | 0x20);
+				__t1_framer_set(wc, 0x20, 0x9f | 0x20);
 				wc->flags.nmf = 1;
 				dev_info(&wc->dev->dev, "NMF workaround on!\n");
 			}
-			t1_framer_set(wc, 0x1e, 0xc3);	/* Reset to CRC4 mode */
-			t1_framer_set(wc, 0x1c, 0xf2);	/* Force Resync */
-			t1_framer_set(wc, 0x1c, 0xf0);	/* Force Resync */
+			__t1_framer_set(wc, 0x1e, 0xc3);	/* Reset to CRC4 mode */
+			__t1_framer_set(wc, 0x1c, 0xf2);	/* Force Resync */
+			__t1_framer_set(wc, 0x1c, 0xf0);	/* Force Resync */
 		} else if (!(c & 0x02)) {
 			if (wc->flags.nmf) {
 				/* LIM0: Clear forced RAI */
-				t1_framer_set(wc, 0x20, 0x9f);
+				__t1_framer_set(wc, 0x20, 0x9f);
 				wc->flags.nmf = 0;
 				dev_info(&wc->dev->dev,
 						"NMF workaround off!\n");
 			}
-		}
-	} else {
-		/* Detect loopup code if we're not sending one */
-		if ((!wc->span.mainttimer) && (d & 0x08)) {
-			/* Loop-up code detected */
-			if ((++wc->loopupcnt > 80) &&
-			    (wc->span.maintstat != DAHDI_MAINT_REMOTELOOP)) {
-				dev_info(&wc->dev->dev, "Loopup detected,"\
-					" enabling remote loop\n");
-				/* LIM0: Disable any local loop */
-				t1_framer_set(wc, 0x36, 0x08);
-
-				/* LIM1: Enable remote loop */
-				t1_framer_set(wc, 0x37, 0xf6);
-				wc->span.maintstat = DAHDI_MAINT_REMOTELOOP;
-			}
-		} else {
-			wc->loopupcnt = 0;
-		}
-		/* Same for loopdown code */
-		if ((!wc->span.mainttimer) && (d & 0x10)) {
-			/* Loop-down code detected */
-			if ((++wc->loopdowncnt > 80) &&
-			    (wc->span.maintstat == DAHDI_MAINT_REMOTELOOP)) {
-				dev_info(&wc->dev->dev, "Loopdown detected,"\
-					" disabling remote loop\n");
-				/* LIM0: Disable any local loop */
-				t1_framer_set(wc, 0x36, 0x08);
-
-				/* LIM1: Disable remote loop */
-				t1_framer_set(wc, 0x37, 0xf0);
-				wc->span.maintstat = DAHDI_MAINT_NONE;
-			}
-		} else {
-			wc->loopdowncnt = 0;
 		}
 	}
 
@@ -2088,97 +2112,186 @@ static inline void t1_check_alarms(struct t13x *wc)
 				j++;
 		if (!j)
 			alarms |= DAHDI_ALARM_NOTOPEN;
+		else
+			alarms &= ~DAHDI_ALARM_NOTOPEN;
 	}
 
 	if (c & 0x20) { /* LOF/LFA */
-		if (wc->alarmcount >= (alarmdebounce/100))
-			alarms |= DAHDI_ALARM_RED;
-		else {
-			if (unlikely(debug && !wc->alarmcount)) {
-				/* starting to debounce LOF/LFA */
-				dev_info(&wc->dev->dev,
-					"LOF/LFA detected but debouncing for %d ms\n",
-					alarmdebounce);
-			}
-			wc->alarmcount++;
-		}
-	} else
-		wc->alarmcount = 0;
+		if (!(alarms & DAHDI_ALARM_RED) && (0 == wc->lofalarmtimer))
+			wc->lofalarmtimer = (jiffies + msecs_to_jiffies(alarmdebounce)) ?: 1;
+	} else {
+		wc->lofalarmtimer = 0;
+	}
 
 	if (c & 0x80) { /* LOS */
-		if (wc->losalarmcount >= (losalarmdebounce/100))
-			alarms |= DAHDI_ALARM_RED;
-		else {
-			if (unlikely(debug && !wc->losalarmcount)) {
-				/* starting to debounce LOS */
-				dev_info(&wc->dev->dev,
-					"LOS detected but debouncing for %d ms\n",
-					losalarmdebounce);
-			}
-			wc->losalarmcount++;
-		}
-	} else
-		wc->losalarmcount = 0;
+		if (!(alarms & DAHDI_ALARM_RED) && (0 == wc->losalarmtimer))
+			wc->losalarmtimer = (jiffies + msecs_to_jiffies(losalarmdebounce)) ?: 1;
+	} else {
+		wc->losalarmtimer = 0;
+	}
+
+	if (!(c & (0x80|0x20)))
+		alarms &= ~DAHDI_ALARM_RED;
 
 	if (c & 0x40) { /* AIS */
-		if (wc->aisalarmcount >= (aisalarmdebounce/100))
-			alarms |= DAHDI_ALARM_BLUE;
-		else {
-			if (unlikely(debug && !wc->aisalarmcount)) {
-				/* starting to debounce AIS */
-				dev_info(&wc->dev->dev,
-					"AIS detected but debouncing for %d ms\n",
-					aisalarmdebounce);
-			}
-			wc->aisalarmcount++;
-		}
-	} else
-		wc->aisalarmcount = 0;
+		if (!(alarms & DAHDI_ALARM_BLUE) && (0 == wc->aisalarmtimer))
+			wc->aisalarmtimer = (jiffies + msecs_to_jiffies(aisalarmdebounce)) ?: 1;
+	} else {
+		wc->aisalarmtimer = 0;
+		alarms &= ~DAHDI_ALARM_BLUE;
+	}
 
 	/* Keep track of recovering */
-	if ((!alarms) && wc->span.alarms)
-		wc->alarmtimer = jiffies + 5*HZ;
-	if (wc->alarmtimer)
-		alarms |= DAHDI_ALARM_RECOVER;
-
-	/* If receiving alarms, go into Yellow alarm state */
-	if (alarms && !wc->flags.sendingyellow) {
-		dev_info(&wc->dev->dev, "Setting yellow alarm\n");
-
-		/* We manually do yellow alarm to handle RECOVER and NOTOPEN,
-		 * otherwise it's auto anyway */
-		t1_framer_set(wc, 0x20, fmr4 | 0x20);
-		wc->flags.sendingyellow = 1;
-	} else if (!alarms && wc->flags.sendingyellow) {
-		dev_info(&wc->dev->dev, "Clearing yellow alarm\n");
-		/* We manually do yellow alarm to handle RECOVER  */
-		t1_framer_set(wc, 0x20, fmr4 & ~0x20);
-		wc->flags.sendingyellow = 0;
+	if (alarms & (DAHDI_ALARM_RED|DAHDI_ALARM_BLUE|DAHDI_ALARM_NOTOPEN)) {
+		wc->recoverytimer = 0;
+		alarms &= ~DAHDI_ALARM_RECOVER;
+	} else if (wc->span.alarms & (DAHDI_ALARM_RED|DAHDI_ALARM_BLUE)) {
+		if (0 == wc->recoverytimer) {
+			wc->recoverytimer = (jiffies + 5*HZ) ?: 1;
+			alarms |= DAHDI_ALARM_RECOVER;
+		}
 	}
-	/*
-	if ((c & 0x10))
-		alarms |= DAHDI_ALARM_YELLOW;
-	*/
 
 	if (c & 0x10) { /* receiving yellow (RAI) */
-		if (wc->yelalarmcount >= (yelalarmdebounce/100))
-			alarms |= DAHDI_ALARM_YELLOW;
-		else {
-			if (unlikely(debug && !wc->yelalarmcount)) {
-				/* starting to debounce AIS */
-				dev_info(&wc->dev->dev,
-					"yellow (RAI) detected but debouncing for %d ms\n",
-					yelalarmdebounce);
-			}
-			wc->yelalarmcount++;
-		}
-	} else
-		wc->yelalarmcount = 0;
+		if (!(alarms & DAHDI_ALARM_YELLOW) && (0 == wc->yelalarmtimer))
+			wc->yelalarmtimer = (jiffies + msecs_to_jiffies(yelalarmdebounce)) ?: 1;
+	} else {
+		wc->yelalarmtimer = 0;
+		alarms &= ~DAHDI_ALARM_YELLOW;
+	}
 
-	if (wc->span.mainttimer || wc->span.maintstat)
-		alarms |= DAHDI_ALARM_LOOPBACK;
-	wc->span.alarms = alarms;
-	dahdi_alarm_notify(&wc->span);
+	if (wc->span.alarms != alarms) {
+		wc->span.alarms = alarms;
+		dahdi_alarm_notify(&wc->span);
+	}
+
+	spin_unlock(&wc->reglock);
+}
+
+static void t1_check_loopcodes(struct t13x *wc)
+{
+	unsigned char frs1;
+
+	frs1 = t1_framer_get(wc, 0x4d);
+
+	/* Detect loopup code if we're not sending one */
+	if ((wc->span.maintstat != DAHDI_MAINT_LOOPUP) && (frs1 & 0x08)) {
+		/* Loop-up code detected */
+		if ((wc->span.maintstat != DAHDI_MAINT_REMOTELOOP) &&
+				(0 == wc->loopuptimer))
+			wc->loopuptimer = (jiffies + msecs_to_jiffies(800)) ?: 1;
+	} else {
+		wc->loopuptimer = 0;
+	}
+
+	/* Same for loopdown code */
+	if ((wc->span.maintstat != DAHDI_MAINT_LOOPDOWN) && (frs1 & 0x10)) {
+		/* Loop-down code detected */
+		if ((wc->span.maintstat == DAHDI_MAINT_REMOTELOOP) &&
+				(0 == wc->loopdntimer))
+			wc->loopdntimer = (jiffies + msecs_to_jiffies(800)) ?: 1;
+	} else {
+		wc->loopdntimer = 0;
+	}
+}
+
+static void t1_debounce_alarms(struct t13x *wc)
+{
+	int alarms;
+	unsigned long flags;
+	unsigned int fmr4;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	alarms = wc->span.alarms;
+
+	if (wc->lofalarmtimer && time_after(jiffies, wc->lofalarmtimer)) {
+		alarms |= DAHDI_ALARM_RED;
+		wc->lofalarmtimer = 0;
+		dev_info(&wc->dev->dev, "LOF alarm detected\n");
+	}
+
+	if (wc->losalarmtimer && time_after(jiffies, wc->losalarmtimer)) {
+		alarms |= DAHDI_ALARM_RED;
+		wc->losalarmtimer = 0;
+		dev_info(&wc->dev->dev, "LOS alarm detected\n");
+	}
+
+	if (wc->aisalarmtimer && time_after(jiffies, wc->aisalarmtimer)) {
+		alarms |= DAHDI_ALARM_BLUE;
+		wc->aisalarmtimer = 0;
+		dev_info(&wc->dev->dev, "AIS alarm detected\n");
+	}
+
+	if (wc->yelalarmtimer && time_after(jiffies, wc->yelalarmtimer)) {
+		alarms |= DAHDI_ALARM_YELLOW;
+		wc->yelalarmtimer = 0;
+		dev_info(&wc->dev->dev, "YEL alarm detected\n");
+	}
+
+	if (wc->recoverytimer && time_after(jiffies, wc->recoverytimer)) {
+		alarms &= ~(DAHDI_ALARM_RECOVER);
+		wc->recoverytimer = 0;
+		dev_info(&wc->dev->dev, "Alarms cleared\n");
+	}
+
+	if (alarms != wc->span.alarms) {
+		wc->span.alarms = alarms;
+		dahdi_alarm_notify(&wc->span);
+	}
+
+	/* If receiving alarms (except Yellow), go into Yellow alarm state */
+	if (alarms & (DAHDI_ALARM_RED|DAHDI_ALARM_BLUE|
+				DAHDI_ALARM_NOTOPEN|DAHDI_ALARM_RECOVER)) {
+		if (!wc->flags.sendingyellow) {
+			dev_info(&wc->dev->dev, "Setting yellow alarm\n");
+			/* We manually do yellow alarm to handle RECOVER
+			 * and NOTOPEN, otherwise it's auto anyway */
+			fmr4 = __t1_framer_get(wc, 0x20);
+			__t1_framer_set(wc, 0x20, fmr4 | 0x20);
+			wc->flags.sendingyellow = 1;
+		}
+	} else {
+		if (wc->flags.sendingyellow) {
+			dev_info(&wc->dev->dev, "Clearing yellow alarm\n");
+			/* We manually do yellow alarm to handle RECOVER  */
+			fmr4 = __t1_framer_get(wc, 0x20);
+			__t1_framer_set(wc, 0x20, fmr4 & ~0x20);
+			wc->flags.sendingyellow = 0;
+		}
+	}
+
+	spin_unlock_irqrestore(&wc->reglock, flags);
+}
+
+static void t1_debounce_loopcodes(struct t13x *wc)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	if (wc->loopuptimer && time_after(jiffies, wc->loopuptimer)) {
+		/* Loop-up code debounced */
+		dev_info(&wc->dev->dev, "Loopup detected, enabling remote loop\n");
+		__t1_framer_set(wc, 0x36, 0x08);	/* LIM0: Disable
+							   any local loop */
+		__t1_framer_set(wc, 0x37, 0xf6);	/* LIM1: Enable
+							   remote loop */
+		wc->span.maintstat = DAHDI_MAINT_REMOTELOOP;
+		wc->loopuptimer = 0;
+		dahdi_alarm_notify(&wc->span);
+	}
+
+	if (wc->loopdntimer && time_after(jiffies, wc->loopdntimer)) {
+		/* Loop-down code debounced */
+		dev_info(&wc->dev->dev, "Loopdown detected, disabling remote loop\n");
+		__t1_framer_set(wc, 0x36, 0x08);	/* LIM0: Disable
+							   any local loop */
+		__t1_framer_set(wc, 0x37, 0xf0);	/* LIM1: Disable
+							   remote loop */
+		wc->span.maintstat = DAHDI_MAINT_NONE;
+		wc->loopdntimer = 0;
+		dahdi_alarm_notify(&wc->span);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
 }
 
 static void handle_leds(struct t13x *wc)
@@ -2192,8 +2305,8 @@ static void handle_leds(struct t13x *wc)
 
 	led = wc->ledstate;
 
-	if ((wc->span.alarms & (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE))
-		|| wc->losalarmcount) {
+	if ((wc->span.alarms & (DAHDI_ALARM_RED | DAHDI_ALARM_BLUE)) ||
+			wc->losalarmtimer)  {
 		/* When we're in red alarm, blink the led once a second. */
 		if (time_after(jiffies, wc->blinktimer)) {
 			led = (led & STATUS_LED_RED) ? UNSET_LED_REDGREEN(led) :
@@ -2210,20 +2323,11 @@ static void handle_leds(struct t13x *wc)
 
 	if (led != wc->ledstate) {
 		wc->blinktimer = jiffies + HZ/2;
-		/* TODO: write blinktimer to register */
+		/* TODO: set ledstate in t1_setleds() */
 		spin_lock_irqsave(&wc->reglock, flags);
 		wc->ledstate = led;
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		t1_setleds(wc, led);
-	}
-}
-
-static void t1_do_counters(struct t13x *wc)
-{
-	if (wc->alarmtimer && time_after(jiffies, wc->alarmtimer)) {
-		wc->span.alarms &= ~(DAHDI_ALARM_RECOVER);
-		wc->alarmtimer = 0;
-		dahdi_alarm_notify(&wc->span);
 	}
 }
 
@@ -2298,7 +2402,7 @@ static void reset_dring(struct t13x *wc)
 
 	if (unlikely(wc->latency > DRING_SIZE)) {
 		dev_info(&wc->dev->dev,
-			"Oops! Tried to increase latency past buffer size.\n");
+				"Oops! Tried to increase latency past buffer size.\n");
 		wc->latency = DRING_SIZE;
 	}
 
@@ -2373,6 +2477,15 @@ static void handle_dma(struct t13x *wc)
 	}
 }
 
+#define SPAN_DEBOUNCE \
+	(wc->lofalarmtimer || wc->losalarmtimer || \
+	 wc->aisalarmtimer || wc->yelalarmtimer || \
+	 wc->recoverytimer || \
+	 wc->loopuptimer   || wc->loopdntimer)
+
+#define SPAN_ALARMS \
+	(wc->span.alarms & ~DAHDI_ALARM_NOTOPEN)
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 static void timer_work_func(void *param)
 {
@@ -2382,24 +2495,105 @@ static void timer_work_func(struct work_struct *work)
 {
 	struct t13x *wc = container_of(work, struct t13x, timer_work);
 #endif
-	t1_do_counters(wc);
-	t1_check_alarms(wc);
-	t1_check_sigbits(wc);
+	static int work_count;
+
+	if (debug)
+		dev_notice(&wc->dev->dev, "Timer work: %d!\n", ++work_count);
+
+	t1_debounce_alarms(wc);
+	if (!dahdi_is_e1_span(&wc->span))
+		t1_debounce_loopcodes(wc);
 	handle_leds(wc);
-	if (test_bit(INITIALIZED, &wc->bit_flags))
-		mod_timer(&wc->timer, jiffies + HZ/30);
+	if (test_bit(INITIALIZED, &wc->bit_flags)) {
+		if (SPAN_DEBOUNCE || SPAN_ALARMS)
+			mod_timer(&wc->timer, jiffies + HZ/10);
+	}
+}
+
+static void handle_falc_int(struct t13x *wc)
+{
+	unsigned char gis, isr0, isr1, isr2, isr3, isr4;
+	unsigned long flags;
+	static int intcount;
+	bool start_timer;
+
+	intcount++;
+	start_timer = FALSE;
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	gis = __t1_framer_get(wc, FRMR_GIS);
+	isr0 = (gis & FRMR_GIS_ISR0) ? __t1_framer_get(wc, FRMR_ISR0) : 0;
+	isr1 = (gis & FRMR_GIS_ISR1) ? __t1_framer_get(wc, FRMR_ISR1) : 0;
+	isr2 = (gis & FRMR_GIS_ISR2) ? __t1_framer_get(wc, FRMR_ISR2) : 0;
+	isr3 = (gis & FRMR_GIS_ISR3) ? __t1_framer_get(wc, FRMR_ISR3) : 0;
+	isr4 = (gis & FRMR_GIS_ISR4) ? __t1_framer_get(wc, FRMR_ISR4) : 0;
+
+	if ((debug) && !(isr3 & ISR3_SEC)) {
+		dev_info(&wc->dev->dev, "gis: %02x, isr0: %02x, isr1: %02x, "\
+			"isr2: %02x, isr3: %02x, isr4: %02x, intcount=%u\n",
+			gis, isr0, isr1, isr2, isr3, isr4, intcount);
+	}
+
+	/* Collect performance counters once per second */
+	if (isr3 & ISR3_SEC) {
+		wc->span.count.fe += __t1_framer_get(wc, FECL_T);
+		wc->span.count.crc4 += __t1_framer_get(wc, CEC1L_T);
+		wc->span.count.cv += __t1_framer_get(wc, CVCL_T);
+		wc->span.count.ebit += __t1_framer_get(wc, EBCL_T);
+		wc->span.count.be += __t1_framer_get(wc, BECL_T);
+		wc->span.count.prbs = __t1_framer_get(wc, FRS1_T);
+	}
+	spin_unlock_irqrestore(&wc->reglock, flags);
+
+	/* Collect errored second counter once per second */
+	if (isr3 & ISR3_ES)
+		wc->span.count.errsec += 1;
+
+	if (isr0 & 0x08)
+		t1_check_sigbits(wc);
+
+	if (dahdi_is_e1_span(&wc->span)) {
+		/* E1 checks */
+		if ((isr3 & 0x68) || isr2 || (isr1 & 0x7f)) {
+			t1_check_alarms(wc);
+			start_timer = TRUE;
+		}
+	} else {
+		/* T1 checks */
+		if (isr2) {
+			t1_check_alarms(wc);
+			start_timer = TRUE;
+		}
+		if (isr3 & 0x08) {	/* T1 LLBSC */
+			t1_check_loopcodes(wc);
+			start_timer = TRUE;
+		}
+	}
+
+	if (!wc->span.alarms) {
+		if ((isr3 & 0x3) || (isr4 & 0xc0))
+			wc->span.count.timingslips++;
+	} else
+		wc->span.count.timingslips = 0;
+
+	if (start_timer && !timer_pending(&wc->timer))
+		mod_timer(&wc->timer, jiffies + HZ/10);
 }
 
 static irqreturn_t _te13xp_isr(int irq, void *dev_id)
 {
 	struct t13x *wc = dev_id;
 	u32 pending;
+	int tdmc;
 
 	pending = ioread32be(wc->membase + ISR);
 	if (!pending)
 		return IRQ_NONE;
 
 	if (pending & DESC_UNDERRUN) {
+		/* acknowledge underrun and descriptor interrupts */
+		iowrite32be(DESC_UNDERRUN | DESC_COMPLETE, wc->membase + IAR);
+
 		if (!test_bit(LATENCY_LOCKED, &wc->bit_flags)) {
 			/* bump latency */
 			wc->latency++;
@@ -2414,17 +2608,20 @@ static irqreturn_t _te13xp_isr(int irq, void *dev_id)
 		reset_dring(wc);
 
 		/* set dma enable bit */
-		iowrite32be(ENABLE_DMA,
-				wc->membase + TDM_CONTROL);
+		tdmc = ioread32be(wc->membase + TDM_CONTROL);
+		iowrite32be(tdmc | ENABLE_DMA, wc->membase + TDM_CONTROL);
 
-		/* acknowledge underrun interrupt */
-		iowrite32be(DESC_UNDERRUN, wc->membase + IAR);
-	}
+	} else if (pending & DESC_COMPLETE) {
+		/* acknowledge descriptor interrupt */
+		iowrite32be(DESC_COMPLETE, wc->membase + IAR);
 
-	if (pending & DESC_COMPLETE) {
 		wc->framecount++;
 		handle_dma(wc);
-		iowrite32be(DESC_COMPLETE, wc->membase + IAR);
+	}
+
+	if (pending & FALC_INT) {
+		iowrite32be(FALC_INT, wc->membase + IAR);
+		handle_falc_int(wc);
 	}
 
 	ioread32be(wc->membase + ISR);
@@ -3055,6 +3252,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 
 	/* Enable hardware interrupts */
 	iowrite32be(-1, wc->membase + IAR);
+	/* Don't enable FALC_INT. Just look for the bit when DESC_COMPLETE interrupts. */
 	iowrite32be(DESC_UNDERRUN|DESC_COMPLETE, wc->membase + IER);
 	iowrite32be(MER_ME|MER_HIE, wc->membase + MER);
 
