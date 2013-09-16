@@ -654,6 +654,95 @@ static void __do_mute_dtmf(xpd_t *xpd, int pos, bool muteit)
 	CALL_PHONE_METHOD(card_pcm_recompute, xpd, priv->search_fsk_pattern);
 }
 
+struct ring_reg_param {
+	int is_indirect;
+	int regno;
+	uint8_t h_val;
+	uint8_t l_val;
+};
+
+enum ring_types {
+	RING_TYPE_NEON = 0,
+	RING_TYPE_TRAPEZ,
+	RING_TYPE_NORMAL,
+};
+
+struct byte_pair {
+	uint8_t h_val;
+	uint8_t l_val;
+};
+
+struct ring_reg_params {
+	int is_indirect;
+	int regno;
+	struct byte_pair values[1 + RING_TYPE_NORMAL - RING_TYPE_NEON];
+};
+
+#define	REG_ENTRY(di, reg, vh1, vl1, vh2, vl2, vh3, vl3) \
+	{ (di), (reg), .values = { \
+		[RING_TYPE_NEON]	= { .h_val = (vh1), .l_val = (vl1) }, \
+		[RING_TYPE_TRAPEZ]	= { .h_val = (vh2), .l_val = (vl2) }, \
+		[RING_TYPE_NORMAL]	= { .h_val = (vh3), .l_val = (vl3) }, \
+		}, \
+	}
+
+static const struct ring_reg_params ring_parameters[] = {
+	/*        INDIR REG     NEON            TRAPEZ          NORMAL */
+	REG_ENTRY(1,	0x16,	0xE8, 0x03,	0xC8, 0x00,	0x00, 0x00),
+	REG_ENTRY(1,	0x15,	0xEF, 0x7B,	0xAB, 0x5E,	0x77, 0x01),
+	REG_ENTRY(1,	0x14,	0x9F, 0x00,	0x8C, 0x01,	0xFD, 0x7E),
+
+	REG_ENTRY(0,	0x22,	0x00, 0x19,	0x00, 0x01,	0x00, 0x00),
+
+	REG_ENTRY(0,	0x30,	0x00, 0xE0,	0x00, 0x00,	0x00, 0x00),
+	REG_ENTRY(0,	0x31,	0x00, 0x01,	0x00, 0x00,	0x00, 0x00),
+	REG_ENTRY(0,	0x32,	0x00, 0xF0,	0x00, 0x00,	0x00, 0x00),
+	REG_ENTRY(0,	0x33,	0x00, 0x05,	0x00, 0x00,	0x00, 0x00),
+
+	REG_ENTRY(1,	0x1D,	0x00, 0x46,	0x00, 0x36,	0x00, 0x36),
+};
+
+static int send_ring_parameters(xbus_t *xbus, xpd_t *xpd, int pos,
+		enum ring_types rtype)
+{
+	const struct ring_reg_params *p;
+	const struct byte_pair *v;
+	int ret = 0;
+	int i;
+
+	if (rtype < RING_TYPE_NEON || rtype > RING_TYPE_NORMAL)
+		return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(ring_parameters); i++) {
+		p = &ring_parameters[i];
+		v = &(p->values[rtype]);
+		if (p->is_indirect) {
+			LINE_DBG(REGS, xpd, pos,
+					"[%d] 0x%02X: I 0x%02X 0x%02X\n",
+					i, p->regno, v->h_val, v->l_val);
+			ret = SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+				p->regno, v->h_val, v->l_val);
+			if (ret < 0) {
+				LINE_ERR(xpd, pos,
+					"Failed: 0x%02X: I 0x%02X, 0x%02X\n",
+					p->regno, v->h_val, v->l_val);
+				break;
+			}
+		} else {
+			LINE_DBG(REGS, xpd, pos, "[%d] 0x%02X: D 0x%02X\n",
+				i, p->regno, v->l_val);
+			ret = SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
+				p->regno, v->l_val);
+			if (ret < 0) {
+				LINE_ERR(xpd, pos,
+					"Failed: 0x%02X: D 0x%02X\n",
+					p->regno, v->l_val);
+				break;
+			}
+		}
+	}
+	return ret;
+}
+
 static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 			   unsigned int msg_waiting)
 {
@@ -667,81 +756,15 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 		/* A write to register 0x40 will now turn on/off the VM led */
 		LINE_DBG(SIGNAL, xpd, pos, "NEON\n");
 		BIT_SET(priv->neon_blinking, pos);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16,
-					  0xE8, 0x03);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15,
-					  0xEF, 0x7B);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x14,
-					  0x9F, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x22, 0x19);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x30, 0xE0);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x31, 0x01);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x32, 0xF0);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x33, 0x05);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x1D,
-					  0x00, 0x46);
+		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_NEON);
 	} else if (ring_trapez) {
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER: Trapez ring\n");
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x16,
-					  0xC8, 0x00);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x15,
-					  0xAB, 0x5E);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x14,
-					  0x8C, 0x01);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x22, 0x01);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x4A, 0x34);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x30, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x31, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x32, 0x00);
-		ret +=
-		    SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x33, 0x00);
-		ret +=
-		    SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, 0x1D,
-					  0x00, 0x36);
+		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_TRAPEZ);
 	} else {
 		/* A write to register 0x40 will now turn on/off the ringer */
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER\n");
 		BIT_CLR(priv->neon_blinking, pos);
-
-		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x16, 0x00, 0x00);
-		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x15, 0x77, 0x01);
-		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x14, 0xFD, 0x7E);
-
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x22, 0x00);
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x30, 0x00);
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x31, 0x00);
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x32, 0x00);
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x33, 0x00);
-		/* High Vbat~ -82V[Dc] */
-		ret += SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x4A, 0x34);
-		ret += SLIC_INDIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-			0x1D, 0x00, 0x36);
+		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_NORMAL);
 	}
 	return (ret ? -EPROTO : 0);
 }

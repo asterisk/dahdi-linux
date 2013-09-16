@@ -298,7 +298,7 @@ sub init_early_direct_regs() {
 	return write_to_slic_file("#
 *	WD	08	00	# Audio Path Loopback Control
 *	WD	6C	01
-*	WD	4A	3F	# High Battery Voltage
+*	WD	4A	34	# High Battery Voltage
 *	WD	4B	$lbv	# Low Battery Voltage
 *	WD	49	$vcm	# Common Mode Voltage (VCM)
 *	WD	40	00	# Line Feed Control
