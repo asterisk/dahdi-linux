@@ -1712,8 +1712,11 @@ _t4_spanconfig(struct file *file, struct dahdi_span *span,
 
 	if (lc->sync < 0)
 		lc->sync = 0;
-	if (lc->sync > wc->numspans)
+	if (lc->sync > wc->numspans) {
+		dev_warn(&wc->dev->dev, "WARNING: Cannot set priority on span %d to %d. Please set to a number between 1 and %d\n",
+			 span->spanno, lc->sync, wc->numspans);
 		lc->sync = 0;
+	}
 	
 	/* remove this span number from the current sync sources, if there */
 	for(i = 0; i < wc->numspans; i++) {
