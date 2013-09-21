@@ -787,6 +787,7 @@ ssize_t lineconfig_str(int lineconfig, char buf[], size_t size)
 	int crc4_bit = 0;
 	int len = 0;
 	int bit;
+	bool written = false;
 
 	for (bit = 4; bit <= 12; bit++) {
 		int mask = (1 << bit);
@@ -798,8 +799,10 @@ ssize_t lineconfig_str(int lineconfig, char buf[], size_t size)
 			case DAHDI_CONFIG_AMI:
 			case DAHDI_CONFIG_HDB3:
 				framing_bit = bit;
-				len += snprintf(buf + len, size, "%s/",
+				len += snprintf(buf + len, size, "%s%s",
+					(written) ? "/" : "",
 					dahdi_lineconfig_bit_name(bit));
+				written = true;
 			}
 		}
 		if (!coding_bit) {
@@ -808,14 +811,18 @@ ssize_t lineconfig_str(int lineconfig, char buf[], size_t size)
 			case DAHDI_CONFIG_D4:
 			case DAHDI_CONFIG_CCS:
 				coding_bit = bit;
-				len += snprintf(buf + len, size, "%s",
+				len += snprintf(buf + len, size, "%s%s",
+					(written) ? "/" : "",
 					dahdi_lineconfig_bit_name(bit));
+				written = true;
 			}
 		}
 		if (!crc4_bit && mask == DAHDI_CONFIG_CRC4) {
 				crc4_bit = bit;
-				len += snprintf(buf + len, size, "/%s",
+				len += snprintf(buf + len, size, "%s%s",
+					(written) ? "/" : "",
 					dahdi_lineconfig_bit_name(bit));
+				written = true;
 		}
 	}
 	return len;
