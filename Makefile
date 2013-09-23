@@ -104,9 +104,8 @@ ifeq	(1,$(PBX_HDLC))
 endif
 MAN_PAGES:=$(wildcard $(BINS:%=doc/%.8))
 
-PINNED_DATA_SCRIPTS:=dahdi_cfg_device_args handle_device \
-	span_assignments span_types
-PINNED_UTILS:=dahdi_map
+PINNED_DATA_SCRIPTS:=handle_device span_config
+PINNED_UTILS:=dahdi_map span_assignments span_types
 PINNED_CONF:=pinned-spans.conf spantype.conf
 
 TEST_BINS:=patgen pattest patlooptest hdlcstress hdlctest hdlcgen hdlcverify timertest dahdi_maint

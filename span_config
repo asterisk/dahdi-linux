@@ -1,8 +1,8 @@
 #! /bin/sh
 #
-# /usr/share/dahdi/handle_device
+# /usr/share/dahdi/span_config
 #
-# Called by UDEV when a dahdi device is added/removed
+# Called by UDEV when a dahdi span is added/removed
 #
 
 me=`basename $0`
@@ -10,13 +10,13 @@ dir=`dirname $0`
 LOGGER="logger -i -t '$me'"
 NAME=`basename "$DEVPATH" | tr -c 'A-Za-z0-9-' '_'`
 
+exec 2> /dev/null
 # Always redirect stderr somewhere, otherwise the shell script will die
 # when it tries to do I/O related stuff on closed file descriptor.
 # Our default is to throw it down the bit-bucket.
-exec 2> /dev/null
-# If you wish to trace this script:
-#exec 2> "/tmp/${me}.$NAME" 1>&2
 #exec 2> /dev/console
+## If you wish to trace this script:
+#exec 2> "/tmp/${me}.$NAME" 1>&2
 
 # Our directory in the beginning, so we can use local lab setup
 PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
@@ -25,21 +25,31 @@ set -e
 
 #echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
 
-# Check if we can safely do our job
-if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
-	echo "Old driver (no auto_assign_spans parameter). Skip $DEVPATH" | $LOGGER
-	exit 0
-fi
-if [ `cat /sys/module/dahdi/parameters/auto_assign_spans` -eq 1 ]; then
-	echo "auto_assign_spans=1. Skip $DEVPATH" | $LOGGER
-	exit 0
-fi
-
 # Can we pass a different value so we can use
 # alternate (testing) configuration?
 # Meanwhile, make it hard-coded.
 DAHDICONFDIR='/etc/dahdi'
 export DAHDICONFDIR
+
+run_dahdi_cfg() {
+	span_devpath="$1"
+	# Sanity check
+	checkit=`"dahdi_cfg" --help 2>&1 | grep -- '-S' | wc -l`
+	if [ "$checkit" != 1 ]; then
+		$LOGGER "Bad dahdi_cfg (no -S support). Skipping"
+		exit 0
+	fi
+	spanno=`echo "$span_devpath" | sed 's,.*/span-,,'`
+	basechan=`cat "$span_devpath/basechan"`
+	channels=`cat "$span_devpath/channels"`
+	endchan=`expr "$basechan" + "$channels" - 1`
+	echo "dahdi_cfg: span $spanno <$basechan-$endchan>"
+	dahdi_cfg \
+		-c "$DAHDICONFDIR/system.conf" \
+		-S "$spanno" \
+		-C "$basechan-$endchan"
+	asterisk -rx "dahdi create channels $basechan $endchan"
+}
 
 case "$ACTION" in
 add)
@@ -47,11 +57,7 @@ add)
 	# Can have alternate dahdi configuration directory for debugging
 	# export DAHDICONFDIR="/tmp/xortel/dahdi"
 
-	# Don't block udev for too long
-	(
-		span_types set "/sys$DEVPATH"
-		span_assignments add "/sys$DEVPATH"
-	) 2>&1 < /dev/null | $LOGGER &
+	run_dahdi_cfg "/sys$DEVPATH" 2>&1 | $LOGGER
 	;;
 remove)
 	# Nothing to do yet...
@@ -61,3 +67,4 @@ remove)
 	echo "UNHANDLED: $ACTION: $DEVPATH" | $LOGGER
 	;;
 esac
+

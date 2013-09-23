@@ -1,3 +1,4 @@
 # DAHDI devices with ownership/permissions for running as non-root
 SUBSYSTEM=="dahdi",		OWNER="asterisk", GROUP="asterisk", MODE="0660"
 SUBSYSTEM=="dahdi_devices",	RUN="/usr/share/dahdi/handle_device"
+SUBSYSTEM=="dahdi_spans",	RUN="/usr/share/dahdi/span_config"
