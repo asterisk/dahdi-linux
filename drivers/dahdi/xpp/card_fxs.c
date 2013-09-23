@@ -673,8 +673,8 @@ struct byte_pair {
 };
 
 struct ring_reg_params {
-	int is_indirect;
-	int regno;
+	const int is_indirect;
+	const int regno;
 	struct byte_pair values[1 + RING_TYPE_NORMAL - RING_TYPE_NEON];
 };
 
@@ -686,7 +686,7 @@ struct ring_reg_params {
 		}, \
 	}
 
-static const struct ring_reg_params ring_parameters[] = {
+static struct ring_reg_params ring_parameters[] = {
 	/*        INDIR REG     NEON            TRAPEZ          NORMAL */
 	REG_ENTRY(1,	0x16,	0xE8, 0x03,	0xC8, 0x00,	0x00, 0x00),
 	REG_ENTRY(1,	0x15,	0xEF, 0x7B,	0xAB, 0x5E,	0x77, 0x01),
@@ -1861,9 +1861,134 @@ static const struct file_operations proc_xpd_metering_ops = {
 #endif
 #endif
 
+static DEVICE_ATTR_READER(fxs_ring_registers_show, dev, buf)
+{
+	xpd_t *xpd;
+	struct FXS_priv_data *priv;
+	unsigned long flags;
+	const struct ring_reg_params *p;
+	const struct byte_pair *v;
+	enum ring_types rtype;
+	int len = 0;
+	int i;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	if (!xpd)
+		return -ENODEV;
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	spin_lock_irqsave(&xpd->lock, flags);
+	len += sprintf(buf + len, "#   Reg#: D/I\tNEON     \tTRAPEZ   \tNORMAL   \n");
+	for (i = 0; i < ARRAY_SIZE(ring_parameters); i++) {
+		p = &ring_parameters[i];
+		len += sprintf(buf + len, "[%d] 0x%02X: %c",
+			i, p->regno, (p->is_indirect) ? 'I' : 'D');
+		for (rtype = RING_TYPE_NEON; rtype <= RING_TYPE_NORMAL; rtype++) {
+			v = &(p->values[rtype]);
+			if (p->is_indirect)
+				len += sprintf(buf + len, "\t0x%02X 0x%02X",
+					v->h_val, v->l_val);
+			else
+				len += sprintf(buf + len, "\t0x%02X ----",
+					v->l_val);
+		}
+		len += sprintf(buf + len, "\n");
+	}
+	spin_unlock_irqrestore(&xpd->lock, flags);
+	return len;
+}
+
+static DEVICE_ATTR_WRITER(fxs_ring_registers_store, dev, buf, count)
+{
+	xpd_t *xpd;
+	struct FXS_priv_data *priv;
+	unsigned long flags;
+	char rtype_name[MAX_PROC_WRITE];
+	enum ring_types rtype;
+	struct ring_reg_params *params;
+	struct byte_pair *v;
+	int regno;
+	int h_val;
+	int l_val;
+	int ret;
+	int i;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	if (!xpd)
+		return -ENODEV;
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	ret = sscanf(buf, "%10s %X %X %X\n",
+		rtype_name, &regno, &h_val, &l_val);
+	if (ret < 3 || ret > 4) {
+		XPD_ERR(xpd, "Bad input: '%s'\n", buf);
+		XPD_ERR(xpd, "# Correct input\n");
+		XPD_ERR(xpd, "{NEON|TRAPEZ|NORMAL} <regno> <byte> [<byte>]\n");
+		goto invalid_input;
+	}
+	if (strcasecmp("NEON", rtype_name) == 0)
+		rtype = RING_TYPE_NEON;
+	else if (strcasecmp("TRAPEZ", rtype_name) == 0)
+		rtype = RING_TYPE_TRAPEZ;
+	else if (strcasecmp("NORMAL", rtype_name) == 0)
+		rtype = RING_TYPE_NORMAL;
+	else {
+		XPD_ERR(xpd, "Unknown ring type '%s' (NEON/TRAPEZ/NORMAL)\n",
+			rtype_name);
+		goto invalid_input;
+	}
+	params = NULL;
+	for (i = 0; i < ARRAY_SIZE(ring_parameters); i++) {
+		if (ring_parameters[i].regno == regno) {
+			params = &ring_parameters[i];
+			break;
+		}
+	}
+	if (!params) {
+		XPD_ERR(xpd, "Bad register 0x%X\n", regno);
+		goto invalid_input;
+	}
+	if (params->is_indirect) {
+		if (ret != 4) {
+			XPD_ERR(xpd,
+				"Missing low-byte (0x%X is indirect register)\n",
+				regno);
+			goto invalid_input;
+		}
+		XPD_INFO(xpd, "%s Indirect 0x%X <=== 0x%X 0x%X\n",
+			rtype_name, regno, h_val, l_val);
+	} else {
+		if (ret != 3) {
+			XPD_ERR(xpd,
+				"Should give exactly one value (0x%X is direct register)\n",
+				regno);
+			goto invalid_input;
+		}
+		l_val = h_val;
+		h_val = 0;
+		XPD_INFO(xpd, "%s Direct 0x%X <=== 0x%X\n",
+			rtype_name, regno, h_val);
+	}
+	spin_lock_irqsave(&xpd->lock, flags);
+	v = &(params->values[rtype]);
+	v->h_val = h_val;
+	v->l_val = l_val;
+	spin_unlock_irqrestore(&xpd->lock, flags);
+	return count;
+invalid_input:
+	return -EINVAL;
+}
+
+static DEVICE_ATTR(fxs_ring_registers, S_IRUGO | S_IWUSR,
+	fxs_ring_registers_show,
+	fxs_ring_registers_store);
+
 static int fxs_xpd_probe(struct device *dev)
 {
 	xpd_t *xpd;
+	int ret;
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
@@ -1873,7 +1998,15 @@ static int fxs_xpd_probe(struct device *dev)
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
+	ret = device_create_file(dev, &dev_attr_fxs_ring_registers);
+	if (ret) {
+		XPD_ERR(xpd, "%s: device_create_file(fxs_ring_registers) failed: %d\n",
+			__func__, ret);
+		goto fail_fxs_ring_registers;
+	}
 	return 0;
+fail_fxs_ring_registers:
+	return ret;
 }
 
 static int fxs_xpd_remove(struct device *dev)
@@ -1882,6 +2015,7 @@ static int fxs_xpd_remove(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
+	device_remove_file(dev, &dev_attr_fxs_ring_registers);
 	return 0;
 }
 
