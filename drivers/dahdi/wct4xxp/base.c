@@ -505,7 +505,7 @@ static void t4_check_sigbits(struct t4 *wc, int span);
 #define FMR5_EIBR (1 << 6)	/* Internal Bit Robbing Access */
 #define DEC_T 0x60		/* Diable Error Counter */
 #define IERR_T 0x1B		/* Single Bit Defect Insertion Register */
-#define IBV	0	 /* Bipolar violation */
+#define IBV	(1 << 0) /* Bipolar violation */
 #define IPE	(1 << 1) /* PRBS defect */
 #define ICASE	(1 << 2) /* CAS defect */
 #define ICRCE	(1 << 3) /* CRC defect */
