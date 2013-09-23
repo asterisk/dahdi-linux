@@ -49,8 +49,12 @@ add)
 
 	# Don't block udev for too long
 	(
-		span_types set "/sys$DEVPATH"
-		span_assignments add "/sys$DEVPATH"
+		if [ -r "$DAHDICONFDIR/span-types.conf" ]; then
+			span_types set "/sys$DEVPATH"
+		fi
+		if [ -r "$DAHDICONFDIR/pinned-spans.conf" ]; then
+			span_assignments add "/sys$DEVPATH"
+		fi
 	) 2>&1 < /dev/null | $LOGGER &
 	;;
 remove)
