@@ -59,6 +59,7 @@ my %settings;
 $settings{debug} = 0;
 $settings{fxs_skip_calib} = 0;
 my $chipregs;
+my $ring_registers;
 
 sub logit {
 	print STDERR "$unit_id: @_\n";
@@ -104,6 +105,10 @@ if (-t STDERR) {
 		logit "OLD DRIVER: does not use /sys chipregs. Falling back to /proc"
 			if -f $chipregs;
 	}
+	$ring_registers = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/fxs_ring_registers",
+		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
+	logit "OLD DRIVER: missing '$ring_registers' -- fallback to hard-coded defaults"
+		unless -f $ring_registers;
 }
 
 sub set_output() {
@@ -145,6 +150,16 @@ sub write_to_slic_file($) {
 	close(SLICS) or die "Failed writing '$write_str' to '$chipregs': $!";
 	main::mysleep(0.001);
 	
+}
+
+sub write_to_ring_register($) {
+	my $write_str = shift;
+
+	open(SLICS,">$ring_registers") or
+		die("Failed writing to ring_registers file $ring_registers");
+	print SLICS $write_str;
+	close(SLICS) or die "Failed writing '$write_str' to '$ring_registers': $!";
+	main::mysleep(0.001);
 }
 
 sub read_reg($$$) {
@@ -442,6 +457,10 @@ sub check_slics() {
 	return @slics;
 }
 
+sub overwrite_ring_registers() {
+	write_to_ring_register("NEON 0x33 0x12");
+}
+
 package main;
 
 main::debug "Starting '$0'";
@@ -470,6 +489,7 @@ while(<DATA>) {
 	print "$_\n";
 }
 close REG;
+FXS::overwrite_ring_registers();
 
 main::debug "Ending '$0'";
 close STDERR;
