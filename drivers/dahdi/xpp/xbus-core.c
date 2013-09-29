@@ -29,6 +29,7 @@
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/sched.h>
+#include <linux/mutex.h>
 #include <linux/proc_fs.h>
 #ifdef	PROTOCOL_DEBUG
 #include <linux/ctype.h>
@@ -913,6 +914,8 @@ static void xbus_free_ddev(xbus_t *xbus)
 	xbus->ddev = NULL;
 }
 
+static DEFINE_MUTEX(dahdi_registration_mutex);
+
 int xbus_register_dahdi_device(xbus_t *xbus)
 {
 	int i;
@@ -920,6 +923,11 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 	int ret;
 
 	XBUS_DBG(DEVICES, xbus, "Entering %s\n", __func__);
+	ret = mutex_lock_interruptible(&dahdi_registration_mutex);
+	if (ret < 0) {
+		XBUS_ERR(xbus, "dahdi_registration_mutex already taken\n");
+		goto err;
+	}
 	if (xbus_is_registered(xbus)) {
 		XBUS_ERR(xbus, "Already registered to DAHDI\n");
 		WARN_ON(1);
@@ -983,30 +991,41 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 			xpd_dahdi_postregister(xpd);
 		}
 	}
-	return 0;
+	ret = 0;
+out:
+	mutex_unlock(&dahdi_registration_mutex);
+	return ret;
 err:
 	xbus_free_ddev(xbus);
-	return ret;
+	goto out;
 }
 
 void xbus_unregister_dahdi_device(xbus_t *xbus)
 {
 	int i;
+	int ret;
 
 	XBUS_NOTICE(xbus, "%s\n", __func__);
-	for(i = 0; i < MAX_XPDS; i++) {
+	ret = mutex_lock_interruptible(&dahdi_registration_mutex);
+	if (ret < 0) {
+		XBUS_ERR(xbus, "dahdi_registration_mutex already taken\n");
+		return;
+	}
+	for (i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_preunregister(xpd);
 	}
 	if (xbus->ddev) {
 		dahdi_unregister_device(xbus->ddev);
-		XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n", __func__);
+		XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n",
+			    __func__);
 		xbus_free_ddev(xbus);
 	}
-	for(i = 0; i < MAX_XPDS; i++) {
+	for (i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_postunregister(xpd);
 	}
+	mutex_unlock(&dahdi_registration_mutex);
 }
 
 /*
