@@ -403,6 +403,16 @@ dahdi_device_hardware_id_show(struct device *dev,
 }
 
 static ssize_t
+dahdi_device_location_show(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+
+	return sprintf(buf, "%s\n",
+		(ddev->location) ? ddev->location : "");
+}
+
+static ssize_t
 dahdi_device_auto_assign(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
 {
@@ -549,6 +559,7 @@ static struct device_attribute dahdi_device_attrs[] = {
 	__ATTR(type, S_IRUGO, dahdi_device_type_show, NULL),
 	__ATTR(span_count, S_IRUGO, dahdi_device_span_count_show, NULL),
 	__ATTR(hardware_id, S_IRUGO, dahdi_device_hardware_id_show, NULL),
+	__ATTR(location, S_IRUGO, dahdi_device_location_show, NULL),
 	__ATTR(auto_assign, S_IWUSR, NULL, dahdi_device_auto_assign),
 	__ATTR(assign_span, S_IWUSR, NULL, dahdi_device_assign_span),
 	__ATTR(unassign_span, S_IWUSR, NULL, dahdi_device_unassign_span),
