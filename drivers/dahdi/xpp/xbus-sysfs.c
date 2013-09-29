@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/errno.h>
+#include <linux/mutex.h>
 #include <linux/proc_fs.h>
 #ifdef	PROTOCOL_DEBUG
 #include <linux/ctype.h>
@@ -582,6 +583,8 @@ static DEVICE_ATTR_READER(span_show, dev, buf)
 	return len;
 }
 
+static DEFINE_MUTEX(span_store_mutex);
+
 /*
  * For backward compatibility with old dahdi-tools
  * Remove after dahdi_registration is upgraded
@@ -603,6 +606,11 @@ static DEVICE_ATTR_WRITER(span_store, dev, buf, count)
 		return -ENODEV;
 	XPD_DBG(DEVICES, xpd, "%s -- deprecated (should use pinned-spans)\n",
 		(dahdi_reg) ? "register" : "unregister");
+	ret = mutex_lock_interruptible(&span_store_mutex);
+	if (ret < 0) {
+		XBUS_ERR(xpd->xbus, "span_store_mutex already taken\n");
+		return ret;
+	}
 	if (xbus_is_registered(xpd->xbus)) {
 		if (dahdi_reg) {
 			XPD_DBG(DEVICES, xpd,
@@ -620,6 +628,7 @@ static DEVICE_ATTR_WRITER(span_store, dev, buf, count)
 			xbus_register_dahdi_device(xpd->xbus);
 		}
 	}
+	mutex_unlock(&span_store_mutex);
 	return count;
 }
 
