@@ -54,6 +54,9 @@ add)
 		fi
 		if [ -r "$DAHDICONFDIR/pinned-spans.conf" ]; then
 			span_assignments add "/sys$DEVPATH"
+		else
+			# No configuration. No order guaranteed
+			span_assignments auto
 		fi
 	) 2>&1 < /dev/null | $LOGGER &
 	;;

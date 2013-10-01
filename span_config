@@ -32,22 +32,36 @@ DAHDICONFDIR='/etc/dahdi'
 export DAHDICONFDIR
 
 run_dahdi_cfg() {
+	echo "dahdi_cfg: span $spanno <$basechan-$endchan>"
+	dahdi_cfg -c "$cfg_file" -S "$spanno" -C "$basechan-$endchan"
+}
+
+configure_span() {
 	span_devpath="$1"
 	# Sanity check
 	checkit=`"dahdi_cfg" --help 2>&1 | grep -- '-S' | wc -l`
 	if [ "$checkit" != 1 ]; then
-		$LOGGER "Bad dahdi_cfg (no -S support). Skipping"
+		echo "Bad dahdi_cfg (no -S support). Skipping"
 		exit 0
 	fi
+
+	# Set variables
 	spanno=`echo "$span_devpath" | sed 's,.*/span-,,'`
 	basechan=`cat "$span_devpath/basechan"`
 	channels=`cat "$span_devpath/channels"`
 	endchan=`expr "$basechan" + "$channels" - 1`
-	echo "dahdi_cfg: span $spanno <$basechan-$endchan>"
-	dahdi_cfg \
-		-c "$DAHDICONFDIR/system.conf" \
-		-S "$spanno" \
-		-C "$basechan-$endchan"
+
+	# Configure DAHDI
+	cfg_file="$DAHDICONFDIR/system.conf"
+	if [ -r "$cfg_file" ]; then
+		run_dahdi_cfg
+	else
+		echo "Using auto-generated config for dahdi_cfg"
+		cfg_file='-'
+		DAHDI_CONF_FILE="$cfg_file" dahdi_genconf system | run_dahdi_cfg
+	fi
+
+	# Add to asterisk
 	asterisk -rx "dahdi create channels $basechan $endchan"
 }
 
@@ -57,9 +71,9 @@ add)
 	# Can have alternate dahdi configuration directory for debugging
 	# export DAHDICONFDIR="/tmp/xortel/dahdi"
 
-	run_dahdi_cfg "/sys$DEVPATH" 2>&1 | $LOGGER
+	configure_span "/sys$DEVPATH" 2>&1 | $LOGGER
 	;;
-remove)
+remove|online|offline)
 	# Nothing to do yet...
 	echo "$ACTION: $DEVPATH" | $LOGGER
 	;;
