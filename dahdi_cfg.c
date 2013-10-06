@@ -1500,7 +1500,10 @@ int main(int argc, char *argv[])
 		error("Unable to open master device '%s'\n", MASTER_DEVICE);
 		goto finish;
 	}
-	cf = fopen(filename, "r");
+	if (strcmp(filename, "-") == 0)
+		cf = fdopen(STDIN_FILENO, "r");
+	else
+		cf = fopen(filename, "r");
 	if (cf) {
 		while((buf = readline())) {
 			if (*buf == 10) /* skip new line */
