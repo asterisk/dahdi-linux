@@ -134,9 +134,10 @@ Span registration should generally always succeed. Span unregistration may
 fail if channels from the span are in use by e.g. asterisk. In such a case
 you'll also see those channels as '(In use)' in the output of lsdahdi(8).
 
-dahdi_registration is intended to be used when the xpp module parameter
-B<dahdi_autoreg> is false (and implicitly: when the dahdi module parameter
-B<auto_assign_span> is true.
+dahdi_registration is intended to be used when the kernel module parameter
+B<xpp.dahdi_autoreg> is false (and implicitly: when the module parameter
+B<dahdi.auto_assign_span> is true). See also the NOTES section regarding
+C<span_assignments>.
 
 If dahdi_autoreg is true, the program will normally do nothing.
 
@@ -209,3 +210,30 @@ This should allow you to register / unregister a specific XPD rather
 than all of them. 
 
 =back
+
+=head1 NOTES
+
+dahdi_registration is intended to be used when the kernel module
+parameter B<xpp.dahdi_autoreg> is false (and implicitly: when the module
+parameter B<dahdi.auto_assign_span> is true), that is, Astribank devices
+as detected by XPP (xbus / xpd) do not register automatically with the
+DAHDI core. This tool is used to register tem in an explicit order. It
+works well, but only if you can arange for all of the Astribanks of the
+system to be available (and not already registered) at a specific point
+in time.
+
+Newer versions of DAHDI added support for registering a span to a
+specific span/channelss numbers specification. This allows registering
+them out of order. To use this capability, the module parameter
+B<dahdi.auto_assign_span> should be unset (set to 0) and thus spans of
+detected DAHDI devices could be registered using C<span_assignments>
+(which may also be run automatically from a udev hook).
+
+In this case there is no point in delaying XPP device registration with
+dahdi and the parameter B<xpp.dahdi_autoreg> should be set.
+dahdi_registration will simply become a no-op.
+
+=head1 SEE ALSO
+
+B<dahdi_cfg>(8), B<span_assignments>(8).
+

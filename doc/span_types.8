@@ -1,0 +1,146 @@
+.TH "SPAN_ASSIGNMENTS" "8" "13 Oct 2013" "" ""
+
+.SH NAME
+span_assignments \- set DAHDI spans properties before registration (E1/T1)
+.SH SYNOPSIS
+
+.B span_assignments <list|dumpconfig|set> [\fIdevpath \fB[\fIdevpath \fB...]]
+
+.SH DESCRIPTION
+The span type (E1/T1/J1) must be set to a span before registering it
+with DAHDI, as E1 spans use more channels. \fBspan_types\fR applies the
+span type configuration to an unregistered span.
+
+Using it only makes sense when the kernel module parameter
+\fBdahdi.auto_assign_span\fR is unset, otherwise the DAHDI spans register
+automatically.
+
+.SH OPTIONS
+.B span_types
+takes a command and an optional list of devices. If no device is given,
+the command is applied to all devices.
+
+The device is marked as a path in the SysFS tree.
+
+.B set
+.RS
+Reads settings from \fBspan-types.conf\fR and applies them to the
+device(s) specified in the command line (or all devices, if none
+specified).
+.RE
+
+.B list
+.RS
+List types for all spans in the system which may be set with span_types
+(E1/T1/J1 spans).
+.RE
+
+.B dumpconfig
+.RS
+List types for the spans in a format fit to be used in
+\fBspan-types.conf\fR. Use this to generate a configuration file after
+you have (perhaps manually) set all existing spans.
+
+.B dahdi_genconf spantypes
+uses this command internally.
+.RE
+
+.SH CONFIGURATION
+.B span-types.conf
+is a file with lines specifying registration of spans.
+
+Empty lines or lines beginning with '#' are ignored.
+
+Each line is in the format of:
+
+.I ID		spanspec ...
+
+The \fIID\fR field specifies the DAHDI device and the \fIspanspecs\fR
+define how to register its spans. A line may have multiple
+\fIspanspecs\fR in a single line (though dumpconfig generates a
+configuration with one per line).
+
+.SS Span Identifier
+A DAHDI device may be specified either by a hardware identifier (a
+software readable serial number or whatever) or the location in which
+it is installed on the system. The former makes it simpler to change
+connector / slot whereas the latter makes it simpler to replace a unit.
+
+The value in this field is matched (when the commands \fBadd\fR and
+\fBremove\fR) are used) to the following values:
+
+ \fIhwid\fR
+ \fB@\fIlocation\fR
+ \fIdevpath\fR
+
+See above for their descriptions. The value may include shell wildcards:
+*, ? and [], which are used in the match. The values to be matched are
+first cleaned up: '!' is replaced with '/' and any character beyond
+"a-zA-Z0-9/:.-" is removed.
+
+.SS Span Specification
+
+Each line should have one or more span specifications: this is the value
+used to register a span with DAHDI in the SysFS interface. A
+specification has three colon-separated numbers:
+
+.I rel_span_no:span_type
+
+for instance, the following are four span specifications specify ports 1 and 2 as E1 and ports 3 and 4 as T1: [12]:E1 [34]:T1 .
+
+.B rel_span_no
+.RS
+The relative number of the span in the device. E.g.: port number.
+.RE
+
+.B span_type
+.RS
+E1/T1/J1
+.RE
+
+
+.SH ENVIRONMENT
+
+.B DAHDICONFDIR
+.RS
+The directory in which span-types.conf resides. /etc/dahdi if not
+overridden from the environment.
+.RE
+
+.B span_types_conf
+.RS
+The path to span-types.conf resides. /etc/dahdi/span-types.conf if
+not overridden from the environment.
+.RE
+
+
+.SH FILES
+
+.B /etc/dahdi/span-types.conf
+.RS
+The default location for the configuration file.
+.RE
+
+.B /sys/bus/dahdi_devices/devices/\fIdevice\fR
+.RS
+SysFS node for the device. In this directory reside the following
+files, among others:
+
+.B spantype
+.RS
+read/write file. Reading from it returns current configuration for spans
+of the device. Span-specifications can be written to it to change types
+(but only for a span that is not registered).
+.RE
+
+
+.SH SEE ALSO
+span_assignments(8), dahdi_genconf(8), dahdi_cfg(8)
+
+.SH AUTHOR
+span_assignments was written by Oron Peled.  This manual page was
+written by Tzafrir Cohen. Permission is granted to copy, distribute
+and/or modify this document under the terms of the GNU General Public
+License, Version 2 any  later version published by the Free Software
+Foundation.
+

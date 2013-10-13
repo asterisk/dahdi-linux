@@ -1,0 +1,222 @@
+.TH "SPAN_ASSIGNMENTS" "8" "13 Oct 2013" "" ""
+
+.SH NAME
+span_assignments \- handle DAHDI spans registration
+.SH SYNOPSIS
+
+.B span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] <add|remove> \fIdevpath
+\fB[\fIdevpath \fB...]
+
+.B span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] auto
+
+.B span_assignments [\-v|\-\-verbose] list
+
+.B span_assignments [\-v|\-\-verbose] [\-k|\-\-key \fIkey\fB] dumpconfig
+
+.B span_assignments \-h|\-\-help
+
+.SH DESCRIPTION
+When the kernel module parameter \fBdahdi.auto_assign_span\fR is unset,
+DAHDI devices (such as DAHDI PCI cards) that register with DAHDI don't
+register their spans (e.g.: each digital port is normally a span) with
+DAHDI. This allows user-space to order DAHDI to register them to specific 
+span and channel numbers. This allows registering different spans out of
+order.
+
+.B span_assignments
+is used to register those spans or to help creating the configuration
+file used in their registration:
+.B /etc/dahdi/pinned-spans.conf .
+
+.SH OPTIONS
+
+There are several sub-commands:
+
+.B add \fIdevpath \fB[\fIdevpath \fB...]
+.RS
+Parameters are paths (in SysFS) to DAHDI devices with unregistered
+spans. The command will register with DAHDI according to according to
+configuration in \fBpinned-spans.conf\fR.
+.RE
+
+.B remove \fIdevpath \fB[\fIdevpath \fB...]
+.RS
+Parameters are paths (in SysFS) to DAHDI devices with registered
+spans. The command will unregister with DAHDI.
+.RE
+
+.B auto
+.RS
+Register all non-registered spans. Each span registers to first
+available span number and channel numbers, as if
+\fBdahdi.auto_assign_span\fR was set.
+.RE
+
+.B list
+.RS
+List all spans in the system.
+.RE
+
+.B dumpconfig
+.RS
+List all registered spans in the system in a format fit to be used in
+\fBpinned-spans.conf\fR. Use this to generate a configuration file after
+you have (perhaps manually) registered all existing spans.
+
+.B dahdi_genconf pinnedspans
+uses this command internally.
+.RE
+
+.B \-v \-\-verbose
+.RS
+Verbose output.
+.RE
+
+.B \-n \-\-dry\-run
+.RS
+Don't register / unregister spans. Only print commands used to do so.
+.RE
+
+.B \-k \fIkey
+.RS
+For \fBdumpconfig\fR \- The key by which to identify the hardware in the
+generated configuration. Legal values:
+
+.B hwid
+.RS
+Hardware identifier (e.g.: software-readable serial number). This is the
+default. If the device has no hwid, devpath is used.
+.RE
+
+.B location
+.RS
+The location field (file) in the SysFS device node (directory) for the
+DAHDI device. If not available (typically: DAHDI version <= 2.7.x),
+devpath is used.
+.RE
+
+.B devpath
+.RS
+Path in SysFS to the device node.
+.RE
+.RE
+
+.SH CONFIGURATOIN
+.B pinned-spans.conf
+is a file with lines specifying registration of spans.
+
+Empty lines or lines beginning with '#' are ignored.
+
+Each line is in the format of:
+
+.I ID		spanspec ...
+
+The \fIID\fR field specifies the DAHDI device and the \fIspanspecs\fR
+define how to register its spans. A line may have multiple
+\fIspanspecs\fR in a single line (though dumpconfig generates a
+configuration with one per line).
+
+.SS Span Identifier
+A DAHDI device may be specified either by a hardware identifier (a
+software readable serial number or whatever) or the location in which
+it is installed on the system. The former makes it simpler to change
+connector / slot whereas the latter makes it simpler to replace a unit.
+
+The value in this field is matched (when the commands \fBadd\fR and
+\fBremove\fR) are used) to the following values:
+
+ \fIhwid\fR
+ \fB@\fIlocation\fR
+ \fIdevpath\fR
+
+See above for their descriptions. The value may include shell wildcards:
+*, ? and [], which are used in the match. The values to be matched are
+first cleaned up: '!' is replaced with '/' and any character beyond
+"a-zA-Z0-9/:.-" is removed.
+
+.SS Span Specification
+
+Each line should have one or more span specifications: this is the value
+used to register a span with DAHDI in the SysFS interface. A
+specification has three colon-separated numbers:
+
+.I rel_span_no:span_no:first_chan
+
+for instance, the following are four span specifications for a quad-E1
+device: 1:6:53 2:7:84 3:8:115 4:9:146 occupying spans 6-9 and channels
+53-176.
+
+.B rel_span_no
+.RS
+The relative number of the span in the device. E.g.: port number.
+.RE
+
+.B span_no
+.RS
+The desired DAHDI span number. Must be available.
+.RE
+
+.B first_chan
+.RS
+The desired DAHDI channel number for the first DAHDI channel in the span.
+All channels of the span will be registered following it and hence that
+space must be available.
+.RE
+
+
+.SH ENVIRONMENT
+
+.B DAHDICONFDIR
+.RS
+The directory in which pinned-spans.conf resides. /etc/dahdi if not
+overridden from the environment.
+.RE
+
+.B pinned_spans_conf
+.RS
+The path to pinned-spans.conf resides. /etc/dahdi/pinned-spans.conf if
+not overridden from the environment.
+.RE
+
+.B SPAN_ASSIGNMENTS_KEY
+.RS
+The default value for \-k . Defaults to "hwid" if not overridden from the
+environment.
+.RE
+
+
+.SH FILES
+
+.B /etc/dahdi/pinned-spans.conf
+.RS
+The default location for the configuration file.
+.RE
+
+.B /sys/bus/dahdi_devices/devices/\fIdevice\fR
+.RS
+SysFS node for the device. In this directory reside the following
+files, among others:
+
+.B location
+.RS
+The value of the device's location field.
+.RE
+
+.B assign_span, unassign_span, auto_assign
+.RS
+Write only files for the operations. Used by \fBadd\fR, \fBremove\fR and
+\fBauto\fR, respectively.
+.RE
+
+.RE
+
+.SH SEE ALSO
+span_types(8), dahdi_genconf(8), dahdi_cfg(8)
+
+.SH AUTHOR
+span_assignments was written by Oron Peled.  This manual page was
+written by Tzafrir Cohen. Permission is granted to copy, distribute
+and/or modify this document under the terms of the GNU General Public
+License, Version 2 any  later version published by the Free Software
+Foundation.
+
