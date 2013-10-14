@@ -3840,6 +3840,31 @@ void dahdi_alarm_channel(struct dahdi_chan *chan, int alarms)
 	spin_unlock_irqrestore(&chan->lock, flags);
 }
 
+struct dahdi_span *get_master_span(void)
+{
+	return master_span;
+}
+
+void set_master_span(int spanno)
+{
+	struct dahdi_span *s;
+	unsigned long flags;
+	struct dahdi_span *old_master;
+
+	spin_lock_irqsave(&chan_lock, flags);
+	old_master = master_span;
+	list_for_each_entry(s, &span_list, spans_node) {
+		if (spanno == s->spanno) {
+			master_span = s;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&chan_lock, flags);
+	if ((debug & DEBUG_MAIN) && (old_master != master_span))
+		module_printk(KERN_NOTICE, "Master span is set to %d (%s)\n",
+			master_span->spanno, master_span->name);
+}
+
 static void __dahdi_find_master_span(void)
 {
 	struct dahdi_span *s;

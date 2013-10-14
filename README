@@ -989,6 +989,12 @@ A very short type string.
 ===== /sys/bus/dahdi_spans/devices/span-N/syncsrc
 Current sync source.
 
+==== sys/bus/dahdi_spans/drivers/generic_lowlevel/master_span
+All spans in the bus are handled by a single driver. The driver has one
+non-standard attribute: master_span. printing it shows the current DAHDI
+master span writing a number to it forces setting this span as the master
+span.
+
 
 Channels Bus
 ^^^^^^^^^^^^

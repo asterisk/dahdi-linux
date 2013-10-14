@@ -231,7 +231,30 @@ static struct device_attribute span_dev_attrs[] = {
 	__ATTR_NULL,
 };
 
+static ssize_t master_span_show(struct device_driver *driver, char *buf)
+{
+	struct dahdi_span *s = get_master_span();
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", (s) ? s->spanno : 0);
+}
+
+static ssize_t master_span_store(struct device_driver *driver, const char *buf,
+			  size_t count)
+{
+	int spanno;
+
+	if (sscanf(buf, "%d", &spanno) != 1) {
+		module_printk(KERN_ERR, "non-numeric input '%s'\n", buf);
+		return -EINVAL;
+	}
+	set_master_span(spanno);
+	return count;
+}
+
+
 static struct driver_attribute dahdi_attrs[] = {
+	__ATTR(master_span, S_IRUGO | S_IWUSR, master_span_show,
+			master_span_store),
 	__ATTR_NULL,
 };
 

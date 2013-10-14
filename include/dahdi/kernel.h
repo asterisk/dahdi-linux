@@ -1003,6 +1003,8 @@ struct dahdi_transcoder_channel {
 };
 
 int dahdi_is_sync_master(const struct dahdi_span *span);
+struct dahdi_span *get_master_span(void);
+void set_master_span(int spanno);
 
 static inline int 
 dahdi_tc_is_built(struct dahdi_transcoder_channel *dtc) {
