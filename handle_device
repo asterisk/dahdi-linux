@@ -25,6 +25,16 @@ set -e
 
 #echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
 
+# Do we have a configuration?
+if [ -f /etc/dahdi/init.conf ]; then
+	. /etc/dahdi/init.conf
+fi
+
+if [ "$DAHDI_UDEV_DISABLE_DEVICES" = 'yes' ]; then
+	echo "DAHDI_UDEV_DISABLE_DEVICES=yes. Skip $DEVPATH" | $LOGGER
+	exit 0
+fi
+
 # Check if we can safely do our job
 if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
 	echo "Old driver (no auto_assign_spans parameter). Skip $DEVPATH" | $LOGGER

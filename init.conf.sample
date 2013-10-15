@@ -17,3 +17,7 @@
 #XPP_FIRMWARE_DIR=/usr/share/dahdi
 #XPP_HOTPLUG_DISABLED=yes
 #XPP_HOTPLUG_DAHDI=yes
+
+# Disable udev handling:
+#DAHDI_UDEV_DISABLE_DEVICES=yes
+#DAHDI_UDEV_DISABLE_SPANS=yes

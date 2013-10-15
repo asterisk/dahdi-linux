@@ -25,6 +25,16 @@ set -e
 
 #echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
 
+# Do we have a configuration?
+if [ -f /etc/dahdi/init.conf ]; then
+	. /etc/dahdi/init.conf
+fi
+
+if [ "$DAHDI_UDEV_DISABLE_SPANS" = 'yes' ]; then
+	echo "DAHDI_UDEV_DISABLE_SPANS=yes. Skip $DEVPATH" | $LOGGER
+	exit 0
+fi
+
 # Can we pass a different value so we can use
 # alternate (testing) configuration?
 # Meanwhile, make it hard-coded.
