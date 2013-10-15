@@ -8,6 +8,7 @@
 #  * The <id> field may be either:
 #         hardware_id
 #         @location
+#         devpath (in sysfs)
 #  * The <local_spanno> is the relative span number 
 #    in the device (starting from 1)
 #    In this filed globbing rules apply. E.g:
@@ -24,4 +25,4 @@
 
 #  Set the first two spans of an Astribank to T1. The
 #  Astribanks is specified by its location instead of hardware_id
-#@pci0000:00/0000:00:03.3/usb1/1-5/xbus-01/astribanks:xbus-01 [12]:T1
+#@usb-0000:00:1d.7-3 [12]:T1

@@ -10,6 +10,7 @@
 #  * The <id> field may be either:
 #         hardware_id
 #         @location
+#         devpath (in sysfs)
 #  * Shell-style globbing is allowed for the <id> field
 #  * There may one or more of <spanspec>
 #  * Each <spanspec> is composed as:
@@ -44,13 +45,13 @@
 # Astribank with 4*BRI without hardware_id :-(
 # We use the location on the bus (ie: where it is physically
 # located). Note the '@' prefix that indicate the location key.
-#@pci0000:00/0000:00:03.3/usb1/1-6/xbus-01/astribanks:xbus-01	1:1:50
-#@pci0000:00/0000:00:03.3/usb1/1-6/xbus-01/astribanks:xbus-01	2:2:100
-#@pci0000:00/0000:00:03.3/usb1/1-6/xbus-01/astribanks:xbus-01	3:3:150
-#@pci0000:00/0000:00:03.3/usb1/1-6/xbus-01/astribanks:xbus-01	4:4:200
+#@usb-0000:00:1d.7-3	1:1:50
+#@usb-0000:00:1d.7-3	2:2:100
+#@usb-0000:00:1d.7-3	3:3:150
+#@usb-0000:00:1d.7-3	4:4:200
 
 # Same configuration with globbing:
-#@*/usb1/1-6/*	1:1:50
-#@*/usb1/1-6/*	2:2:100
-#@*/usb1/1-6/*	3:3:150
-#@*/usb1/1-6/*	4:4:200
+#/sys/*/usb1/1-6/*	1:1:50
+#/sys/*/usb1/1-6/*	2:2:100
+#/sys/*/usb1/1-6/*	3:3:150
+#/sys/*/usb1/1-6/*	4:4:200
