@@ -226,12 +226,10 @@ ifeq (,$(wildcard $(DESTDIR)$(CONFIG_FILE)))
 	$(INSTALL) -d $(DESTDIR)$(CONFIG_DIR)
 	$(INSTALL) -m 644 system.conf.sample $(DESTDIR)$(CONFIG_FILE)
 endif
-ifeq ($(DAHDI_PINNED),yes)
 	install -d $(DESTDIR)$(DATA_DIR)
 	install $(PINNED_DATA_SCRIPTS) $(DESTDIR)$(DATA_DIR)/
 	install $(PINNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
 	install -m 644 $(PINNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
-endif
 
 install-libs: libs
 	$(INSTALL) -d -m 755 $(DESTDIR)/$(LIB_DIR)
