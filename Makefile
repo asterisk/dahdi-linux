@@ -85,6 +85,7 @@ MAN_DIR:=$(mandir)/man8
 DATA_DIR:=${datadir}/dahdi
 CONFIG_DIR:=$(sysconfdir)/dahdi
 CONFIG_FILE:=$(CONFIG_DIR)/system.conf
+UDEVRULES_DIR:=$(sysconfdir)/udev/rules.d
 
 # Utilities we build with a standard build procedure:
 UTILS		= dahdi_tool dahdi_test dahdi_monitor dahdi_speed sethdlc dahdi_cfg \
@@ -292,6 +293,8 @@ endif
 ifeq (,$(wildcard $(DESTDIR)$(BLACKLIST_FILE)))
 	$(INSTALL) -D -m 644 blacklist.sample $(DESTDIR)$(BLACKLIST_FILE)
 endif
+	$(INSTALL) -d $(DESTDIR)$(UDEVRULES_DIR)
+	$(INSTALL) -D -m 644 dahdi.rules $(DESTDIR)$(UDEVRULES_DIR)/
 ifneq (,$(COPY_NETSCR))
 	$(COPY_NETSCR)
 endif
