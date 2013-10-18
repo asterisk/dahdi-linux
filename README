@@ -133,6 +133,16 @@ FIXME: still not properly formatted.
 include::genconf_parameters.asciidoc[]
 
 
+Sample assigned-spans.conf
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+include::assigned-spans.conf.asciidoc[]
+
+
+Sample span-types.conf
+~~~~~~~~~~~~~~~~~~~~~~
+include::span-types.conf.asciidoc[]
+
+
 Tonezones
 ~~~~~~~~~
 The file zonedata.c contains the information about the tone zones used
