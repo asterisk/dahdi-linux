@@ -217,12 +217,14 @@ usb_firmware_device() {
 	id_str="$1"
 	devpath="$2"
 
+	bcd_device=`echo "$id_str" | cut -d/ -f3`
+
 	case "$id_str" in
 	e4e4/11[3456]0/101|e4e4/1163/101)
 		fw="USB_FW.hex"
 		;;
-	e4e4/116[03]/201)
-		fw="USB_FW.201.hex"
+	e4e4/116[03]/20?)
+		fw="USB_FW.${bcd_device}.hex"
 		;;
 	e4e4/*)
 		debug "No USB firmware for device $devpath ($id_str)"
@@ -332,7 +334,7 @@ fpga_firmware_device() {
 	e4e4/11[456]1/101)
 		fw="FPGA_${id_product}.hex"
 		;;
-	e4e4/1161/201)
+	e4e4/1161/20?)
 		fw="FPGA_${id_product}.${bcd_device}.hex"
 		;;
 	e4e4/*)
