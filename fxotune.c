@@ -980,7 +980,7 @@ static int channel_open(int channo)
  * 
  * @return 0 if successful, !0 otherwise
  */	
-static int do_set(char *configfilename)
+static int do_set(char *configfilename, int dev_range, int startdev, int stopdev)
 {
 	FILE *fp = NULL;
 	int res = 0;
@@ -1007,6 +1007,8 @@ static int do_set(char *configfilename)
 		if (res == EOF) {
 			break;
 		}
+		if (dev_range && (mydahdi < startdev || mydahdi > stopdev))
+			continue;
 
 		/* Check to be sure conversion is done correctly */
 		if (OUT_OF_BOUNDS(myacim) || OUT_OF_BOUNDS(mycoef1)||
@@ -1028,6 +1030,8 @@ static int do_set(char *configfilename)
 		mycoefs.coef7 = mycoef7;
 		mycoefs.coef8 = mycoef8;
 	
+		if (debug >= 2)
+			printf("fxotune: set channel %d\n", mydahdi);
 		fd = channel_open(mydahdi);
 		if (fd < 0) {
 			return -1;
@@ -1187,6 +1191,7 @@ int main(int argc , char **argv)
 {
 	int startdev = 1; /* -b */
 	int stopdev = 252; /* -e */
+	int dev_range = 0; /* false */
 	int calibtype = 2; /* -t */
 	int waveformtype = -1; /* -w multi-tone by default.  If > 0, single tone of specified frequency */
 	int delaytosilence = 0; /* -l */
@@ -1228,9 +1233,11 @@ int main(int argc , char **argv)
 				continue;
 			case 'b':
 				startdev = moreargs ? atoi(argv[++i]) : startdev;
+				dev_range = 1;
 				break;
 			case 'e':
 				stopdev = moreargs ? atoi(argv[++i]) : stopdev;
+				dev_range = 1;
 				break;
 			case 't':
 				calibtype = moreargs ? atoi(argv[++i]) : calibtype;
@@ -1300,13 +1307,13 @@ int main(int argc , char **argv)
 	if (docalibrate){
 		res = do_calibrate(startdev, stopdev, calibtype, configfile, dialstr, delaytosilence, silencegoodfor);
 		if (!res)
-			return do_set(configfile);	
+			return do_set(configfile, dev_range, startdev, stopdev);
 		else
 			return -1;
 	}
 
 	if (doset)
-		return do_set(configfile);
+		return do_set(configfile, dev_range, startdev, stopdev);
 				
 	if (dodump){
 		res = do_dump(startdev, dialstr, delaytosilence, silencegoodfor, waveformtype);
