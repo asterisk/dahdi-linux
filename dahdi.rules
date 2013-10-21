@@ -5,5 +5,5 @@ SUBSYSTEM=="dahdi",		OWNER="asterisk", GROUP="asterisk", MODE="0660"
 SUBSYSTEM=="dahdi_channels",	SYMLINK+="dahdi/%m"
 
 # hotplug support
-SUBSYSTEM=="dahdi_devices",	RUN="/usr/share/dahdi/handle_device"
-SUBSYSTEM=="dahdi_spans",	RUN="/usr/share/dahdi/span_config"
+SUBSYSTEM=="dahdi_devices",	RUN="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/handle_device"
+SUBSYSTEM=="dahdi_spans",	RUN="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/span_config"
