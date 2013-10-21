@@ -42,7 +42,7 @@ DAHDICONFDIR='/etc/dahdi'
 export DAHDICONFDIR
 
 run_dahdi_cfg() {
-	echo "dahdi_cfg: span $spanno <$basechan-$endchan>"
+	echo "dahdi_cfg: span $spanno <$basechan-$endchan> ($DEVPATH)"
 	dahdi_cfg -c "$cfg_file" -S "$spanno" -C "$basechan-$endchan"
 }
 
@@ -69,6 +69,11 @@ configure_span() {
 		echo "Using auto-generated config for dahdi_cfg"
 		cfg_file='-'
 		DAHDI_CONF_FILE="$cfg_file" dahdi_genconf system | run_dahdi_cfg
+	fi
+	fxotune_cfg='/etc/fxotune.conf'
+	if [ -r "$fxotune_cfg" ]; then
+		echo "fxotune: span $spanno <$basechan-$endchan> ($DEVPATH)"
+		fxotune -s -b "$basechan" -e "$endchan"
 	fi
 
 	# Add to asterisk
