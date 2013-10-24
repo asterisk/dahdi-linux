@@ -40,11 +40,10 @@
 /* #define SHORT_FLASH_TIME */
 
 /*
- * Uncomment to disable calibration and/or DC/DC converter tests
+ * Uncomment to disable calibration tests
  * (not generally recommended)
  */
 /* #define NO_CALIBRATION */
-/* #define NO_DCDC */
 
 /*
  * Boost ring voltage (Higher ring voltage, takes more power)
