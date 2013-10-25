@@ -2719,6 +2719,9 @@ static void __devexit te13xp_remove_one(struct pci_dev *pdev)
 	/* Quiesce DMA engine interrupts */
 	wcxb_stop(&wc->xb);
 
+	/* Leave framer in reset so it no longer transmits */
+	wcxb_gpio_clear(&wc->xb, FALC_CPU_RESET);
+
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
 	del_timer_sync(&wc->timer);
