@@ -130,6 +130,10 @@ static struct wcxb_operations xb_ops = {
 #define LIM1		0x37
 #define LIM1_RL	(1<<1)
 #define LIM1_JATT	(1<<2)
+#define FMR3_T		0x21	/* T1 Framer 3 register */
+#define FMR3_E		0x31	/* E1 Framer 3 register */
+#define LOOPUP		(1<<4)	/* Transmit loopup code */
+#define LOOPDOWN	(1<<5)	/* Transmit loopdown code */
 
 /* Clear Channel Registers */
 #define CCB1		0x2f
@@ -152,6 +156,13 @@ static struct wcxb_operations xb_ops = {
 
 #define ISR3_SEC (1 << 6)	/* Internal one-second interrupt bit mask */
 #define ISR3_ES (1 << 7)	/* Errored Second interrupt bit mask */
+#define IERR_T 0x1B		/* Single Bit Defect Insertion Register */
+#define IBV	(1 << 0) /* Bipolar violation */
+#define IPE	(1 << 1) /* PRBS defect */
+#define ICASE	(1 << 2) /* CAS defect */
+#define ICRCE	(1 << 3) /* CRC defect */
+#define IMFE	(1 << 4) /* Multiframe defect */
+#define IFASE	(1 << 5) /* FAS defect */
 
 #define IMR0		0x14
 #define CCR1		0x09
@@ -847,7 +858,6 @@ static inline int t13x_framer_get(struct t13x *wc, int addr)
 	return t13x_pci_get(wc, FRAMER_BASE + addr);
 }
 
-
 static void t13x_framer_reset(struct t13x *wc)
 {
 	/*
@@ -1064,7 +1074,7 @@ static void t13x_configure_t1(struct t13x *wc, int lineconfig, int txlevel)
 	__t13x_framer_set(wc, 0x1c, fmr0);
 
 	__t13x_framer_set(wc, 0x20, fmr4);
-	__t13x_framer_set(wc, 0x21, 0x40);	/* FMR5: Enable RBS mode */
+	__t13x_framer_set(wc, FMR3_T, 0x40);	/* FMR5: Enable RBS mode */
 
 	__t13x_framer_set(wc, 0x37, 0xf8);	/* LIM1: Clear data in case of
 						   LOS, Set receiver threshold
@@ -1468,138 +1478,103 @@ static void t13x_check_sigbits(struct t13x *wc)
 	}
 }
 
-struct maint_work_struct {
-	struct work_struct work;
-	struct t13x *wc;
-	int cmd;
-	struct dahdi_span *span;
-};
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void t13x_maint_work(void *data)
+static void t13x_reset_counters(struct dahdi_span *span)
 {
-	struct maint_work_struct *w = data;
-#else
-static void t13x_maint_work(struct work_struct *work)
-{
-	struct maint_work_struct *w = container_of(work,
-					struct maint_work_struct, work);
-#endif
+	memset(&span->count, 0, sizeof(span->count));
+}
 
-	struct t13x *wc = w->wc;
-	struct dahdi_span *span = w->span;
+static int t13x_maint(struct dahdi_span *span, int cmd)
+{
+	struct t13x *wc = container_of(span, struct t13x, span);
 	int reg = 0;
-	int cmd = w->cmd;
 	unsigned long flags;
 
-	if (dahdi_is_e1_span(&wc->span)) {
-		switch (cmd) {
-		case DAHDI_MAINT_NONE:
-			dev_info(&wc->dev->dev, "Clearing all maint modes\n");
-			t13x_clear_maint(span);
-			break;
-		case DAHDI_MAINT_LOCALLOOP:
-			dev_info(&wc->dev->dev, "Turning on local loopback\n");
-			t13x_clear_maint(span);
+	switch (cmd) {
+	case DAHDI_MAINT_NONE:
+		dev_info(&wc->dev->dev, "Clearing all maint modes\n");
+		t13x_clear_maint(span);
+		break;
+	case DAHDI_MAINT_LOCALLOOP:
+		dev_info(&wc->dev->dev, "Turning on local loopback\n");
+		t13x_clear_maint(span);
+		spin_lock_irqsave(&wc->reglock, flags);
+		reg = __t13x_framer_get(wc, LIM0);
+		__t13x_framer_set(wc, LIM0, reg | LIM0_LL);
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		break;
+	case DAHDI_MAINT_NETWORKLINELOOP:
+		dev_info(&wc->dev->dev,
+				"Turning on network line loopback\n");
+		t13x_clear_maint(span);
+		spin_lock_irqsave(&wc->reglock, flags);
+		reg = __t13x_framer_get(wc, LIM1);
+		__t13x_framer_set(wc, LIM1, reg | LIM1_RL);
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		break;
+	case DAHDI_MAINT_NETWORKPAYLOADLOOP:
+		dev_info(&wc->dev->dev,
+			"Turning on network payload loopback\n");
+		t13x_clear_maint(span);
+		spin_lock_irqsave(&wc->reglock, flags);
+		reg = __t13x_framer_get(wc, LIM1);
+		__t13x_framer_set(wc, LIM1, reg | (LIM1_RL | LIM1_JATT));
+		spin_unlock_irqrestore(&wc->reglock, flags);
+		break;
+	case DAHDI_MAINT_LOOPUP:
+		dev_info(&wc->dev->dev, "Transmitting loopup code\n");
+		t13x_clear_maint(span);
+		if (dahdi_is_e1_span(&wc->span)) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM0);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM0, reg | LIM0_LL);
+			reg = __t13x_framer_get(wc, FMR3_E);
+			__t13x_framer_set(wc, FMR3_E, reg | LOOPUP);
 			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		case DAHDI_MAINT_NETWORKLINELOOP:
-			dev_info(&wc->dev->dev,
-					"Turning on network line loopback\n");
-			t13x_clear_maint(span);
+		} else {
 			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM1);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM1, reg | LIM1_RL);
+			reg = __t13x_framer_get(wc, FMR3_T);
+			__t13x_framer_set(wc, FMR3_T, reg | LOOPUP);
 			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-			dev_info(&wc->dev->dev,
-				"Turning on network payload loopback\n");
-			t13x_clear_maint(span);
-			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM1);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM1, reg | (LIM1_RL | LIM1_JATT));
-			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		default:
-			dev_info(&wc->dev->dev,
-					"Unknown E1 maint command: %d\n", cmd);
-			goto cleanup;
 		}
-	} else {
-		switch (cmd) {
-		case DAHDI_MAINT_NONE:
-			dev_info(&wc->dev->dev, "Clearing all maint modes\n");
-			t13x_clear_maint(span);
-			break;
-		case DAHDI_MAINT_LOCALLOOP:
-			dev_info(&wc->dev->dev, "Turning on local loopback\n");
-			t13x_clear_maint(span);
+		break;
+	case DAHDI_MAINT_LOOPDOWN:
+		dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
+		t13x_clear_maint(span);
+		if (dahdi_is_e1_span(&wc->span)) {
 			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM0);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM0, reg | LIM0_LL);
+			reg = __t13x_framer_get(wc, FMR3_E);
+			__t13x_framer_set(wc, FMR3_E, reg | LOOPDOWN);
 			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		case DAHDI_MAINT_NETWORKLINELOOP:
-			dev_info(&wc->dev->dev,
-					"Turning on network line loopback\n");
-			t13x_clear_maint(span);
+		} else {
 			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM1);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM1, reg | LIM1_RL);
+			reg = __t13x_framer_get(wc, FMR3_T);
+			__t13x_framer_set(wc, FMR3_T, reg | LOOPDOWN);
 			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-			dev_info(&wc->dev->dev,
-				"Turning on network payload loopback\n");
-			t13x_clear_maint(span);
-			spin_lock_irqsave(&wc->reglock, flags);
-			reg = __t13x_framer_get(wc, LIM1);
-			if (reg < 0) {
-				spin_unlock_irqrestore(&wc->reglock, flags);
-				goto cleanup;
-			}
-			__t13x_framer_set(wc, LIM1, reg | (LIM1_RL | LIM1_JATT));
-			spin_unlock_irqrestore(&wc->reglock, flags);
-			break;
-		case DAHDI_MAINT_LOOPUP:
-			dev_info(&wc->dev->dev, "Transmitting loopup code\n");
-			t13x_clear_maint(span);
-			t13x_framer_set(wc, 0x21, 0x50);
-			break;
-		case DAHDI_MAINT_LOOPDOWN:
-			dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
-			t13x_clear_maint(span);
-			t13x_framer_set(wc, 0x21, 0x60);
-			break;
-		default:
-			dev_info(&wc->dev->dev,
-					"Unknown T1 maint command: %d\n", cmd);
-			return;
 		}
+		break;
+	case DAHDI_MAINT_FAS_DEFECT:
+		t13x_framer_set(wc, IERR_T, IFASE);
+		break;
+	case DAHDI_MAINT_MULTI_DEFECT:
+		t13x_framer_set(wc, IERR_T, IMFE);
+		break;
+	case DAHDI_MAINT_CRC_DEFECT:
+		t13x_framer_set(wc, IERR_T, ICRCE);
+		break;
+	case DAHDI_MAINT_CAS_DEFECT:
+		t13x_framer_set(wc, IERR_T, ICASE);
+		break;
+	case DAHDI_MAINT_PRBS_DEFECT:
+		t13x_framer_set(wc, IERR_T, IPE);
+		break;
+	case DAHDI_MAINT_BIPOLAR_DEFECT:
+		t13x_framer_set(wc, IERR_T, IBV);
+		break;
+	case DAHDI_RESET_COUNTERS:
+		t13x_reset_counters(span);
+		break;
+	default:
+		dev_info(&wc->dev->dev,
+				"Unknown maint command: %d\n", cmd);
+		return -ENOSYS;
 	}
 
 	/* update DAHDI_ALARM_LOOPBACK status bit and check timing source */
@@ -1609,66 +1584,6 @@ static void t13x_maint_work(struct work_struct *work)
 	dahdi_alarm_notify(span);
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-cleanup:
-	kfree(w);
-	return;
-}
-
-static int t13x_maint(struct dahdi_span *span, int cmd)
-{
-	struct maint_work_struct *work;
-	struct t13x *wc = container_of(span, struct t13x, span);
-
-	if (dahdi_is_e1_span(&wc->span)) {
-		switch (cmd) {
-		case DAHDI_MAINT_NONE:
-		case DAHDI_MAINT_LOCALLOOP:
-		case DAHDI_MAINT_NETWORKLINELOOP:
-		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-			break;
-		case DAHDI_MAINT_LOOPUP:
-		case DAHDI_MAINT_LOOPDOWN:
-			dev_info(&wc->dev->dev,
-				"Only local loop supported in E1 mode\n");
-			return -ENOSYS;
-		default:
-			dev_info(&wc->dev->dev,
-					"Unknown E1 maint command: %d\n", cmd);
-			return -ENOSYS;
-		}
-	} else {
-		switch (cmd) {
-		case DAHDI_MAINT_NONE:
-		case DAHDI_MAINT_LOCALLOOP:
-		case DAHDI_MAINT_NETWORKLINELOOP:
-		case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-		case DAHDI_MAINT_LOOPUP:
-		case DAHDI_MAINT_LOOPDOWN:
-			break;
-		default:
-			dev_info(&wc->dev->dev,
-					"Unknown T1 maint command: %d\n", cmd);
-			return -ENOSYS;
-		}
-	}
-
-	work = kzalloc(sizeof(*work), GFP_ATOMIC);
-	if (!work) {
-		dev_info(&wc->dev->dev,
-				"Failed to allocate memory for workqueue\n");
-		return -ENOMEM;
-	}
-
-	work->span = span;
-	work->wc = wc;
-	work->cmd = cmd;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&work->work, t13x_maint_work, work);
-#else
-	INIT_WORK(&work->work, t13x_maint_work);
-#endif
-	queue_work(wc->wq, &work->work);
 	return 0;
 }
 
@@ -1681,23 +1596,23 @@ static int t13x_clear_maint(struct dahdi_span *span)
 	/* Turn off local loop */
 	spin_lock_irqsave(&wc->reglock, flags);
 	reg = __t13x_framer_get(wc, LIM0);
-	if (reg < 0) {
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		return -EIO;
-	}
 	__t13x_framer_set(wc, LIM0, reg & ~LIM0_LL);
 
 	/* Turn off remote loop & jitter attenuator */
 	reg = __t13x_framer_get(wc, LIM1);
-	if (reg < 0) {
-		spin_unlock_irqrestore(&wc->reglock, flags);
-		return -EIO;
-	}
 	__t13x_framer_set(wc, LIM1, reg & ~(LIM1_RL | LIM1_JATT));
 
 	/* Clear loopup/loopdown signals on the line */
-	__t13x_framer_set(wc, 0x21, 0x40);
+	if (dahdi_is_e1_span(&wc->span)) {
+		reg = __t13x_framer_get(wc, FMR3_E);
+		__t13x_framer_set(wc, FMR3_E, reg & ~(LOOPDOWN | LOOPUP));
+	} else {
+		reg = __t13x_framer_get(wc, FMR3_T);
+		__t13x_framer_set(wc, FMR3_T, reg & ~(LOOPDOWN | LOOPUP));
+	}
+
 	spin_unlock_irqrestore(&wc->reglock, flags);
+
 	return 0;
 }
 
@@ -2569,9 +2484,8 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	wc->devtype = d;
 	dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 
-	/* Set the performance counters to -1 since this card currently does
-	 * not support collecting them. */
-	memset(&wc->span.count, -1, sizeof(wc->span.count));
+	/* Set the performance counters to 0 */
+	t13x_reset_counters(&wc->span);
 
 	ifaces[index] = wc;
 
