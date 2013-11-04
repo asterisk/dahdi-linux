@@ -8,37 +8,108 @@
 #
 # Span types can be set only *BEFORE* span are assigned.
 #
-# It reads a configuration file /etc/dahdi/span-types.conf
+# It uses a configuration file: $DAHDICONFDIR/span-types.conf
+# (default DAHDICONFDIR=/etc/dahdi)
 # (the format is documented inside that file)
 #
-# A mandatory first argument is:
-#   list       - to show existing E1/T1/J1 types
-#   dumpconfig - the same, but in a format (almost) suitable
-#                for the configuration file
-#   set        - actually write the setting to the driver
+# The first argument is an action:
+#   "set"        - actually write the setting to the driver
+#   "list"       - human-readable list of E1/T1/J1 types
+#   "dumpconfig" - dump current assignments in a /etc/dahdi/span-types.conf
+#                  compatible format
+#
+# Without further arguments, it operates on all existing spans
+# With one or more sysfs dahdi_devices it is limited to those.
+#
+# We may use alternative "keys" for device matching:
+# * Available keys:
+#   - "hwid"       - Hardware id attribute from sysfs
+#   - "@location"  - Location attribute from sysfs (embeded inside '<>')
+#   - "/devpath"   - The sysfs absolute devpath
+#
+# * During "dumpconfig", for each device we take the first available key:
+#   - The preference is: "hwid" or else "@location" or else "/devpath"
+#   - This can be overriden via the SPAN_ASSIGNMENTS_KEY environment variable
+#     or the '{-k|--key} key' command line option.
+#
+# Command line options:
+#  - The '-h|--help' show a usage message.
+#  - The '-k <key>|--key <key>' overrides the SPAN_ASSIGNMENTS_KEY environment
+#    variable.
 #
 # Examples:
 #    span_types list
-#    span_types dumpconfig
 #    span_types set	     # all devices
 #    span_types set /sys/bus/dahdi_devices/devices/astribanks:xbus-00
+#    span_types -k location dumpconfig
 #
 
 
 devbase='/sys/bus/dahdi_devices/devices'
 DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
 spantypes_conf="$DAHDICONFDIR/span-types.conf"
+SPAN_ASSIGNMENTS_KEY=${SPAN_ASSIGNMENTS_KEY:-hwid}
 
 usage() {
-	echo >&2 "Usage: $0 {list|dumpconfig|set} [devpath ...]"
+	echo >&2 "Usage: $0 [options] action [devpath ...]"
+	echo >&2 "       action:"
+	echo >&2 "         set        - set spans to E1/T1 according to configuration"
+	echo >&2 "         list       - human-readable list of all spans"
+	echo >&2 "         dumpconfig - dump current state as new configuration"
+	echo >&2 ""
+	echo >&2 "       options:"
+	echo >&2 "         -h|--help      - Show this help"
+	echo >&2 "         -k|--key <k>   - Override prefered key during dumpconfig action"
 	exit 1
 }
 
+# Parse command line options
+TEMP=`getopt -o hk: --long help,key: -n "$0" -- "$@"`
+if [ $? != 0 ]; then
+	echo >&2 "Bad options"
+	usage
+fi
+
+# Note the quotes around `$TEMP': they are essential!
+eval set -- "$TEMP"
+
+while true ; do
+	case "$1" in
+	-h|--help)
+		usage
+		;;
+	-k|--key)
+		SPAN_ASSIGNMENTS_KEY="$2"
+		shift
+		shift
+		;;
+	--)
+		shift
+		break
+		;;
+	*)
+		echo "Internal error!"
+		exit 1
+		;;
+	esac
+done
+
 if [ "$#" -eq 0 ]; then
+	echo >&2 "Missing action argument"
 	usage
 fi
 action="$1"
 shift
+
+# Validate SPAN_ASSIGNMENTS_KEY
+case "$SPAN_ASSIGNMENTS_KEY" in
+hwid|location|devpath)
+	;;
+*)
+	echo >&2 "Bad SPAN_ASSIGNMENTS_KEY='$SPAN_ASSIGNMENTS_KEY' (should be: hwid|location|devpath)"
+	usage
+	;;
+esac
 
 if [ ! -d "$devbase" ]; then
 	echo >&2 "$0: Missing '$devbase' (DAHDI driver unloaded?)"
@@ -52,17 +123,23 @@ else
 	DEVICES=`echo $devbase/*`
 fi
 
+# Beware of special characters in attributes
+attr_clean() {
+	cat "$1" | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
+}
+
 show_spantypes() {
 	echo "# PRI span types (E1/T1/J1)"
 	for device in $DEVICES
 	do
-		hw_id=`cat "$device/hardware_id"`
-		location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
+		devpath=`cd "$device" && pwd -P`
+		location='@'`attr_clean "$device/location"`
+		hardware_id=`attr_clean "$device/hardware_id"`
 		cat "$device/spantype" | while read st; do
 			case "$st" in
 			*:[ETJ]1)
 				printf "%-10s %-20s %s\n" \
-					"$st" "[$hw_id]" "$location"
+					"$st" "[$hardware_id]" "$location"
 				;;
 			esac
 		done | sort -n
@@ -78,14 +155,17 @@ dump_config() {
 	printf "$fmt" '# @location/hardware_id' 'span_type'
 	for device in $DEVICES
 	do
-		hw_id=`cat "$device/hardware_id"`
-		location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
-		if [ -n "$hw_id" ]; then
-			id="$hw_id"
+		devpath=`cd "$device" && pwd -P`
+		location=`attr_clean "$device/location"`
+		hardware_id=`attr_clean "$device/hardware_id"`
+		if [ "$SPAN_ASSIGNMENTS_KEY" = 'hwid' -a "$hardware_id" != '' ]; then
+			id="$hardware_id"
+		elif [ "$SPAN_ASSIGNMENTS_KEY" = 'location' -a "$location" != '' ]; then
+			id="@$location"
 		else
-			id="$location"
+			id="$devpath"
 		fi
-		#echo "# Device: [$hw_id] $location"
+		echo "# Device: [$hardware_id] @$location $devpath"
 		cat "$device/spantype" | while read st; do
 			case "$st" in
 			*:[ETJ]1)
@@ -106,7 +186,7 @@ filter_conf() {
 }
 
 conf_spans() {
-	hw_id="$1"
+	hardware_id="$1"
 	location="$2"
 	filter_conf | (
 		# Collect device spans
@@ -120,7 +200,7 @@ conf_spans() {
 				SPANS="$SPANS $spans"
 				;;
 			esac
-			case "$hw_id" in
+			case "$hardware_id" in
 			$id)
 				#echo >&2 "match([$id]): $spans"
 				SPANS="$SPANS $spans"
@@ -131,17 +211,13 @@ conf_spans() {
 	)
 }
 
-# Beware of special characters in attributes
-attr_clean() {
-	cat "$1" | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
-}
-
 device_set_spantype() {
 	device="$1"
 	attr_file="$device/spantype"
-	hw_id=`attr_clean "$device/hardware_id"`
-	location='@'`cd "$device" && pwd -P | sed 's,/sys/devices/,,'`
-	spanspecs=`conf_spans "$hw_id" "$location"`
+	devpath=`cd "$device" && pwd -P`
+	location='@'`attr_clean "$device/location"`
+	hardware_id=`attr_clean "$device/hardware_id"`
+	spanspecs=`conf_spans "$hardware_id" "$location"`
 	#echo >&2 "MATCHED($device): $spanspecs"
 	cut -d: -f1 "$attr_file" | while read spanno; do
 			for sp in $spanspecs
