@@ -256,8 +256,10 @@ void vpm450m_set_alaw_companding(struct vpm450m *vpm450m, int channel,
 		pr_notice("Failed to apply echo can changes on channel %d %d %08x!\n",
 			  vpm450m->aulEchoChanHndl[channel], channel, ulResult);
 	} else {
-		pr_info("Changed companding on channel %d to %s.\n", channel,
-			(alaw) ? "alaw" : "ulaw");
+		if (debug) {
+			pr_info("Changed companding on channel %d to %s.\n",
+				channel, (alaw) ? "alaw" : "ulaw");
+		}
 		if (alaw)
 			vpm450m->chanflags[channel] |= FLAG_ALAW;
 		else

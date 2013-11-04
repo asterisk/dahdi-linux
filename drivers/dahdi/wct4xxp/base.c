@@ -183,7 +183,7 @@ static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct 
 		"CONFIG_NOEXTENDED_RESET."
 #endif
 
-static int debug=0;
+int debug = 0;
 static int timingcable = 0;
 static int t1e1override = -1;  /* deprecated */
 static char *default_linemode = "auto";

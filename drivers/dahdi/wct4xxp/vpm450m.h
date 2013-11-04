@@ -42,4 +42,6 @@ void release_vpm450m(struct vpm450m *instance);
 void vpm450m_set_alaw_companding(struct vpm450m *vpm450m,
 				 int channel, bool alaw);
 
+extern int debug;
+
 #endif
