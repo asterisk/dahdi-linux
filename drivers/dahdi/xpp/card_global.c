@@ -511,6 +511,11 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)
 		ret = -EPROTO;
 		goto proto_err;
 	}
+	if (units[0].addr.unit != 0 || units[0].addr.subunit != 0) {
+		XBUS_NOTICE(xbus, "No first module. Astribank unusable.\n");
+		ret = -EPROTO;
+		goto proto_err;
+	}
 	if (!xbus_setstate(xbus, XBUS_STATE_RECVD_DESC)) {
 		ret = -EPROTO;
 		goto proto_err;
