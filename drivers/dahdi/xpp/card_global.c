@@ -568,6 +568,7 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)
 	}
 	goto out;
 proto_err:
+	xbus_setstate(xbus, XBUS_STATE_FAIL);
 	dump_packet("AB_DESCRIPTION", pack, DBG_ANY);
 out:
 	return ret;
