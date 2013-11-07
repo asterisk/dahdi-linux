@@ -20,4 +20,7 @@ install:
 	mkdir -p $(TARGET)
 	install $(SCRIPTS) $(TARGET)/
 	install -m 644 ../XppConfig.pm $(FIRMWARES) $(TARGET)/
+	if [ ! -r $(TARGET)/USB_FW.202.hex ]; then \
+		ln -s USB_FW.201.hex $(TARGET)/USB_FW.202.hex;\
+	fi
 
