@@ -1411,6 +1411,25 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31)
 #define KERN_CONT ""
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
+
+#  ifndef RHEL_RELEASE_VERSION
+/* I'm not sure which 5.x release this was backported into. */
+static inline int try_wait_for_completion(struct completion *x)
+{
+	unsigned long flags;
+	int ret = 1;
+
+	spin_lock_irqsave(&x->wait.lock, flags);
+	if (!x->done)
+		ret = 0;
+	else
+		x->done--;
+	spin_unlock_irqrestore(&x->wait.lock, flags);
+	return ret;
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
 #ifdef CONFIG_PROC_FS
 #include <linux/proc_fs.h>
@@ -1450,8 +1469,11 @@ void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
 
-#ifndef __packed                                                                                         
-#define __packed  __attribute__((packed))                                                                
+#define list_first_entry(ptr, type, member) \
+	list_entry((ptr)->next, type, member)
+
+#ifndef __packed
+#define __packed  __attribute__((packed))
 #endif 
 
 #include <linux/ctype.h>
@@ -1479,6 +1501,7 @@ static inline int strcasecmp(const char *s1, const char *s2)
 #endif /* 2.6.22 */
 #endif /* 2.6.25 */
 #endif /* 2.6.26 */
+#endif /* 2.6.27 */
 #endif /* 2.6.31 */
 #endif /* 3.10.0 */
 
