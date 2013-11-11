@@ -1571,6 +1571,17 @@ struct mutex {
 	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
 #endif
 
+/* If KBUILD_MODNAME is not defined in a compilation unit, then the dev_dbg
+ * macro will not work properly. */
+#ifndef KBUILD_MODNAME
+  #undef dev_dbg
+  #ifdef DEBUG
+    #define dev_dbg dev_info
+  #else
+    #define dev_dbg(...) do { } while (0)
+  #endif
+#endif
+
 /* The dbg_* ones use a magical variable 'debug' and the user should be
  * aware of that.
 */
