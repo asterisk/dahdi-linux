@@ -34,6 +34,9 @@ wcte11xp
 # Digium TDM410P/AEX410: up to 4 analog ports
 wctdm24xxp
 
+# Digium A4A/A4B/A8A/A8B
+wcaxx
+
 # X100P - Single port FXO interface
 # X101P - Single port FXO interface 
 wcfxo
