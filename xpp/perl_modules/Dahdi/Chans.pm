@@ -143,7 +143,7 @@ sub new($$$$$$) {
 		$type = "FXO"; # likely Rhino
 	} elsif ($fqn =~ m{---/.*}) {
 		$type = "EMPTY"; # likely Rhino, empty slot.
-	} elsif ($fqn =~ m{\b(TE[24]|WCT1|WCT13x|Tor2|TorISA|WP[TE]1|cwain[12]|R[124]T1|AP40[124]|APE40[124])/.*}) {
+	} elsif ($fqn =~ m{\b(WCTE|TE[24]|WCT1|WCT13x|Tor2|TorISA|WP[TE]1|cwain[12]|R[124]T1|AP40[124]|APE40[124])/.*}) {
 		# TE[24]: Digium wct4xxp
 		# WCT1: Digium single span card drivers?
 		# Tor2: Tor PCI cards

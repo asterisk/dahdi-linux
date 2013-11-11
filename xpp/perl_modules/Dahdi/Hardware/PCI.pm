@@ -103,6 +103,9 @@ my %pci_ids = (
 	'd161:800f'		=> { DRIVER => 'wcaxx', DESCRIPTION => 'Digium A4A' },
 	'd161:8010'		=> { DRIVER => 'wcaxx', DESCRIPTION => 'Digium A4B' },
 
+	# from wcte435/235
+	'd161:800e'		=> { DRIVER => 'wcte43x', DESCRIPTION => 'Wildcard TE435/235' },
+
 	# from wcb4xxp
 	'd161:b410'		=> { DRIVER => 'wcb4xxp', DESCRIPTION => 'Digium Wildcard B410P' },
 

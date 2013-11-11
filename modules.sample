@@ -13,6 +13,10 @@
 # Digium TE420: PCI-Express quad-port T1/E1/J1
 wct4xxp
 
+# Digium TE435
+# Digium TE235
+wcte43x
+
 # Digium TE120P: PCI single-port T1/E1/J1
 # Digium TE121: PCI-Express single-port T1/E1/J1
 # Digium TE122: PCI single-port T1/E1/J1

@@ -13,6 +13,7 @@ blacklist wctdm
 blacklist wctc4xxp
 blacklist wcb4xxp
 blacklist wcaxx
+blacklist wcte43x
 
 # Some mISDN drivers may try to attach to cards supported by DAHDI. If you
 # have a card which is *not* supported by DAHDI but supported by one of the
