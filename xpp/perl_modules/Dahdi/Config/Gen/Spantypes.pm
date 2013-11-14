@@ -23,6 +23,12 @@ sub generate($$$) {
 	my $gconfig = $self->{GCONFIG};
 	my $genopts = $self->{GENOPTS};
 	my @spans = @_;
+
+	# If the span_types utilities were not installed we do not want to run
+	# this generator or report any errors.
+	system "which span_types > /dev/null 2>&1";
+	return if $?;
+
 	warn "Empty configuration -- no spans\n" unless @spans;
 	rename "$file", "$file.bak"
 		or $! == 2	# ENOENT (No dependency on Errno.pm)
