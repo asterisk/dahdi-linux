@@ -37,7 +37,7 @@ TE435_VERSION:=d0017
 A8A_VERSION:=1d0017
 A8B_VERSION:=1d0017
 A4A_VERSION:=a0017
-A4B_VERSION:=a0017
+A4B_VERSION:=b0017
 
 FIRMWARE_URL:=http://downloads.digium.com/pub/telephony/firmware/releases
 
