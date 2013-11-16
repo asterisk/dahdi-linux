@@ -761,6 +761,12 @@ int wcxb_start(struct wcxb *xb)
 	return 0;
 }
 
+struct wcxb_meta_block {
+	__le32 chksum;
+	__le32 version;
+	__le32 size;
+} __packed;
+
 struct wcxb_firm_header {
 	u8	header[6];
 	__le32	chksum;
@@ -786,32 +792,54 @@ static int wcxb_update_firmware(struct wcxb *xb, const struct firmware *fw,
 				const char *filename)
 {
 	u32 tdm_control;
-	int offset = 0x200000;
-	const u8 *data, *end;
+	static const int APPLICATION_ADDRESS = 0x200000;
+	static const int META_BLOCK_OFFSET   = 0x170000;
+	static const int ERASE_BLOCK_SIZE    = 0x010000;
+	static const int END_OFFSET = APPLICATION_ADDRESS + META_BLOCK_OFFSET +
+			 ERASE_BLOCK_SIZE;
 	struct wcxb_spi_master *flash_spi_master;
 	struct wcxb_spi_device *flash_spi_device;
+	struct wcxb_meta_block meta;
+	int offset;
+	struct wcxb_firm_header *head = (struct wcxb_firm_header *)(fw->data);
+
+	if (fw->size > (META_BLOCK_OFFSET + sizeof(*head))) {
+		dev_err(&xb->pdev->dev,
+			"Firmware is too large to fit in available space.\n");
+
+		return -EINVAL;
+	}
+
+	meta.size = cpu_to_le32(fw->size);
+	meta.version = head->version;
+	meta.chksum = head->chksum;
 
 	flash_spi_master = wcxb_spi_master_create(&xb->pdev->dev,
 						  xb->membase + FLASH_SPI_BASE,
 						  false);
+
 	flash_spi_device = wcxb_spi_device_create(flash_spi_master, 0);
 
 	dev_info(&xb->pdev->dev,
 		"Uploading %s. This can take up to 30 seconds.\n", filename);
 
-	data  = &fw->data[sizeof(struct wcxb_firm_header)];
-	end = &fw->data[fw->size];
 
-	while (data < end) {
+	/* First erase all the blocks in the application area. */
+	offset = APPLICATION_ADDRESS;
+	while (offset < END_OFFSET) {
 		wcxb_flash_sector_erase(flash_spi_device, offset);
-		data += 0x10000;
-		offset += 0x10000;
+		offset += ERASE_BLOCK_SIZE;
 	}
 
-	data  = &fw->data[sizeof(struct wcxb_firm_header)];
-	offset = 0x200000;
+	/* Then write the new firmware file. */
+	wcxb_flash_write(flash_spi_device, APPLICATION_ADDRESS,
+			 &fw->data[sizeof(struct wcxb_firm_header)],
+			 fw->size - sizeof(struct wcxb_firm_header));
 
-	wcxb_flash_write(flash_spi_device, offset, data, end-data);
+	/* Finally, update the meta block. */
+	wcxb_flash_write(flash_spi_device,
+			 APPLICATION_ADDRESS + META_BLOCK_OFFSET,
+			 &meta, sizeof(meta));
 
 	/* Reset fpga after loading firmware */
 	dev_info(&xb->pdev->dev, "Firmware load complete. Reseting device.\n");
