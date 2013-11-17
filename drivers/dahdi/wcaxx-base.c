@@ -1155,9 +1155,6 @@ static int wcaxx_proslic_verify_indirect_regs(struct wcaxx *wc,
 		if (j < 0) {
 			dev_notice(&wc->xb.pdev->dev,
 				   "Failed to read indirect register %d\n", i);
-#ifdef CONFIG_TRACING
-			tracing_off();
-#endif
 			return -1;
 		}
 		initial = indirect_regs[i].initial;
@@ -1179,14 +1176,8 @@ static int wcaxx_proslic_verify_indirect_regs(struct wcaxx *wc,
 	} else {
 		dev_notice(&wc->xb.pdev->dev,
 			" !!!!! Init Indirect Registers UNSUCCESSFULLY.\n");
-#ifdef CONFIG_TRACING
-			tracing_off();
-#endif
 		return -1;
 	}
-#ifdef CONFIG_TRACING
-			tracing_off();
-#endif
 	return 0;
 }
 
@@ -2077,9 +2068,6 @@ wcaxx_proslic_insane(struct wcaxx *wc, struct wcaxx_module *const mod)
 
 	/* let's be really sure this is an FXS before we continue */
 	reg1 = wcaxx_getreg(wc, mod, 1);
-#ifdef CONFIG_TRACING
-	trace_printk("reg1 = %02x blah=%02x\n", reg1, blah);
-#endif
 	if ((0x80 != (blah & 0xf0)) || (0x88 != reg1)) {
 		if (debug & DEBUG_CARD) {
 			dev_info(&wc->xb.pdev->dev,
@@ -2503,13 +2491,6 @@ wcaxx_init_voicedaa(struct wcaxx *wc, struct wcaxx_module *mod,
 	unsigned long flags;
 	unsigned long newjiffies;
 
-#ifdef CONFIG_TRACING
-	tracing_on();
-#endif
-#ifdef CONFIG_TRACING
-	trace_printk("Starting %s\n", __func__);
-#endif
-
 	/* Send a short write to the device in order to reset the SPI state
 	 * machine. It may be out of sync since the driver was probing for an
 	 * FXS device on that chip select. */
@@ -2519,15 +2500,8 @@ wcaxx_init_voicedaa(struct wcaxx *wc, struct wcaxx_module *mod,
 	mod->type = FXO;
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	if (!sane && wcaxx_voicedaa_insane(wc, mod)) {
-#ifdef CONFIG_TRACING
-		trace_printk("wcaxx_voicedaa_insane failed\n");
-#endif
-#ifdef CONFIG_TRACING
-		tracing_off();
-#endif
+	if (!sane && wcaxx_voicedaa_insane(wc, mod))
 		return -2;
-	}
 
 	/* Software reset */
 	wcaxx_setreg(wc, mod, 1, 0x80);
@@ -2582,9 +2556,6 @@ wcaxx_init_voicedaa(struct wcaxx *wc, struct wcaxx_module *mod,
 
 	if (!(wcaxx_getreg(wc, mod, 11) & 0xf0)) {
 		dev_notice(&wc->xb.pdev->dev, "VoiceDAA did not bring up ISO link properly!\n");
-#ifdef CONFIG_TRACING
-		tracing_off();
-#endif
 		return -1;
 	}
 
@@ -2626,9 +2597,6 @@ wcaxx_init_voicedaa(struct wcaxx *wc, struct wcaxx_module *mod,
 				-(wcaxx_getreg(wc, mod, 41) - 16) :
 				wcaxx_getreg(wc, mod, 41));
 	}
-#ifdef CONFIG_TRACING
-	tracing_off();
-#endif
 
 	return 0;
 }
@@ -4458,10 +4426,6 @@ static int __init wcaxx_init(void)
 {
 	int res;
 	int x;
-
-#ifdef CONFIG_TRACING
-	tracing_off();
-#endif
 
 	for (x = 0; x < ARRAY_SIZE(fxo_modes); x++) {
 		if (!strcmp(fxo_modes[x].name, opermode))
