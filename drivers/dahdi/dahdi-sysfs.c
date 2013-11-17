@@ -306,6 +306,7 @@ void span_sysfs_remove(struct dahdi_span *span)
 	get_device(span_device);
 	span_uevent_send(span, KOBJ_OFFLINE);
 	device_unregister(span->span_device);
+	sysfs_remove_link(&span_device->kobj, "ddev");
 	dev_set_drvdata(span_device, NULL);
 	span_device->parent = NULL;
 	put_device(span_device);
@@ -340,6 +341,15 @@ int span_sysfs_create(struct dahdi_span *span)
 	res = device_register(span_device);
 	if (res) {
 		span_err(span, "%s: device_register failed: %d\n", __func__,
+				res);
+		kfree(span->span_device);
+		span->span_device = NULL;
+		goto cleanup;
+	}
+	res = sysfs_create_link(&span_device->kobj, &span_device->parent->kobj,
+			"ddev");
+	if (res) {
+		span_err(span, "%s: sysfs_create_link failed: %d\n", __func__,
 				res);
 		kfree(span->span_device);
 		span->span_device = NULL;
