@@ -173,7 +173,7 @@ static sumtype *conf_sums_next;
 static sumtype *conf_sums;
 static sumtype *conf_sums_prev;
 
-static struct dahdi_span *master;
+static struct dahdi_span *master_span;
 struct file_operations *dahdi_transcode_fops = NULL;
 
 
@@ -611,7 +611,7 @@ void dahdi_unregister_echocan_factory(const struct dahdi_echocan_factory *ec)
 /* Is this span our syncronization master? */
 int dahdi_is_sync_master(const struct dahdi_span *span)
 {
-	return span == master;
+	return span == master_span;
 }
 
 static inline void rotate_sums(void)
@@ -3847,7 +3847,7 @@ static void __dahdi_find_master_span(void)
 	struct dahdi_span *old_master;
 
 	spin_lock_irqsave(&chan_lock, flags);
-	old_master = master;
+	old_master = master_span;
 	list_for_each_entry(s, &span_list, spans_node) {
 		if (s->alarms && old_master)
 			continue;
@@ -3857,15 +3857,15 @@ static void __dahdi_find_master_span(void)
 			continue;
 		if (!can_provide_timing(s))
 			continue;
-		if (master == s)
+		if (master_span == s)
 			continue;
 
-		master = s;
+		master_span = s;
 		break;
 	}
 	spin_unlock_irqrestore(&chan_lock, flags);
 
-	if ((debug & DEBUG_MAIN) && (old_master != master))
+	if ((debug & DEBUG_MAIN) && (old_master != master_span))
 		module_printk(KERN_NOTICE, "Master changed to %s\n", s->name);
 }
 
@@ -3906,7 +3906,7 @@ void dahdi_alarm_notify(struct dahdi_span *span)
 			dahdi_alarm_channel(span->chans[x], span->alarms);
 
 		/* If we're going into or out of alarm we should try to find a
-		 * new master that may be a better fit. */
+		 * new master_span that may be a better fit. */
 		dahdi_find_master_span();
 
 		/* Report more detailed alarms */
@@ -5136,7 +5136,7 @@ static int dahdi_ioctl_startup(struct file *file, unsigned long data)
 		}
 
 		/* Now that this span is running, it might be selected as the
-		 * master span */
+		 * master_span */
 		__dahdi_find_master_span();
 	}
 	put_span(s);
@@ -7208,7 +7208,7 @@ EXPORT_SYMBOL(dahdi_init_span);
  * @spanno:	The span number we would like assigned. If 0, the first
  *		available spanno/basechan will be used.
  * @basechan:	The base channel number we would like. Ignored if spanno is 0.
- * @prefmaster:	will the new span be preferred as a master?
+ * @prefmaster:	will the new span be preferred as a master_span?
  *
  * Assigns a span for usage with DAHDI. All the channel numbers in it will
  * have their numbering started at basechan.
@@ -7486,8 +7486,8 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 	for (x=0;x<span->channels;x++)
 		dahdi_chan_unreg(span->chans[x]);
 
-	new_master = master; /* FIXME: locking */
-	if (master == span)
+	new_master = master_span; /* FIXME: locking */
+	if (master_span == span)
 		new_master = NULL;
 
 	spin_lock_irqsave(&chan_lock, flags);
@@ -7498,13 +7498,13 @@ static int _dahdi_unassign_span(struct dahdi_span *span)
 		break;
 	}
 	spin_unlock_irqrestore(&chan_lock, flags);
-	if (master != new_master) {
+	if (master_span != new_master) {
 		if (debug & DEBUG_MAIN) {
 			module_printk(KERN_NOTICE, "%s: Span ('%s') is new master\n", __FUNCTION__,
 				      (new_master)? new_master->name: "no master");
 		}
 	}
-	master = new_master;
+	master_span = new_master;
 	return 0;
 }
 
