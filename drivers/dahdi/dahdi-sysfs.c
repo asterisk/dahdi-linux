@@ -371,6 +371,71 @@ static inline struct dahdi_device *to_ddev(struct device *dev)
 	return container_of(dev, struct dahdi_device, dev);
 }
 
+#define	DEVICE_VAR_BLOCK	\
+	do {		\
+		DAHDI_ADD_UEVENT_VAR("DAHDI_TOOLS_ROOTDIR=%s", tools_rootdir); \
+		DAHDI_ADD_UEVENT_VAR("DAHDI_INIT_DIR=%s/%s", tools_rootdir,    \
+				initdir);				\
+		DAHDI_ADD_UEVENT_VAR("DAHDI_DEVICE_HWID=%s",		\
+				ddev->hardware_id);			\
+		DAHDI_ADD_UEVENT_VAR("DAHDI_DEVICE_LOCATION=%s",	\
+				ddev->location);			\
+	} while (0)
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+#define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
+	do {							\
+		int err = add_uevent_var(envp, num_envp, &i,	\
+				buffer, buffer_size, &len,	\
+				fmt, val);			\
+		if (err)					\
+			return err;				\
+	} while (0)
+
+static int device_uevent(struct device *dev, char **envp, int num_envp,
+		char *buffer, int buffer_size)
+{
+	struct dahdi_device	*ddev;
+	int			i = 0;
+	int			len = 0;
+
+	if (!dev)
+		return -ENODEV;
+
+	ddev = to_ddev(dev);
+	if (!ddev)
+		return -ENODEV;
+
+	dahdi_dbg(GENERAL, "SYFS dev_name=%s\n", dev_name(dev));
+	DEVICE_VAR_BLOCK;
+	envp[i] = NULL;
+	return 0;
+}
+
+#else
+#define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
+	do {							\
+		int err = add_uevent_var(kenv, fmt, val);	\
+		if (err)					\
+			return err;				\
+	} while (0)
+
+static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+{
+	struct dahdi_device *ddev;
+
+	if (!dev)
+		return -ENODEV;
+	ddev = to_ddev(dev);
+	if (!ddev)
+		return -ENODEV;
+	dahdi_dbg(GENERAL, "SYFS dev_name=%s\n", dev_name(dev));
+	DEVICE_VAR_BLOCK;
+	return 0;
+}
+
+#endif
+
 static ssize_t
 dahdi_device_manufacturer_show(struct device *dev,
 			       struct device_attribute *attr, char *buf)
@@ -579,6 +644,7 @@ static struct device_attribute dahdi_device_attrs[] = {
 
 static struct bus_type dahdi_device_bus = {
 	.name = "dahdi_devices",
+	.uevent         = device_uevent,
 	.dev_attrs = dahdi_device_attrs,
 };
 
