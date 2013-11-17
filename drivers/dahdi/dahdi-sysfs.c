@@ -32,8 +32,15 @@
 #include "dahdi-sysfs.h"
 
 
-static char *initdir = "/usr/share/dahdi";
-module_param(initdir, charp, 0644);
+static char *initdir;
+module_param(initdir, charp, 0444);
+MODULE_PARM_DESC(initdir,
+		"deprecated, should use <tools_rootdir>/usr/share/dahdi");
+
+static char *tools_rootdir;
+module_param(tools_rootdir, charp, 0444);
+MODULE_PARM_DESC(tools_rootdir,
+		"root directory of all tools paths (default /)");
 
 static int span_match(struct device *dev, struct device_driver *driver)
 {
@@ -47,7 +54,9 @@ static inline struct dahdi_span *dev_to_span(struct device *dev)
 
 #define	SPAN_VAR_BLOCK	\
 	do {		\
-		DAHDI_ADD_UEVENT_VAR("DAHDI_INIT_DIR=%s", initdir);	\
+		DAHDI_ADD_UEVENT_VAR("DAHDI_TOOLS_ROOTDIR=%s", tools_rootdir); \
+		DAHDI_ADD_UEVENT_VAR("DAHDI_INIT_DIR=%s/%s", tools_rootdir,    \
+				initdir);	\
 		DAHDI_ADD_UEVENT_VAR("SPAN_NUM=%d", span->spanno);	\
 		DAHDI_ADD_UEVENT_VAR("SPAN_NAME=%s", span->name);	\
 	} while (0)
@@ -650,6 +659,19 @@ int __init dahdi_sysfs_init(const struct file_operations *dahdi_fops)
 	int res = 0;
 
 	dahdi_dbg(DEVICES, "Registering DAHDI device bus\n");
+
+	/* Handle dahdi-tools paths (for udev environment) */
+	if (tools_rootdir && initdir) {
+		dahdi_err("Cannot use tools-rootdir and initdir parameters simultaneously\n");
+		return -EINVAL;
+	}
+	if (initdir)
+		pr_notice("dahdi: initdir is depracated -- prefer using \"tools_rootdir\" parameter\n");
+	else
+		initdir = "/usr/share/dahdi";
+	if (!tools_rootdir)
+		tools_rootdir = "";
+
 	res = bus_register(&dahdi_device_bus);
 	if (res)
 		return res;

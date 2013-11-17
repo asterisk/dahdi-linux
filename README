@@ -534,10 +534,19 @@ DAHDI hardware. However if you have such systems, automatic
 registration can cause the order of spans to be unpredictable.
 The standard startup scripts use 'dahdi_registration on' instead of this.
 
+==== tools_rootdir
+(xpp)
+
+Defaults to /. Passed (as the variable DAHDI_TOOLS_ROOTDIR) to generated
+events (which can be used in udev hooks). Also serves as the base of
+the variable DAHDI_INIT_DIR (by default: $DAHDI_TOOLS_DIR/usr/share/dahdi).
+
 ==== initdir
 (xpp)
 
-This is the directory containing the initialization scripts.
+Deprecated. Setting both initdir and tools_rootdir will generate an error.
+
+A directory under tools_rootdir containing the initialization scripts.
 The default is /usr/share/dahdi .
 Setting this value could be useful if that location is inconvenient for you.
 
