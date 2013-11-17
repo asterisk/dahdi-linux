@@ -61,7 +61,7 @@ export ASTRIBANK_HEXLOAD
 
 # make sure Astribank initialization scripts are from our tree.
 xpp_ARGS="$xpp_ARGS initdir=$FIRMWARE_DIR"
-#dahdi_ARGS="$dahdi_ARGS initdir=$FIRMWARE_DIR"
+dahdi_ARGS="$dahdi_ARGS tools_rootdir=$DESTDIR"
 
 if [ "$DYNAMIC_LOC" = 'yes' ]; then
 	MODULES_LOAD="$MODULES_LOAD dahdi_dynamic dahdi_dynamic_loc"
