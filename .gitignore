@@ -5,6 +5,7 @@
 *.mod
 *.mod.[oc]
 *.ko
+*.ko.unsigned
 *.cmd
 *.order
 *.tar.gz
