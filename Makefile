@@ -47,8 +47,6 @@ ifeq (yes,$(HAS_KSRC))
   HOTPLUG_FIRMWARE:=$(shell if grep -q '^CONFIG_FW_LOADER=[ym]' $(KCONFIG); then echo "yes"; else echo "no"; fi)
 endif
 
-UDEV_DIR:=/etc/udev/rules.d
-
 MODULE_ALIASES:=wcfxs wctdm8xxp wct2xxp
 
 INST_HEADERS:=kernel.h user.h fasthdlc.h wctdm_user.h dahdi_config.h
@@ -87,7 +85,7 @@ prereq: include/dahdi/version.h firmware-loaders
 stackcheck: $(CHECKSTACK) modules
 	objdump -d drivers/dahdi/*.ko drivers/dahdi/*/*.ko | $(CHECKSTACK)
 
-install: all install-modules install-devices install-include install-firmware install-xpp-firm
+install: all install-modules install-include install-firmware install-xpp-firm
 	@echo "###################################################"
 	@echo "###"
 	@echo "### DAHDI installed successfully."
@@ -96,7 +94,7 @@ install: all install-modules install-devices install-include install-firmware in
 	@echo "###"
 	@echo "###################################################"
 
-uninstall: uninstall-modules uninstall-devices uninstall-include uninstall-firmware
+uninstall: uninstall-modules uninstall-include uninstall-firmware
 
 install-modconf:
 	build_tools/genmodconf $(BUILDVER) "$(ROOT_PREFIX)" "$(filter-out dahdi dahdi_dummy xpp dahdi_transcode dahdi_dynamic,$(BUILD_MODULES)) $(MODULE_ALIASES)"
@@ -129,14 +127,6 @@ uninstall-include:
 		rm -f $(DESTDIR)/usr/include/dahdi/$$hdr; \
 	done
 	-rmdir $(DESTDIR)/usr/include/dahdi
-
-install-devices:
-	install -d $(DESTDIR)$(UDEV_DIR)
-	build_tools/genudevrules > $(DESTDIR)$(UDEV_DIR)/dahdi.rules
-	install -m 644 drivers/dahdi/xpp/xpp.rules $(DESTDIR)$(UDEV_DIR)/
-
-uninstall-devices:
-	rm -f $(DESTDIR)$(UDEV_DIR)/dahdi.rules
 
 install-modules: modules
 ifndef DESTDIR
