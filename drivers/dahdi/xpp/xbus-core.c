@@ -60,7 +60,7 @@ static DEF_PARM(uint, command_queue_length, 1500, 0444,
 static DEF_PARM(uint, poll_timeout, 1000, 0644,
 		"Timeout (in jiffies) waiting for units to reply");
 static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
-static DEF_PARM_BOOL(dahdi_autoreg, 0, 0644,
+static DEF_PARM_BOOL(dahdi_autoreg, 1, 0644,
 		     "Register devices automatically (1) or not (0)");
 
 #ifdef	CONFIG_PROC_FS
