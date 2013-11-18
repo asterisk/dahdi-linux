@@ -909,7 +909,7 @@ struct dahdi_span_ops {
 	/*! Opt: Provide the name of the echo canceller on a channel */
 	const char *(*echocan_name)(const struct dahdi_chan *chan);
 
-	/*! When using "pinned_spans", this function is called back when this
+	/*! When using "assigned spans", this function is called back when this
 	 * span has been assigned with the system. */
 	void (*assigned)(struct dahdi_span *span);
 

@@ -604,7 +604,7 @@ static DEVICE_ATTR_WRITER(span_store, dev, buf, count)
 		return -EINVAL;
 	if (!XBUS_IS(xpd->xbus, READY))
 		return -ENODEV;
-	XPD_DBG(DEVICES, xpd, "%s -- deprecated (should use pinned-spans)\n",
+	XPD_DBG(DEVICES, xpd, "%s -- deprecated (should use assigned-spans)\n",
 		(dahdi_reg) ? "register" : "unregister");
 	ret = mutex_lock_interruptible(&span_store_mutex);
 	if (ret < 0) {
