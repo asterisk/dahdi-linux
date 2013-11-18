@@ -105,9 +105,9 @@ ifeq	(1,$(PBX_HDLC))
 endif
 MAN_PAGES:=$(wildcard $(BINS:%=doc/%.8))
 
-PINNED_DATA_SCRIPTS:=handle_device span_config
-PINNED_UTILS:=span_assignments span_types
-PINNED_CONF:=pinned-spans.conf.sample span-types.conf.sample
+ASSIGNED_DATA_SCRIPTS:=handle_device span_config
+ASSIGNED_UTILS:=span_assignments span_types
+ASSIGNED_CONF:=assigned-spans.conf.sample span-types.conf.sample
 
 TEST_BINS:=patgen pattest patlooptest hdlcstress hdlctest hdlcgen hdlcverify timertest dahdi_maint
 # All the man pages. Not just installed ones:
@@ -228,9 +228,9 @@ ifeq (,$(wildcard $(DESTDIR)$(CONFIG_FILE)))
 	$(INSTALL) -m 644 system.conf.sample $(DESTDIR)$(CONFIG_FILE)
 endif
 	install -d $(DESTDIR)$(DATA_DIR)
-	install $(PINNED_DATA_SCRIPTS) $(DESTDIR)$(DATA_DIR)/
-	install $(PINNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
-	install -m 644 $(PINNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
+	install $(ASSIGNED_DATA_SCRIPTS) $(DESTDIR)$(DATA_DIR)/
+	install $(ASSIGNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
+	install -m 644 $(ASSIGNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
 
 install-libs: libs
 	$(INSTALL) -d -m 755 $(DESTDIR)/$(LIB_DIR)

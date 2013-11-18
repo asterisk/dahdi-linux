@@ -6,17 +6,17 @@
 # from the command line to assign/unassign and list
 # current span assignments.
 #
-# It uses a configuration file: $DAHDICONFDIR/pinned-spans.conf
+# It uses a configuration file: $DAHDICONFDIR/assigned-spans.conf
 # (default DAHDICONFDIR=/etc/dahdi)
 #
 # The first argument is an action:
 #   "auto"       - trigger driver auto_assign attribute for given devices
 #		   (no configuration file is used)
 #   "add"        - assign (spans which are not already assigned), according
-#                  to /etc/dahdi/pinned-spans.conf configuration file
+#                  to /etc/dahdi/assigned-spans.conf configuration file
 #   "remove"     - unassign spans which are not already unassigned
 #   "list"       - human-readable list of all spans (with/without assignments)
-#   "dumpconfig" - dump current assignments in a /etc/dahdi/pinned-spans.conf
+#   "dumpconfig" - dump current assignments in a /etc/dahdi/assigned-spans.conf
 #                  compatible format
 #
 # Without further arguments, it operates on all existing spans
@@ -54,7 +54,7 @@
 
 devbase='/sys/bus/dahdi_devices/devices'
 DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
-pinned_spans_conf="$DAHDICONFDIR/pinned-spans.conf"
+assigned_spans_conf="$DAHDICONFDIR/assigned-spans.conf"
 SPAN_ASSIGNMENTS_KEY=${SPAN_ASSIGNMENTS_KEY:-hwid}
 dry_run=
 verbose=
@@ -63,7 +63,7 @@ usage() {
 	echo >&2 "Usage: $0 [options] action [devpath ...]"
 	echo >&2 "       action:"
 	echo >&2 "         auto       - trigger driver auto_assign attribute for given devices"
-	echo >&2 "         add        - assign spans, according to /etc/dahdi/pinned-spans.conf"
+	echo >&2 "         add        - assign spans, according to /etc/dahdi/assigned-spans.conf"
 	echo >&2 "         remove     - unassign spans"
 	echo >&2 "         list       - human-readable list of all spans"
 	echo >&2 "         dumpconfig - dump current state as new configuration"
@@ -228,7 +228,7 @@ unassign_all_spans() {
 
 # Allow comments and empty lines in config file
 filter_conf() {
-	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$pinned_spans_conf"
+	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$assigned_spans_conf"
 }
 
 assign_device_spans() {
@@ -289,11 +289,11 @@ match_device() {
 }
 
 assign_devices() {
-	if [ ! -f "$pinned_spans_conf" ]; then
-		echo >&2 "$0: Missing '$pinned_spans_conf'"
+	if [ ! -f "$assigned_spans_conf" ]; then
+		echo >&2 "$0: Missing '$assigned_spans_conf'"
 		exit 1
 	fi
-	echo "using '$pinned_spans_conf'"
+	echo "using '$assigned_spans_conf'"
 	for device in $DEVICES
 	do
 		match_device "$device"

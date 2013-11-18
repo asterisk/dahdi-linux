@@ -1,4 +1,4 @@
-package Dahdi::Config::Gen::Pinnedspans;
+package Dahdi::Config::Gen::Assignedspans;
 use strict;
 
 use Dahdi::Config::Gen qw(is_true);
@@ -7,7 +7,7 @@ sub new($$$) {
 	my $pack = shift || die;
 	my $gconfig = shift || die;
 	my $genopts = shift || die;
-	my $file = $ENV{PINNED_SPANS_CONF_FILE} || "/etc/dahdi/pinned-spans.conf";
+	my $file = $ENV{ASSIGNED_SPANS_CONF_FILE} || "/etc/dahdi/assigned-spans.conf";
 	my $self = {
 			FILE	=> $file,
 			GCONFIG	=> $gconfig,
@@ -57,7 +57,7 @@ dahdi - Generate configuration for dahdi drivers.
 
 =head1 DESCRIPTION
 
-Generate the F</etc/dahdi/pinned-spans.conf>.
+Generate the F</etc/dahdi/assigned-spans.conf>.
 This is the configuration for span_assignments.
 
-Its location may be overriden via the environment variable F<PINNED_SPANS_CONF_FILE>.
+Its location may be overriden via the environment variable F<ASSIGNED_SPANS_CONF_FILE>.

@@ -26,7 +26,7 @@ order.
 .B span_assignments
 is used to register those spans or to help creating the configuration
 file used in their registration:
-.B /etc/dahdi/pinned-spans.conf .
+.B /etc/dahdi/assigned-spans.conf .
 
 .SH OPTIONS
 
@@ -36,7 +36,7 @@ There are several sub-commands:
 .RS
 Parameters are paths (in SysFS) to DAHDI devices with unregistered
 spans. The command will register with DAHDI according to according to
-configuration in \fBpinned-spans.conf\fR.
+configuration in \fBassigned-spans.conf\fR.
 .RE
 
 .B remove \fIdevpath \fB[\fIdevpath \fB...]
@@ -60,10 +60,10 @@ List all spans in the system.
 .B dumpconfig
 .RS
 List all registered spans in the system in a format fit to be used in
-\fBpinned-spans.conf\fR. Use this to generate a configuration file after
+\fBassigned-spans.conf\fR. Use this to generate a configuration file after
 you have (perhaps manually) registered all existing spans.
 
-.B dahdi_genconf pinnedspans
+.B dahdi_genconf assignedspans
 uses this command internally.
 .RE
 
@@ -102,7 +102,7 @@ Path in SysFS to the device node.
 .RE
 
 .SH CONFIGURATOIN
-.B pinned-spans.conf
+.B assigned-spans.conf
 is a file with lines specifying registration of spans.
 
 Empty lines or lines beginning with '#' are ignored.
@@ -168,13 +168,13 @@ space must be available.
 
 .B DAHDICONFDIR
 .RS
-The directory in which pinned-spans.conf resides. /etc/dahdi if not
+The directory in which assigned-spans.conf resides. /etc/dahdi if not
 overridden from the environment.
 .RE
 
-.B pinned_spans_conf
+.B assigned_spans_conf
 .RS
-The path to pinned-spans.conf resides. /etc/dahdi/pinned-spans.conf if
+The path to assigned-spans.conf resides. /etc/dahdi/assigned-spans.conf if
 not overridden from the environment.
 .RE
 
@@ -187,7 +187,7 @@ environment.
 
 .SH FILES
 
-.B /etc/dahdi/pinned-spans.conf
+.B /etc/dahdi/assigned-spans.conf
 .RS
 The default location for the configuration file.
 .RE

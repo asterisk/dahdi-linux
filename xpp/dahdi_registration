@@ -36,9 +36,9 @@ getopts('vRs:', \%opts) || usage;
 
 my $dahdi_autoreg = check_param('/sys/module/xpp/parameters/dahdi_autoreg') eq 'Y';
 my $auto_assign_spans = check_param('/sys/module/dahdi/parameters/auto_assign_spans') eq '1';
-my $pinned_spans_config = $ENV{'PINNED_SPANS_CONF_FILE'} || '/etc/dahdi/pinned-spans.conf';
+my $assigned_spans_config = $ENV{'ASSIGNED_SPANS_CONF_FILE'} || '/etc/dahdi/assigned-spans.conf';
 my $span_types_config = $ENV{'SPAN_TYPES_CONF_FILE'} || '/etc/dahdi/span-types.conf';
-my $have_pinned_spans_config = -f $pinned_spans_config || 0;
+my $have_assigned_spans_config = -f $assigned_spans_config || 0;
 my $have_span_types_config = -f $span_types_config || 0;
 
 my $sorter;
@@ -60,7 +60,7 @@ my $on = shift;
 my $verbose = $opts{'v'};
 my $should_output = 1;
 
-#print "dahdi_autoreg=$dahdi_autoreg auto_assign_spans=$auto_assign_spans have_pinned_spans_config='$have_pinned_spans_config' have_span_types_config='$have_span_types_config'\n";
+#print "dahdi_autoreg=$dahdi_autoreg auto_assign_spans=$auto_assign_spans have_assigned_spans_config='$have_assigned_spans_config' have_span_types_config='$have_span_types_config'\n";
 
 if(defined($on)) {	# Translate to booleans
 	$on = uc($on);
@@ -100,8 +100,8 @@ foreach my $xbus (Dahdi::Xpp::xbuses($sorter)) {
 		}
 		myprintf "%3s ==> %3s\n", state2str($prev), state2str($on);
 	}
-	if (defined($on) && $on && ! $have_pinned_spans_config && ! $auto_assign_spans) {
-		# Emulate /etc/dahdi/pinned-spans.conf:
+	if (defined($on) && $on && ! $have_assigned_spans_config && ! $auto_assign_spans) {
+		# Emulate /etc/dahdi/assigned-spans.conf:
 		#   - We iterate over $xbus according to /etc/dahdi/xpp_order
 		#   - We "auto" assign all spans of current $xbus
 		my $devpath = sprintf "/sys/bus/dahdi_devices/devices/astribanks:xbus-%02d", $xbus->num;

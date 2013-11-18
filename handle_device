@@ -62,7 +62,7 @@ add)
 		if [ -r "$DAHDICONFDIR/span-types.conf" ]; then
 			span_types set "/sys$DEVPATH"
 		fi
-		if [ -r "$DAHDICONFDIR/pinned-spans.conf" ]; then
+		if [ -r "$DAHDICONFDIR/assigned-spans.conf" ]; then
 			span_assignments add "/sys$DEVPATH"
 		else
 			# No configuration. No order guaranteed

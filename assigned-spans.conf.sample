@@ -1,5 +1,5 @@
 #
-# /etc/dahdi/pinned-spans.conf:
+# /etc/dahdi/assigned-spans.conf:
 #
 # This file assigns span and channel numbers to dahdi devices
 #
