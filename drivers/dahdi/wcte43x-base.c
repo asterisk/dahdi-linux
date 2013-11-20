@@ -1276,31 +1276,6 @@ static ssize_t t43x_timing_master_show(struct device *dev,
 
 static DEVICE_ATTR(timing_master, 0400, t43x_timing_master_show, NULL);
 
-static ssize_t
-dcxo_show(struct device *dev,
-	  struct device_attribute *attr, char *buf)
-{
-	struct t43x *wc = dev_get_drvdata(dev);
-	return sprintf(buf, "0x%08x\n", ioread32be(wc->xb.membase + 0x2008));
-}
-
-static ssize_t
-dcxo_store(struct device *dev, struct device_attribute *attr,
-	   const char *buf, size_t count)
-{
-	int ret;
-	struct t43x *wc = dev_get_drvdata(dev);
-	u32 dcxo_setting;
-	ret = sscanf(buf, "%x", &dcxo_setting);
-	iowrite32be(dcxo_setting, wc->xb.membase + 0x2008);
-	ioread32be(wc->xb.membase + 0x2008);
-	iowrite32be(dcxo_setting, wc->xb.membase + 0x2008);
-	ioread32be(wc->xb.membase + 0x2008);
-	return count;
-}
-
-static DEVICE_ATTR(dcxo, 0644, dcxo_show, dcxo_store);
-
 static void create_sysfs_files(struct t43x *wc)
 {
 	int ret;
@@ -1310,19 +1285,11 @@ static void create_sysfs_files(struct t43x *wc)
 		dev_info(&wc->xb.pdev->dev,
 			"Failed to create device attributes.\n");
 	}
-
-	dev_warn(&wc->xb.pdev->dev, "WARNING: Creating dcxo file. Do not release like this.\n");
-	ret = device_create_file(&wc->xb.pdev->dev, &dev_attr_dcxo);
-	if (ret) {
-		dev_info(&wc->xb.pdev->dev,
-			"Failed to create DCXO device attributes.\n");
-	}
 }
 
 static void remove_sysfs_files(struct t43x *wc)
 {
 	device_remove_file(&wc->xb.pdev->dev, &dev_attr_timing_master);
-	device_remove_file(&wc->xb.pdev->dev, &dev_attr_dcxo);
 }
 
 static inline void __t43x_update_timing(struct t43x *wc)
