@@ -2454,10 +2454,9 @@ t43x_init_one_span(struct t43x *wc, struct t43x_span *ts, enum linemode type)
 			goto error_exit;
 	}
 
+	/* Stop the interrupt handler so that we may swap the channel array. */
 	disable_irq(wc->xb.pdev->irq);
 
-	/* Because the interrupt handler is running, we need to atomically
-	 * swap the channel arrays. */
 	spin_lock_irqsave(&wc->reglock, flags);
 	for (x = 0; x < ARRAY_SIZE(ts->chans); x++) {
 		kfree(ts->chans[x]);
@@ -2997,7 +2996,6 @@ static void t43x_handle_receive(struct wcxb *xb, void *vfp)
 		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &ts->span.flags))
 			continue;
 
-		spin_lock(&wc->reglock);
 		for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
 			for (i = 0; i < ts->span.channels; i++) {
 				ts->chans[i]->readchunk[j] =
@@ -3012,7 +3010,6 @@ static void t43x_handle_receive(struct wcxb *xb, void *vfp)
 						 c->writechunk);
 			}
 		}
-		spin_unlock(&wc->reglock);
 
 		_dahdi_receive(&ts->span);
 	}
@@ -3034,12 +3031,10 @@ static void t43x_handle_transmit(struct wcxb *xb, void *vfp)
 
 		_dahdi_transmit(&ts->span);
 
-		spin_lock(&wc->reglock);
 		for (j = 0; j < DAHDI_CHUNKSIZE; j++)
 			for (i = 0; i < ts->span.channels; i++)
 				frame[j*WCXB_DMA_CHAN_SIZE+(s+1+i*4)] =
 					ts->chans[i]->writechunk[j];
-		spin_unlock(&wc->reglock);
 	}
 }
 
