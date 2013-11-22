@@ -23,6 +23,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 
+#include <dahdi/kernel.h>
+
 #include "oct612x.h"
 
 UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
@@ -175,6 +177,23 @@ EXPORT_SYMBOL(Oct6100ApiGetCapacityPinsDef);
 EXPORT_SYMBOL(Oct6100ChannelOpen);
 EXPORT_SYMBOL(Oct6100ChannelOpenDef);
 EXPORT_SYMBOL(Oct6100ChannelModifyDef);
+
+static int __init oct612x_module_init(void)
+{
+	/* This registration with dahdi.ko will fail since the span is not
+	 * defined, but it will make sure that this module is a dependency of
+	 * dahdi.ko, so that when it is being unloded, this module will be
+	 * unloaded as well. */
+	dahdi_register_device(NULL, NULL);
+	return 0;
+}
+module_init(oct612x_module_init);
+
+static void __exit oct612x_module_cleanup(void)
+{
+	/* Nothing to do */;
+}
+module_exit(oct612x_module_cleanup);
 
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
 MODULE_DESCRIPTION("Octasic OCT6100 Hardware Echocan Library");
