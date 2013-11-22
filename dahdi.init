@@ -286,8 +286,12 @@ case "$1" in
 		$FXOTUNE -s || :
 	fi
 
-	# Set the right Astribanks ticker:
-	LC_ALL=C xpp_sync "$XPP_SYNC"
+	# Do not try to call xpp_sync if there are no Astribank devices
+	# installed.
+	if test -e /sys/bus/astribanks; then 
+		# Set the right Astribanks ticker:
+		LC_ALL=C xpp_sync "$XPP_SYNC"
+	fi
 
 	hpec_start
 	;;
