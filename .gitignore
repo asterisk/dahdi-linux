@@ -39,4 +39,12 @@ drivers/dahdi/firmware/dahdi-fw-oct6114-256.bin
 drivers/dahdi/firmware/dahdi-fw-tc400m.bin
 drivers/dahdi/firmware/dahdi-fw-te820.bin
 drivers/dahdi/firmware/dahdi-fw-vpmoct032.bin
+drivers/dahdi/firmware/dahdi-fw-a4a.bin
+drivers/dahdi/firmware/dahdi-fw-a4b.bin
+drivers/dahdi/firmware/dahdi-fw-a8a.bin
+drivers/dahdi/firmware/dahdi-fw-a8b.bin
+drivers/dahdi/firmware/dahdi-fw-oct6114-032.bin
+drivers/dahdi/firmware/dahdi-fw-te133.bin
+drivers/dahdi/firmware/dahdi-fw-te134.bin
+drivers/dahdi/firmware/dahdi-fw-te435.bin
 drivers/dahdi/firmware/make_firmware_object
