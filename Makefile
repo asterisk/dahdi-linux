@@ -331,6 +331,9 @@ update:
 		echo "Not under version control";  \
 	fi
 
+dist:
+	@./build_tools/make_dist "dahdi-tools" "$(TOOLSVERSION)"
+
 clean:
 	rm -f $(BINS) $(TEST_BINS)
 	rm -f *.o dahdi_cfg tzdriver sethdlc
@@ -363,7 +366,7 @@ config.status: configure
 	@echo "****"
 	@exit 1
 
-.PHONY: distclean dist-clean clean all install programs tests devel data config update install-programs install-libs install-utils-subdirs utils-subdirs prereq
+.PHONY: distclean dist-clean clean all install programs tests devel data config update install-programs install-libs install-utils-subdirs utils-subdirs prereq dist
 
 FORCE:
 
