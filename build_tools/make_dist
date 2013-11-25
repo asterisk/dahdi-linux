@@ -1,0 +1,26 @@
+#! /bin/sh
+
+if [ "$#" -ne 2 ]; then
+	echo >&2 "Usage: $0 <package> <version>"
+	exit 1
+fi
+package="$1"
+version="$2"
+tarball_prefix="$package-$version"
+echo "I: Making dist tarball for $tarball_prefix"
+tarball_name="$tarball_prefix.tar.gz"
+
+tmp_work_dir=".tmp"
+tmp_version_dir="$tmp_work_dir/$tarball_prefix"
+
+if [ "$DESTDIR" != '' ]; then
+	destdir="$DESTDIR/"
+fi
+output="$destdir$tarball_name"
+
+mkdir -p "$tmp_version_dir"
+git archive --format tar HEAD | tar xf - -C "$tmp_version_dir"
+echo "$version" > "$tmp_version_dir/.version"
+tar czf "$output" -C "$tmp_work_dir" "$tarball_prefix"
+rm -rf "$tmp_work_dir"
+echo "I: tarball is ready: '$output'"

@@ -169,6 +169,9 @@ update:
 		echo "Not under version control";  \
 	fi
 
+dist:
+	@./build_tools/make_dist "dahdi-linux" "$(DAHDIVERSION)"
+
 clean:
 ifneq (no,$(HAS_KSRC))
 	$(KMAKE) clean
@@ -198,6 +201,6 @@ README.html: README
 dahdi-api.html: drivers/dahdi/dahdi-base.c
 	build_tools/kernel-doc --kernel $(KSRC) $^ >$@
 
-.PHONY: distclean dist-clean clean all install devices modules stackcheck install-udev update install-modules install-include uninstall-modules firmware-download install-xpp-firm firmware-loaders
+.PHONY: distclean dist-clean clean all install devices modules stackcheck install-udev update install-modules install-include uninstall-modules firmware-download install-xpp-firm firmware-loaders dist
 
 FORCE:
