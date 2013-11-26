@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# /usr/share/dahdi/span_config
+# /usr/share/dahdi/dahdi_span_config
 #
 # Called by UDEV when a dahdi span is added/removed
 #

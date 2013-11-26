@@ -24,9 +24,9 @@ sub generate($$$) {
 	my $genopts = $self->{GENOPTS};
 	my @spans = @_;
 
-	# If the span_types utilities were not installed we do not want to run
+	# If the dahdi_span_types utilities were not installed we do not want to run
 	# this generator or report any errors.
-	system "which span_types > /dev/null 2>&1";
+	system "which dahdi_span_types > /dev/null 2>&1";
 	return if $?;
 
 	warn "Empty configuration -- no spans\n" unless @spans;
@@ -35,7 +35,7 @@ sub generate($$$) {
 		or die "Failed to backup old config: $!\n";
 	#$gconfig->dump;
 	print "Generating $file\n" if $genopts->{verbose};
-	my $cmd = "span_types dumpconfig > $file";
+	my $cmd = "dahdi_span_types dumpconfig > $file";
 	system $cmd;
 	die "Command failed (status=$?): '$cmd'" if $?;
 }
@@ -58,6 +58,6 @@ dahdi - Generate configuration for dahdi drivers.
 =head1 DESCRIPTION
 
 Generate the F</etc/dahdi/span-types.conf>.
-This is the configuration for span_types.
+This is the configuration for dahdi_span_types.
 
 Its location may be overriden via the environment variable F<SPAN_TYPES_CONF_FILE>.

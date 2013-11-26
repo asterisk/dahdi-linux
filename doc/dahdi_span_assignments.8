@@ -1,19 +1,19 @@
 .TH "SPAN_ASSIGNMENTS" "8" "13 Oct 2013" "" ""
 
 .SH NAME
-span_assignments \- handle DAHDI spans registration
+dahdi_span_assignments \- handle DAHDI spans registration
 .SH SYNOPSIS
 
-.B span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] <add|remove> \fIdevpath
+.B dahdi_span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] <add|remove> \fIdevpath
 \fB[\fIdevpath \fB...]
 
-.B span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] auto
+.B dahdi_span_assignments [\-v|\-\-verbose] [\-n|\-\-dry\-run] auto
 
-.B span_assignments [\-v|\-\-verbose] list
+.B dahdi_span_assignments [\-v|\-\-verbose] list
 
-.B span_assignments [\-v|\-\-verbose] [\-k|\-\-key \fIkey\fB] dumpconfig
+.B dahdi_span_assignments [\-v|\-\-verbose] [\-k|\-\-key \fIkey\fB] dumpconfig
 
-.B span_assignments \-h|\-\-help
+.B dahdi_span_assignments \-h|\-\-help
 
 .SH DESCRIPTION
 When the kernel module parameter \fBdahdi.auto_assign_span\fR is unset,
@@ -23,7 +23,7 @@ DAHDI. This allows user-space to order DAHDI to register them to specific
 span and channel numbers. This allows registering different spans out of
 order.
 
-.B span_assignments
+.B dahdi_span_assignments
 is used to register those spans or to help creating the configuration
 file used in their registration:
 .B /etc/dahdi/assigned-spans.conf .
@@ -211,10 +211,10 @@ Write only files for the operations. Used by \fBadd\fR, \fBremove\fR and
 .RE
 
 .SH SEE ALSO
-span_types(8), dahdi_genconf(8), dahdi_cfg(8)
+dahdi_span_types(8), dahdi_genconf(8), dahdi_cfg(8)
 
 .SH AUTHOR
-span_assignments was written by Oron Peled.  This manual page was
+dahdi_span_assignments was written by Oron Peled.  This manual page was
 written by Tzafrir Cohen. Permission is granted to copy, distribute
 and/or modify this document under the terms of the GNU General Public
 License, Version 2 any  later version published by the Free Software

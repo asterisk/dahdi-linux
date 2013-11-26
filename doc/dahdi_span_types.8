@@ -1,14 +1,14 @@
 .TH "SPAN_TYPES" "8" "13 Oct 2013" "" ""
 
 .SH NAME
-span_types \- set DAHDI spans properties before registration (E1/T1)
+dahdi_span_types \- set DAHDI spans properties before registration (E1/T1)
 .SH SYNOPSIS
 
-.B span_types <list|dumpconfig|set> [\fIdevpath \fB[\fIdevpath \fB...]]
+.B dahdi_span_types <list|dumpconfig|set> [\fIdevpath \fB[\fIdevpath \fB...]]
 
 .SH DESCRIPTION
 The span type (E1/T1/J1) must be set to a span before registering it
-with DAHDI, as E1 spans use more channels. \fBspan_types\fR applies the
+with DAHDI, as E1 spans use more channels. \fBdahdi_span_types\fR applies the
 span type configuration to an unregistered span.
 
 Using it only makes sense when the kernel module parameter
@@ -16,7 +16,7 @@ Using it only makes sense when the kernel module parameter
 automatically.
 
 .SH OPTIONS
-.B span_types
+.B dahdi_span_types
 takes a command and an optional list of devices. If no device is given,
 the command is applied to all devices.
 
@@ -31,7 +31,7 @@ specified).
 
 .B list
 .RS
-List types for all spans in the system which may be set with span_types
+List types for all spans in the system which may be set with dahdi_span_types
 (E1/T1/J1 spans).
 .RE
 
@@ -107,7 +107,7 @@ The directory in which span-types.conf resides. /etc/dahdi if not
 overridden from the environment.
 .RE
 
-.B span_types_conf
+.B dahdi_span_types_conf
 .RS
 The path to span-types.conf resides. /etc/dahdi/span-types.conf if
 not overridden from the environment.
@@ -135,10 +135,10 @@ of the device. Span-specifications can be written to it to change types
 
 
 .SH SEE ALSO
-span_assignments(8), dahdi_genconf(8), dahdi_cfg(8)
+dahdi_span_assignments(8), dahdi_genconf(8), dahdi_cfg(8)
 
 .SH AUTHOR
-span_types was written by Oron Peled.  This manual page was
+dahdi_span_types was written by Oron Peled.  This manual page was
 written by Tzafrir Cohen. Permission is granted to copy, distribute
 and/or modify this document under the terms of the GNU General Public
 License, Version 2 any  later version published by the Free Software

@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# /usr/sbin/span_types
+# /usr/sbin/dahdi_span_types
 #
 # This script can be used both from udev and
 # from the command line to manage PRI spans
@@ -38,10 +38,10 @@
 #    variable.
 #
 # Examples:
-#    span_types list
-#    span_types set	     # all devices
-#    span_types set /sys/bus/dahdi_devices/devices/astribanks:xbus-00
-#    span_types -k location dumpconfig
+#    dahdi_span_types list
+#    dahdi_span_types set	     # all devices
+#    dahdi_span_types set /sys/bus/dahdi_devices/devices/astribanks:xbus-00
+#    dahdi_span_types -k location dumpconfig
 #
 
 

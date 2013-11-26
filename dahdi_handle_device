@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# /usr/share/dahdi/handle_device
+# /usr/share/dahdi/dahdi_handle_device
 #
 # Called by UDEV when a dahdi device is added/removed
 #
@@ -60,13 +60,13 @@ add)
 	# Don't block udev for too long
 	(
 		if [ -r "$DAHDICONFDIR/span-types.conf" ]; then
-			span_types set "/sys$DEVPATH"
+			dahdi_span_types set "/sys$DEVPATH"
 		fi
 		if [ -r "$DAHDICONFDIR/assigned-spans.conf" ]; then
-			span_assignments add "/sys$DEVPATH"
+			dahdi_span_assignments add "/sys$DEVPATH"
 		else
 			# No configuration. No order guaranteed
-			span_assignments auto
+			dahdi_span_assignments auto
 		fi
 	) 2>&1 < /dev/null | $LOGGER &
 	;;

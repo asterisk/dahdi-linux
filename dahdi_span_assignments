@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# /usr/sbin/span_assignments:
+# /usr/sbin/dahdi_span_assignments:
 #
 # this script can be used both from udev and
 # from the command line to assign/unassign and list
@@ -45,11 +45,11 @@
 #    variable.
 #
 # Examples:
-#    span_assignments list
-#    span_assignments add	# all unassigned devices
-#    span_assignments add       /sys/bus/dahdi_devices/devices/astribanks:xbus-00
-#    span_assignments remove	# all assigned devices
-#    span_assignments -k location dumpconfig
+#    dahdi_span_assignments list
+#    dahdi_span_assignments add	# all unassigned devices
+#    dahdi_span_assignments add       /sys/bus/dahdi_devices/devices/astribanks:xbus-00
+#    dahdi_span_assignments remove	# all assigned devices
+#    dahdi_span_assignments -k location dumpconfig
 #
 
 devbase='/sys/bus/dahdi_devices/devices'

@@ -26,7 +26,7 @@ sub generate($$$) {
 
 	# If the span_types utilities were not installed we do not want to run
 	# this generator or report any errors.
-	system "which span_assignments > /dev/null 2>&1";
+	system "which dahdi_span_assignments > /dev/null 2>&1";
 	return if $?;
 
 	warn "Empty configuration -- no spans\n" unless @spans;
@@ -35,7 +35,7 @@ sub generate($$$) {
 		or die "Failed to backup old config: $!\n";
 	#$gconfig->dump;
 	print "Generating $file\n" if $genopts->{verbose};
-	my $cmd = "span_assignments dumpconfig > $file";
+	my $cmd = "dahdi_span_assignments dumpconfig > $file";
 	system $cmd;
 	die "Command failed (status=$?): '$cmd'" if $?;
 }
@@ -58,6 +58,6 @@ dahdi - Generate configuration for dahdi drivers.
 =head1 DESCRIPTION
 
 Generate the F</etc/dahdi/assigned-spans.conf>.
-This is the configuration for span_assignments.
+This is the configuration for dahdi_span_assignments.
 
 Its location may be overriden via the environment variable F<ASSIGNED_SPANS_CONF_FILE>.
