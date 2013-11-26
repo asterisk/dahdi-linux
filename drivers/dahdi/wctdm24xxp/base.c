@@ -4384,32 +4384,6 @@ wctdm_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	return wctdm_wait_for_ready(wc);
 }
 
-/*
- * wctdm24xxp_assigned - Called when span is assigned.
- * @span:	The span that is now assigned.
- *
- * This function is called by the core of DAHDI after the span number and
- * channel numbers have been assigned.
- *
- */
-static void wctdm24xxp_assigned(struct dahdi_span *span)
-{
-	struct dahdi_span *s;
-	struct dahdi_device *ddev = span->parent;
-	struct wctdm *wc = NULL;
-
-	list_for_each_entry(s, &ddev->spans, device_node) {
-		wc = (container_of(s, struct wctdm_span, span))->wc;
-		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &s->flags))
-			return;
-	}
-
-	if (wc) {
-		WARN_ON(0 == wc->not_ready);
-		--wc->not_ready;
-	}
-}
-
 static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.owner = THIS_MODULE,
 	.hooksig = wctdm_hooksig,
@@ -4419,7 +4393,6 @@ static const struct dahdi_span_ops wctdm24xxp_analog_span_ops = {
 	.watchdog = wctdm_watchdog,
 	.chanconfig = wctdm_chanconfig,
 	.dacs = wctdm_dacs,
-	.assigned = wctdm24xxp_assigned,
 #ifdef VPM_SUPPORT
 	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
 	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
@@ -4438,7 +4411,6 @@ static const struct dahdi_span_ops wctdm24xxp_digital_span_ops = {
 	.spanconfig = b400m_spanconfig,
 	.chanconfig = b400m_chanconfig,
 	.dacs = wctdm_dacs,
-	.assigned = wctdm24xxp_assigned,
 #ifdef VPM_SUPPORT
 	.enable_hw_preechocan = wctdm_enable_hw_preechocan,
 	.disable_hw_preechocan = wctdm_disable_hw_preechocan,
@@ -5950,6 +5922,9 @@ __wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		wctdm_back_out_gracefully(wc);
 		return -1;
 	}
+
+	WARN_ON(wc->not_ready <= 0);
+	--wc->not_ready;
 
 	dev_info(&wc->vb.pdev->dev,
 		 "Found a %s: %s (%d BRI spans, %d analog %s)\n",
