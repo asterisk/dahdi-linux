@@ -188,6 +188,7 @@ filter_conf() {
 conf_spans() {
 	hardware_id="$1"
 	location="$2"
+	devpath="$3"
 	filter_conf | (
 		# Collect device spans
 		# in a subshell, so $SPANS is not lost
@@ -206,6 +207,12 @@ conf_spans() {
 				SPANS="$SPANS $spans"
 				;;
 			esac
+			case "$devpath" in
+			$id)
+				#echo >&2 "match([$id]): $spans"
+				SPANS="$SPANS $spans"
+				;;
+			esac
 		done
 		echo "$SPANS"
 	)
@@ -217,7 +224,7 @@ device_set_spantype() {
 	devpath=`cd "$device" && pwd -P`
 	location='@'`attr_clean "$device/location"`
 	hardware_id=`attr_clean "$device/hardware_id"`
-	spanspecs=`conf_spans "$hardware_id" "$location"`
+	spanspecs=`conf_spans "$hardware_id" "$location" "$devpath"`
 	#echo >&2 "MATCHED($device): $spanspecs"
 	cut -d: -f1 "$attr_file" | while read spanno; do
 			for sp in $spanspecs
