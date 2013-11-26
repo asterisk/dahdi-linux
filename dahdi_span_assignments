@@ -54,7 +54,7 @@
 
 devbase='/sys/bus/dahdi_devices/devices'
 DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
-assigned_spans_conf="$DAHDICONFDIR/assigned-spans.conf"
+DAHDISASSIGNEDSPANSCONF="${DAHDIASSIGNEDSPANSCONF:-"${DAHDICONFDIR}/assigned-spans.conf"}"
 SPAN_ASSIGNMENTS_KEY=${SPAN_ASSIGNMENTS_KEY:-hwid}
 dry_run=
 verbose=
@@ -228,7 +228,7 @@ unassign_all_spans() {
 
 # Allow comments and empty lines in config file
 filter_conf() {
-	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$assigned_spans_conf"
+	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$DAHDISASSIGNEDSPANSCONF"
 }
 
 assign_device_spans() {
@@ -289,11 +289,11 @@ match_device() {
 }
 
 assign_devices() {
-	if [ ! -f "$assigned_spans_conf" ]; then
-		echo >&2 "$0: Missing '$assigned_spans_conf'"
+	if [ ! -f "$DAHDISASSIGNEDSPANSCONF" ]; then
+		echo >&2 "$0: Missing '$DAHDISASSIGNEDSPANSCONF'"
 		exit 1
 	fi
-	echo "using '$assigned_spans_conf'"
+	echo "using '$DAHDISASSIGNEDSPANSCONF'"
 	for device in $DEVICES
 	do
 		match_device "$device"

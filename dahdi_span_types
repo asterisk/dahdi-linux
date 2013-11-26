@@ -47,7 +47,7 @@
 
 devbase='/sys/bus/dahdi_devices/devices'
 DAHDICONFDIR="${DAHDICONFDIR:-/etc/dahdi}"
-spantypes_conf="$DAHDICONFDIR/span-types.conf"
+DAHDISPANTYPESCONF="${DAHDISPANTYPESCONF:-"${DAHDICONFDIR}/span-types.conf"}"
 SPAN_ASSIGNMENTS_KEY=${SPAN_ASSIGNMENTS_KEY:-hwid}
 
 usage() {
@@ -182,7 +182,7 @@ dump_config() {
 
 # Allow comments and empty lines in config file
 filter_conf() {
-	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$spantypes_conf"
+	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$DAHDISPANTYPESCONF"
 }
 
 conf_spans() {
@@ -242,8 +242,8 @@ device_set_spantype() {
 }
 
 set_spantypes() {
-	if [ ! -f "$spantypes_conf" ]; then
-		echo >&2 "$0: Missing configuration '$spantypes_conf'"
+	if [ ! -f "$DAHDISPANTYPESCONF" ]; then
+		echo >&2 "$0: Missing configuration '$DAHDISPANTYPESCONF'"
 		exit 1
 	fi
 	for device in $DEVICES
