@@ -328,8 +328,8 @@ void span_sysfs_remove(struct dahdi_span *span)
 
 	get_device(span_device);
 	span_uevent_send(span, KOBJ_OFFLINE);
-	device_unregister(span->span_device);
 	sysfs_remove_link(&span_device->kobj, "ddev");
+	device_unregister(span->span_device);
 	dev_set_drvdata(span_device, NULL);
 	span_device->parent = NULL;
 	put_device(span_device);
