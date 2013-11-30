@@ -122,10 +122,14 @@ struct wcxb_meta_desc {
 
 static inline bool wcxb_is_pcie(const struct wcxb *xb)
 {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 33)
+	return pci_is_pcie(xb->pdev);
+#else
 #ifndef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
 	return (xb->pdev->is_pcie > 0);
 #else
 	return (xb->flags.is_pcie > 0);
+#endif
 #endif
 }
 
