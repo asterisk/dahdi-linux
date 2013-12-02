@@ -3610,6 +3610,10 @@ static bool check_for_single_fxs(struct wcaxx *wc, unsigned int port)
 	result = wcaxx_init_fxs_port(wc, mod);
 	if (!result)
 		mod->type = NONE;
+
+	/* It is currently unclear why this read is necessary for some of the
+	 * S100M modules to properly function. */
+	wcaxx_getreg(wc, mod, 0x00);
 	return result;
 }
 
