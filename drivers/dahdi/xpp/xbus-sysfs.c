@@ -55,10 +55,19 @@ static ssize_t sync_store(struct device_driver *driver, const char *buf,
 	return exec_sync_command(buf, count);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 static struct driver_attribute xpp_attrs[] = {
 	__ATTR(sync, S_IRUGO | S_IWUSR, sync_show, sync_store),
 	__ATTR_NULL,
 };
+#else
+static DRIVER_ATTR_RW(sync);
+static struct attribute *xpp_attrs[] = {
+	&driver_attr_sync.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(xpp);
+#endif
 
 /*--------- Sysfs Bus handling ----*/
 static DEVICE_ATTR_READER(xbus_state_show, dev, buf)
@@ -410,7 +419,11 @@ static struct bus_type toplevel_bus_type = {
 	.match = astribank_match,
 	.uevent = astribank_uevent,
 	.dev_attrs = xbus_dev_attrs,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.drv_attrs = xpp_attrs,
+#else
+	.drv_groups = xpp_groups,
+#endif
 };
 
 static int astribank_probe(struct device *dev)
