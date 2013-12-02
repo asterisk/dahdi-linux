@@ -33,7 +33,6 @@
 #include <linux/moduleparam.h>
 #include <linux/firmware.h>
 #include <linux/crc32.h>
-#include <linux/interrupt.h>
 
 #include <stdbool.h>
 
@@ -1987,7 +1986,8 @@ static void wcaxx_handle_receive(struct wcxb *xb, void *_frame)
 		wc->module_poll_time = wc->framecount + MODULE_POLL_TIME_MS;
 	}
 
-	if (!test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags))
+	/* TODO: This protection needs to be thought about. */
+	if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &wc->span.flags))
 		return;
 
 	for (j = 0; j < DAHDI_CHUNKSIZE; j++) {
@@ -2012,7 +2012,8 @@ static void wcaxx_handle_transmit(struct wcxb *xb, void *_frame)
 
 	wcxb_spi_handle_interrupt(wc->master);
 
-	if (!test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags))
+	/* TODO: This protection needs to be thought about. */
+	if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &wc->span.flags))
 		return;
 
 	_dahdi_transmit(&wc->span);
@@ -3383,41 +3384,36 @@ wcaxx_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 }
 
 /*
- * wcaxx_span_shutdown - Called when span is unassigned or shutdown.
- * @span:	The span that is shutdown
+ * wcaxx_assigned - Called when span is assigned.
+ * @span:	The span that is now assigned.
+ *
+ * This function is called by the core of DAHDI after the span number and
+ * channel numbers have been assigned.
  *
  */
-static int wcaxx_span_shutdown(struct dahdi_span *span)
+static void wcaxx_assigned(struct dahdi_span *span)
 {
-	struct wcaxx *wc = container_of(span, struct wcaxx, span);
-	clear_bit(DAHDI_FLAGBIT_RUNNING, &span->flags);
-	synchronize_irq(wc->xb.pdev->irq);
-	return 0;
-}
+	struct dahdi_span *s;
+	struct dahdi_device *ddev = span->parent;
+	struct wcaxx *wc = NULL;
 
-/*
- * wcaxx_span_startup - Called when span is unassigned or shutdown.
- * @span:	The span that is shutdown
- *
- */
-static int wcaxx_span_startup(struct file *file, struct dahdi_span *span)
-{
-	set_bit(DAHDI_FLAGBIT_RUNNING, &span->flags);
-	return 0;
+	list_for_each_entry(s, &ddev->spans, device_node) {
+		wc = container_of(s, struct wcaxx, span);
+		if (!test_bit(DAHDI_FLAGBIT_REGISTERED, &s->flags))
+			return;
+	}
 }
-
 
 static const struct dahdi_span_ops wcaxx_span_ops = {
 	.owner = THIS_MODULE,
 	.hooksig = wcaxx_hooksig,
-	.shutdown = wcaxx_span_shutdown,
-	.startup = wcaxx_span_startup,
 	.open = wcaxx_open,
 	.close = wcaxx_close,
 	.ioctl = wcaxx_ioctl,
 	.watchdog = wcaxx_watchdog,
 	.chanconfig = wcaxx_chanconfig,
 	.dacs = wcaxx_dacs,
+	.assigned = wcaxx_assigned,
 #ifdef VPM_SUPPORT
 	.echocan_create = wcaxx_echocan_create,
 	.echocan_name = wcaxx_echocan_name,
