@@ -291,14 +291,18 @@ _wcxb_spi_next_transfer(struct wcxb_spi_transfer *t)
  */
 void wcxb_spi_handle_interrupt(struct wcxb_spi_master *master)
 {
-	struct wcxb_spi_message *msg = master->cur_msg;
-	struct wcxb_spi_transfer *t = master->cur_transfer;
+	struct wcxb_spi_message *msg;
+	struct wcxb_spi_transfer *t;
 	void (*complete)(void *arg) = NULL;
 	unsigned long flags;
 
 	/* Check if we're not in the middle of a transfer, or not finished with
 	 * a part of one. */
 	spin_lock_irqsave(&master->lock, flags);
+
+	t = master->cur_transfer;
+	msg = master->cur_msg;
+
 	if (!msg || !is_txfifo_empty(master))
 		goto done;
 
