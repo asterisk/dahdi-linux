@@ -251,19 +251,31 @@ static ssize_t master_span_store(struct device_driver *driver, const char *buf,
 	return count;
 }
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 static struct driver_attribute dahdi_attrs[] = {
 	__ATTR(master_span, S_IRUGO | S_IWUSR, master_span_show,
 			master_span_store),
 	__ATTR_NULL,
 };
+#else
+static DRIVER_ATTR_RW(master_span);
+static struct attribute *dahdi_attrs[] = {
+	&driver_attr_master_span.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(dahdi);
+#endif
 
 static struct bus_type spans_bus_type = {
 	.name           = "dahdi_spans",
 	.match          = span_match,
 	.uevent         = span_uevent,
 	.dev_attrs	= span_dev_attrs,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.drv_attrs	= dahdi_attrs,
+#else
+	.drv_groups 	= dahdi_groups,
+#endif
 };
 
 static int span_probe(struct device *dev)
