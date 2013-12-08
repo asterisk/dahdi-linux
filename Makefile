@@ -107,8 +107,9 @@ ASSIGNED_DATA_SCRIPTS:=dahdi_handle_device dahdi_span_config
 ASSIGNED_UTILS:=dahdi_span_assignments dahdi_span_types
 ASSIGNED_CONF:=assigned-spans.conf.sample span-types.conf.sample
 
-MAN_PAGES:=$(wildcard $(BINS:%=doc/%.8))
-MAN_PAGES:=$(wildcard $(ASSIGNED_UTILS:%=doc/%.8))
+MAN_PAGES:= \
+	$(wildcard $(BINS:%=doc/%.8)) \
+	$(wildcard $(ASSIGNED_UTILS:%=doc/%.8))
 
 TEST_BINS:=patgen pattest patlooptest hdlcstress hdlctest hdlcgen hdlcverify timertest dahdi_maint
 # All the man pages. Not just installed ones:
