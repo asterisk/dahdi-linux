@@ -36,6 +36,8 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <dirent.h>
+#include <stdbool.h>
 
 #include <dahdi/user.h>
 #include "tonezone.h"
@@ -136,6 +138,84 @@ static const char *laws[] = {
 	"Mu-law",
 	"A-law"
 };
+
+static bool _are_all_spans_assigned(const char *device_path)
+{
+	char attribute[1024];
+	int res;
+	FILE *fp;
+	int span_count;
+	DIR *dirp;
+	struct dirent *dirent;
+
+	snprintf(attribute, sizeof(attribute) - 1,
+		 "%s/span_count", device_path);
+	fp = fopen(attribute, "r");
+	if (NULL == fp) {
+		fprintf(stderr, "Failed to open '%s'.\n", attribute);
+		return false;
+	}
+	res = fscanf(fp, "%d", &span_count);
+	fclose(fp);
+
+	if (EOF == res) {
+		fprintf(stderr, "Failed to read '%s'.\n", attribute);
+		return false;
+	}
+
+	dirp = opendir(device_path);
+	while (span_count) {
+		dirent = readdir(dirp);
+		if (NULL == dirent)
+			break;
+		if (!strncmp("span-", dirent->d_name, 5)) {
+			--span_count;
+		}
+	}
+	closedir(dirp);
+	return (span_count > 0) ? false : true;
+}
+
+/**
+ * are_all_spans_assigned - Look in sysfs to see if all spans for a device are assigned.
+ *
+ * Returns true if there are $span_count child spans of all devices, or false
+ *  otherwise.
+ */
+static bool are_all_spans_assigned(void)
+{
+	DIR *dirp;
+	struct dirent *dirent;
+	bool res = true;
+	char device_path[1024];
+
+	dirp = opendir("/sys/bus/dahdi_devices/devices");
+	if (!dirp) {
+		/* If we cannot open dahdi_devices, either dahdi isn't loaded,
+		 * or we're using an older version of DAHDI that doesn't use
+		 * sysfs. */
+		return true;
+	}
+
+	while (true && res) {
+
+		dirent = readdir(dirp);
+		if (NULL == dirent)
+			break;
+
+		if (!strcmp(dirent->d_name, ".") ||
+		    !strcmp(dirent->d_name, ".."))
+			continue;
+
+		snprintf(device_path, sizeof(device_path)-1,
+			 "/sys/bus/dahdi_devices/devices/%s", dirent->d_name);
+		res = _are_all_spans_assigned(device_path);
+	}
+
+	closedir(dirp);
+	errno = 0;
+	return res;
+}
 
 static const char *sigtype_to_str(const int sig)
 {
@@ -1493,6 +1573,21 @@ int main(int argc, char *argv[])
 	
 	if (verbose) {
 		fprintf(stderr, "%s\n", dahdi_tools_version);
+	}
+
+	if (!restrict_channels && !only_span) {
+		bool all_assigned = are_all_spans_assigned();
+		unsigned int timeout = 4*5; /* We'll wait 5 seconds */
+
+		while (!all_assigned && --timeout) {
+			usleep(250000);
+			all_assigned = are_all_spans_assigned();
+		}
+
+		if (0 == timeout) {
+			fprintf(stderr,
+				"Timeout waiting for all spans to be assigned.\n");
+		}
 	}
 
 	if (fd == -1) fd = open(MASTER_DEVICE, O_RDWR);
