@@ -3357,7 +3357,7 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 
 	/* Check for field updatable firmware */
 	res = wcxb_check_firmware(&wc->xb, TE435_VERSION,
-			TE435_FW_FILENAME, force_firmware);
+			TE435_FW_FILENAME, force_firmware, WCXB_RESET_NOW);
 	if (res)
 		goto fail_exit;
 

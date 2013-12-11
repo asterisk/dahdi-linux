@@ -3909,7 +3909,7 @@ static int wcaxx_check_firmware(struct wcaxx *wc)
 	}
 
 	return wcxb_check_firmware(&wc->xb, firmware_version,
-				   filename, force_firmware);
+				   filename, force_firmware, WCXB_RESET_NOW);
 }
 
 static void wcaxx_check_sethook(struct wcaxx *wc, struct wcaxx_module *mod)

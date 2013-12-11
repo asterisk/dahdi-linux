@@ -105,9 +105,17 @@ static inline void wcxb_disable_timing_header_driver(struct wcxb *xb)
 	xb->flags.drive_timing_cable = 0;
 }
 
+enum wcxb_reset_option {
+	WCXB_RESET_NOW,
+	WCXB_RESET_LATER
+};
+
+extern u32 wcxb_get_firmware_version(struct wcxb *xb);
 extern int wcxb_check_firmware(struct wcxb *xb, const u32 expected_version,
 			       const char *firmware_filename,
-			       bool force_firmware);
+			       bool force_firmware,
+			       enum wcxb_reset_option reset);
+
 extern void wcxb_stop_dma(struct wcxb *xb);
 extern void wcxb_disable_interrupts(struct wcxb *xb);
 

@@ -2431,6 +2431,26 @@ error_exit:
 	return serial;
 }
 
+static int te13xp_check_firmware(struct t13x *wc)
+{
+	const char *filename;
+	enum wcxb_reset_option reset;
+
+	if (is_pcie(wc))
+		filename = TE133_FW_FILENAME;
+	else
+		filename = TE134_FW_FILENAME;
+
+	/* Specific firmware requires power cycle to properly reset */
+	if (0x6f0017 == wcxb_get_firmware_version(&wc->xb))
+		reset = WCXB_RESET_LATER;
+	else
+		reset = WCXB_RESET_NOW;
+
+	return wcxb_check_firmware(&wc->xb, TE13X_FW_VERSION, filename,
+			force_firmware, reset);
+}
+
 static int __devinit te13xp_init_one(struct pci_dev *pdev,
 		const struct pci_device_id *ent)
 {
@@ -2513,18 +2533,9 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	if (res)
 		goto fail_exit;
 
-	/* Check for field updatable firmware */
-	if (is_pcie(wc)) {
-		res = wcxb_check_firmware(&wc->xb, TE13X_FW_VERSION,
-				TE133_FW_FILENAME, force_firmware);
-		if (res)
-			goto fail_exit;
-	} else {
-		res = wcxb_check_firmware(&wc->xb, TE13X_FW_VERSION,
-				TE134_FW_FILENAME, force_firmware);
-		if (res)
-			goto fail_exit;
-	}
+	res = te13xp_check_firmware(wc);
+	if (res)
+		goto fail_exit;
 
 	wc->ddev->hardware_id = t13x_read_serial(wc);
 	if (!wc->ddev->hardware_id) {

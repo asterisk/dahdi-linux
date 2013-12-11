@@ -792,7 +792,7 @@ struct wcxb_firm_header {
 	__le32	version;
 } __packed;
 
-static u32 wcxb_get_firmware_version(struct wcxb *xb)
+u32 wcxb_get_firmware_version(struct wcxb *xb)
 {
 	u32 version = 0;
 
@@ -807,7 +807,8 @@ static u32 wcxb_get_firmware_version(struct wcxb *xb)
 }
 
 static int wcxb_update_firmware(struct wcxb *xb, const struct firmware *fw,
-				const char *filename)
+				const char *filename,
+				enum wcxb_reset_option reset)
 {
 	u32 tdm_control;
 	static const int APPLICATION_ADDRESS = 0x200000;
@@ -859,14 +860,20 @@ static int wcxb_update_firmware(struct wcxb *xb, const struct firmware *fw,
 			 APPLICATION_ADDRESS + META_BLOCK_OFFSET,
 			 &meta, sizeof(meta));
 
-	/* Reset fpga after loading firmware */
-	dev_info(&xb->pdev->dev, "Firmware load complete. Reseting device.\n");
-	tdm_control = ioread32be(xb->membase + TDM_CONTROL);
+	if (WCXB_RESET_NOW == reset) {
+		/* Reset fpga after loading firmware */
+		dev_info(&xb->pdev->dev,
+				"Firmware load complete. Reseting device.\n");
+		tdm_control = ioread32be(xb->membase + TDM_CONTROL);
 
-	wcxb_hard_reset(xb);
+		wcxb_hard_reset(xb);
 
-	iowrite32be(0, xb->membase + 0x04);
-	iowrite32be(tdm_control, xb->membase + TDM_CONTROL);
+		iowrite32be(0, xb->membase + 0x04);
+		iowrite32be(tdm_control, xb->membase + TDM_CONTROL);
+	} else {
+		dev_info(&xb->pdev->dev,
+			"Delaying reset. Firmware load requires a power cycle\n");
+	}
 
 	wcxb_spi_device_destroy(flash_spi_device);
 	wcxb_spi_master_destroy(flash_spi_master);
@@ -874,10 +881,16 @@ static int wcxb_update_firmware(struct wcxb *xb, const struct firmware *fw,
 }
 
 int wcxb_check_firmware(struct wcxb *xb, const u32 expected_version,
-			const char *firmware_filename, bool force_firmware)
+			const char *firmware_filename, bool force_firmware,
+			enum wcxb_reset_option reset)
 {
 	const struct firmware *fw;
 	const struct wcxb_firm_header *header;
+	static const int APPLICATION_ADDRESS = 0x200000;
+	static const int META_BLOCK_OFFSET   = 0x170000;
+	struct wcxb_spi_master *flash_spi_master;
+	struct wcxb_spi_device *flash_spi_device;
+	struct wcxb_meta_block meta;
 	int res = 0;
 	u32 crc;
 	u32 version = 0;
@@ -893,6 +906,27 @@ int wcxb_check_firmware(struct wcxb *xb, const u32 expected_version,
 
 	if ((expected_version == version) && !force_firmware) {
 		dev_info(&xb->pdev->dev, "Firmware version: %x\n", version);
+		return 0;
+	}
+
+	/* Check meta firmware version for a not-booted application image */
+	flash_spi_master = wcxb_spi_master_create(&xb->pdev->dev,
+						  xb->membase + FLASH_SPI_BASE,
+						  false);
+	flash_spi_device = wcxb_spi_device_create(flash_spi_master, 0);
+	res = wcxb_flash_read(flash_spi_device,
+			APPLICATION_ADDRESS + META_BLOCK_OFFSET,
+			&meta, sizeof(meta));
+	if (res) {
+		dev_info(&xb->pdev->dev, "Unable to read flash\n");
+		return -EIO;
+	}
+
+	if ((meta.version == cpu_to_le32(expected_version))
+			&& !force_firmware) {
+		dev_info(&xb->pdev->dev,
+			"Detected previous firmware updated to current version %x, but not running. You likely need to power cycle your system.\n",
+			expected_version);
 		return 0;
 	}
 
@@ -938,12 +972,22 @@ int wcxb_check_firmware(struct wcxb *xb, const u32 expected_version,
 	dev_info(&xb->pdev->dev, "Found %s (version: %x) Preparing for flash\n",
 				firmware_filename, header->version);
 
-	res = wcxb_update_firmware(xb, fw, firmware_filename);
+	res = wcxb_update_firmware(xb, fw, firmware_filename, reset);
 
 	version = wcxb_get_firmware_version(xb);
-	dev_info(&xb->pdev->dev, "Reset into firmware version: %x\n", version);
+	if (WCXB_RESET_NOW == reset) {
+		dev_info(&xb->pdev->dev,
+			"Reset into firmware version: %x\n", version);
+	} else {
+		dev_info(&xb->pdev->dev,
+			"Running firmware version: %x\n", version);
+		dev_info(&xb->pdev->dev,
+			"Loaded firmware version: %x (Will load after next power cycle)\n",
+			header->version);
+	}
 
-	if ((expected_version != version) && !force_firmware) {
+	if ((WCXB_RESET_NOW == reset) && (expected_version != version)
+			&& !force_firmware) {
 		/* On the off chance that the interface is in a state where it
 		 * cannot boot into the updated firmware image, power cycling
 		 * the card can recover. A simple "reset" of the computer is not
