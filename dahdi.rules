@@ -14,5 +14,5 @@ SUBSYSTEM=="dahdi_channels", ATTRS{location}!="",	SYMLINK+="dahdi/devices/@%s{lo
 LABEL="dahdi_add_end"
 
 # hotplug scripts
-SUBSYSTEM=="dahdi_devices",	RUN="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/dahdi_handle_device"
-SUBSYSTEM=="dahdi_spans",	RUN="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/dahdi_span_config"
+SUBSYSTEM=="dahdi_devices",	RUN+="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/dahdi_handle_device"
+SUBSYSTEM=="dahdi_spans",	RUN+="%E{DAHDI_TOOLS_ROOTDIR}/usr/share/dahdi/dahdi_span_config"
