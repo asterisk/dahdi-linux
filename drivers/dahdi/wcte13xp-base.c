@@ -45,7 +45,7 @@
 
 static const char *TE133_FW_FILENAME = "dahdi-fw-te133.bin";
 static const char *TE134_FW_FILENAME = "dahdi-fw-te134.bin";
-static const u32 TE13X_FW_VERSION = 0x6f0017;
+static const u32 TE13X_FW_VERSION = 0x780017;
 
 #define VPM_SUPPORT
 #define WC_MAX_IFACES 8
