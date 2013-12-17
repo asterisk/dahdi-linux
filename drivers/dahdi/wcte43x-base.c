@@ -55,7 +55,6 @@ static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
 static const u32 TE435_VERSION = 0xe0017;
 
 /* #define RPC_RCLK */
-#define VPM_SUPPORT
 
 enum linemode {
 	T1 = 1,
@@ -129,10 +128,8 @@ struct t43x {
 	struct workqueue_struct *wq;
 	struct t43x_clksrc_work clksrc_work;
 	unsigned int not_ready;		/* 0 when entire card is ready to go */
-#ifdef VPM_SUPPORT
 	struct vpm450m *vpm;
 	char *vpm_name;
-#endif
 	struct mutex lock;
 	bool latency_locked;
 	int syncsrc;
@@ -220,9 +217,6 @@ static void t43x_check_sigbits(struct t43x *wc, int span_idx);
 static const struct dahdi_span_ops t43x_span_ops;
 static void __t43x_set_timing_source_auto(struct t43x *wc);
 
-#ifndef VPM_SUPPORT
-static int vpmsupport;
-#else
 static int vpmsupport = 1;
 
 #include "oct6100api/oct6100_api.h"
@@ -772,7 +766,6 @@ static void t43x_vpm_init(struct t43x *wc)
 		wc->numspans);
 
 }
-#endif /* VPM_SUPPORT */
 
 static int t43x_clear_maint(struct dahdi_span *span);
 
@@ -3164,10 +3157,8 @@ static const struct dahdi_span_ops t43x_span_ops = {
 	.ioctl = t43x_ioctl,
 	.assigned = t43x_span_assigned,
 	.set_spantype = t43x_set_linemode,
-#ifdef VPM_SUPPORT
 	.echocan_create = t43x_echocan_create,
 	.echocan_name = t43x_echocan_name,
-#endif /* VPM_SUPPORT */
 };
 
 /**
@@ -3416,7 +3407,6 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 
 	t43x_init_spans(wc, type);
 
-#ifdef VPM_SUPPORT
 	if (!wc->vpm)
 		t43x_vpm_init(wc);
 
@@ -3428,10 +3418,6 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 		wc->ddev->devicetype = kasprintf(GFP_KERNEL,
 					"%s", wc->devtype->name);
 	}
-#else
-	wc->ddev->devicetype = kasprintf(GFP_KERNEL,
-				"%s", wc->devtype->name);
-#endif
 
 	res = dahdi_register_device(wc->ddev, &wc->xb.pdev->dev);
 	if (res) {
@@ -3484,11 +3470,9 @@ static void __devexit t43x_remove_one(struct pci_dev *pdev)
 	/* Turn off status LEDs */
 	t43x_setleds(wc, 0);
 
-#ifdef VPM_SUPPORT
 	if (wc->vpm)
 		release_vpm450m(wc->vpm);
 	wc->vpm = NULL;
-#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	cancel_work_sync(&wc->clksrc_work.work);
@@ -3574,9 +3558,7 @@ module_param(alarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(losalarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(aisalarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(yelalarmdebounce, int, S_IRUGO | S_IWUSR);
-#ifdef VPM_SUPPORT
 module_param(vpmsupport, int, 0600);
-#endif
 module_param(force_firmware, int, S_IRUGO);
 module_param(latency, int, S_IRUGO);
 MODULE_PARM_DESC(latency, "How many milliseconds of audio to buffer between card and host (3ms default). This number will increase during runtime, dynamically, if dahdi detects that it is too small. This is commonly refered to as a \"latency bump\"");

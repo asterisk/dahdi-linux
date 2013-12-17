@@ -47,7 +47,6 @@ static const char *TE133_FW_FILENAME = "dahdi-fw-te133.bin";
 static const char *TE134_FW_FILENAME = "dahdi-fw-te134.bin";
 static const u32 TE13X_FW_VERSION = 0x780017;
 
-#define VPM_SUPPORT
 #define WC_MAX_IFACES 8
 
 enum linemode {
@@ -107,9 +106,7 @@ struct t13x {
 	struct timer_list timer;
 	struct work_struct timer_work;
 	struct workqueue_struct *wq;
-#ifdef VPM_SUPPORT
 	struct vpm450m *vpm;
-#endif
 	struct mutex lock;
 	struct wcxb xb;
 };
@@ -191,7 +188,6 @@ struct t13x_firm_header {
 static void t13x_check_alarms(struct t13x *wc);
 static void t13x_check_sigbits(struct t13x *wc);
 
-#ifdef VPM_SUPPORT
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/string.h>
@@ -787,7 +783,6 @@ static void t13x_vpm_init(struct t13x *wc)
 		"VPM450: Present and operational servicing %d span\n", 1);
 
 }
-#endif /* VPM_SUPPORT */
 
 static int t13x_clear_maint(struct dahdi_span *span);
 
@@ -2355,10 +2350,8 @@ static const struct dahdi_span_ops t13x_span_ops = {
 	.maint = t13x_maint,
 	.ioctl = t13x_ioctl,
 	.set_spantype = t13x_set_linemode,
-#ifdef VPM_SUPPORT
 	.echocan_create = t13x_echocan_create,
 	.echocan_name = t13x_echocan_name,
-#endif /* VPM_SUPPORT */
 };
 
 #define SPI_BASE 0x200
@@ -2576,10 +2569,8 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	if (res)
 		goto fail_exit;
 
-#ifdef VPM_SUPPORT
 	if (!wc->vpm && vpmsupport && vpmcapable)
 		t13x_vpm_init(wc);
-#endif
 
 	if (wc->vpm)
 		wc->ddev->devicetype = kasprintf(GFP_KERNEL,
@@ -2644,11 +2635,9 @@ static void __devexit te13xp_remove_one(struct pci_dev *pdev)
 	/* Turn off status LED */
 	t13x_setleds(wc, 0);
 
-#ifdef VPM_SUPPORT
 	if (wc->vpm)
 		release_vpm450m(wc->vpm);
 	wc->vpm = NULL;
-#endif
 
 	dahdi_unregister_device(wc->ddev);
 
@@ -2723,9 +2712,7 @@ module_param(alarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(losalarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(aisalarmdebounce, int, S_IRUGO | S_IWUSR);
 module_param(yelalarmdebounce, int, S_IRUGO | S_IWUSR);
-#ifdef VPM_SUPPORT
 module_param(vpmsupport, int, 0600);
-#endif
 module_param(force_firmware, int, S_IRUGO);
 module_param(latency, int, S_IRUGO);
 MODULE_PARM_DESC(latency, "How many milliseconds of audio to buffer between card and host (3ms default). This number will increase during runtime, dynamically, if dahdi detects that it is too small. This is commonly refered to as a \"latency bump\"");

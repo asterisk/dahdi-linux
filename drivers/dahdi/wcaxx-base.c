@@ -75,8 +75,6 @@
 
 #define NUM_MODULES		8
 
-#define VPM_SUPPORT
-
 #define CMD_WR(addr, val) (((addr<<8)&0xff00) | (val&0xff))
 
 enum battery_state {
@@ -245,7 +243,6 @@ static inline bool is_four_port(const struct wcaxx *wc)
 	return (4 == wc->desc->ports);
 }
 
-#ifdef VPM_SUPPORT
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/string.h>
@@ -728,7 +725,6 @@ static int wcaxx_vpm_init(struct wcaxx *wc)
 
 	return 0;
 }
-#endif /* VPM_SUPPORT */
 
 static inline bool is_initialized(struct wcaxx *wc)
 {
@@ -3084,11 +3080,9 @@ wcaxx_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long data)
 				 ((hwgain.tx) ? "tx" : "rx"));
 		}
 		break;
-#ifdef VPM_SUPPORT
 	case DAHDI_TONEDETECT:
 		/* Hardware DTMF detection is not supported. */
 		return -ENOSYS;
-#endif
 	case DAHDI_SETPOLARITY:
 		if (get_user(x, (__user int *) data))
 			return -EFAULT;
@@ -3414,10 +3408,8 @@ static const struct dahdi_span_ops wcaxx_span_ops = {
 	.chanconfig = wcaxx_chanconfig,
 	.dacs = wcaxx_dacs,
 	.assigned = wcaxx_assigned,
-#ifdef VPM_SUPPORT
 	.echocan_create = wcaxx_echocan_create,
 	.echocan_name = wcaxx_echocan_name,
-#endif
 };
 
 static struct wcaxx_chan *
@@ -4384,11 +4376,9 @@ static void __devexit wcaxx_remove_one(struct pci_dev *pdev)
 	flush_scheduled_work();
 	wcxb_stop(&wc->xb);
 
-#ifdef VPM_SUPPORT
 	if (wc->vpm)
 		release_vpm450m(wc->vpm);
 	wc->vpm = NULL;
-#endif
 
 	wcaxx_release(wc);
 }
@@ -4527,9 +4517,7 @@ module_param(neonmwi_monitor, int, 0600);
 module_param(neonmwi_level, int, 0600);
 module_param(neonmwi_envelope, int, 0600);
 module_param(neonmwi_offlimit, int, 0600);
-#ifdef VPM_SUPPORT
 module_param(vpmsupport, int, 0400);
-#endif
 
 module_param(forceload, int, 0600);
 MODULE_PARM_DESC(forceload,
