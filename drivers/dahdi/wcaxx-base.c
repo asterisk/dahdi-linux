@@ -4299,7 +4299,12 @@ __wcaxx_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -ENOMEM;
 	}
 
-	wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s", wc->desc->name);
+	if (wc->vpm)
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s (%s)",
+			wc->desc->name, "VPMOCT032");
+	else
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s",
+				wc->desc->name);
 
 	if (!wc->ddev->devicetype) {
 		wcaxx_back_out_gracefully(wc);

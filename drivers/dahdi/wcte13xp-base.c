@@ -1252,25 +1252,6 @@ static void t13x_framer_start(struct t13x *wc)
 	set_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags);
 }
 
-static void set_span_devicetype(struct t13x *wc)
-{
-	const char *olddevicetype;
-	olddevicetype = wc->ddev->devicetype;
-
-#ifndef VPM_SUPPORT
-	wc->ddev->devicetype = kasprintf(GFP_KERNEL,
-				 "%s (VPMOCT032)", wc->devtype->name);
-#else
-	wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s", wc->devtype->name);
-#endif /* VPM_SUPPORT */
-
-	/* On the off chance that we were able to allocate it previously. */
-	if (!wc->ddev->devicetype)
-		wc->ddev->devicetype = olddevicetype;
-	else
-		kfree(olddevicetype);
-}
-
 /**
  * te13xp_check_for_interrupts - Return 0 if the card is generating interrupts.
  * @wc:	The card to check.
@@ -1307,8 +1288,6 @@ static int t13x_startup(struct file *file, struct dahdi_span *span)
 	struct t13x *wc = container_of(span, struct t13x, span);
 	unsigned long flags;
 	int ret;
-
-	set_span_devicetype(wc);
 
 	/* Stop the DMA since the clock source may have changed. */
 	wcxb_stop_dma(&wc->xb);
@@ -1727,8 +1706,6 @@ static int t13x_software_init(struct t13x *wc, enum linemode type)
 			goto error_exit;
 	}
 
-	set_span_devicetype(wc);
-
 	/* Because the interrupt handler is running, we need to atomically
 	 * swap the channel arrays. */
 	spin_lock_irqsave(&wc->reglock, flags);
@@ -1779,8 +1756,6 @@ static int t13x_software_init(struct t13x *wc, enum linemode type)
 		wc->chans[x]->pvt = wc;
 		wc->chans[x]->chanpos = x + 1;
 	}
-
-	set_span_devicetype(wc);
 
 	return 0;
 
@@ -2593,6 +2568,13 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	if (!wc->vpm)
 		t13x_vpm_init(wc);
 #endif
+
+	if (wc->vpm)
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL,
+				 "%s (VPMOCT032)", wc->devtype->name);
+	else
+		wc->ddev->devicetype = kasprintf(GFP_KERNEL, "%s",
+				wc->devtype->name);
 
 	wc->span.ops = &t13x_span_ops;
 	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
