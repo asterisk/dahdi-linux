@@ -657,7 +657,7 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 		}
 	}
 
-	if (vpmsupport != 0)
+	if (vpmsupport)
 		wcxb_enable_echocan(&wc->xb);
 
 	kfree(ChipOpen);
@@ -797,8 +797,8 @@ struct t13x_desc {
 	const char *name;
 };
 
-static const struct t13x_desc te133 = {"Wildcard TE133"}; /* pci express */
-static const struct t13x_desc te134 = {"Wildcard TE134"}; /* legacy pci */
+static const struct t13x_desc te133 = {"Wildcard TE131/TE133"}; /* pci express*/
+static const struct t13x_desc te134 = {"Wildcard TE132/TE134"}; /* legacy pci */
 
 static inline bool is_pcie(const struct t13x *t1)
 {
@@ -2187,7 +2187,7 @@ static void te13x_handle_receive(struct wcxb *xb, void *vfp)
 		}
 	}
 
-	if (0 == vpmsupport) {
+	if (!vpmsupport || !wc->vpm) {
 		for (i = 0; i < wc->span.channels; i++) {
 			struct dahdi_chan *const c = wc->span.chans[i];
 			__dahdi_ec_chunk(c, c->readchunk, c->readchunk,
@@ -2440,6 +2440,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	int res;
 	unsigned int index = -1;
 	enum linemode type;
+	bool vpmcapable = false;
 
 	for (x = 0; x < ARRAY_SIZE(ifaces); x++) {
 		if (!ifaces[x]) {
@@ -2526,6 +2527,17 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	}
 
 	wc->ddev->hardware_id = t13x_read_serial(wc);
+	if (!wc->ddev->hardware_id) {
+		dev_info(&wc->dev->dev, "No serial number found.\n");
+		res = -EIO;
+		goto fail_exit;
+	}
+
+	/* Check for hardware echo cancel support */
+	if (!strncmp("TE133", wc->ddev->hardware_id+1, 5) ||
+	    !strncmp("TE134", wc->ddev->hardware_id+1, 5)) {
+		vpmcapable = true;
+	}
 
 	wc->wq = create_singlethread_workqueue(wc->name);
 	if (!wc->wq) {
@@ -2565,7 +2577,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 		goto fail_exit;
 
 #ifdef VPM_SUPPORT
-	if (!wc->vpm)
+	if (!wc->vpm && vpmsupport && vpmcapable)
 		t13x_vpm_init(wc);
 #endif
 
