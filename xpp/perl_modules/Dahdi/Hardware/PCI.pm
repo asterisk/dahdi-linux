@@ -94,8 +94,8 @@ my %pci_ids = (
 	'd161:8001'		=> { DRIVER => 'wcte12xp', DESCRIPTION => 'Wildcard TE122' },
 
 	# from wcte13xp
-	'd161:800a'		=> { DRIVER => 'wcte13xp', DESCRIPTION => 'Wildcard TE133' },
-	'd161:800b'		=> { DRIVER => 'wcte13xp', DESCRIPTION => 'Wildcard TE134' },
+	'd161:800a'		=> { DRIVER => 'wcte13xp', DESCRIPTION => 'Wildcard TE131/TE133' },
+	'd161:800b'		=> { DRIVER => 'wcte13xp', DESCRIPTION => 'Wildcard TE132/TE134' },
 
 	# from wcaxx
 	'd161:800c'		=> { DRIVER => 'wcaxx', DESCRIPTION => 'Digium A8A' },

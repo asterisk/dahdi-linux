@@ -24,6 +24,8 @@ wcte12xp
 
 # Digium TE131: PCI-Express single-port T1/E1/J1
 # Digium TE132: PCI single-port T1/E1/J1
+# Digium TE133: PCI-Express single-port T1/E1/J1 with hardware echocan
+# Digium TE134: PCI single-port T1/E1/J1 with hardware echocan
 wcte13xp
 
 # Digium T100P: PCI single-port T1
