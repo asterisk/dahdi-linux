@@ -1684,6 +1684,9 @@ t13x_spanconfig(struct file *file, struct dahdi_span *span,
 	if (file->f_flags & O_NONBLOCK)
 		return -EAGAIN;
 
+	/* Set recover timing mode */
+	span->syncsrc = lc->sync;
+
 	/* make sure that sigcaps gets updated if necessary */
 	for (i = 0; i < wc->span.channels; i++)
 		t13x_chan_set_sigcap(span, i);
