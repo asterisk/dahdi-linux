@@ -3100,6 +3100,8 @@ wctdm_init_voicedaa(struct wctdm *wc, struct wctdm_module *mod,
 	spin_unlock_irqrestore(&wc->reglock, flags);
 	msleep(20);
 
+	memset(&mod->mod.fxo, 0, sizeof(mod->mod.fxo));
+
 	if (!sane && wctdm_voicedaa_insane(wc, mod))
 		return -2;
 
@@ -3244,8 +3246,7 @@ wctdm_init_proslic(struct wctdm *wc, struct wctdm_module *const mod,
 		return -2;
 
 	/* Initialize VMWI settings */
-	memset(&(fxs->vmwisetting), 0, sizeof(fxs->vmwisetting));
-	fxs->vmwi_linereverse = 0;
+	memset(fxs, 0, sizeof(*fxs));
 
 	/* By default, don't send on hook */
 	if (!reversepolarity != !fxs->reversepolarity)
