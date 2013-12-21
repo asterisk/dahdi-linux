@@ -35,16 +35,6 @@ if [ "$DAHDI_UDEV_DISABLE_DEVICES" = 'yes' ]; then
 	exit 0
 fi
 
-# Check if we can safely do our job
-if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
-	echo "Old driver (no auto_assign_spans parameter). Skip $DEVPATH" | $LOGGER
-	exit 0
-fi
-if [ `cat /sys/module/dahdi/parameters/auto_assign_spans` -eq 1 ]; then
-	echo "auto_assign_spans=1. Skip $DEVPATH" | $LOGGER
-	exit 0
-fi
-
 # Can we pass a different value so we can use
 # alternate (testing) configuration?
 # Meanwhile, make it hard-coded.
@@ -54,6 +44,19 @@ export DAHDICONFDIR
 case "$ACTION" in
 add)
 	echo "$ACTION: $DEVPATH" | $LOGGER
+
+	# Check if we can safely do our job
+	if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
+		if [ -f /sys/module/dahdi ]; then
+			$LOGGER "Old driver (no auto_assign_spans parameter). Skip $DEVPATH"
+			exit 0
+		fi
+	fi
+	if [ `cat /sys/module/dahdi/parameters/auto_assign_spans` -eq 1 ]; then
+		echo "auto_assign_spans=1. Skip $DEVPATH" | $LOGGER
+		exit 0
+	fi
+
 	# Can have alternate dahdi configuration directory for debugging
 	# export DAHDICONFDIR="/tmp/xortel/dahdi"
 
