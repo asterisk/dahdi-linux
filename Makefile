@@ -60,6 +60,8 @@ MODULES_FILE	= /etc/dahdi/modules
 GENCONF_FILE	= /etc/dahdi/genconf_parameters
 MODPROBE_FILE	= /etc/modprobe.d/dahdi.conf
 BLACKLIST_FILE	= /etc/modprobe.d/dahdi.blacklist.conf
+BASH_COMP_DIR	= /etc/bash_completion.d
+BASH_COMP_FILE	= $(BASH_COMP_DIR)/dahdi
 
 NETSCR_DIR	:= $(firstword $(wildcard $(DESTDIR)/etc/sysconfig/network-scripts ))
 ifneq (,$(NETSCR_DIR))
@@ -243,6 +245,8 @@ endif
 	tar cf - -C hotplug $(ASSIGNED_DATA_SCRIPTS) | tar xf - -C $(DESTDIR)$(DATA_DIR)/
 	install $(ASSIGNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
 	install -m 644 $(ASSIGNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
+	install -d $(DESTDIR)$(BASH_COMP_DIR)
+	install -m 644 dahdi-bash-completion $(DESTDIR)$(BASH_COMP_FILE)
 
 install-libs: libs
 	$(INSTALL) -d -m 755 $(DESTDIR)/$(LIB_DIR)
