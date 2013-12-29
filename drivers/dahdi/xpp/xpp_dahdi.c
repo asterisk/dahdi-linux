@@ -458,29 +458,28 @@ static void phonedev_cleanup(xpd_t *xpd)
 	unsigned int x;
 
 	for (x = 0; x < phonedev->channels; x++) {
-		if (phonedev->chans[x])
+		if (phonedev->chans[x]) {
 			KZFREE(phonedev->chans[x]);
-		if (phonedev->ec[x])
+			phonedev->chans[x] = NULL;
+		}
+		if (phonedev->ec[x]) {
 			KZFREE(phonedev->ec[x]);
+			phonedev->ec[x] = NULL;
+		}
 	}
+	phonedev->channels = 0;
 }
 
-__must_check static int phonedev_init(xpd_t *xpd,
-				      const xproto_table_t *proto_table,
-				      int channels, xpp_line_t no_pcm)
+int phonedev_alloc_channels(xpd_t *xpd, int channels)
 {
 	struct phonedev *phonedev = &PHONEDEV(xpd);
+	int old_channels = phonedev->channels;
 	unsigned int x;
 
-	spin_lock_init(&phonedev->lock_recompute_pcm);
+	XPD_NOTICE(xpd, "Reallocating channels: %d -> %d\n",
+			old_channels, channels);
+	phonedev_cleanup(xpd);
 	phonedev->channels = channels;
-	phonedev->no_pcm = no_pcm;
-	phonedev->offhook_state = 0x0;	/* ONHOOK */
-	phonedev->phoneops = proto_table->phoneops;
-	phonedev->digital_outputs = 0;
-	phonedev->digital_inputs = 0;
-	atomic_set(&phonedev->dahdi_registered, 0);
-	atomic_set(&phonedev->open_counter, 0);
 	for (x = 0; x < phonedev->channels; x++) {
 		if (!
 		    (phonedev->chans[x] =
@@ -501,6 +500,29 @@ err:
 	phonedev_cleanup(xpd);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL(phonedev_alloc_channels);
+
+__must_check static int phonedev_init(xpd_t *xpd,
+				      const xproto_table_t *proto_table,
+				      int channels, xpp_line_t no_pcm)
+{
+	struct phonedev *phonedev = &PHONEDEV(xpd);
+
+	spin_lock_init(&phonedev->lock_recompute_pcm);
+	phonedev->no_pcm = no_pcm;
+	phonedev->offhook_state = 0x0;	/* ONHOOK */
+	phonedev->phoneops = proto_table->phoneops;
+	phonedev->digital_outputs = 0;
+	phonedev->digital_inputs = 0;
+	atomic_set(&phonedev->dahdi_registered, 0);
+	atomic_set(&phonedev->open_counter, 0);
+	if (phonedev_alloc_channels(xpd, channels) < 0)
+		goto err;
+	return 0;
+err:
+	return -ENOMEM;
+}
+
 
 /*
  * xpd_alloc - Allocator for new XPD's
@@ -1025,12 +1047,9 @@ EXPORT_SYMBOL(xpd_set_spanname);
 static void xpd_init_span(xpd_t *xpd, unsigned offset, int cn)
 {
 	struct dahdi_span *span;
-	int i;
 
 	memset(&PHONEDEV(xpd).span, 0, sizeof(struct dahdi_span));
-	for (i = 0; i < cn; i++)
-		memset(XPD_CHAN(xpd, i), 0, sizeof(struct dahdi_chan));
-
+	phonedev_alloc_channels(xpd, cn);
 	span = &PHONEDEV(xpd).span;
 	span->deflaw = DAHDI_LAW_MULAW;	/* card_* drivers may override */
 	span->channels = cn;

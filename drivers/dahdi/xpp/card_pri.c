@@ -611,7 +611,7 @@ static int set_pri_proto(xpd_t *xpd, enum pri_protocol set_proto)
 	}
 	priv->pri_protocol = set_proto;
 	priv->is_cas = -1;
-	phonedev->channels = pri_num_channels(set_proto);
+	phonedev_alloc_channels(xpd, pri_num_channels(set_proto));
 	phonedev->offhook_state = BITMASK(phonedev->channels);
 	CALL_PHONE_METHOD(card_pcm_recompute, xpd, 0);
 	priv->deflaw = deflaw;
@@ -1082,6 +1082,7 @@ static int pri_set_spantype(struct dahdi_span *span, enum spantypes spantype)
 	struct phonedev *phonedev = container_of(span, struct phonedev, span);
 	xpd_t *xpd = container_of(phonedev, struct xpd, phonedev);
 	enum pri_protocol set_proto = PRI_PROTO_0;
+	int ret;
 
 	XPD_INFO(xpd, "%s: %s\n", __func__, dahdi_spantype2str(spantype));
 	switch (spantype) {
@@ -1099,7 +1100,13 @@ static int pri_set_spantype(struct dahdi_span *span, enum spantypes spantype)
 			__func__, dahdi_spantype2str(spantype));
 		return -EINVAL;
 	}
-	return set_pri_proto(xpd, set_proto);
+	ret = set_pri_proto(xpd, set_proto);
+	if (ret < 0) {
+		XPD_ERR(xpd, "%s: set_pri_proto failed\n", __func__);
+		return ret;
+	}
+	dahdi_init_span(span);
+	return 0;
 }
 
 static int PRI_card_open(xpd_t *xpd, lineno_t pos)
@@ -1929,7 +1936,8 @@ static void PRI_card_pcm_tospan(xpd_t *xpd, xpacket_t *pack)
 				dchan_state(xpd, 0);
 		}
 		if (IS_SET(physical_mask, i)) {
-			r = XPD_CHAN(xpd, logical_chan)->readchunk;
+			struct dahdi_chan *chan = XPD_CHAN(xpd, logical_chan);
+			r = chan->readchunk;
 			// memset((u_char *)r, 0x5A, DAHDI_CHUNKSIZE);  // DEBUG
 			memcpy((u_char *)r, pcm, DAHDI_CHUNKSIZE);
 			pcm += DAHDI_CHUNKSIZE;

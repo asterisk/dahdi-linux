@@ -38,6 +38,7 @@ xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit, int subtype, int subunits,
 		 int channels);
 void xpd_free(xpd_t *xpd);
 void xpd_remove(xpd_t *xpd);
+int phonedev_alloc_channels(xpd_t *xpd, int channels);
 void update_xpd_status(xpd_t *xpd, int alarm_flag);
 const char *xpp_echocan_name(const struct dahdi_chan *chan);
 int xpp_echocan_create(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
@@ -64,6 +65,7 @@ void notify_rxsig(xpd_t *xpd, int pos, enum dahdi_rxsig rxsig);
 extern struct proc_dir_entry *xpp_proc_toplevel;
 #endif
 
-#define	SPAN_REGISTERED(xpd)	atomic_read(&PHONEDEV(xpd).dahdi_registered)
+#define	SPAN_REGISTERED(xpd)  (atomic_read(&PHONEDEV(xpd).dahdi_registered) && \
+		test_bit(DAHDI_FLAGBIT_REGISTERED, &PHONEDEV(xpd).span.flags))
 
 #endif /* XPP_DAHDI_H */
