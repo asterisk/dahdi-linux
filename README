@@ -117,29 +117,29 @@ set at the beginning of the init.d script.
 Reference Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~
 Sample system.conf
-~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^
 include::system.conf.asciidoc[]
 
 
 Sample init.conf
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^
 include::init.conf.asciidoc[]
 
 
 Sample genconf_parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^
 FIXME: still not properly formatted.
 
 include::genconf_parameters.asciidoc[]
 
 
 Sample assigned-spans.conf
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 include::assigned-spans.conf.asciidoc[]
 
 
 Sample span-types.conf
-~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^
 include::span-types.conf.asciidoc[]
 
 

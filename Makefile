@@ -196,7 +196,7 @@ genconf_parameters.sample: xpp/genconf_parameters
 README.html: README system.conf.asciidoc init.conf.asciidoc tonezones.txt \
   UPGRADE.txt genconf_parameters.asciidoc assigned-spans.conf.asciidoc \
   span-types.conf.asciidoc
-	$(ASCIIDOC) -n -a toc -a toclevels=3 $<
+	$(ASCIIDOC) -n -a toc -a toclevels=4 $<
 
 README.Astribank.html: xpp/README.Astribank
 	$(ASCIIDOC) -o $@ -n -a toc -a toclevels=4 $<

@@ -4,7 +4,7 @@
 # This file is parsed by the DAHDI Configurator, dahdi_cfg
 #
 # Span Configuration
-# ^^^^^^^^^^^^^^^^^^
+# ++++++++++++++++++
 # First come the span definitions, in the format
 # 
 #   span=<span num>,<timing source>,<line build out (LBO)>,<framing>,<coding>[,yellow]
@@ -69,7 +69,7 @@
 #span=3,0,0,ccs,hdb3,crc4
 #
 # Dynamic Spans
-# ^^^^^^^^^^^^^
+# +++++++++++++
 # Next come the dynamic span definitions, in the form:
 # 
 #   dynamic=<driver>,<address>,<numchans>,<timing>
@@ -87,7 +87,7 @@
 # have the non-zero value. 
 #
 # Channel Configuration
-# ^^^^^^^^^^^^^^^^^^^^^
+# +++++++++++++++++++++
 # Next come the definitions for using the channels.  The format is:
 # <device>=<channel list>
 #
@@ -204,7 +204,7 @@
 #dacsrbs=1-24:48
 #
 # Tone Zone Data
-# ^^^^^^^^^^^^^^
+# ++++++++++++++
 # Finally, you can preload some tone zones, to prevent them from getting
 # overwritten by other users (if you allow non-root users to open /dev/dahdi/*
 # interfaces anyway.  Also this means they won't have to be loaded at runtime.
@@ -232,7 +232,7 @@ loadzone = us
 defaultzone=us
 #
 # PCI Radio Interface
-# ^^^^^^^^^^^^^^^^^^^
+# +++++++++++++++++++
 # (see http://www.zapatatelephony.org/app_rpt.html)
 #
 # The PCI Radio Interface card interfaces up to 4 two-way radios (either
@@ -298,7 +298,7 @@ defaultzone=us
 #channels=1-4
 #
 # Overiding PCM encoding
-# ^^^^^^^^^^^^^^^^^^^^^^
+# ++++++++++++++++++++++
 # Usually the channel driver sets the encoding of the PCM for the
 # channel (mulaw / alaw. That is: g711u or g711a). However there are
 # some cases where you would like to override that. 'mulaw' and 'alaw'
@@ -313,7 +313,7 @@ defaultzone=us
 #deflaw=5
 #
 # Echo Cancellers
-# ^^^^^^^^^^^^^^^
+# +++++++++++++++
 # DAHDI uses modular echo cancellers that are configured per channel. The echo
 # cancellers are compiled and installed as part of the dahdi-linux package.
 # You can specify in this file the echo canceller to be used for each
