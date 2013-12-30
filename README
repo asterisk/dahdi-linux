@@ -212,6 +212,128 @@ that is included in the ppp/ subdirectory. To install it:
    CONFIG_HDLC .
 
 
+Initialization
+--------------
+This section documents the start up sequence of the DAHDI modules.
+
+There are generally two options: explicit (using an init script) and
+implicit (run from UDEV hook scripts).
+
+Explicit
+~~~~~~~~
+The dahdi init scripts does the following tasks:
+
+* Loading the module dahdi and any other module listed in
+  /etc/dahdi/modules.
+* For xpp (Astribanks) - some specific initializations. See
+  README.Astribank.
+* Runs link:doc/dahdi_cfg.8.html[dahdi_cfg] after all modules were
+  loaded.
+* A number of other tools may need to be run:
+** link:doc/fxotune.8.html[fxotune]
+** dahdihpec_enable
+
+Only at this point Asterisk (or any other user of DAHDI) can be run.
+
+
+Implicit
+~~~~~~~~
+(Also known as "hot-plug" or "pinned-spans". This requires:
+
+* dahdi >= 2.8.0
+* Setting the module parameter auto_assign_spans of dahdi to 0
+* (Recommended) Asterisk >= 12 - which supports "dahdi create channels".
+
+When a device driver of a DAHDI device finishes initialization, it
+creates a dahdi_device kernel object. A dahdi_device represents a single
+DAHDI device (such as a PCI card) and may have several spans. If the
+value of auto_assign_spans is 1 when dahdi_device is created, spans are
+assigned automatically - each new span gets the first available span
+number and range of channels. However if it is set to 0, spans will not
+get assigned, and user space programs need to assign them. The
+low-level interface for doing so is explained in the section "Span
+Assignment" in the README of DAHDI-Linux.
+
+New Devices
+^^^^^^^^^^^
+When a kernel object is created or destroyed, the kernel sends an event
+to user space. Those events are normally handled by udevd. Configurations
+for udevd ("udev rules") may be placed in /etc/udev/rules.d or
+/lib/udev/rules.d. This package installs rules that instruct udevd to
+run the script `/usr/share/dahdi/dahdi_handle_device` on each new
+device. This script will:
+
+* If `/etc/dahdi/span-types.conf` exists, apply it to the device. It is
+ used for E1/T1/J1 settings. See
+ <<_sample_span_types_conf,sample span-types.conf>>.
+
+* If `/etc/dahdi/assigned-spans.conf` exists, assign the span according
+ to it (if it is not specified there: don't assign it).
+ used for E1/T1/J1 settings. See
+ <<_sample_assigned_spans_conf,sample assigned-spans.conf>>.
+
+* But if that file does not exist, assign the span to the first
+  available place.
+
+This script mainly uses the commands
+link:doc/dahdi_span_types.8.html[dahdi_span_types] and
+link:doc/dahdi_span_assignments.8.html[dahdi_span_assignments].
+
+DAHDI devices are listed under `/sys/bus/dahdi_devices/devices`.
+
+If you want to disable running this script, add the following line to
+`/etc/dahdi/init.conf`:
+.............................
+DAHDI_UDEV_DISABLE_DEVICES=yes
+.............................
+
+
+New Spans
+^^^^^^^^^
+Once a span is assigned, a kernel object will appear for it. It will be
+listed under its device. As a new kernel object was created, an event is
+sent to udev.
+
+The standard DAHDI udev rules instruct udevd to run the script
+`/usr/share/dahdi/dahdi_span_config`. This script configures the new
+span:
+
+* If system.conf does not exist, generates a temporary configuration
+  for the span using link:doc/dahdi_genconf.8.html[dahdi_genconf
+  system].
+* Runs link:doc/dahdi_cfg.8.html[dahdi_cfg] on the new span (using `-S`
+  and -C`).
+
+* Runs `asterisk -rx 'dahdi create channels'` to add the new channels
+  and spans to Asterisk (if they were configured in advance).
+
+If you want to disable running this script, add the following line to
+`/etc/dahdi/init.conf`:
+.............................
+DAHDI_UDEV_DISABLE_SPANS=yes
+.............................
+
+
+New Channels
+^^^^^^^^^^^^
+DAHDI channels have their own representation in the kernel. The standard
+udev rules that dahdi-tools includes for them, however, don't run a
+script for each device. Each DAHDI channel creates a block device file
+at /dev/dahdi/chan/'span'/'rel-chan', where 'span' and 'rel-chan' are
+each three-digit numbers (e.g: 035). 'span' is the span number and
+'rel-chan' is the channel number relative to the span.
+
+The udev rules generate the following extra symlinks under /dev/dahdi:
+
+* /dev/dahdi/'num' - the channel number. As it was originally (but
+  continues beyond 250).
+* /dev/dahdi/devices/'hardware_id'/'rel-span'/'rel-chan' - if the DAHDI
+  device has a hardware ID field, provide listing of the device's span
+  and channels.
+* /dev/dahdi/devices/@'hardware_id'/'rel-span'/'rel-chan' - likewise for
+  the connector field. It has a "@" prefix.
+
+
 include::UPGRADE.txt[]
 
 
