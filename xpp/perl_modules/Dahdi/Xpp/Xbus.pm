@@ -110,9 +110,7 @@ sub read_xpdnames($) {
 sub read_num($) {
 	my $self = shift or die;
 	my $xbus_dir = $self->sysfs_dir;
-	my @xpdnames = read_xpdnames($xbus_dir);
-	my $first = shift @xpdnames or die "No XPDs for '$xbus_dir'\n";
-	$first =~ /^(\d+\d+).*/;
+	$xbus_dir =~ /.*-(\d\d)$/;
 	return $1;
 }
 
