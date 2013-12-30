@@ -49,15 +49,18 @@ There are some make targets that are provided to build or install just
 parts of DAHDI:
 
 . Build targets:
-  - make: Build DAHDI user-space programs. partial
+  - make: Build DAHDI user-space programs and libraries. partial
     targets of it:
     * make 'utilname': builds 'utilname' alone (e.g: `make dahdi_diag`)
-    * make utils: Build libtonezone.
+    * make utils: Build just the programs.
     * make libs: Build libtonezone.
+    * make tests: Build testing binaries.
 . Install targets:
-  - make install: Installs user space tools into /usr/sbin/ (TODO - list
-    partial targets)
-  - make config: should be run once to configure 
+  - make install: Install everything. Sub-targets of it:
+    * make install-utils: Installs most things.
+    * make install-libs: Installs libtonezone.
+  - make config: install configuration files (overriding existing ones).
+  - make install-test: Install testing binaries.
 
 
 Installation to a Subtree
