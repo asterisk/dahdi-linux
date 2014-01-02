@@ -35,6 +35,8 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <semaphore.h>
 #include <errno.h>
 #include <dirent.h>
 #include <stdbool.h>
@@ -794,7 +796,7 @@ static int setfiftysixkhdlc(char *keyword, char *args)
 	return 0;
 }
 
-static void apply_fiftysix(void)
+static int apply_fiftysix(void)
 {
 	int x;
 	int rate;
@@ -808,7 +810,7 @@ static void apply_fiftysix(void)
 			fprintf(stderr, 
 			    "Couldn't open /dev/dahdi/channel: %s\n", 
 			    strerror(errno));
-			exit(-1);
+			return -1;	
 		}
 
 		if (ioctl(chanfd, DAHDI_SPECIFY, &x)) {
@@ -829,6 +831,7 @@ static void apply_fiftysix(void)
 		}
 		close(chanfd);
 	}
+	return 0;
 }
 
 static int setechocan(char *keyword, char *args)
@@ -1530,6 +1533,9 @@ int main(int argc, char *argv[])
 	char *buf;
 	char *key, *value;
 	int x,found;
+	sem_t *lock = SEM_FAILED;
+	const char *SEM_NAME = "dahdi_cfg";
+	int exit_code = 0;
 
 	while((c = getopt(argc, argv, "fthc:vsd::C:S:")) != -1) {
 		switch(c) {
@@ -1656,6 +1662,20 @@ finish:
 		printf("About to open Master device\n");
 		fflush(stdout);
 	}
+
+	lock = sem_open(SEM_NAME, O_CREAT, O_RDWR, 1);
+	if (SEM_FAILED == lock) {
+		error("Unable to create 'dahdi_cfg' mutex.\n");
+		exit_code = 1;
+		goto release_sem;
+	}
+
+	if (-1 == sem_wait(lock)) {
+		error("Failed to wait for dahdi_cfg mutex.\n");
+		exit_code = 1;
+		goto release_sem;
+	}
+
 	for (x=0;x<numdynamic;x++) {
 		/* destroy them all */
 		ioctl(fd, DAHDI_DYNAMIC_DESTROY, &zds[x]);
@@ -1667,10 +1687,12 @@ finish:
 			if (ioctl(fd, DAHDI_SHUTDOWN, &lc[x].span)) {
 				fprintf(stderr, "DAHDI shutdown failed: %s\n", strerror(errno));
 				close(fd);
-				exit(1);
+				exit_code = 1;
+				goto release_sem;
 			}
 		}
-		exit(1);
+		exit_code = 1;
+		goto release_sem;
 	}
 	for (x=0;x<spans;x++) {
 		if (only_span && lc[x].span != only_span)
@@ -1678,14 +1700,16 @@ finish:
 		if (ioctl(fd, DAHDI_SPANCONFIG, lc + x)) {
 			fprintf(stderr, "DAHDI_SPANCONFIG failed on span %d: %s (%d)\n", lc[x].span, strerror(errno), errno);
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 	}
 	for (x=0;x<numdynamic;x++) {
 		if (ioctl(fd, DAHDI_DYNAMIC_CREATE, &zds[x])) {
 			fprintf(stderr, "DAHDI dynamic span creation failed: %s\n", strerror(errno));
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 	}
 	for (x=1;x<DAHDI_MAX_CHANNELS;x++) {
@@ -1810,7 +1834,8 @@ finish:
 					" to channel 16 of an E1 CAS span\n");
 			}
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 
 		ae[x].chan = x;
@@ -1821,7 +1846,8 @@ finish:
 		if (ioctl(fd, DAHDI_ATTACH_ECHOCAN, &ae[x])) {
 			fprintf(stderr, "DAHDI_ATTACH_ECHOCAN failed on channel %d: %s (%d)\n", x, strerror(errno), errno);
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 	}
 	if (0 == numzones) {
@@ -1848,7 +1874,8 @@ finish:
 		if (ioctl(fd, DAHDI_DEFAULTZONE, &deftonezone)) {
 			fprintf(stderr, "DAHDI_DEFAULTZONE failed: %s (%d)\n", strerror(errno), errno);
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 	}
 	for (x=0;x<spans;x++) {
@@ -1857,9 +1884,16 @@ finish:
 		if (ioctl(fd, DAHDI_STARTUP, &lc[x].span)) {
 			fprintf(stderr, "DAHDI startup failed: %s\n", strerror(errno));
 			close(fd);
-			exit(1);
+			exit_code = 1;
+			goto release_sem;
 		}
 	}
-	apply_fiftysix();
-	exit(0);
+	exit_code = apply_fiftysix();
+
+release_sem:
+	if (SEM_FAILED != lock) {
+		sem_post(lock);
+		sem_unlink(SEM_NAME);
+	}
+	exit(exit_code);
 }

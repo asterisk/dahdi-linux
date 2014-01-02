@@ -168,7 +168,7 @@ $(LTZ_SO): $(LTZ_SO_OBJS)
 	$(CC) $(CFLAGS) -shared -Wl,-soname,$(LTZ_SO).$(LTZ_SO_MAJOR_VER).$(LTZ_SO_MINOR_VER) -o $@ $^ -lm
 
 dahdi_cfg: $(LTZ_A)
-dahdi_cfg: LIBS+=-lm
+dahdi_cfg: LIBS+=-lm -lpthread
 dahdi_pcap:
 	$(CC) $(CFLAGS) dahdi_pcap.c -lpcap -o $@ $<
 	
