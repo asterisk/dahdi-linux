@@ -120,7 +120,7 @@ fi
 if [ "$#" -gt 0 ]; then
 	DEVICES="$@"
 else
-	DEVICES=`echo $devbase/*`
+	DEVICES=`ls -d $devbase/* 2>/dev/null`
 fi
 
 # Beware of special characters in attributes
