@@ -3327,7 +3327,7 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 	wc->xb.ops = &xb_ops;
 	wc->xb.debug = &debug;
 
-	res = wcxb_init(&wc->xb, KBUILD_MODNAME, 1);
+	res = wcxb_init(&wc->xb, KBUILD_MODNAME, 0);
 	if (res)
 		goto fail_exit;
 
