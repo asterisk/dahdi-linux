@@ -2533,7 +2533,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	wc->xb.pdev = pdev;
 	wc->xb.ops = &xb_ops;
 	wc->xb.debug = &debug;
-	res = wcxb_init(&wc->xb, wc->name, 1);
+	res = wcxb_init(&wc->xb, wc->name, 0);
 	if (res)
 		goto fail_exit;
 
