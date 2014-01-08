@@ -178,7 +178,6 @@ static int yelalarmdebounce = 500; /* RAI(yellow) def to 0.5s AT&T devguide */
 static char *default_linemode = "t1"; /* 'e1', 't1', or 'j1' */
 static int force_firmware;
 static int latency = WCXB_DEFAULT_LATENCY;
-static unsigned int max_latency = WCXB_DEFAULT_MAXLATENCY;
 
 struct t13x_firm_header {
 	u8	header[6];
@@ -2574,9 +2573,6 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 		goto fail_exit;
 	}
 
-	wcxb_set_minlatency(&wc->xb, latency);
-	wcxb_set_maxlatency(&wc->xb, max_latency);
-
 	create_sysfs_files(wc);
 
 	res = t13x_hardware_post_init(wc, &type);
@@ -2735,8 +2731,6 @@ module_param(vpmsupport, int, 0600);
 module_param(force_firmware, int, S_IRUGO);
 module_param(latency, int, S_IRUGO);
 MODULE_PARM_DESC(latency, "How many milliseconds of audio to buffer between card and host (3ms default). This number will increase during runtime, dynamically, if dahdi detects that it is too small. This is commonly refered to as a \"latency bump\"");
-module_param(max_latency, int, 0600);
-MODULE_PARM_DESC(max_latency, "The maximum amount of latency that the driver will permit.");
 
 MODULE_DESCRIPTION("Wildcard Digital Card Driver");
 MODULE_AUTHOR("Digium Incorporated <support@digium.com>");
