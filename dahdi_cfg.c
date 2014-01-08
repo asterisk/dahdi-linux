@@ -219,6 +219,19 @@ static bool are_all_spans_assigned(void)
 	return res;
 }
 
+static bool wait_for_all_spans_assigned(unsigned long timeout_sec)
+{
+	bool all_assigned = are_all_spans_assigned();
+	unsigned int timeout = 10*timeout_sec;
+
+	while (!all_assigned && --timeout) {
+		usleep(100000);
+		all_assigned = are_all_spans_assigned();
+	}
+
+	return all_assigned;
+}
+
 static const char *sigtype_to_str(const int sig)
 {
 	switch (sig) {
@@ -1582,15 +1595,9 @@ int main(int argc, char *argv[])
 	}
 
 	if (!restrict_channels && !only_span) {
-		bool all_assigned = are_all_spans_assigned();
-		unsigned int timeout = 4*5; /* We'll wait 5 seconds */
+		bool all_assigned = wait_for_all_spans_assigned(5);
 
-		while (!all_assigned && --timeout) {
-			usleep(250000);
-			all_assigned = are_all_spans_assigned();
-		}
-
-		if (0 == timeout) {
+		if (!all_assigned) {
 			fprintf(stderr,
 				"Timeout waiting for all spans to be assigned.\n");
 		}
@@ -1673,13 +1680,16 @@ finish:
 	if (-1 == sem_wait(lock)) {
 		error("Failed to wait for dahdi_cfg mutex.\n");
 		exit_code = 1;
-		goto release_sem;
+		goto unlink_sem;
 	}
 
-	for (x=0;x<numdynamic;x++) {
-		/* destroy them all */
-		ioctl(fd, DAHDI_DYNAMIC_DESTROY, &zds[x]);
+	if (!restrict_channels && !only_span) {
+		for (x=0;x<numdynamic;x++) {
+			/* destroy them all */
+			ioctl(fd, DAHDI_DYNAMIC_DESTROY, &zds[x]);
+		}
 	}
+
 	if (stopmode) {
 		for (x=0;x<spans;x++) {
 			if (only_span && lc[x].span != only_span)
@@ -1704,14 +1714,28 @@ finish:
 			goto release_sem;
 		}
 	}
-	for (x=0;x<numdynamic;x++) {
-		if (ioctl(fd, DAHDI_DYNAMIC_CREATE, &zds[x])) {
-			fprintf(stderr, "DAHDI dynamic span creation failed: %s\n", strerror(errno));
-			close(fd);
+
+	if (!restrict_channels && !only_span) {
+
+		sem_post(lock);
+
+		for (x=0;x<numdynamic;x++) {
+			if (ioctl(fd, DAHDI_DYNAMIC_CREATE, &zds[x])) {
+				fprintf(stderr, "DAHDI dynamic span creation failed: %s\n", strerror(errno));
+				close(fd);
+				exit_code = 1;
+				goto release_sem;
+			}
+			wait_for_all_spans_assigned(1);
+		}
+
+		if (-1 == sem_wait(lock)) {
+			error("Failed to wait for dahdi_cfg mutex after creating dynamic spans.\n");
 			exit_code = 1;
-			goto release_sem;
+			goto unlink_sem;
 		}
 	}
+
 	for (x=1;x<DAHDI_MAX_CHANNELS;x++) {
 		struct dahdi_params current_state;
 		int master;
@@ -1891,9 +1915,11 @@ finish:
 	exit_code = apply_fiftysix();
 
 release_sem:
-	if (SEM_FAILED != lock) {
+	if (SEM_FAILED != lock)
 		sem_post(lock);
+
+unlink_sem:
+	if (SEM_FAILED != lock)
 		sem_unlink(SEM_NAME);
-	}
 	exit(exit_code);
 }
