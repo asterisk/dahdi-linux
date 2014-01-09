@@ -53,9 +53,9 @@ SPAN_ASSIGNMENTS_KEY=${SPAN_ASSIGNMENTS_KEY:-hwid}
 usage() {
 	echo >&2 "Usage: $0 [options] action [devpath ...]"
 	echo >&2 "       action:"
-	echo >&2 "         set        - set spans to E1/T1 according to configuration"
+	echo >&2 "         set        - set spans to E1/T1 according to /etc/dahdi/span-types.conf"
 	echo >&2 "         list       - human-readable list of all spans"
-	echo >&2 "         dumpconfig - dump current state as new configuration"
+	echo >&2 "         dumpconfig - dump current state in /etc/dahdi/span-types.conf format"
 	echo >&2 ""
 	echo >&2 "       options:"
 	echo >&2 "         -h|--help      - Show this help"
