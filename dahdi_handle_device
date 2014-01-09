@@ -69,7 +69,7 @@ add)
 			dahdi_span_assignments add "/sys$DEVPATH"
 		else
 			# No configuration. No order guaranteed
-			dahdi_span_assignments auto
+			dahdi_span_assignments auto "/sys$DEVPATH"
 		fi
 	) 2>&1 < /dev/null | $LOGGER &
 	;;
