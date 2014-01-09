@@ -141,7 +141,9 @@ as specified by the generator arguments.  Each generator is a perl class
 in Dahdi::Config::Gen namespace.  The generator names on the command line
 are the class names in lowercase.
 
-The following generators are currently implemented: system, chandahdi, unicall, users.
+The following generators are currently implemented: system, modules, spantypes,
+assignedspans, chandahdi, unicall, users.
+
 For further documentation on each, please user perldoc on the relevant
 class. E.g: C<perldoc Dahdi::Config::Gen::Chandahdi>
 
