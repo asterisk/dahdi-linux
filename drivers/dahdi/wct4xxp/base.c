@@ -1121,15 +1121,10 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	struct t4 *wc = chan->pvt;
 	struct t4_span *tspan = container_of(chan->span, struct t4_span, span);
 	int channel;
-	const struct dahdi_echocan_ops *ops;
-	const struct dahdi_echocan_features *features;
 	const bool alaw = (chan->span->deflaw == 2);
 
 	if (!vpmsupport || !wc->vpm)
 		return -ENODEV;
-
-	ops = &vpm_ec_ops;
-	features = &vpm_ec_features;
 
 	if (ecp->param_count > 0) {
 		dev_warn(&wc->dev->dev, "%s echo canceller does not support "
@@ -1139,8 +1134,8 @@ static int t4_echocan_create(struct dahdi_chan *chan,
 	}
 
 	*ec = tspan->ec[chan->chanpos - 1];
-	(*ec)->ops = ops;
-	(*ec)->features = *features;
+	(*ec)->ops = &vpm_ec_ops;
+	(*ec)->features = vpm_ec_features;
 
 	channel = has_e1_span(wc) ? chan->chanpos : chan->chanpos + 4;
 
