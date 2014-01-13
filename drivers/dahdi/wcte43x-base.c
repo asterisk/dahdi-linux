@@ -648,15 +648,10 @@ static int t43x_echocan_create(struct dahdi_chan *chan,
 	struct t43x *wc = chan->pvt;
 	struct t43x_span *ts = container_of(chan->span, struct t43x_span, span);
 	int channel = chan->chanpos - 1;
-	const struct dahdi_echocan_ops *ops;
-	const struct dahdi_echocan_features *features;
 	const bool alaw = (chan->span->deflaw == 2);
 
 	if (!vpmsupport || !wc->vpm)
 		return -ENODEV;
-
-	ops = &vpm_ec_ops;
-	features = &vpm_ec_features;
 
 	if (ecp->param_count > 0) {
 		dev_warn(&wc->xb.pdev->dev,
@@ -666,8 +661,8 @@ static int t43x_echocan_create(struct dahdi_chan *chan,
 	}
 
 	*ec = ts->ec[channel];
-	(*ec)->ops = ops;
-	(*ec)->features = *features;
+	(*ec)->ops = &vpm_ec_ops;
+	(*ec)->features = vpm_ec_features;
 
 	channel += (32*chan->span->offset);
 	vpm450m_set_alaw_companding(wc->vpm, channel, alaw);
