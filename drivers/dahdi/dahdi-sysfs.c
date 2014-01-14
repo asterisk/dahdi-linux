@@ -629,7 +629,8 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 {
 	struct dahdi_device *const ddev = to_ddev(dev);
 	int ret;
-	struct dahdi_span *span;
+	struct dahdi_span *span = NULL;
+	struct dahdi_span *cur;
 	unsigned int local_span_number;
 	char spantype_name[80];
 	enum spantypes spantype;
@@ -645,9 +646,18 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 	}
 
-	list_for_each_entry(span, &ddev->spans, device_node) {
-		if (local_spanno(span) == local_span_number)
+	list_for_each_entry(cur, &ddev->spans, device_node) {
+		if (local_spanno(cur) == local_span_number) {
+			span = cur;
 			break;
+		}
+	}
+
+	if (!span || (local_spanno(span) != local_span_number)) {
+		module_printk(KERN_WARNING,
+				"%d is not a valid local span number "
+				"for this device.\n", local_span_number);
+		return -EINVAL;
 	}
 
 	if (test_bit(DAHDI_FLAGBIT_REGISTERED, &span->flags)) {
@@ -656,12 +666,6 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 	}
 
-	if (local_spanno(span) != local_span_number) {
-		module_printk(KERN_WARNING,
-				"%d is not a valid local span number "
-				"for this device.\n", local_span_number);
-		return -EINVAL;
-	}
 
 	if (!span->ops->set_spantype) {
 		module_printk(KERN_WARNING, "Span %s does not support "
