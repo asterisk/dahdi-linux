@@ -231,7 +231,7 @@ ifeq (,$(wildcard $(DESTDIR)$(CONFIG_FILE)))
 	$(INSTALL) -m 644 system.conf.sample $(DESTDIR)$(CONFIG_FILE)
 endif
 	install -d $(DESTDIR)$(DATA_DIR)
-	install $(ASSIGNED_DATA_SCRIPTS) $(DESTDIR)$(DATA_DIR)/
+	tar cf - -C hotplug $(ASSIGNED_DATA_SCRIPTS) | tar xf - -C $(DESTDIR)$(DATA_DIR)/
 	install $(ASSIGNED_UTILS) $(DESTDIR)/$(BIN_DIR)/
 	install -m 644 $(ASSIGNED_CONF) $(DESTDIR)/$(CONFIG_DIR)/
 
