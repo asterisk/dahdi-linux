@@ -1,0 +1,49 @@
+.TH "DAHDI_WAITFOR_SPAN_ASSIGNMENTS" "8" "22 Jan 2014" "" ""
+
+.SH NAME
+dahdi_waitfor_span_assignments \- wait for DAHDI spans to get (un)assigned
+.SH SYNOPSIS
+
+.B dahdi_span_assignments assigned
+
+.B dahdi_span_assignments unassigned
+
+.SH DESCRIPTION
+DAHDI spans get assigned / unassigned asynchronously.
+
+.B dahdi_span_assignments
+is a helper script that allows running commands after all the spans have
+been assigned or unassigned.
+
+It takes a single command: \fBassigned\fR or \fBunassigned\fR and waits
+(up until a timeout of 5 seconds) for all the DAHDI spans in the system
+to do so.
+
+Note that if the system has a span that will not get assigned
+automatically (e.g.: it's not in assigned\-spans.conf), this program
+does not know and will wait until a timeout.
+
+.SH EXAMPLES
+
+ modprobe wctdm24xxp
+ dahdi_waitfor_span_assignments assigned
+ do_something
+
+ dahdi_span_assignments add
+ dahdi_waitfor_span_assignments assigned
+ do_something_else
+
+ dahdi_span_assignments remove
+ dahdi_span_assignments unassigned
+ do_something_completely_different
+
+.SH SEE ALSO
+dahdi_span_assignments(8)
+
+.SH AUTHOR
+dahdi_waitfor_span_assignments was written by Oron Peled.  This manual
+page was written by Tzafrir Cohen. Permission is granted to copy,
+distribute and/or modify this document under the terms of the GNU
+General Public License, Version 2 any  later version published by the
+Free Software Foundation.
+

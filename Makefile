@@ -112,7 +112,8 @@ ASSIGNED_DATA_SCRIPTS:=\
 	handle_device.d/10-span-types	\
 	handle_device.d/20-span-assignments
 
-ASSIGNED_UTILS:=dahdi_span_assignments dahdi_span_types
+ASSIGNED_UTILS:=dahdi_span_assignments dahdi_span_types \
+	dahdi_waitfor_span_assignments
 ASSIGNED_CONF:=assigned-spans.conf.sample span-types.conf.sample
 
 MAN_PAGES:= \

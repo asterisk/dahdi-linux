@@ -1,0 +1,73 @@
+#! /bin/sh
+
+usage() {
+	echo >&2 "Usage: $0 {assigned|unassigned}"
+	echo >&2 "# wait until all spans known are assigned/unassigned"
+	exit 1
+}
+
+TIMEOUT=5	# How much time to wait for spans
+
+if [ "$#" -lt 1 ]; then
+	usage
+fi
+wanted_event="$1"
+shift
+
+case "$wanted_event" in
+assigned)
+	;;
+unassigned)
+	;;
+*)
+	usage
+	;;
+esac
+
+devbase='/sys/bus/dahdi_devices/devices'
+
+spans_of() {
+	dev="$1"
+	wc -l < "$dev/spantype"
+}
+
+assigned_spans_of() {
+	dev="$1"
+	ls -d "$dev/span-"* 2>/dev/null | wc -l
+}
+
+
+waitfor_span_assignments() {
+	wanted_state="$1"
+	device_list=`ls -d "$devbase/"* 2> /dev/null`
+	finished=''
+	count="$TIMEOUT"
+	echo -n "Waiting for spans to become $wanted_state: "
+	while [ "$count" -gt 0 ]; do
+		finished='yes'
+		for dev in $device_list
+		do
+			spans=`spans_of "$dev"`
+			assigned_spans=`assigned_spans_of "$dev"`
+			if [ "$wanted_state" = 'assigned' -a "$assigned_spans" -ne "$spans" ]; then
+				finished='no'
+			elif [ "$wanted_state" = 'unassigned' -a "$assigned_spans" -ne 0 ]; then
+				finished='no'
+			fi
+		done
+		if [ "$finished" = 'yes' ]; then
+			break
+		else
+			sleep 1
+			echo -n "."
+		fi
+		count=`expr "$count" - 1`
+	done
+	if [ "$finished" = 'yes' ]; then
+		echo "done"
+	else
+		echo "timeout"
+	fi
+}
+
+waitfor_span_assignments "$wanted_event"
