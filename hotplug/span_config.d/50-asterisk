@@ -1,0 +1,9 @@
+#! /bin/sh
+
+if [ "$ACTION" != 'add' ]; then
+	# Nothing to do here
+	exit 0
+fi
+
+# Add to asterisk
+asterisk -rx "dahdi create channels $BASECHAN $ENDCHAN"

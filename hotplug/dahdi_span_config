@@ -20,6 +20,7 @@ exec 2> /dev/null
 
 # Our directory in the beginning, so we can use local lab setup
 PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
+export PATH
 
 set -e
 
@@ -41,66 +42,35 @@ fi
 DAHDICONFDIR='/etc/dahdi'
 export DAHDICONFDIR
 
-run_dahdi_cfg() {
-	echo "dahdi_cfg: span $spanno <$basechan-$endchan> ($DEVPATH)"
-	dahdi_cfg -c "$cfg_file" -S "$spanno" -C "$basechan-$endchan"
-}
-
-configure_span() {
-	span_devpath="$1"
-	# Sanity check
-	checkit=`"dahdi_cfg" --help 2>&1 | grep -- '-S' | wc -l`
-	if [ "$checkit" != 1 ]; then
-		echo "Bad dahdi_cfg (no -S support). Skipping"
-		exit 0
-	fi
-
-	# Set variables
-	spanno=`echo "$span_devpath" | sed 's,.*/span-,,'`
-	basechan=`cat "$span_devpath/basechan"`
-	channels=`cat "$span_devpath/channels"`
-	endchan=`expr "$basechan" + "$channels" - 1`
-
-	# Configure DAHDI
-	cfg_file="$DAHDICONFDIR/system.conf"
-	if [ -r "$cfg_file" ]; then
-		run_dahdi_cfg
-	else
-		echo "Using auto-generated config for dahdi_cfg"
-		cfg_file='-'
-		DAHDI_CONF_FILE="$cfg_file" dahdi_genconf system | run_dahdi_cfg
-	fi
-	fxotune_cfg='/etc/fxotune.conf'
-	if [ -r "$fxotune_cfg" ]; then
-		echo "fxotune: span $spanno <$basechan-$endchan> ($DEVPATH)"
-		fxotune -s -b "$basechan" -e "$endchan"
-	fi
-
-	# Add to asterisk
-	asterisk -rx "dahdi create channels $basechan $endchan"
+run_parts() {
+	# Have our internal "run-parts" (adapted from Fedora),
+	# as implementations differ
+	for i in `LC_ALL=C; ls -d $dir/span_config.d/*[!~,] 2>/dev/null` ; do
+		[ -d "$i" ] && continue
+		[ ! -x "$i" ] && continue
+		# Don't run *.{rpmsave,rpmorig,rpmnew,swp,cfsaved} files
+		case "$i" in
+		*.cfsaved|*.rpmsave|*.rpmorig|*.rpmnew|*.swp|*,v)
+			continue
+			;;
+		esac
+		#echo "D: Running '$i'"
+		"$i"
+	done
 }
 
 case "$ACTION" in
 add)
 	echo "$ACTION: $DEVPATH" | $LOGGER
-
-	# Old driver. These scripts probably won't work anyway.
-	if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
-		if [ -f /sys/module/dahdi ]; then
-			$LOGGER "Old driver (no auto_assign_spans parameter). Skip $DEVPATH"
-			exit 0
-		fi
-	fi
-
-	if [ $(cat /sys/module/dahdi/parameters/auto_assign_spans) -eq 1 ]; then
-		$LOGGER "auto_assign_spans=1. Skip $DEVPATH"
-		exit 0
-	fi
-
-	# Can have alternate dahdi configuration directory for debugging
-	# export DAHDICONFDIR="/tmp/xortel/dahdi"
-
-	configure_span "/sys$DEVPATH" 2>&1 | $LOGGER
+	# Set variables
+	span_devpath="/sys$DEVPATH"
+	SPANNO=`echo "$span_devpath" | sed 's,.*/span-,,'`
+	BASECHAN=`cat "$span_devpath/basechan"`
+	CHANNELS=`cat "$span_devpath/channels"`
+	ENDCHAN=`expr "$BASECHAN" + "$CHANNELS" - 1`
+	export SPANNO BASECHAN CHANNELS ENDCHAN
+	# Background run -- don't block udev
+	run_parts 2>&1 < /dev/null | $LOGGER &
 	;;
 remove|online|offline)
 	# Nothing to do yet...

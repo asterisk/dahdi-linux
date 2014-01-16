@@ -1,0 +1,8 @@
+#! /bin/sh
+
+if [ -r "$DAHDICONFDIR/assigned-spans.conf" ]; then
+	dahdi_span_assignments add "/sys$DEVPATH"
+else
+	# No configuration. No order guaranteed
+	dahdi_span_assignments auto "/sys$DEVPATH"
+fi

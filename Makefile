@@ -103,7 +103,15 @@ endif
 ifeq	(1,$(PBX_HDLC))
 	BINS	+= sethdlc
 endif
-ASSIGNED_DATA_SCRIPTS:=dahdi_handle_device dahdi_span_config
+ASSIGNED_DATA_SCRIPTS:=\
+	dahdi_handle_device	\
+	dahdi_span_config	\
+	span_config.d/10-dahdi-cfg	\
+	span_config.d/20-fxotune	\
+	span_config.d/50-asterisk	\
+	handle_device.d/10-span-types	\
+	handle_device.d/20-span-assignments
+
 ASSIGNED_UTILS:=dahdi_span_assignments dahdi_span_types
 ASSIGNED_CONF:=assigned-spans.conf.sample span-types.conf.sample
 

@@ -1,0 +1,12 @@
+#! /bin/sh
+
+if [ "$ACTION" != 'add' ]; then
+	# Nothing to do here
+	exit 0
+fi
+
+fxotune_cfg='/etc/fxotune.conf'
+if [ -r "$fxotune_cfg" ]; then
+	echo "fxotune: span $SPANNO <$BASECHAN-$ENDCHAN> ($DEVPATH)"
+	fxotune -s -b "$BASECHAN" -e "$ENDCHAN"
+fi

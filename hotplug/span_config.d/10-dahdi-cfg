@@ -1,0 +1,28 @@
+#! /bin/sh
+
+if [ "$ACTION" != 'add' ]; then
+	# Nothing to do here
+	exit 0
+fi
+
+# Sanity check
+checkit=`"dahdi_cfg" --help 2>&1 | grep -- '-S' | wc -l`
+if [ "$checkit" != 1 ]; then
+	echo "Bad dahdi_cfg (no -S support). Skipping"
+	exit 0
+fi
+
+run_dahdi_cfg() {
+	echo "dahdi_cfg: span $SPANNO <$BASECHAN-$ENDCHAN> ($DEVPATH)"
+	dahdi_cfg -c "$cfg_file" -S "$SPANNO" -C "$BASECHAN-$ENDCHAN"
+}
+
+# Configure DAHDI
+cfg_file="$DAHDICONFDIR/system.conf"
+if [ -r "$cfg_file" ]; then
+	run_dahdi_cfg
+else
+	echo "Using auto-generated config for dahdi_cfg"
+	cfg_file='-'
+	DAHDI_CONF_FILE="$cfg_file" dahdi_genconf system | run_dahdi_cfg
+fi

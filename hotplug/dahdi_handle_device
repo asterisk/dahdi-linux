@@ -20,6 +20,7 @@ exec 2> /dev/null
 
 # Our directory in the beginning, so we can use local lab setup
 PATH="$dir:/usr/sbin:/sbin:/usr/bin:/bin"
+export PATH
 
 set -e
 
@@ -35,43 +36,44 @@ if [ "$DAHDI_UDEV_DISABLE_DEVICES" = 'yes' ]; then
 	exit 0
 fi
 
+# Check if we can safely do our job
+if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
+	echo "Old driver (no auto_assign_spans parameter). Skip $DEVPATH" | $LOGGER
+	exit 0
+fi
+if [ `cat /sys/module/dahdi/parameters/auto_assign_spans` -eq 1 ]; then
+	echo "auto_assign_spans=1. Skip $DEVPATH" | $LOGGER
+	exit 0
+fi
+
 # Can we pass a different value so we can use
 # alternate (testing) configuration?
 # Meanwhile, make it hard-coded.
 DAHDICONFDIR='/etc/dahdi'
 export DAHDICONFDIR
 
+run_parts() {
+	# Have our internal "run-parts" (adapted from Fedora),
+	# as implementations differ
+	for i in `LC_ALL=C; ls -d $dir/handle_device.d/*[!~,] 2>/dev/null` ; do
+		[ -d "$i" ] && continue
+		[ ! -x "$i" ] && continue
+		# Don't run *.{rpmsave,rpmorig,rpmnew,swp,cfsaved} files
+		case "$i" in
+		*.cfsaved|*.rpmsave|*.rpmorig|*.rpmnew|*.swp|*,v)
+			continue
+			;;
+		esac
+		echo "D: Running '$i'"
+		"$i"
+	done
+}
+
 case "$ACTION" in
 add)
 	echo "$ACTION: $DEVPATH" | $LOGGER
-
-	# Check if we can safely do our job
-	if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
-		if [ -f /sys/module/dahdi ]; then
-			$LOGGER "Old driver (no auto_assign_spans parameter). Skip $DEVPATH"
-			exit 0
-		fi
-	fi
-	if [ `cat /sys/module/dahdi/parameters/auto_assign_spans` -eq 1 ]; then
-		echo "auto_assign_spans=1. Skip $DEVPATH" | $LOGGER
-		exit 0
-	fi
-
-	# Can have alternate dahdi configuration directory for debugging
-	# export DAHDICONFDIR="/tmp/xortel/dahdi"
-
-	# Don't block udev for too long
-	(
-		if [ -r "$DAHDICONFDIR/span-types.conf" ]; then
-			dahdi_span_types set "/sys$DEVPATH"
-		fi
-		if [ -r "$DAHDICONFDIR/assigned-spans.conf" ]; then
-			dahdi_span_assignments add "/sys$DEVPATH"
-		else
-			# No configuration. No order guaranteed
-			dahdi_span_assignments auto "/sys$DEVPATH"
-		fi
-	) 2>&1 < /dev/null | $LOGGER &
+	# Background run -- don't block udev
+	run_parts 2>&1 < /dev/null | $LOGGER &
 	;;
 remove)
 	# Nothing to do yet...

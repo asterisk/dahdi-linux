@@ -1,0 +1,5 @@
+#! /bin/sh
+
+if [ -r "$DAHDICONFDIR/span-types.conf" ]; then
+	dahdi_span_types set "/sys$DEVPATH"
+fi
