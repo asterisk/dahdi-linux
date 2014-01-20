@@ -54,7 +54,7 @@ sub generator_list($) {
 		}
 	} else {
 		# No files given. Use the defaults.
-		@genlist = ('spantypes', 'assignedspans', 'system', 'chandahdi');
+		@genlist = ('assignedspans', 'system', 'chandahdi');
 		if($gconfig->{'pri_connection_type'} eq 'R2') {
 			push @genlist, 'unicall';
 		}
