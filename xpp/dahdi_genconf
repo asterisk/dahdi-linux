@@ -11,16 +11,29 @@ use strict;
 use File::Basename;
 BEGIN { my $dir = dirname($0); unshift(@INC, "$dir", "$dir/perl_modules"); }
 
-use Getopt::Std;
+use Getopt::Long;
 use Dahdi;
 use Dahdi::Xpp;
 use Dahdi::Config::Gen;
 use Dahdi::Config::Params;
 
+Getopt::Long::Configure ("bundling");
+
 my $version = '1';	# Functionality version (integer)
 my $revision = '$Revision$';
 
 my %opts;
+
+sub usage {
+	warn "Usage: $0 [options] <generators>\n";
+	warn "          Options:\n";
+	warn "            --line-mode=<E1|T1|J1>   - Also generate span-types.conf with default line mode\n";
+	warn "            -F|--freepbx             - Modify configuration for Freepbx (skip FXS channels)\n";
+	warn "            -v|--verbose             - Be versbose, show generated files\n";
+	warn "            -V|--version             - Show version and exit\n";
+	warn "            -h|--help                - Show this message\n";
+	exit 1;
+}
 
 sub set_defaults {
 	my $default_file = $ENV{GENCONF_PARAMETERS} || "/etc/dahdi/genconf_parameters";
@@ -44,12 +57,24 @@ sub spans_prep($@) {
 	}
 }
 
+sub munge_spantypes {
+	if ($opts{'line-mode'}) {
+		print "Will generate span-types.conf with line-mode=$opts{'line-mode'}\n"
+			if $opts{'verbose'};
+		return "spantypes=line-mode=$opts{'line-mode'}";
+	} else {
+		print "Will generate span-types.conf\n" if $opts{'verbose'};
+		return "spantypes";
+	}
+}
+
 sub generator_list($) {
 	my $gconfig = shift || die;
 	my @genlist;
 
 	if (@ARGV) {
 		for my $gen (@ARGV) {
+			$gen = munge_spantypes() if $gen eq 'spantypes';
 			push @genlist, $gen;
 		}
 	} else {
@@ -58,6 +83,7 @@ sub generator_list($) {
 		if($gconfig->{'pri_connection_type'} eq 'R2') {
 			push @genlist, 'unicall';
 		}
+		push(@genlist, munge_spantypes()) if $opts{'line-mode'};
 	}
 	return @genlist;
 }
@@ -93,7 +119,16 @@ sub generate_files($@) {
 	}
 }
 
-getopts('vVF', \%opts) || die "$0: Bad option\n";
+GetOptions(\%opts,
+		"line-mode=s",
+		"h|help",
+		"v|verbose",
+		"V|version",
+		"F|freepbx",
+	) or usage;
+
+usage if $opts{h};
+
 if($opts{'V'}) {
 	my $revstr = $revision;
 	$revstr =~ s/[^$]*\$[^:]+:\s*//;
@@ -156,19 +191,27 @@ a comma separated list of options to the generator name. E.g:
 
 =over 4
 
-=item -V
+=item -V --version
 
 Version -- print version string and exit.
 
-=item -v
+=item -v --verbose
 
 Verbose -- sets the C<'verbose'> option for all generators.
 
-=item -F
+=item -F --freepbx
 
 Freepbx -- sets the C<'freepbx'> option for all generators.
 Currently, chandahdi is affected.
 
+=item --line-mode=I<mode>
+
+I<mode> may be E1, J1 or T1.
+
+Enables the generator B<spantypes> and the option B<line-mode> to it.
+(Equivalent to the option C<--line-mode> to C<dahdi_span_types>). This
+will generate a C<span-types.conf> file with a single wildcard line
+setting the line mode to I<mode>.
 
 =back
 

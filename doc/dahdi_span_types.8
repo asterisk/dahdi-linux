@@ -40,6 +40,16 @@ changing anything.
 During \fB"set"\fR operation, show the actions that are being performed.
 .RE
 
+.BI \-\-line\-mode= <E1|T1|J1>
+.RS
+During \fB"dumpconfig"\fR operation, force special generation mode:
+.IP \(bu 3
+First, generates a "wildcard" entry with the fiven \fBline\-mode\fR.
+.IP \(bu 3
+Comment out all span entries. Each of them may be manually un-commented
+to override the "wildcard".
+.RE
+
 .SH SUB-COMMANDS
 .B set
 .RS
