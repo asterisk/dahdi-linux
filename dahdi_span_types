@@ -27,6 +27,19 @@
 #   - "@location"  - Location attribute from sysfs (embeded inside '<>')
 #   - "/devpath"   - The sysfs absolute devpath
 #
+# * Wildcard are allowed in the configuration file:
+#   - In the device specifiers (keys)
+#   - In the span numbers
+#   - Example for "match-all":    *   *:T1
+#
+# * During "set":
+#   - If there are multiple matches, for a span, all are applied
+#   - They are always applied in their order in the configuration file
+#   - This means the last match wins
+#   - Example:
+#         *                   *:T1        # All span on all devices are T1
+#         usb:X1234567        [34]:E1	   # Except spans 3,4 on specific device
+#
 # * During "dumpconfig", for each device we take the first available key:
 #   - The preference is: "hwid" or else "@location" or else "/devpath"
 #   - This can be overriden via the SPAN_ASSIGNMENTS_KEY environment variable
@@ -34,6 +47,8 @@
 #
 # Command line options:
 #  - The '-h|--help' show a usage message.
+#  - The '-v|--verbose' show debugging messages (on stderr)
+#  - The '-n|--dry-run' During "set", only show what would be done
 #  - The '-k <key>|--key <key>' overrides the SPAN_ASSIGNMENTS_KEY environment
 #    variable.
 #
@@ -59,12 +74,14 @@ usage() {
 	echo >&2 ""
 	echo >&2 "       options:"
 	echo >&2 "         -h|--help      - Show this help"
+	echo >&2 "         -v|--verbose'  - Show debugging messages (on stderr)"
+	echo >&2 "         -n|--dry-run'  - During 'set', only show what would be done"
 	echo >&2 "         -k|--key <k>   - Override prefered key during dumpconfig action"
 	exit 1
 }
 
 # Parse command line options
-TEMP=`getopt -o hk: --long help,key: -n "$0" -- "$@"`
+TEMP=`getopt -o hnvk: --long help,dry-run,verbose,key: -n "$0" -- "$@"`
 if [ $? != 0 ]; then
 	echo >&2 "Bad options"
 	usage
@@ -77,6 +94,14 @@ while true ; do
 	case "$1" in
 	-h|--help)
 		usage
+		;;
+	-n|--dry-run)
+		shift
+		dry_run=true
+		;;
+	-v|--verbose)
+		shift
+		verbose=true
 		;;
 	-k|--key)
 		SPAN_ASSIGNMENTS_KEY="$2"
@@ -138,11 +163,12 @@ show_spantypes() {
 		cat "$device/spantype" | while read st; do
 			case "$st" in
 			*:[ETJ]1)
-				printf "%-10s %-20s %s\n" \
-					"$st" "[$hardware_id]" "$location"
+				printf "%-10s %-20s %-30s %s\n" \
+					"$st" "[$hardware_id]" "$location" \
+					"$devpath"
 				;;
 			esac
-		done | sort -n
+		done
 	done
 }
 
@@ -185,70 +211,78 @@ filter_conf() {
 	sed -e 's/#.*//' -e '/^[ \t]*$/d' "$DAHDISPANTYPESCONF"
 }
 
-conf_spans() {
-	hardware_id="$1"
-	location="$2"
-	devpath="$3"
-	filter_conf | (
-		# Collect device spans
-		# in a subshell, so $SPANS is not lost
-		SPANS=''
-		while read id spans; do
+handle_span() {
+	device="$1"
+	spantype="$2"
+	attr_file="$device/spantype"
+	devpath=`cd "$device" && pwd -P`
+	devname=`echo "$device" | sed "s,$devbase/,,"`
+	location='@'`attr_clean "$device/location"`
+	hardware_id=`attr_clean "$device/hardware_id"`
+	spanno=`echo "$spantype" | cut -d: -f1`
+	#echo >&2 "DEBUG: $device $spanno ($spantype)"
+	filter_conf | while read id span_spec; do
+			sn=`echo "$span_spec" | cut -d: -f1`
+			val=`echo "$span_spec" | cut -d: -f2`
+			case "$spanno" in
+			$sn)
+				;;
+			*)
+				#echo >&2 "no-match($device $spanno): $sn"
+				continue
+				;;
+			esac
+			found=no
 			# GLOBBING
 			case "$location" in
 			$id)
-				#echo >&2 "match($id): $spans"
-				SPANS="$SPANS $spans"
+				#echo >&2 "match($id): $span_spec"
+				found=yes
 				;;
 			esac
 			case "$hardware_id" in
 			$id)
-				#echo >&2 "match([$id]): $spans"
-				SPANS="$SPANS $spans"
+				#echo >&2 "match([$id]): $span_spec"
+				found=yes
 				;;
 			esac
 			case "$devpath" in
 			$id)
-				#echo >&2 "match([$id]): $spans"
-				SPANS="$SPANS $spans"
+				#echo >&2 "match([$id]): $span_spec"
+				found=yes
 				;;
 			esac
-		done
-		echo "$SPANS"
-	)
-}
-
-device_set_spantype() {
-	device="$1"
-	attr_file="$device/spantype"
-	devpath=`cd "$device" && pwd -P`
-	location='@'`attr_clean "$device/location"`
-	hardware_id=`attr_clean "$device/hardware_id"`
-	spanspecs=`conf_spans "$hardware_id" "$location" "$devpath"`
-	#echo >&2 "MATCHED($device): $spanspecs"
-	cut -d: -f1 "$attr_file" | while read spanno; do
-			for sp in $spanspecs
-			do
-				s=`echo "$sp" | cut -d: -f1`
-				v=`echo "$sp" | cut -d: -f2`
-				case "$spanno" in
-				$s)
-					#echo >&2 "conf($attr_file): $spanno:$v"
-					echo "$spanno:$v" > "$attr_file"
-					;;
-				esac
-			done
+			if [ "$found" = 'yes' ]; then
+				if [ "$dry_run" = 'true' -o "$verbose" = 'true' ]; then
+					echo >&2 "Set $devname span $spanno = $val"
+				fi
+				if [ "$dry_run" != 'true' ]; then
+					echo "$spanno:$val" > "$attr_file"
+				fi
+			fi
 		done
 }
 
-set_spantypes() {
+set_all_devices() {
 	if [ ! -f "$DAHDISPANTYPESCONF" ]; then
 		echo >&2 "$0: Missing configuration '$DAHDISPANTYPESCONF'"
 		exit 1
 	fi
 	for device in $DEVICES
 	do
-		device_set_spantype "$device"
+		devname=`echo "$device" | sed "s,$devbase/,,"`
+		cat "$device/spantype" | while read spantype; do
+			case "$spantype" in
+			*:[ETJ]1)
+				handle_span "$device" "$spantype"
+				;;
+			*)
+				if [ "$dry_run" = 'true' -o "$verbose" = 'true' ]; then
+					echo >&2 "Skipping non-E1/T1/J1 span ($devname -- $spantype)"
+				fi
+				;;
+			esac
+		done
 	done
 }
 
@@ -260,7 +294,7 @@ dumpconfig)
 	dump_config
 	;;
 set)
-	set_spantypes
+	set_all_devices
 	;;
 *)
 	usage

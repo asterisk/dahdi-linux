@@ -1,27 +1,46 @@
-.TH "SPAN_TYPES" "8" "13 Oct 2013" "" ""
+.TH "DAHDI_SPAN_TYPES" "8" "23 Jan 2014" "" ""
 
 .SH NAME
-dahdi_span_types \- set DAHDI spans properties before registration (E1/T1)
+dahdi_span_types \- set line modes of DAHDI spans before assignment
 .SH SYNOPSIS
 
-.B dahdi_span_types <list|dumpconfig|set> [\fIdevpath \fB[\fIdevpath \fB...]]
+.B dahdi_span_types [\fIoptions\fB] <list|dumpconfig|set> \fB[\fIdevpath \fB...]
 
 .SH DESCRIPTION
-The span type (E1/T1/J1) must be set to a span before registering it
-with DAHDI, as E1 spans use more channels. \fBdahdi_span_types\fR applies the
-span type configuration to an unregistered span.
+The span type (the line mode: E1/T1/J1) must be set to a span before
+DAHDI assigns it a span number, as E1 spans use more channels.
+\fBdahdi_span_types\fR applies the span type configuration to an
+un-assigned span.
 
 Using it only makes sense when the kernel module parameter
-\fBdahdi.auto_assign_span\fR is unset, otherwise the DAHDI spans register
-automatically.
+\fBdahdi.auto_assign_span\fR is unset, otherwise DAHDI automatically
+assign span numbers during device registration.
 
-.SH OPTIONS
 .B dahdi_span_types
 takes a command and an optional list of devices. If no device is given,
 the command is applied to all devices.
 
 The device is marked as a path in the SysFS tree.
 
+.SH OPTIONS
+
+.B -h|--help
+.RS
+Output usage message and exit
+.RE
+
+.B -n|--dry-run
+.RS
+During \fB"set"\fR operation, only show what would be done, without actually
+changing anything.
+.RE
+
+.B -v|--verbose
+.RS
+During \fB"set"\fR operation, show the actions that are being performed.
+.RE
+
+.SH SUB-COMMANDS
 .B set
 .RS
 Reads settings from \fBspan-types.conf\fR and applies them to the
@@ -31,8 +50,8 @@ specified).
 
 .B list
 .RS
-List types for all spans in the system which may be set with dahdi_span_types
-(E1/T1/J1 spans).
+List line modes for all spans in the system which may be set with
+dahdi_span_types (E1/T1/J1 spans).
 .RE
 
 .B dumpconfig
@@ -46,8 +65,9 @@ uses this command internally.
 .RE
 
 .SH CONFIGURATION
+.SS General structure
 .B span-types.conf
-is a file with lines specifying registration of spans.
+is a file with lines specifying line modes of spans.
 
 Empty lines or lines beginning with '#' are ignored.
 
@@ -56,7 +76,7 @@ Each line is in the format of:
 .I ID		spanspec ...
 
 The \fIID\fR field specifies the DAHDI device and the \fIspanspecs\fR
-define how to register its spans. A line may have multiple
+define the line modes of its spans. A line may have multiple
 \fIspanspecs\fR in a single line (though dumpconfig generates a
 configuration with one per line).
 
@@ -66,8 +86,8 @@ software readable serial number or whatever) or the location in which
 it is installed on the system. The former makes it simpler to change
 connector / slot whereas the latter makes it simpler to replace a unit.
 
-The value in this field is matched (when the commands \fBadd\fR and
-\fBremove\fR) are used) to the following values:
+The value in this field is matched (when the command \fBset\fR is
+used) to the following values:
 
  \fIhwid\fR
  \fB@\fIlocation\fR
@@ -75,28 +95,49 @@ The value in this field is matched (when the commands \fBadd\fR and
 
 See above for their descriptions. The value may include shell wildcards:
 *, ? and [], which are used in the match. The values to be matched are
-first cleaned up: '!' is replaced with '/' and any character beyond
-"a-zA-Z0-9/:.-" is removed.
+first cleaned up: '!' is replaced with '/' and any character not in
+"a-zA-Z0-9/:.-" is replaced by "_".
+
+Note that while span\-types.conf allows an arbitrarily-complex
+combination of E1, J1 and T1 ports, it would normally have just a single
+wildcard line setting the line mode (the first line in the example below).
 
 .SS Span Specification
 
 Each line should have one or more span specifications: this is the value
-used to register a span with DAHDI in the SysFS interface. A
-specification has three colon-separated numbers:
+used to set span type with DAHDI in the SysFS interface. A
+specification has two colon-separated fields:
 
 .I rel_span_no:span_type
 
-for instance, the following are four span specifications specify ports 1 and 2 as E1 and ports 3 and 4 as T1: [12]:E1 [34]:T1 .
+for instance, the following are four span specifications specify ports 1
+and 2 as E1 and ports 3 and 4 as T1: [12]:E1 [34]:T1 .
 
 .B rel_span_no
 .RS
 The relative number of the span in the device. E.g.: port number.
+This field may contain shell wildcards (*, ? and [])
 .RE
 
 .B span_type
 .RS
 E1/T1/J1
 .RE
+
+.SS Multiple matches
+During \fBset\fR operation, the \fBdahdi_span_types\fR applies all
+matching settings to a span. This is done in the order of lines in the
+configuration files.
+
+Thus, if there are multiple matches to a span -- the last match
+will \fIwin\fR (all will be applied to the kernel in order. The last
+one in the file will be applied last).
+
+Example:
+.EX
+*             *:T1      # All spans on all devices will be T1
+usb:X1234567  [34]:E1   # Except spans 3,4 on the device which will be E1
+.EE
 
 
 .SH ENVIRONMENT
@@ -109,14 +150,14 @@ overridden from the environment.
 
 .B DAHDISPANTYPESCONF
 .RS
-The path to span-types.conf resides. /etc/dahdi/span-types.conf if
+The path to span-types.conf resides. /etc/dahdi/span\-types.conf if
 not overridden from the environment.
 .RE
 
 
 .SH FILES
 
-.B /etc/dahdi/span-types.conf
+.B /etc/dahdi/span\-types.conf
 .RS
 The default location for the configuration file.
 .RE
@@ -129,8 +170,8 @@ files, among others:
 .B spantype
 .RS
 read/write file. Reading from it returns current configuration for spans
-of the device. Span-specifications can be written to it to change types
-(but only for a span that is not registered).
+of the device. Span-specifications can be written to it to change line
+modes (but only for a span that is not assigned yet).
 .RE
 
 
