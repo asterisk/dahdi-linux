@@ -7373,7 +7373,7 @@ int dahdi_assign_device_spans(struct dahdi_device *ddev)
 	return 0;
 }
 
-static int auto_assign_spans;
+static int auto_assign_spans = 1;
 static const char *UNKNOWN = "";
 
 /**
