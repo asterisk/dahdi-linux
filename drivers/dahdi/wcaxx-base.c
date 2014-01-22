@@ -3872,9 +3872,16 @@ static void wcaxx_back_out_gracefully(struct wcaxx *wc)
 	kfree(wc);
 }
 
+static void wcaxx_handle_error(struct wcxb *xb)
+{
+	struct wcaxx *wc = container_of(xb, struct wcaxx, xb);
+	wc->ddev->irqmisses++;
+}
+
 static const struct wcxb_operations wcxb_operations = {
 	.handle_receive = wcaxx_handle_receive,
 	.handle_transmit = wcaxx_handle_transmit,
+	.handle_error = wcaxx_handle_error,
 };
 
 struct cmd_results {
