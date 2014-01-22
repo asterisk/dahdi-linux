@@ -144,10 +144,17 @@ static void t43x_handle_transmit(struct wcxb *xb, void *vfp);
 static void t43x_handle_receive(struct wcxb *xb, void *vfp);
 static void t43x_handle_interrupt(struct wcxb *xb, u32 pending);
 
+static void t43x_handle_error(struct wcxb *xb)
+{
+	struct t43x *wc = container_of(xb, struct t43x, xb);
+	wc->ddev->irqmisses++;
+}
+
 static struct wcxb_operations xb_ops = {
 	.handle_receive = t43x_handle_receive,
 	.handle_transmit = t43x_handle_transmit,
 	.handle_interrupt = t43x_handle_interrupt,
+	.handle_error = t43x_handle_error,
 };
 
 /* Maintenance Mode Registers */

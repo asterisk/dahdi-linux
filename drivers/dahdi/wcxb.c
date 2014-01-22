@@ -397,6 +397,12 @@ static irqreturn_t _wcxb_isr(int irq, void *dev_id)
 		if (pending & DESC_UNDERRUN) {
 			u32 reg;
 
+			/* Report the error in case drivers have any custom
+			 * methods for indicating potential data corruption. An
+			 * underrun means data loss in the TDM channel. */
+			if (xb->ops->handle_error)
+				xb->ops->handle_error(xb);
+
 			/* bump latency */
 			spin_lock(&xb->lock);
 
