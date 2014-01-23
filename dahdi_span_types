@@ -166,7 +166,7 @@ fi
 
 # Beware of special characters in attributes
 attr_clean() {
-	cat "$1" | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
+	cat "$1" 2>/dev/null | tr -d '\n' | tr '!' '/' | tr -c 'a-zA-Z0-9/:.-' '_'
 }
 
 show_spantypes() {
