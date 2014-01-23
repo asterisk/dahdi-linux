@@ -90,9 +90,9 @@ __dahdi_genconf() {
 	--line-type) COMPREPLY=( $(compgen -W 'E1 J1 T1' -- $cur) ) ;;
 	*)
 		case "$cur" in
-		-*) COMPREPLY=( ${COMPREPLY[@]} $(compgen -W '-F -v -V --freepbx --version --verbose --line-type' -- $cur ) ) ;;
+		-*) COMPREPLY+=( $(compgen -W '-F -v -V --freepbx --version --verbose --line-type' -- $cur ) ) ;;
 		*)
-			COMPREPLY=( $( perl -e 'my $file = "\u$ARGV[0]";
+			COMPREPLY+=( $(compgen -W "$( perl -e 'my $file = "\u$ARGV[0]";
 				# Complete module name. Translate the case of the
 				# first letter
 				my @pats = map {"$_/Dahdi/Config/Gen/$file*.pm"} @INC;
@@ -101,9 +101,9 @@ __dahdi_genconf() {
 						s|.*/||;
 						s|.pm$||;
 						s|^(.)|lc($1)|e;
-						print "$_\n"
+						print "$_ "
 					}
-				}') )
+				}')" -- $cur ) )
 			;;
 		esac
 		;;
