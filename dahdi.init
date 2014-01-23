@@ -237,11 +237,6 @@ if [ ! -x "$DAHDI_CFG" ]; then
        exit 0
 fi
 
-if [ ! -f /etc/dahdi/system.conf ]; then
-	echo "/etc/dahdi/system.conf not found. Nothing to do."
-       exit 0
-fi
-
 RETVAL=0
 
 # See how we were called.
