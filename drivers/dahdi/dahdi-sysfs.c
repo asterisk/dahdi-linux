@@ -677,6 +677,19 @@ dahdi_spantype_store(struct device *dev, struct device_attribute *attr,
 	return (ret < 0) ? ret : count;
 }
 
+static ssize_t
+dahdi_registration_time_show(struct device *dev,
+		    struct device_attribute *attr, char *buf)
+{
+	struct dahdi_device *ddev = to_ddev(dev);
+	int count = 0;
+
+	count += sprintf(buf, "%010ld.%09ld\n",
+		ddev->registration_time.tv_sec,
+		ddev->registration_time.tv_nsec);
+	return count;
+}
+
 static struct device_attribute dahdi_device_attrs[] = {
 	__ATTR(manufacturer, S_IRUGO, dahdi_device_manufacturer_show, NULL),
 	__ATTR(type, S_IRUGO, dahdi_device_type_show, NULL),
@@ -688,6 +701,7 @@ static struct device_attribute dahdi_device_attrs[] = {
 	__ATTR(unassign_span, S_IWUSR, NULL, dahdi_device_unassign_span),
 	__ATTR(spantype, S_IWUSR | S_IRUGO, dahdi_spantype_show,
 	       dahdi_spantype_store),
+	__ATTR(registration_time, S_IRUGO, dahdi_registration_time_show, NULL),
 	__ATTR_NULL,
 };
 

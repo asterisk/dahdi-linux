@@ -50,6 +50,7 @@
 #include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/mutex.h>
+#include <linux/time.h>
 
 #if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 #include <linux/smp_lock.h>
@@ -7404,6 +7405,7 @@ static int _dahdi_register_device(struct dahdi_device *ddev,
 		__dahdi_init_span(s);
 	}
 
+	getnstimeofday(&ddev->registration_time);
 	ret = dahdi_sysfs_add_device(ddev, parent);
 	if (ret)
 		return ret;
