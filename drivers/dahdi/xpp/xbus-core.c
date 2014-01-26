@@ -61,7 +61,7 @@ static DEF_PARM(uint, poll_timeout, 1000, 0644,
 		"Timeout (in jiffies) waiting for units to reply");
 static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
 static DEF_PARM_BOOL(dahdi_autoreg, 1, 0644,
-		     "Register devices automatically (1) or not (0)");
+		     "Register devices automatically (1) or not (0). UNUSED.");
 
 #ifdef	CONFIG_PROC_FS
 static const struct file_operations xbus_read_proc_ops;
@@ -1118,7 +1118,7 @@ void xbus_populate(void *data)
 	 */
 	xbus_request_sync(xbus, SYNC_MODE_PLL);
 	elect_syncer("xbus_populate(end)");	/* FIXME: try to do it later */
-	if (dahdi_autoreg)
+	if (!auto_assign_spans)
 		xbus_register_dahdi_device(xbus);
 out:
 	XBUS_DBG(DEVICES, xbus, "Leaving\n");
