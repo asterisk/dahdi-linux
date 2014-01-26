@@ -60,7 +60,7 @@ static DEF_PARM(uint, command_queue_length, 1500, 0444,
 static DEF_PARM(uint, poll_timeout, 1000, 0644,
 		"Timeout (in jiffies) waiting for units to reply");
 static DEF_PARM_BOOL(rx_tasklet, 0, 0644, "Use receive tasklets");
-static DEF_PARM_BOOL(dahdi_autoreg, 1, 0644,
+static DEF_PARM_BOOL(dahdi_autoreg, 0, 0444,
 		     "Register devices automatically (1) or not (0). UNUSED.");
 
 #ifdef	CONFIG_PROC_FS
@@ -1977,6 +1977,10 @@ int __init xbus_core_init(void)
 {
 	int ret = 0;
 
+	if (dahdi_autoreg == 1) {
+		NOTICE("WARNING: The dahdi_autoreg parameter is deprecated " \
+			"-- just set dahdi.auto_assign_spans=0\n");
+	}
 	initialize_xbuses_array();
 #ifdef PROTOCOL_DEBUG
 	INFO("FEATURE: with PROTOCOL_DEBUG\n");
