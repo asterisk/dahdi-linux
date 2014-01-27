@@ -35,7 +35,7 @@ Normally there's a different option that you need that implies it.
 
 .B \-o
 .RS
-Plays the output to OSS (/dev/dsp). Requires -m not to be used.
+Plays the output to OSS (/dev/dsp). Requires \-m not to be used.
 .RE
 
 .B \-v
@@ -44,7 +44,7 @@ Display Visual audio levels. With two v-s, Verbose mode is enabled, that
 shows the actual levels as numbers. Note that this requires a terminal
 wider than 80 columns to be properly displayed.
 
-Implies -m.
+Implies \-m.
 .RE
 
 .B \-f \fIFILE
@@ -62,14 +62,14 @@ to a file.
 .RS
 Record the content of the Rx channel to a file.
 
-Implies -m.
+Implies \-m.
 .RE
 
 .B \-R \fIFILE
 .RS
 Record the content of the R channel before the echo canceler to a file.
 
-Implies -m.
+Implies \-m.
 .RE
 
 .B \-s \fIFILE
@@ -87,47 +87,47 @@ canceler to a file.
 .RS
 Record the content of the Tx channel to a file.
 
-Implies -m.
+Implies \-m.
 .RE
 
 .B \-T \fIFILE
 .RS
 Record the content of the Tx channel before the echo canceler to a file.
 
-Implies -m.
+Implies \-m.
 .RE
 
 .SH EXAMPLES
 
 Visualize audio levels on DAHDI channel 2:
 
-  dahdi_monitor 2 -v
+  dahdi_monitor 2 \-v
 
 
 Record channel 3 to a file:
 
-  dahdi_monitor 3 -f output.raw
+  dahdi_monitor 3 \-f output.raw
 
 This will create a raw PCM file (signed-linear, 8kHz, mono, 16 bits per
 sample). Both the Tx and Rx will be multiplexed in a single channel.
 It can be converted to a WAV file using e.g.:
 
-  sox -s -c1 -2 -r8000 output.raw output.wav
+  sox \-s \-c1 \-2 \-r8000 output.raw output.wav
 
 
 Record Tx and Rx of channel 5 to separate files. This time directly to
 WAV files:
 
-  dahdi_monitor 5 -r output_rx.wav -t output_tx.wav
+  dahdi_monitor 5 \-r output_rx.wav \-t output_tx.wav
 
 
 Record channel 8 to a stereo file (Tx and Rx on its two channels):
 
-  dahdi_monitor 8 -s output.raw
+  dahdi_monitor 8 \-s output.raw
 
 Converting it to a WAV file:
 
-  sox -s -c2 -2 -r8000 output.raw output.wav
+  sox \-s \-c2 \-2 \-r8000 output.raw output.wav
 
 
 

@@ -28,7 +28,7 @@ at all).
 .B dahdi_span_assignments
 is used to assign those spans or to help creating the configuration
 file used in their assignment:
-.B /etc/dahdi/assigned-spans.conf .
+.B /etc/dahdi/assigned\-spans.conf .
 
 .SH SUB-COMMANDS
 
@@ -46,14 +46,14 @@ Parameters are paths (in SysFS) to DAHDI devices with unassigned
 spans.
 
 The command will assign spans with DAHDI according to
-configuration in \fBassigned-spans.conf\fR.
+configuration in \fBassigned\-spans.conf\fR.
 
 If no line matches the span, or if the assignment for it fails (it is
 not available) it will remain unassigned.
 
 If any of the span settings fails (the span number or range of channels
 is already in use), the program will print a message, but continue
-applying the others. In such a case you should fix assigned-spans.conf
+applying the others. In such a case you should fix assigned\-spans.conf
 and re-run \fBadd\fR (or run \fBauto\fR to give those channels the
 first available range and regenerate the file with 'dahdi_genconf
 assignedspans').
@@ -161,7 +161,7 @@ The value in this field is matched (when the commands \fBadd\fR and
 See above for their descriptions. The value may include shell wildcards:
 *, ? and [], which are used in the match. The values to be matched are
 first cleaned up: '!' is replaced with '/' and any character beyond
-"a-zA-Z0-9/:.-" is removed.
+"a\-zA\-Z0\-9/:.\-" is removed.
 
 .SS Span Specification
 
@@ -197,13 +197,13 @@ space must be available.
 
 .B DAHDICONFDIR
 .RS
-The directory in which assigned-spans.conf resides. /etc/dahdi if not
+The directory in which assigned\-spans.conf resides. /etc/dahdi if not
 overridden from the environment.
 .RE
 
 .B DAHDISASSIGNEDSPANSCONF
 .RS
-The path to assigned-spans.conf resides. /etc/dahdi/assigned-spans.conf if
+The path to assigned-spans.conf resides. /etc/dahdi/assigned\-spans.conf if
 not overridden from the environment.
 .RE
 
@@ -216,7 +216,7 @@ environment.
 
 .SH FILES
 
-.B /etc/dahdi/assigned-spans.conf
+.B /etc/dahdi/assigned\-spans.conf
 .RS
 The default location for the configuration file.
 .RE

@@ -24,18 +24,18 @@ The device is marked as a path in the SysFS tree.
 
 .SH OPTIONS
 
-.B -h|--help
+.B \-h|\-\-help
 .RS
 Output usage message and exit
 .RE
 
-.B -n|--dry-run
+.B \-n|\-\-dry\-run
 .RS
 During \fB"set"\fR operation, only show what would be done, without actually
 changing anything.
 .RE
 
-.B -v|--verbose
+.B \-v|\-\-verbose
 .RS
 During \fB"set"\fR operation, show the actions that are being performed.
 .RE
@@ -53,7 +53,7 @@ to override the "wildcard".
 .SH SUB-COMMANDS
 .B set
 .RS
-Reads settings from \fBspan-types.conf\fR and applies them to the
+Reads settings from \fBspan\-types.conf\fR and applies them to the
 device(s) specified in the command line (or all devices, if none
 specified).
 .RE
@@ -67,7 +67,7 @@ dahdi_span_types (E1/T1/J1 spans).
 .B dumpconfig
 .RS
 List types for the spans in a format fit to be used in
-\fBspan-types.conf\fR. Use this to generate a configuration file after
+\fBspan\-types.conf\fR. Use this to generate a configuration file after
 you have (perhaps manually) set all existing spans.
 
 .B dahdi_genconf spantypes
@@ -76,7 +76,7 @@ uses this command internally.
 
 .SH CONFIGURATION
 .SS General structure
-.B span-types.conf
+.B span\-types.conf
 is a file with lines specifying line modes of spans.
 
 Empty lines or lines beginning with '#' are ignored.
@@ -106,7 +106,7 @@ used) to the following values:
 See above for their descriptions. The value may include shell wildcards:
 *, ? and [], which are used in the match. The values to be matched are
 first cleaned up: '!' is replaced with '/' and any character not in
-"a-zA-Z0-9/:.-" is replaced by "_".
+"a\-zA\-Z0\-9/:.\-" is replaced by "_".
 
 Note that while span\-types.conf allows an arbitrarily-complex
 combination of E1, J1 and T1 ports, it would normally have just a single
@@ -154,13 +154,13 @@ usb:X1234567  [34]:E1   # Except spans 3,4 on the device which will be E1
 
 .B DAHDICONFDIR
 .RS
-The directory in which span-types.conf resides. /etc/dahdi if not
+The directory in which span\-types.conf resides. /etc/dahdi if not
 overridden from the environment.
 .RE
 
 .B DAHDISPANTYPESCONF
 .RS
-The path to span-types.conf resides. /etc/dahdi/span\-types.conf if
+The path to span\-types.conf resides. /etc/dahdi/span\-types.conf if
 not overridden from the environment.
 .RE
 
