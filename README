@@ -264,7 +264,8 @@ to user space. Those events are normally handled by udevd. Configurations
 for udevd ("udev rules") may be placed in /etc/udev/rules.d or
 /lib/udev/rules.d. This package installs rules that instruct udevd to
 run the script `/usr/share/dahdi/dahdi_handle_device` on each new
-device. This script will:
+device, which runs all the scripts in `/usr/share/dahdi/handle_device.d`.
+Those scripts will:
 
 * If `/etc/dahdi/span-types.conf` exists, apply it to the device. It is
  used for E1/T1/J1 settings. See
@@ -298,12 +299,14 @@ listed under its device. As a new kernel object was created, an event is
 sent to udev.
 
 The standard DAHDI udev rules instruct udevd to run the script
-`/usr/share/dahdi/dahdi_span_config`. This script configures the new
+`/usr/share/dahdi/dahdi_span_config` which runs all the scripts in
+`/usr/share/dahdi/span_config.d`. Those script configures the new
 span:
 
 * If system.conf does not exist, generates a temporary configuration
   for the span using link:doc/dahdi_genconf.8.html[dahdi_genconf
   system].
+
 * Runs link:doc/dahdi_cfg.8.html[dahdi_cfg] on the new span (using `-S`
   and -C`).
 
