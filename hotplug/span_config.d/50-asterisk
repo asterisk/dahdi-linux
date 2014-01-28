@@ -1,5 +1,10 @@
 #! /bin/sh
 
+# This file, if installed under /usr/share/dahdi/span_config.d/ , will
+# attempt to add a newly-generated span to a running copy of Asterisk.
+# Asterisk has to be running (if not: it will pick the span on its
+# startup), and has to have the channels already configured.
+
 if [ "$ACTION" != 'add' ]; then
 	# Nothing to do here
 	exit 0
