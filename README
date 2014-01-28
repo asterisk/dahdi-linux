@@ -926,6 +926,10 @@ A unique hardware-level identifier (e.g. serial number), if available.
 ===== /sys/bus/dahdi_devices/devices/DEVICE/manufacturer
 The name of the manufacturer. Freeform-string.
 
+===== /sys/bus/dahdi_devices/devices/DEVICE/registration_time
+The time at which the device registered with the DAHDI core. Example
+value: "0005634136.941901429".
+
 ===== /sys/bus/dahdi_devices/devices/DEVICE/spantype
 A line for each available span: <num>:<type>. This has to be provided
 here as in the case of manual assignment, userspace may need to know
