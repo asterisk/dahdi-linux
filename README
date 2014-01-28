@@ -897,11 +897,12 @@ to other nodes.
 
 Class DAHDI
 ^^^^^^^^^^^
-under /sys/class/dadhi there exists a node for each DAHDI device file
-under /dev/dahdi. The name is 'dahdi!foo' for the file '/dev/dahdi/foo'
-(udev translates exclamation marks to slashes). Those nodes are not, for
-the most part, proper SysFS nodes, and don't include any interesting
-properties.
+Under /sys/class/dadhi there exists a node for the non-channel DAHDI
+device file under /dev/dahdi. The name is 'dahdi!foo' for the file
+'/dev/dahdi/foo' (udev translates exclamation marks to slashes). Those
+nodes are not, for the most part, proper SysFS nodes, and don't include
+any interesting properties. The files in this class `ctl`, `timer`,
+`channel`, `pseudo` and (if exists) `transcode`.
 
 
 Devices Bus
