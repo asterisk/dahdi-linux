@@ -7374,9 +7374,17 @@ int dahdi_assign_device_spans(struct dahdi_device *ddev)
 	return 0;
 }
 
-int auto_assign_spans = 1;
-EXPORT_SYMBOL(auto_assign_spans);
+static int auto_assign_spans = 1;
 static const char *UNKNOWN = "";
+
+/**
+ * dahdi_auto_assign_spans - is the parameter auto_assign_spans set?
+ */
+int dahdi_get_auto_assign_spans(void)
+{
+	return auto_assign_spans;
+}
+EXPORT_SYMBOL(dahdi_get_auto_assign_spans);
 
 /**
  * _dahdi_register_device - Registers a DAHDI device and assign its spans.

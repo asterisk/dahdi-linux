@@ -1280,7 +1280,8 @@ static inline void dahdi_ec_span(struct dahdi_span *span)
 }
 
 extern struct file_operations *dahdi_transcode_fops;
-extern int auto_assign_spans;
+
+int dahdi_get_auto_assign_spans(void);
 
 /* Don't use these directly -- they're not guaranteed to
    be there. */

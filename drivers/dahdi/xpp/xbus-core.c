@@ -1118,7 +1118,7 @@ void xbus_populate(void *data)
 	 */
 	xbus_request_sync(xbus, SYNC_MODE_PLL);
 	elect_syncer("xbus_populate(end)");	/* FIXME: try to do it later */
-	if (!auto_assign_spans)
+	if (!dahdi_get_auto_assign_spans())
 		xbus_register_dahdi_device(xbus);
 out:
 	XBUS_DBG(DEVICES, xbus, "Leaving\n");
