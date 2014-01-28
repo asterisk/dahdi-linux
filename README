@@ -528,11 +528,12 @@ XPP (Astribank) module parameters
 ==== dahdi_autoreg
 (xpp)
 
-Register spans automatically (1) or not (0). Default: 0.
-Setting it simplifies operations with a single Astribank and no other
-DAHDI hardware. However if you have such systems, automatic
-registration can cause the order of spans to be unpredictable.
-The standard startup scripts use 'dahdi_registration on' instead of this.
+Deprecated. See dahdi.<<_auto_assign_spans,auto_assign_spans>> above.
+
+Originally had a somewhat similar (but xpp-specific and more limited)
+role to auto_assign_spans. For backward compatibility this variable is
+still kept, but its value is unused. Astribanks will auto-register
+with dahdi if auto_assign_spans is not set.
 
 ==== tools_rootdir
 (xpp)
