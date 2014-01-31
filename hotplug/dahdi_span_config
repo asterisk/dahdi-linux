@@ -26,6 +26,17 @@ set -e
 
 #echo >&2 "$0($ACTION): DEBUG($# args): '$*'"
 
+# Old driver. These scripts probably won't work anyway.
+if [ ! -f /sys/module/dahdi/parameters/auto_assign_spans ]; then
+	$LOGGER "Old driver (no auto_assign_spans parameter). Skip $DEVPATH"
+	exit 0
+fi
+
+if [ $(cat /sys/module/dahdi/parameters/auto_assign_spans) -eq 1 ]; then
+	$LOGGER "auto_assign_spans=1. Skip $DEVPATH"
+	exit 0
+fi
+
 # Do we have a configuration?
 if [ -f /etc/dahdi/init.conf ]; then
 	. /etc/dahdi/init.conf
