@@ -104,6 +104,7 @@
 #define DTE_DEBUG_RX_TIMEOUT	(1 << 4) /* 16 */
 #define DTE_DEBUG_NETWORK_IF	(1 << 5) /* 32 */
 #define DTE_DEBUG_NETWORK_EARLY	(1 << 6) /* 64 */
+#define DTE_DEBUG_ETH_STATS	(1 << 7) /* 128 */
 
 static int debug;
 static char *mode;
@@ -174,6 +175,7 @@ struct csm_encaps_hdr {
 #define SUPVSR_CREATE_CHANNEL	0x0010
 
 #define MONITOR_LIVE_INDICATION_TYPE 0x75
+#define VOIP_VCEINFO_TYPE	0x0e
 #define CONFIG_CHANGE_TYPE	0x00
 #define CONFIG_CHANNEL_CLASS	0x02
 #define CONFIG_DEVICE_CLASS	0x06
@@ -783,6 +785,10 @@ struct wctc4xxp_descriptor_ring {
 	struct pci_dev  *pdev;
 	/*! The size of the dring. */
 	unsigned long size;
+	/*! Total number of packets completed. */
+	unsigned long packet_count;
+	/*! Total number of packets with errors. */
+	unsigned long packet_errors;
 };
 
 /**
@@ -905,6 +911,7 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 	struct tcb *c;
 	unsigned int head = dr->head;
 	unsigned long flags;
+	u32 des0;
 	spin_lock_irqsave(&dr->lock, flags);
 	d = wctc4xxp_descriptor(dr, head);
 	if (d->buffer1 && !OWNED(d)) {
@@ -916,8 +923,18 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 		d->buffer1 = 0;
 		--dr->count;
 		WARN_ON(!c);
-		c->data_len = (le32_to_cpu(d->des0) >> 16) & BUFFER1_SIZE_MASK;
-		WARN_ON(c->data_len > SFRAME_SIZE);
+		des0 = le32_to_cpu(d->des0);
+		c->data_len = (des0 >> 16) & BUFFER1_SIZE_MASK;
+		if (des0 & (1<<15)) {
+			++dr->packet_errors;
+			/* The upper layers won't be able to do anything with
+			 * this packet. Free it up and log the error. */
+			free_cmd(c);
+			c = NULL;
+		} else {
+			++dr->packet_count;
+			WARN_ON(c->data_len > SFRAME_SIZE);
+		}
 	} else {
 		c = NULL;
 	}
@@ -933,6 +950,37 @@ static inline int wctc4xxp_getcount(struct wctc4xxp_descriptor_ring *dr)
 	count = dr->count;
 	spin_unlock_irqrestore(&dr->lock, flags);
 	return count;
+}
+
+static inline int wctc4xxp_get_packet_count(struct wctc4xxp_descriptor_ring *dr)
+{
+	unsigned long count;
+	unsigned long flags;
+	spin_lock_irqsave(&dr->lock, flags);
+	count = dr->packet_count;
+	spin_unlock_irqrestore(&dr->lock, flags);
+	return count;
+}
+
+static inline int
+wctc4xxp_get_packet_errors(struct wctc4xxp_descriptor_ring *dr)
+{
+	unsigned long count;
+	unsigned long flags;
+	spin_lock_irqsave(&dr->lock, flags);
+	count = dr->packet_errors;
+	spin_unlock_irqrestore(&dr->lock, flags);
+	return count;
+}
+
+static inline void
+wctc4xxp_set_packet_count(struct wctc4xxp_descriptor_ring *dr,
+			  unsigned long count)
+{
+	unsigned long flags;
+	spin_lock_irqsave(&dr->lock, flags);
+	dr->packet_count = count;
+	spin_unlock_irqrestore(&dr->lock, flags);
 }
 
 static inline void
@@ -1428,6 +1476,54 @@ send_trans_disconnect_cmd(struct wcdte *wc, struct tcb *cmd, const u16
 		decoder_channel, encoder_format, decoder_format);
 }
 
+static int
+send_voip_vceinfo_cmd(struct channel_pvt *pvt, struct tcb *cmd)
+{
+	int res;
+	const u16 parameters[] = {0};
+	static const int CONFIG_CHANNEL_STATS_CLASS = 1;
+	create_channel_cmd(pvt, cmd,
+		VOIP_VCEINFO_TYPE, CONFIG_CHANNEL_STATS_CLASS,
+		0x0000, parameters, 0);
+	res = wctc4xxp_transmit_cmd_and_wait(pvt->wc, cmd);
+	return res;
+}
+
+static int
+send_eth_statistics_cmd(struct wcdte *wc, struct tcb *cmd)
+{
+	int res;
+	const u16 parameters[] = {0};
+
+	create_supervisor_cmd(wc, cmd, 0x00, 0x05, 0x0000,
+		parameters, ARRAY_SIZE(parameters));
+	res = wctc4xxp_transmit_cmd_and_wait(wc, cmd);
+	if (res)
+		return -EIO;
+	if (0x0000 != response_header(cmd)->params[0]) {
+		dev_info(&wc->pdev->dev,
+			 "Failed to get ethernet stats: 0x%04x\n",
+			 response_header(cmd)->params[0]);
+		res = -EIO;
+	}
+	return res;
+}
+
+static void wctc4xxp_match_packet_counts(struct wcdte *wc)
+{
+	struct tcb *cmd  = alloc_cmd(SFRAME_SIZE);
+	int res;
+	u32 *parms;
+
+	res = send_eth_statistics_cmd(wc, cmd);
+	if (0 == res) {
+		parms = (u32 *)(&response_header(cmd)->params[0]);
+		wctc4xxp_set_packet_count(wc->rxd, parms[1]);
+		wctc4xxp_set_packet_count(wc->txd, parms[2]);
+	}
+	free_cmd(cmd);
+}
+
 static struct tcb *
 wctc4xxp_create_rtp_cmd(struct wcdte *wc, struct dahdi_transcoder_channel *dtc,
 	size_t inbytes)
@@ -1874,6 +1970,20 @@ wctc4xxp_disable_polling(struct wcdte *wc)
 	wctc4xxp_enable_interrupts(wc);
 }
 
+static void wctc4xxp_check_for_rx_errors(struct wcdte *wc)
+{
+	static unsigned long last_errors = 0;
+	unsigned long errors = wctc4xxp_get_packet_errors(wc->rxd);
+	if (last_errors != errors) {
+		if (printk_ratelimit()) {
+			dev_err(&wc->pdev->dev,
+				"%lu errored receive packets.\n",
+				errors - last_errors);
+			last_errors = errors;
+		}
+	}
+}
+
 static int
 wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 {
@@ -1965,6 +2075,9 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 	compl_cpvt = compl_dtc->pvt;
 	compl_cpvt->chan_in_num = INVALID;
 	compl_cpvt->chan_out_num = INVALID;
+
+	wctc4xxp_check_for_rx_errors(wc);
+
 error_exit:
 	mutex_unlock(&wc->chanlock);
 	return res;
@@ -2315,7 +2428,10 @@ do_rx_ack_packet(struct wcdte *wc, struct tcb *cmd)
 static inline int
 is_response(const struct csm_encaps_hdr *hdr)
 {
-	return ((0x02 == hdr->type) || (0x04 == hdr->type)) ? 1 : 0;
+	return ((0x02 == hdr->type) ||
+		(0x04 == hdr->type) ||
+		(0x0e == hdr->type) ||
+		(0x00 == hdr->type)) ? 1 : 0;
 }
 
 static void
@@ -2694,7 +2810,7 @@ wctc4xxp_hardware_init(struct wcdte *wc)
 	wctc4xxp_setctl(wc, 0x0000, reg | 0x60000);
 
 	/* Configure watchdogs, access, etc */
-	wctc4xxp_setctl(wc, 0x0030, 0x00280040);
+	wctc4xxp_setctl(wc, 0x0030, 0x00280048);
 	wctc4xxp_setctl(wc, 0x0078, 0x00000013);
 	reg = wctc4xxp_getctl(wc, 0x00fc);
 	wctc4xxp_setctl(wc, 0x00fc, (reg & ~0x7) | 0x7);
@@ -3082,6 +3198,94 @@ error_exit:
 	return -EIO;
 }
 
+static void print_vceinfo_packet(struct wcdte *wc, struct tcb *cmd)
+{
+	int i;
+	struct device *const dev = &wc->pdev->dev;
+
+	static const struct {
+		const char *name;
+		bool show;
+	} PARAMETERS[] = {
+		{ "Format Revision                                   ", false},
+		{ "Reserved                                          ", false},
+		{ "Call Timer (seconds)                              ", false},
+		{ "Current Playout Delay [to PCM]                    ", false},
+		{ "Minimum Playout Delay [to PCM]                    ", false},
+		{ "Maximum Playout Delay [to PCM]                    ", false},
+		{ "Clock Offset                                      ", false},
+		{ "PeakJitter (ms)                                   ", true},
+		{ "Interpolative Concealment [to PCM]                ", false},
+		{ "Silence Concealment [to PCM]                      ", false},
+		{ "Jitter Buffer Overflow Discard [from IP]          ", true},
+		{ "End-point Detection Errors                        ", true},
+		{ "Number of Tx Voice Packets [to IP]                ", true},
+		{ "Number of Tx Signalling Packets [to IP]           ", true},
+		{ "Number of Tx Comfort Noise Packets [to IP]        ", true},
+		{ "Total Transmit Duration [to IP]                   ", true},
+		{ "Voice Transmit Duration [to IP]                   ", true},
+		{ "Number of Rx Voice Packets [from IP]              ", true},
+		{ "Number of Rx Signalling Packets [from IP]         ", true},
+		{ "Number of Rx Comfort Noise Packets [from IP]      ", true},
+		{ "Total Receive Duration [from IP]                  ", true},
+		{ "Voice Receive Duration [from IP]                  ", true},
+		{ "Packets Out of Sequence [from IP]                 ", true},
+		{ "Bad Protocol Headers [from IP]                    ", true},
+		{ "Late Packets [from IP]                            ", true},
+		{ "Reserved (Early Packets) always zero              ", false},
+		{ "Number of Rx Voice bytes                          ", true},
+		{ "Number of Lost Packets [from IP]                  ", true},
+		{ "Current Transmit Power [from PCM]                 ", false},
+		{ "Mean Transmit Power [from PCM]                    ", false},
+		{ "Current Receive Power [to PCM]                    ", false},
+		{ "Mean Receive Power [to PCM]                       ", false},
+		{ "Background Noise [to PCM]                         ", false},
+		{ "ERL Level [to PCM]                                ", false},
+		{ "ACOM Level [from PCM]                             ", false},
+		{ "Current Transmit Activity [from PCM]              ", false},
+		{ "Current Receive Activity [to PCM]                 ", false},
+		{ "Discarded Unexpected Packets                      ", true},
+		{ "Discard Packets Due to Rx Disabled                ", true},
+		{ "Discarded Duplicate Packets                       ", true},
+		{ "Discarded Packets Due to Incorrect Payload Length ", true},
+		{ "Discarded Packets Due to Channel Inactive         ", true},
+		{ "Discarded Packets Due to Insufficient Memory      ", true}
+	};
+
+	u32 *parms = (u32 *)(&response_header(cmd)->params[0]);
+	for (i = 0; i < 43; ++i) {
+		if (PARAMETERS[i].show)
+			dev_info(dev, "%s%d\n", PARAMETERS[i].name, parms[i]);
+	}
+}
+
+static void print_eth_statistics_packet(struct wcdte *wc, struct tcb *cmd)
+{
+	int i;
+	struct device *const dev = &wc->pdev->dev;
+
+	static const struct {
+		const char *name;
+		bool show;
+	} PARAMETERS[] = {
+		{ "Format Revision                 ", true},
+		{ "Emitted Frames                  ", true},
+		{ "Received Frames                 ", true},
+		{ "Unknown Packet Type             ", true},
+		{ "Received Broadcast Packets      ", true},
+		{ "Unknown Broadcast               ", true},
+		{ "Emitted VLAN frames             ", true},
+		{ "Received VLAN frames            ", true},
+		{ "Received VLAN frames with E-RIF ", true}
+	};
+
+	u32 *parms = (u32 *)(&response_header(cmd)->params[0]);
+	for (i = 0; i < sizeof(PARAMETERS)/sizeof(PARAMETERS[0]); ++i) {
+		if (PARAMETERS[i].show)
+			dev_info(dev, "%s%d\n", PARAMETERS[i].name, parms[i]);
+	}
+}
+
 static int
 wctc4xxp_destroy_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt)
 {
@@ -3118,6 +3322,26 @@ wctc4xxp_destroy_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt)
 	encoder_pvt = dtc1->pvt;
 	decoder_pvt = dtc2->pvt;
 
+	if (debug & DTE_DEBUG_ETH_STATS) {
+		if (send_voip_vceinfo_cmd(encoder_pvt, cmd))
+			goto error_exit;
+		dev_warn(&wc->pdev->dev,
+			 "****************************************\n");
+		dev_warn(&wc->pdev->dev,
+			 "Encoder stats (ch: %d):\n",
+			 encoder_pvt->timeslot_in_num);
+		print_vceinfo_packet(wc, cmd);
+
+		if (send_voip_vceinfo_cmd(decoder_pvt, cmd))
+			goto error_exit;
+		dev_warn(&wc->pdev->dev,
+			 "****************************************\n");
+		dev_warn(&wc->pdev->dev,
+			 "Decoder stats (ch: %d):\n",
+			 decoder_pvt->timeslot_in_num);
+		print_vceinfo_packet(wc, cmd);
+	}
+
 	if (send_voip_vopena_close_cmd(encoder_pvt, cmd))
 		goto error_exit;
 	if (send_voip_vopena_close_cmd(decoder_pvt, cmd))
@@ -3128,6 +3352,15 @@ wctc4xxp_destroy_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt)
 		goto error_exit;
 	if (send_destroy_channel_cmd(wc, cmd, chan2))
 		goto error_exit;
+
+	if (debug & DTE_DEBUG_ETH_STATS) {
+		if (send_eth_statistics_cmd(wc, cmd))
+			goto error_exit;
+		print_eth_statistics_packet(wc, cmd);
+		dev_info(&wc->pdev->dev, "AN983 tx packets: %d rx packets: %d\n",
+			 wctc4xxp_get_packet_count(wc->txd),
+			 wctc4xxp_get_packet_count(wc->rxd));
+	}
 
 	free_cmd(cmd);
 	return 0;
@@ -3610,6 +3843,8 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	DTE_DEBUG(DTE_DEBUG_GENERAL, "Operating in DEBUG mode.\n");
 	dahdi_transcoder_register(wc->uencode);
 	dahdi_transcoder_register(wc->udecode);
+
+	wctc4xxp_match_packet_counts(wc);
 
 	return 0;
 
