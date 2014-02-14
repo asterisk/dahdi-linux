@@ -205,7 +205,6 @@ struct tcb {
 	unsigned long flags;
 	struct tcb *response;
 	struct completion complete;
-	struct timer_list timer;
 	/* The number of bytes available in data. */
 	int data_len;
 	spinlock_t lock;
