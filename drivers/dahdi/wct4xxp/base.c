@@ -40,6 +40,7 @@
 #include <linux/delay.h>
 #include <linux/moduleparam.h>
 #include <linux/crc32.h>
+#include <linux/slab.h>
 
 #include <stdbool.h>
 #include <dahdi/kernel.h>

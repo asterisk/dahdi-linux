@@ -27,6 +27,7 @@
 #include <linux/version.h>
 #include <linux/kernel.h>
 #include <linux/pci.h>
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 

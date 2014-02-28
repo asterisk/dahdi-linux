@@ -31,6 +31,7 @@
 #include <linux/sched.h>
 #include <linux/interrupt.h>
 #include <linux/moduleparam.h>
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 #define NEED_PCI_IDS

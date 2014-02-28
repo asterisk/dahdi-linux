@@ -34,8 +34,8 @@
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/crc32.h>
-
 #include <linux/slab.h>
+
 #include <linux/vmalloc.h>
 #include <linux/string.h>
 #include <linux/time.h>

@@ -26,6 +26,7 @@
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/crc32.h>
+#include <linux/slab.h>
 
 #include "voicebus/vpmoct.h"
 #include "linux/firmware.h"

@@ -29,6 +29,7 @@
 #include <linux/crc32.h>
 #include <linux/delay.h>
 #include <linux/version.h>
+#include <linux/slab.h>
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 #define HAVE_RATELIMIT

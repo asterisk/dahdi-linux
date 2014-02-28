@@ -51,6 +51,7 @@ With driver:	303826  (1.5 %)
 #include <linux/interrupt.h>
 #include <linux/moduleparam.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <asm/io.h>
 #include <asm/delay.h> 
 

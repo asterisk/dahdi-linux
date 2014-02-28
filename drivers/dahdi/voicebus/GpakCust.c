@@ -38,6 +38,7 @@
 #else
 #include <asm/semaphore.h>
 #endif
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 #include <dahdi/user.h>

@@ -25,6 +25,7 @@
 #include <linux/ppp_defs.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 
 #define FAST_HDLC_NEED_TABLES
 #include <dahdi/kernel.h>

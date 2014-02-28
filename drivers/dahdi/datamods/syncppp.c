@@ -51,6 +51,7 @@
 #include <linux/pkt_sched.h>
 #include <linux/spinlock.h>
 #include <linux/rcupdate.h>
+#include <linux/slab.h>
 
 #include <net/syncppp.h>
 

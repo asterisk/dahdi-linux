@@ -51,6 +51,7 @@
 #include <linux/delay.h>
 #include <linux/mutex.h>
 #include <linux/ktime.h>
+#include <linux/slab.h>
 
 #if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
 #include <linux/smp_lock.h>

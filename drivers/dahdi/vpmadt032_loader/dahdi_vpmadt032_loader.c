@@ -23,6 +23,7 @@
 #include <linux/ctype.h>
 #include <linux/moduleparam.h>
 #include <linux/pci.h>
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 

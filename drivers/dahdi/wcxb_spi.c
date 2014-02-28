@@ -28,6 +28,7 @@
 #include <linux/completion.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
+#include <linux/slab.h>
 
 #include <linux/io.h>
 

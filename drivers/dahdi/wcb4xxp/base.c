@@ -40,6 +40,7 @@
 #include <linux/timer.h>	/* timer_struct */
 #include <linux/moduleparam.h>
 #include <linux/proc_fs.h>
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 

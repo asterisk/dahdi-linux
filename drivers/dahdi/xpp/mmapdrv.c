@@ -4,6 +4,7 @@
 #include <linux/proc_fs.h>
 #include <linux/interrupt.h>
 #include <linux/firmware.h>
+#include <linux/slab.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/blackfin.h>

@@ -31,6 +31,7 @@
 #include <linux/pci.h>
 #include <asm/io.h>
 #include <linux/moduleparam.h>
+#include <linux/slab.h>
 
 #include <dahdi/kernel.h>
 

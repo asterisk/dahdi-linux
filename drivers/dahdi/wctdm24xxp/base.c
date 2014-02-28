@@ -55,6 +55,7 @@ Tx Gain - W/Pre-Emphasis: -23.99 to 0.00 db
 #include <asm/semaphore.h>
 #endif
 #include <linux/crc32.h>
+#include <linux/slab.h>
 
 #include <stdbool.h>
 
