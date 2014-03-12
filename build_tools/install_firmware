@@ -1,0 +1,20 @@
+#!/bin/sh
+# This is a helper script intended to be called from
+# drivers/dahdi/firmware/Makefile to install the different firmware version.
+
+FIRMWARE_PATTERN=$1
+FIRMWARE_VERSION=$2
+DESTDIR=$3
+
+if ! test -f ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION} || ! test -f ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}; then
+	echo "Installing ${FIRMWARE_PATTERN}.bin to hotplug firmware directories"
+	set -e
+	install -m 644 ${FIRMWARE_PATTERN}.bin ${DESTDIR}/usr/lib/hotplug/firmware
+	rm -rf ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-*
+	touch ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}
+	install -m 644 ${FIRMWARE_PATTERN}.bin ${DESTDIR}/lib/firmware
+	rm -rf ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-*
+	touch ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}
+else
+	echo "Firmware ${FIRMWARE_PATTERN}.bin is already installed with required version ${FIRMWARE_VERSION}"
+fi

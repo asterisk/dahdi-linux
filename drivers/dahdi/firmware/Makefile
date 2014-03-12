@@ -82,6 +82,7 @@ OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032.o)
 # Force usage of wget, for now
 DOWNLOAD=wget
 WGET=wget
+INSTALL_FIRMWARE=../../../build_tools/install_firmware
 
 # If "fetch" is used, --continue is not a valid option.
 ifeq ($(WGET),wget)
@@ -126,172 +127,21 @@ $(DESTDIR)/usr/lib/hotplug/firmware $(DESTDIR)/lib/firmware:
 
 # Install all downloaded firmware images for hotplug usage
 hotplug-install: $(DESTDIR)/usr/lib/hotplug/firmware $(DESTDIR)/lib/firmware $(FIRMWARE)
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-032-$(OCT6114_032_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-032-$(OCT6114_032_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-oct6114-032.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-oct6114-032.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-032-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-032-$(OCT6114_032_VERSION)
-	@install -m 644 dahdi-fw-oct6114-032.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-032-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-032-$(OCT6114_032_VERSION)
-else
-	@echo "Firmware dahdi-fw-oct6114-032.bin is already installed with required version $(OCT6114_032_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-064-$(OCT6114_064_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-064-$(OCT6114_064_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-oct6114-064.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-oct6114-064.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-064-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-064-$(OCT6114_064_VERSION)
-	@install -m 644 dahdi-fw-oct6114-064.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-064-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-064-$(OCT6114_064_VERSION)
-else
-	@echo "Firmware dahdi-fw-oct6114-064.bin is already installed with required version $(OCT6114_064_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-128-$(OCT6114_128_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-128-$(OCT6114_128_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-oct6114-128.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-oct6114-128.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-128-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-128-$(OCT6114_128_VERSION)
-	@install -m 644 dahdi-fw-oct6114-128.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-128-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-128-$(OCT6114_128_VERSION)
-else
-	@echo "Firmware dahdi-fw-oct6114-128.bin is already installed with required version $(OCT6114_128_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-oct6114-256.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-oct6114-256.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION)
-	@install -m 644 dahdi-fw-oct6114-256.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-oct6114-256-$(OCT6114_256_VERSION)
-else
-	@echo "Firmware dahdi-fw-oct6114-256.bin is already installed with required version $(OCT6114_256_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-tc400m.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-tc400m.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-tc400m-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION)
-	@install -m 644 dahdi-fw-tc400m.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-tc400m-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-tc400m-$(TC400M_VERSION)
-else
-	@echo "Firmware dahdi-fw-tc400m.bin is already installed with required version $(TC400M_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-hx8-$(HX8_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-hx8-$(HX8_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-hx8.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-hx8.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-hx8-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-hx8-$(HX8_VERSION)
-	@install -m 644 dahdi-fw-hx8.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-hx8-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-hx8-$(HX8_VERSION)
-else
-	@echo "Firmware dahdi-fw-hx8.bin is already installed with required version $(HX8_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-vpmoct032-$(VPMOCT032_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-vpmoct032-$(VPMOCT032_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-vpmoct032.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-vpmoct032.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-vpmoct032-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-vpmoct032-$(VPMOCT032_VERSION)
-	@install -m 644 dahdi-fw-vpmoct032.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-vpmoct032-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-vpmoct032-$(VPMOCT032_VERSION)
-else
-	@echo "Firmware dahdi-fw-vpmoct032.bin is already installed with required version $(VPMOCT032_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-$(WCT820_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-te820-$(WCT820_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-te820.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-te820.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te820-$(WCT820_VERSION)
-	@install -m 644 dahdi-fw-te820.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-te820-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te820-$(WCT820_VERSION)
-else
-	@echo "Firmware dahdi-fw-te820.bin is already installed with required version $(WCT820_VERSION)"
-endif
-
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te133-$(TE133_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-te133-$(TE133_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-te133.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-te133.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te133-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te133-$(TE133_VERSION)
-	@install -m 644 dahdi-fw-te133.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-te133-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te133-$(TE133_VERSION)
-else
-	@echo "Firmware dahdi-fw-te133.bin is already installed with required version $(TE133_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te134-$(TE134_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-te134-$(TE134_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-te134.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-te134.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te134-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te134-$(TE134_VERSION)
-	@install -m 644 dahdi-fw-te134.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-te134-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te134-$(TE134_VERSION)
-else
-	@echo "Firmware dahdi-fw-te134.bin is already installed with required version $(TE134_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te435-$(TE435_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-te435-$(TE435_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-te435.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-te435.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te435-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-te435-$(TE435_VERSION)
-	@install -m 644 dahdi-fw-te435.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-te435-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-te435-$(TE435_VERSION)
-else
-	@echo "Firmware dahdi-fw-te435.bin is already installed with required version $(TE435_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-$(A8A_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-$(A8A_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-a8a.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-a8a.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8a-$(A8A_VERSION)
-	@install -m 644 dahdi-fw-a8a.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a8a-$(A8A_VERSION)
-else
-	@echo "Firmware dahdi-fw-a8a.bin is already installed with required version $(A8A_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-$(A8B_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-$(A8B_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-a8b.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-a8b.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a8b-$(A8B_VERSION)
-	@install -m 644 dahdi-fw-a8b.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a8b-$(A8B_VERSION)
-else
-	@echo "Firmware dahdi-fw-a8b.bin is already installed with required version $(A8B_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-$(A4A_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-$(A4A_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-a4a.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-a4a.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4a-$(A4A_VERSION)
-	@install -m 644 dahdi-fw-a4a.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a4a-$(A4A_VERSION)
-else
-	@echo "Firmware dahdi-fw-a4a.bin is already installed with required version $(A4A_VERSION)"
-endif
-ifeq ($(shell if ( [ -f $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-$(A4B_VERSION) ] ) && ( [ -f $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-$(A4B_VERSION) ] ); then echo "no"; else echo "yes"; fi),yes)
-	@echo "Installing dahdi-fw-a4b.bin to hotplug firmware directories"
-	@install -m 644 dahdi-fw-a4b.bin $(DESTDIR)/usr/lib/hotplug/firmware
-	@rm -rf $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-*
-	@touch $(DESTDIR)/usr/lib/hotplug/firmware/.dahdi-fw-a4b-$(A4B_VERSION)
-	@install -m 645 dahdi-fw-a4b.bin $(DESTDIR)/lib/firmware
-	@rm -rf $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-*
-	@touch $(DESTDIR)/lib/firmware/.dahdi-fw-a4b-$(A4B_VERSION)
-else
-	@echo "Firmware dahdi-fw-a4b.bin is already installed with required version $(A4B_VERSION)"
-endif
+	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-032 $(OCT6114_032_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-064 $(OCT6114_064_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-128 $(OCT6114_128_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-256 $(OCT6114_256_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-tc400m $(TC400M_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-hx8 $(HX8_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-vpmoct032 $(VPMOCT032_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-te820 $(WCT820_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-te133 $(TE133_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-te134 $(TE134_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-te435 $(TE435_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-a8a $(A8A_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-a8b $(A8B_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-a4a $(A4A_VERSION)
+	@$(INSTALL_FIRMWARE) dahdi-fw-a4b $(A4B_VERSION)
 
 # Uninstall any installed dahdi firmware images from hotplug firmware directories
 hotplug-uninstall:
