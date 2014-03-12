@@ -61,6 +61,7 @@ struct wcxb {
 #ifdef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
 		u32	is_pcie:1;
 #endif
+		u32	io_error:1;
 	} flags;
 	void __iomem			*membase;
 	struct wcxb_meta_desc		*meta_dring;

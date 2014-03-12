@@ -62,6 +62,7 @@
 #define DRING_SIZE_MASK		(DRING_SIZE-1)
 #define DESC_EOR		(1 << 0)
 #define DESC_INT		(1 << 1)
+#define DESC_IO_ERROR		(1 << 30)
 #define DESC_OWN		(1 << 31)
 #define DESC_DEFAULT_STATUS	0xdeadbeef
 #define DMA_CHAN_SIZE		128
@@ -357,9 +358,27 @@ static void _wcxb_reset_dring(struct wcxb *xb)
 static void wcxb_handle_dma(struct wcxb *xb)
 {
 	struct wcxb_meta_desc *mdesc;
+	struct wcxb_hw_desc *tail = &(xb->hw_dring[xb->dma_tail]);
 
-	while (!(xb->hw_dring[xb->dma_tail].control & cpu_to_be32(DESC_OWN))) {
+	while (!(tail->control & cpu_to_be32(DESC_OWN))) {
 		u_char *frame;
+
+		if (tail->control & cpu_to_be32(DESC_IO_ERROR)) {
+			u32 ier;
+			unsigned long flags;
+
+			/* The firmware detected an error condition on the bus.
+			 * Force an underrun by disabling the descriptor
+			 * complete interrupt. When the driver processes the
+			 * underrun it will reset the TDM engine. */
+			xb->flags.io_error = 1;
+
+			spin_lock_irqsave(&xb->lock, flags);
+			ier = ioread32be(xb->membase + IER);
+			iowrite32be(ier & ~DESC_COMPLETE, xb->membase + IER);
+			spin_unlock_irqrestore(&xb->lock, flags);
+			return;
+		}
 
 		mdesc = &xb->meta_dring[xb->dma_tail];
 		frame = mdesc->rx_buf_virt;
@@ -368,6 +387,7 @@ static void wcxb_handle_dma(struct wcxb *xb)
 
 		xb->dma_tail =
 			(xb->dma_tail == xb->latency-1) ? 0 : xb->dma_tail + 1;
+		tail = &(xb->hw_dring[xb->dma_tail]);
 
 		mdesc = &xb->meta_dring[xb->dma_head];
 		frame = mdesc->tx_buf_virt;
@@ -403,10 +423,18 @@ static irqreturn_t _wcxb_isr(int irq, void *dev_id)
 			if (xb->ops->handle_error)
 				xb->ops->handle_error(xb);
 
-			/* bump latency */
 			spin_lock(&xb->lock);
 
-			if (!xb->flags.latency_locked) {
+			if (xb->flags.io_error) {
+				/* Since an IO error is not necessarily because
+				 * the host could not keep up, we do not want to
+				 * bump the latency. */
+				xb->flags.io_error = 0;
+				dev_warn(&xb->pdev->dev,
+					 "IO error reported by firmware.\n");
+			} else if (!xb->flags.latency_locked) {
+				/* bump latency */
+
 				xb->latency = min(xb->latency + 1,
 						  xb->max_latency);
 #ifdef HAVE_RATELIMIT
