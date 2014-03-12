@@ -45,7 +45,8 @@
 
 static const char *TE133_FW_FILENAME = "dahdi-fw-te133.bin";
 static const char *TE134_FW_FILENAME = "dahdi-fw-te134.bin";
-static const u32 TE13X_FW_VERSION = 0x780017;
+static const u32 TE133_FW_VERSION = 0x780019;
+static const u32 TE134_FW_VERSION = 0x780017;
 
 #define WC_MAX_IFACES 8
 
@@ -2434,12 +2435,16 @@ error_exit:
 static int te13xp_check_firmware(struct t13x *wc)
 {
 	const char *filename;
+	u32 expected_version;
 	enum wcxb_reset_option reset;
 
-	if (is_pcie(wc))
+	if (is_pcie(wc)) {
 		filename = TE133_FW_FILENAME;
-	else
+		expected_version = TE133_FW_VERSION;
+	} else {
 		filename = TE134_FW_FILENAME;
+		expected_version = TE134_FW_VERSION;
+	}
 
 	/* Specific firmware requires power cycle to properly reset */
 	if (0x6f0017 == wcxb_get_firmware_version(&wc->xb))
@@ -2447,7 +2452,7 @@ static int te13xp_check_firmware(struct t13x *wc)
 	else
 		reset = WCXB_RESET_NOW;
 
-	return wcxb_check_firmware(&wc->xb, TE13X_FW_VERSION, filename,
+	return wcxb_check_firmware(&wc->xb, expected_version, filename,
 			force_firmware, reset);
 }
 
