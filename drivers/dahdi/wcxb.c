@@ -925,8 +925,8 @@ int wcxb_check_firmware(struct wcxb *xb, const u32 expected_version,
 	if ((meta.version == cpu_to_le32(expected_version))
 			&& !force_firmware) {
 		dev_info(&xb->pdev->dev,
-			"Detected previous firmware updated to current version %x, but not running. You likely need to power cycle your system.\n",
-			expected_version);
+			"Detected previous firmware updated to current version %x, but %x is currently running on card. You likely need to power cycle your system.\n",
+			expected_version, version);
 		return 0;
 	}
 
