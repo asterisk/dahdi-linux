@@ -47,6 +47,11 @@ struct wcxb_operations {
 struct wcxb_meta_desc;
 struct wcxb_hw_desc;
 
+/**
+ *  struct wcxb - Interface to wcxb firmware.
+ *  @last_retry_count: Running count of times firmware had to retry host DMA
+ *  	transaction. Debugging aide.
+ */
 struct wcxb {
 	struct pci_dev			*pdev;
 	spinlock_t			lock;
@@ -71,6 +76,9 @@ struct wcxb {
 	dma_addr_t			hw_dring_phys;
 	struct dma_pool			*pool;
 	unsigned long			framecount;
+#ifdef DEBUG
+	u8				last_retry_count;
+#endif
 };
 
 extern int wcxb_init(struct wcxb *xb, const char *board_name, u32 int_mode);

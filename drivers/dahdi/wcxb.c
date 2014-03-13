@@ -64,7 +64,7 @@
 #define DESC_INT		(1 << 1)
 #define DESC_IO_ERROR		(1 << 30)
 #define DESC_OWN		(1 << 31)
-#define DESC_DEFAULT_STATUS	0xdeadbeef
+#define DESC_DEFAULT_STATUS	0xdeadbe00
 #define DMA_CHAN_SIZE		128
 
 /* Echocan definitions */
@@ -352,11 +352,18 @@ static void _wcxb_reset_dring(struct wcxb *xb)
 	BUG_ON(!hdesc);
 	/* Set end of ring bit in last descriptor to force hw to loop around */
 	hdesc->control |= cpu_to_be32(DESC_EOR);
+#ifdef DEBUG
+	xb->last_retry_count = 0;
+#endif
 	iowrite32be(xb->hw_dring_phys, xb->membase + TDM_DRING_ADDR);
 }
 
 static void wcxb_handle_dma(struct wcxb *xb)
 {
+#ifdef DEBUG
+	bool did_retry_dma = false;
+	u8 retry;
+#endif
 	struct wcxb_meta_desc *mdesc;
 	struct wcxb_hw_desc *tail = &(xb->hw_dring[xb->dma_tail]);
 
@@ -380,6 +387,14 @@ static void wcxb_handle_dma(struct wcxb *xb)
 			return;
 		}
 
+#ifdef DEBUG
+		retry = be32_to_cpu(tail->status) & 0xff;
+		if (xb->last_retry_count != retry) {
+			xb->last_retry_count = retry;
+			did_retry_dma = true;
+		}
+#endif
+
 		mdesc = &xb->meta_dring[xb->dma_tail];
 		frame = mdesc->rx_buf_virt;
 
@@ -399,6 +414,13 @@ static void wcxb_handle_dma(struct wcxb *xb)
 		xb->dma_head =
 			(xb->dma_head == xb->latency-1) ? 0 : xb->dma_head + 1;
 	}
+
+#ifdef DEBUG
+	if (did_retry_dma) {
+		dev_info(&xb->pdev->dev,
+			 "DMA retries detected: %d\n", xb->last_retry_count);
+	}
+#endif
 }
 
 static irqreturn_t _wcxb_isr(int irq, void *dev_id)
