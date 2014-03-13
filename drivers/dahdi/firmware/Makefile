@@ -108,7 +108,6 @@ dahdi-fw-%.tar.gz:
 		echo "Attempting to download $@"; \
 		if test ! -f $@; then $(DOWNLOAD) $(WGET_ARGS) $(FIRMWARE_URL)/$@; fi; \
 		if test ! -f $@; then exit 1; fi; \
-		(cat $@ | gzip -d | tar --no-same-owner -xf -) \
 	fi
 
 firmware-loaders: $(FWLOADERS)
