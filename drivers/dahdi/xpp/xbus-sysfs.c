@@ -302,6 +302,42 @@ field##_show(struct device *dev, struct device_attribute *attr, char *buf) \
 xbus_attr(connector, "%s\n");
 xbus_attr(label, "%s\n");
 
+static DEVICE_ATTR_WRITER(dahdi_registration_store, dev, buf, count)
+{
+	xbus_t *xbus;
+	int dahdi_reg;
+	int ret;
+
+	xbus = dev_to_xbus(dev);
+	if (!xbus)
+		return -ENODEV;
+	ret = sscanf(buf, "%d", &dahdi_reg);
+	if (ret != 1)
+		return -EINVAL;
+	if (dahdi_reg) {
+		ret = xbus_register_dahdi_device(xbus);
+		if (ret < 0) {
+			XBUS_ERR(xbus,
+				"xbus_register_dahdi_device() failed (ret = %d)\n",
+				ret);
+			return ret;
+		}
+	} else {
+		xbus_unregister_dahdi_device(xbus);
+	}
+	return count;
+}
+
+static DEVICE_ATTR_READER(dahdi_registration_show, dev, buf)
+{
+	xbus_t *xbus;
+	int len;
+
+	xbus = dev_to_xbus(dev);
+	len = sprintf(buf, "%d\n", xbus_is_registered(xbus));
+	return len;
+}
+
 static struct device_attribute xbus_dev_attrs[] = {
 	__ATTR_RO(connector),
 	__ATTR_RO(label),
@@ -316,6 +352,9 @@ static struct device_attribute xbus_dev_attrs[] = {
 #ifdef	SAMPLE_TICKS
 	__ATTR(samples, S_IWUSR | S_IRUGO, samples_show, samples_store),
 #endif
+	__ATTR(dahdi_registration, S_IRUGO | S_IWUSR,
+		dahdi_registration_show,
+		dahdi_registration_store),
 	__ATTR_NULL,
 };
 
