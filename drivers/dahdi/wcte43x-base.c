@@ -52,7 +52,7 @@
 #include "wcxb_flash.h"
 
 static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
-static const u32 TE435_VERSION = 0xe0017;
+static const u32 TE435_VERSION = 0xe0019;
 
 /* #define RPC_RCLK */
 
