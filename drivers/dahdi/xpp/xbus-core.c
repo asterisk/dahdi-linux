@@ -953,10 +953,14 @@ int xbus_register_dahdi_device(xbus_t *xbus)
 		goto err;
 	}
 	if (xbus_is_registered(xbus)) {
-		XBUS_ERR(xbus, "Already registered to DAHDI\n");
-		WARN_ON(1);
-		ret = -EINVAL;
-		goto err;
+		/*
+		 * Ignore duplicate registrations (from dahdi_registration)
+		 * Until we completely migrate to dahdi_autoreg=1 and
+		 * hotplug-based span-assignments
+		 */
+		XBUS_DBG(DEVICES, xbus, "Already registered to DAHDI\n");
+		ret = 0;
+		goto out;
 	}
 	xbus->ddev = dahdi_create_device();
 	if (!xbus->ddev) {
