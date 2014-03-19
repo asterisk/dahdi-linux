@@ -45,9 +45,12 @@
 
 /* The definition for Surprise Down was added in Linux 3.6 in (a0dee2e PCI: misc
  * pci_reg additions). It may be backported though so we won't check for the
- * version. */
+ * version. Same with PCI_EXP_SLTCTL_PDCE. */
 #ifndef PCI_ERR_UNC_SURPDN
 #define PCI_ERR_UNC_SURPDN 0x20
+#endif
+#ifndef PCI_EXP_SLTCTL_PDCE
+#define PCI_EXP_SLTCTL_PDCE 0x8
 #endif
 
 /* FPGA Status definitions */
@@ -602,27 +605,41 @@ static void _wcxb_pcie_hard_reset(struct wcxb *xb)
 {
 	struct pci_dev *const parent = xb->pdev->bus->self;
 	u32 aer_mask;
-	int pos;
+	u16 sltctl;
+	int pos_err;
+	int pos_exp;
 
 	if (!wcxb_is_pcie(xb))
 		return;
 
-	pos = pci_find_ext_capability(parent, PCI_EXT_CAP_ID_ERR);
-	if (pos) {
-		pci_read_config_dword(parent, pos + PCI_ERR_UNCOR_MASK,
+	pos_err = pci_find_ext_capability(parent, PCI_EXT_CAP_ID_ERR);
+	if (pos_err) {
+		pci_read_config_dword(parent, pos_err + PCI_ERR_UNCOR_MASK,
 				      &aer_mask);
-		pci_write_config_dword(parent, pos + PCI_ERR_UNCOR_MASK,
+		pci_write_config_dword(parent, pos_err + PCI_ERR_UNCOR_MASK,
 				       aer_mask | PCI_ERR_UNC_SURPDN);
+	}
+
+	/* Also disable any presence change reporting. */
+	pos_exp = pci_find_capability(parent, PCI_CAP_ID_EXP);
+	if (pos_exp) {
+		pci_read_config_word(parent, pos_exp + PCI_EXP_SLTCTL,
+				     &sltctl);
+		pci_write_config_word(parent, pos_exp + PCI_EXP_SLTCTL,
+				      sltctl & ~PCI_EXP_SLTCTL_PDCE);
 	}
 
 	_wcxb_hard_reset(xb);
 
-	if (pos) {
-		pci_write_config_dword(parent, pos + PCI_ERR_UNCOR_MASK,
+	if (pos_exp)
+		pci_write_config_word(parent, pos_exp + PCI_EXP_SLTCTL, sltctl);
+
+	if (pos_err) {
+		pci_write_config_dword(parent, pos_err + PCI_ERR_UNCOR_MASK,
 				       aer_mask);
 
 		/* Clear the error as well from the status register. */
-		pci_write_config_dword(parent, pos + PCI_ERR_UNCOR_STATUS,
+		pci_write_config_dword(parent, pos_err + PCI_ERR_UNCOR_STATUS,
 				       PCI_ERR_UNC_SURPDN);
 	}
 
