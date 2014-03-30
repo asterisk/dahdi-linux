@@ -83,6 +83,7 @@ OBJECT_FILES:=$(OBJECT_FILES:FIRMWARE-VPMOCT032=dahdi-fw-vpmoct032.o)
 DOWNLOAD=wget
 WGET=wget
 INSTALL_FIRMWARE=../../../build_tools/install_firmware
+RUN_INST=$(INSTALL_FIRMWARE) $(1) $(2) $(DESTDIR)
 
 # If "fetch" is used, --continue is not a valid option.
 ifeq ($(WGET),wget)
@@ -126,21 +127,21 @@ $(DESTDIR)/usr/lib/hotplug/firmware $(DESTDIR)/lib/firmware:
 
 # Install all downloaded firmware images for hotplug usage
 hotplug-install: $(DESTDIR)/usr/lib/hotplug/firmware $(DESTDIR)/lib/firmware $(FIRMWARE)
-	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-032 $(OCT6114_032_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-064 $(OCT6114_064_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-128 $(OCT6114_128_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-oct6114-256 $(OCT6114_256_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-tc400m $(TC400M_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-hx8 $(HX8_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-vpmoct032 $(VPMOCT032_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-te820 $(WCT820_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-te133 $(TE133_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-te134 $(TE134_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-te435 $(TE435_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-a8a $(A8A_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-a8b $(A8B_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-a4a $(A4A_VERSION)
-	@$(INSTALL_FIRMWARE) dahdi-fw-a4b $(A4B_VERSION)
+	@$(call RUN_INST,dahdi-fw-oct6114-032,$(OCT6114_032_VERSION))
+	@$(call RUN_INST,dahdi-fw-oct6114-064,$(OCT6114_064_VERSION))
+	@$(call RUN_INST,dahdi-fw-oct6114-128,$(OCT6114_128_VERSION))
+	@$(call RUN_INST,dahdi-fw-oct6114-256,$(OCT6114_256_VERSION))
+	@$(call RUN_INST,dahdi-fw-tc400m,$(TC400M_VERSION))
+	@$(call RUN_INST,dahdi-fw-hx8,$(HX8_VERSION))
+	@$(call RUN_INST,dahdi-fw-vpmoct032,$(VPMOCT032_VERSION))
+	@$(call RUN_INST,dahdi-fw-te820,$(WCT820_VERSION))
+	@$(call RUN_INST,dahdi-fw-te133,$(TE133_VERSION))
+	@$(call RUN_INST,dahdi-fw-te134,$(TE134_VERSION))
+	@$(call RUN_INST,dahdi-fw-te435,$(TE435_VERSION))
+	@$(call RUN_INST,dahdi-fw-a8a,$(A8A_VERSION))
+	@$(call RUN_INST,dahdi-fw-a8b,$(A8B_VERSION))
+	@$(call RUN_INST,dahdi-fw-a4a,$(A4A_VERSION))
+	@$(call RUN_INST,dahdi-fw-a4b,$(A4B_VERSION))
 
 # Uninstall any installed dahdi firmware images from hotplug firmware directories
 hotplug-uninstall:
