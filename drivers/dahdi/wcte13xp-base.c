@@ -73,7 +73,6 @@ enum linemode {
 #define FALC_INT (1<<3)
 
 struct t13x {
-	struct pci_dev *dev;
 	spinlock_t reglock;
 
 	u8 latency;
@@ -538,23 +537,23 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 
 	vpm450m = kzalloc(sizeof(struct vpm450m), GFP_KERNEL);
 	if (!vpm450m) {
-		dev_info(&wc->dev->dev, "Unable to allocate vpm450m struct\n");
+		dev_info(&wc->xb.pdev->dev, "Unable to allocate vpm450m struct\n");
 		return NULL;
 	}
 
-	vpm450m->context.dev = &wc->dev->dev;
+	vpm450m->context.dev = &wc->xb.pdev->dev;
 	vpm450m->context.ops = &t13x_oct612x_ops;
 
 	ChipOpen = kzalloc(sizeof(tOCT6100_CHIP_OPEN), GFP_KERNEL);
 	if (!ChipOpen) {
-		dev_info(&wc->dev->dev, "Unable to allocate ChipOpen\n");
+		dev_info(&wc->xb.pdev->dev, "Unable to allocate ChipOpen\n");
 		kfree(vpm450m);
 		return NULL;
 	}
 
 	ChannelOpen = kzalloc(sizeof(tOCT6100_CHANNEL_OPEN), GFP_KERNEL);
 	if (!ChannelOpen) {
-		dev_info(&wc->dev->dev, "Unable to allocate ChannelOpen\n");
+		dev_info(&wc->xb.pdev->dev, "Unable to allocate ChannelOpen\n");
 		kfree(vpm450m);
 		kfree(ChipOpen);
 		return NULL;
@@ -563,7 +562,7 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 	for (x = 0; x < ARRAY_SIZE(vpm450m->ecmode); x++)
 		vpm450m->ecmode[x] = -1;
 
-	dev_info(&wc->dev->dev, "Echo cancellation for %d channels\n",
+	dev_info(&wc->xb.pdev->dev, "Echo cancellation for %d channels\n",
 		 ECHOCAN_NUM_CHANS);
 
 	Oct6100ChipOpenDef(ChipOpen);
@@ -625,14 +624,14 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 	/* Get the size of the OCT6100 instance structure. */
 	ulResult = Oct6100GetInstanceSize(ChipOpen, &InstanceSize);
 	if (ulResult != cOCT6100_ERR_OK) {
-		dev_info(&wc->dev->dev, "Unable to get instance size: %x\n",
+		dev_info(&wc->xb.pdev->dev, "Unable to get instance size: %x\n",
 				ulResult);
 		return NULL;
 	}
 
 	vpm450m->pApiInstance = vmalloc(InstanceSize.ulApiInstanceSize);
 	if (!vpm450m->pApiInstance) {
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			"Out of memory (can't allocate %d bytes)!\n",
 			InstanceSize.ulApiInstanceSize);
 		return NULL;
@@ -642,7 +641,7 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 	oct_enable_dram(wc);
 	ulResult = Oct6100ChipOpen(vpm450m->pApiInstance, ChipOpen);
 	if (ulResult != cOCT6100_ERR_OK) {
-		dev_info(&wc->dev->dev, "Unable to Oct6100ChipOpen: %x\n",
+		dev_info(&wc->xb.pdev->dev, "Unable to Oct6100ChipOpen: %x\n",
 				ulResult);
 		return NULL;
 	}
@@ -652,7 +651,7 @@ static struct vpm450m *init_vpm450m(struct t13x *wc, int isalaw,
 	for (i = 0; i < ECHOCAN_NUM_CHANS; i++) {
 		ulResult = echocan_initialize_channel(vpm450m, i, isalaw);
 		if (0 != ulResult) {
-			dev_info(&wc->dev->dev,
+			dev_info(&wc->xb.pdev->dev,
 				"Unable to echocan_initialize_channel: %x\n",
 				ulResult);
 			return NULL;
@@ -714,7 +713,7 @@ static int t13x_echocan_create(struct dahdi_chan *chan,
 	features = &vpm_ec_features;
 
 	if (ecp->param_count > 0) {
-		dev_warn(&wc->dev->dev, "%s echo canceller does not support parameters; failing request\n",
+		dev_warn(&wc->xb.pdev->dev, "%s echo canceller does not support parameters; failing request\n",
 			 chan->ec_factory->get_name(chan));
 		return -EINVAL;
 	}
@@ -752,14 +751,14 @@ static void t13x_vpm_init(struct t13x *wc)
 #endif
 
 	if (!vpmsupport) {
-		dev_info(&wc->dev->dev, "VPM450: Support Disabled\n");
+		dev_info(&wc->xb.pdev->dev, "VPM450: Support Disabled\n");
 		return;
 	}
 
 #if defined(HOTPLUG_FIRMWARE)
-	if ((request_firmware(&firmware, oct032_firmware, &wc->dev->dev) != 0)
-			|| !firmware) {
-		dev_notice(&wc->dev->dev, "VPM450: firmware %s not available from userspace\n",
+	if ((request_firmware(&firmware, oct032_firmware,
+			      &wc->xb.pdev->dev) != 0) || !firmware) {
+		dev_notice(&wc->xb.pdev->dev, "VPM450: firmware %s not available from userspace\n",
 				oct032_firmware);
 		return;
 	}
@@ -778,7 +777,7 @@ static void t13x_vpm_init(struct t13x *wc)
 
 	wc->vpm = init_vpm450m(wc, companding, firmware);
 	if (!wc->vpm) {
-		dev_notice(&wc->dev->dev, "VPM450: Failed to initialize\n");
+		dev_notice(&wc->xb.pdev->dev, "VPM450: Failed to initialize\n");
 		if (firmware != &embedded_firmware)
 			release_firmware(firmware);
 		return;
@@ -787,7 +786,7 @@ static void t13x_vpm_init(struct t13x *wc)
 	if (firmware != &embedded_firmware)
 		release_firmware(firmware);
 
-	dev_info(&wc->dev->dev,
+	dev_info(&wc->xb.pdev->dev,
 		"VPM450: Present and operational servicing %d span\n", 1);
 
 }
@@ -1138,7 +1137,7 @@ static void t13x_configure_t1(struct t13x *wc, int lineconfig, int txlevel)
 	__t13x_framer_set(wc, 0x18, 0x3f);	/* IMR4: Slips on transmit */
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	dev_info(&wc->dev->dev, "Span configured for %s/%s\n", framing, line);
+	dev_info(&wc->xb.pdev->dev, "Span configured for %s/%s\n", framing, line);
 }
 
 static void t13x_configure_e1(struct t13x *wc, int lineconfig)
@@ -1237,7 +1236,7 @@ static void t13x_configure_e1(struct t13x *wc, int lineconfig)
 							   transmit */
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
-	dev_info(&wc->dev->dev,
+	dev_info(&wc->xb.pdev->dev,
 			"Span configured for %s/%s%s\n", framing, line, crc4);
 }
 
@@ -1275,7 +1274,7 @@ static int te13xp_check_for_interrupts(struct t13x *wc)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		if (time_after(jiffies, stop_time)) {
 			wc->span.alarms = DAHDI_ALARM_RED;
-			dev_err(&wc->dev->dev, "Interrupts not detected.\n");
+			dev_err(&wc->xb.pdev->dev, "Interrupts not detected.\n");
 			return -EIO;
 		}
 		msleep(100);
@@ -1296,7 +1295,7 @@ static int t13x_startup(struct file *file, struct dahdi_span *span)
 	wcxb_stop_dma(&wc->xb);
 	ret = wcxb_wait_for_stop(&wc->xb, 50);
 	if (ret) {
-		dev_err(&wc->dev->dev, "Timeout waiting for DMA to stop.\n");
+		dev_err(&wc->xb.pdev->dev, "Timeout waiting for DMA to stop.\n");
 		return ret;
 	}
 
@@ -1313,7 +1312,7 @@ static int t13x_startup(struct file *file, struct dahdi_span *span)
 	if (ret)
 		return ret;
 
-	dev_info(&wc->dev->dev,
+	dev_info(&wc->xb.pdev->dev,
 			"Calling startup (flags is %lu)\n", span->flags);
 
 	/* Get this party started */
@@ -1474,11 +1473,11 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 
 	switch (cmd) {
 	case DAHDI_MAINT_NONE:
-		dev_info(&wc->dev->dev, "Clearing all maint modes\n");
+		dev_info(&wc->xb.pdev->dev, "Clearing all maint modes\n");
 		t13x_clear_maint(span);
 		break;
 	case DAHDI_MAINT_LOCALLOOP:
-		dev_info(&wc->dev->dev, "Turning on local loopback\n");
+		dev_info(&wc->xb.pdev->dev, "Turning on local loopback\n");
 		t13x_clear_maint(span);
 		spin_lock_irqsave(&wc->reglock, flags);
 		reg = __t13x_framer_get(wc, LIM0);
@@ -1486,7 +1485,7 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		break;
 	case DAHDI_MAINT_NETWORKLINELOOP:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 				"Turning on network line loopback\n");
 		t13x_clear_maint(span);
 		spin_lock_irqsave(&wc->reglock, flags);
@@ -1495,7 +1494,7 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		break;
 	case DAHDI_MAINT_NETWORKPAYLOADLOOP:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			"Turning on network payload loopback\n");
 		t13x_clear_maint(span);
 		spin_lock_irqsave(&wc->reglock, flags);
@@ -1504,7 +1503,7 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		break;
 	case DAHDI_MAINT_LOOPUP:
-		dev_info(&wc->dev->dev, "Transmitting loopup code\n");
+		dev_info(&wc->xb.pdev->dev, "Transmitting loopup code\n");
 		t13x_clear_maint(span);
 		if (dahdi_is_e1_span(&wc->span)) {
 			spin_lock_irqsave(&wc->reglock, flags);
@@ -1519,7 +1518,7 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 		}
 		break;
 	case DAHDI_MAINT_LOOPDOWN:
-		dev_info(&wc->dev->dev, "Transmitting loopdown code\n");
+		dev_info(&wc->xb.pdev->dev, "Transmitting loopdown code\n");
 		t13x_clear_maint(span);
 		if (dahdi_is_e1_span(&wc->span)) {
 			spin_lock_irqsave(&wc->reglock, flags);
@@ -1555,7 +1554,7 @@ static int t13x_maint(struct dahdi_span *span, int cmd)
 		t13x_reset_counters(span);
 		break;
 	default:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 				"Unknown maint command: %d\n", cmd);
 		return -ENOSYS;
 	}
@@ -1748,7 +1747,7 @@ static int t13x_software_init(struct t13x *wc, enum linemode type)
 
 	spin_unlock_irqrestore(&wc->reglock, flags);
 
-	dev_info(&wc->dev->dev, "Setting up global serial parameters for %s\n",
+	dev_info(&wc->xb.pdev->dev, "Setting up global serial parameters for %s\n",
 		dahdi_spantype2str(wc->span.spantype));
 
 	t13x_serial_setup(wc);
@@ -1798,7 +1797,7 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 	clear_bit(INITIALIZED, &wc->bit_flags);
 	disable_irq(wc->xb.pdev->irq);
 
-	synchronize_irq(wc->dev->irq);
+	synchronize_irq(wc->xb.pdev->irq);
 	smp_mb__after_clear_bit();
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
@@ -1808,24 +1807,24 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 
 	switch (linemode) {
 	case SPANTYPE_DIGITAL_T1:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			 "Changing from %s to T1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t13x_software_init(wc, T1);
 		break;
 	case SPANTYPE_DIGITAL_E1:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			 "Changing from %s to E1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t13x_software_init(wc, E1);
 		break;
 	case SPANTYPE_DIGITAL_J1:
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			 "Changing from %s to E1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t13x_software_init(wc, J1);
 	default:
-		dev_err(&wc->dev->dev,
+		dev_err(&wc->xb.pdev->dev,
 			"Got invalid linemode '%s' from dahdi\n",
 			dahdi_spantype2str(linemode));
 		res = -EINVAL;
@@ -1858,14 +1857,14 @@ static int t13x_hardware_post_init(struct t13x *wc, enum linemode *type)
 	} else if (!strcasecmp(default_linemode, "j1")) {
 		*type = J1;
 	} else {
-		dev_warn(&wc->dev->dev,
+		dev_warn(&wc->xb.pdev->dev,
 			 "'%s' is an unknown linemode. Defaulting to 't1'\n",
 			 default_linemode);
 		*type = T1;
 	}
 
 	if (debug) {
-		dev_info(&wc->dev->dev, "linemode: %s\n",
+		dev_info(&wc->xb.pdev->dev, "linemode: %s\n",
 			 (*type == T1) ? "T1" : ((J1 == *type) ? "J1" : "E1"));
 	}
 
@@ -1873,23 +1872,23 @@ static int t13x_hardware_post_init(struct t13x *wc, enum linemode *type)
 	wcxb_gpio_set(&wc->xb, FALC_CPU_RESET);
 	reg = t13x_framer_get(wc, 0x4a);
 	if (reg < 0) {
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 				"Failed to read FALC version (%x)\n", reg);
 		return -EIO;
 	}
-	dev_info(&wc->dev->dev, "FALC version: %1x\n", reg);
+	dev_info(&wc->xb.pdev->dev, "FALC version: %1x\n", reg);
 
 	/* make sure reads and writes work */
 	for (x = 0; x < 256; x++) {
 		t13x_framer_set(wc, 0x14, x);
 		reg = t13x_framer_get(wc, 0x14);
 		if (reg < 0) {
-			dev_info(&wc->dev->dev,
+			dev_info(&wc->xb.pdev->dev,
 					"Failed register read (%d)\n", reg);
 			return -EIO;
 		}
 		if (reg != x) {
-			dev_info(&wc->dev->dev,
+			dev_info(&wc->xb.pdev->dev,
 				"Register test failed. Wrote '%x' but read '%x'\n",
 				x, reg);
 			return -EIO;
@@ -1928,7 +1927,7 @@ static void t13x_check_alarms(struct t13x *wc)
 				/* LIM0: Force RAI High */
 				__t13x_framer_set(wc, 0x20, 0x9f | 0x20);
 				wc->flags.nmf = 1;
-				dev_info(&wc->dev->dev, "NMF workaround on!\n");
+				dev_info(&wc->xb.pdev->dev, "NMF workaround on!\n");
 			}
 			__t13x_framer_set(wc, 0x1e, 0xc3);	/* Reset to CRC4 mode */
 			__t13x_framer_set(wc, 0x1c, 0xf2);	/* Force Resync */
@@ -1938,7 +1937,7 @@ static void t13x_check_alarms(struct t13x *wc)
 				/* LIM0: Clear forced RAI */
 				__t13x_framer_set(wc, 0x20, 0x9f);
 				wc->flags.nmf = 0;
-				dev_info(&wc->dev->dev,
+				dev_info(&wc->xb.pdev->dev,
 						"NMF workaround off!\n");
 			}
 		}
@@ -2047,31 +2046,31 @@ static void t13x_debounce_alarms(struct t13x *wc)
 	if (wc->lofalarmtimer && time_after(jiffies, wc->lofalarmtimer)) {
 		alarms |= DAHDI_ALARM_RED;
 		wc->lofalarmtimer = 0;
-		dev_info(&wc->dev->dev, "LOF alarm detected\n");
+		dev_info(&wc->xb.pdev->dev, "LOF alarm detected\n");
 	}
 
 	if (wc->losalarmtimer && time_after(jiffies, wc->losalarmtimer)) {
 		alarms |= DAHDI_ALARM_RED;
 		wc->losalarmtimer = 0;
-		dev_info(&wc->dev->dev, "LOS alarm detected\n");
+		dev_info(&wc->xb.pdev->dev, "LOS alarm detected\n");
 	}
 
 	if (wc->aisalarmtimer && time_after(jiffies, wc->aisalarmtimer)) {
 		alarms |= DAHDI_ALARM_BLUE;
 		wc->aisalarmtimer = 0;
-		dev_info(&wc->dev->dev, "AIS alarm detected\n");
+		dev_info(&wc->xb.pdev->dev, "AIS alarm detected\n");
 	}
 
 	if (wc->yelalarmtimer && time_after(jiffies, wc->yelalarmtimer)) {
 		alarms |= DAHDI_ALARM_YELLOW;
 		wc->yelalarmtimer = 0;
-		dev_info(&wc->dev->dev, "YEL alarm detected\n");
+		dev_info(&wc->xb.pdev->dev, "YEL alarm detected\n");
 	}
 
 	if (wc->recoverytimer && time_after(jiffies, wc->recoverytimer)) {
 		alarms &= ~(DAHDI_ALARM_RECOVER);
 		wc->recoverytimer = 0;
-		dev_info(&wc->dev->dev, "Alarms cleared\n");
+		dev_info(&wc->xb.pdev->dev, "Alarms cleared\n");
 	}
 
 	if (alarms != wc->span.alarms) {
@@ -2085,7 +2084,7 @@ static void t13x_debounce_alarms(struct t13x *wc)
 	if (alarms & (DAHDI_ALARM_RED|DAHDI_ALARM_BLUE|
 				DAHDI_ALARM_NOTOPEN|DAHDI_ALARM_RECOVER)) {
 		if (!wc->flags.sendingyellow) {
-			dev_info(&wc->dev->dev, "Setting yellow alarm\n");
+			dev_info(&wc->xb.pdev->dev, "Setting yellow alarm\n");
 			/* We manually do yellow alarm to handle RECOVER
 			 * and NOTOPEN, otherwise it's auto anyway */
 			fmr4 = __t13x_framer_get(wc, 0x20);
@@ -2094,7 +2093,7 @@ static void t13x_debounce_alarms(struct t13x *wc)
 		}
 	} else {
 		if (wc->flags.sendingyellow) {
-			dev_info(&wc->dev->dev, "Clearing yellow alarm\n");
+			dev_info(&wc->xb.pdev->dev, "Clearing yellow alarm\n");
 			/* We manually do yellow alarm to handle RECOVER  */
 			fmr4 = __t13x_framer_get(wc, 0x20);
 			__t13x_framer_set(wc, 0x20, fmr4 & ~0x20);
@@ -2112,7 +2111,7 @@ static void t13x_debounce_loopcodes(struct t13x *wc)
 	spin_lock_irqsave(&wc->reglock, flags);
 	if (wc->loopuptimer && time_after(jiffies, wc->loopuptimer)) {
 		/* Loop-up code debounced */
-		dev_info(&wc->dev->dev, "Loopup detected, enabling remote loop\n");
+		dev_info(&wc->xb.pdev->dev, "Loopup detected, enabling remote loop\n");
 		__t13x_framer_set(wc, 0x36, 0x08);	/* LIM0: Disable
 							   any local loop */
 		__t13x_framer_set(wc, 0x37, 0xf6);	/* LIM1: Enable
@@ -2126,7 +2125,7 @@ static void t13x_debounce_loopcodes(struct t13x *wc)
 
 	if (wc->loopdntimer && time_after(jiffies, wc->loopdntimer)) {
 		/* Loop-down code debounced */
-		dev_info(&wc->dev->dev, "Loopdown detected, disabling remote loop\n");
+		dev_info(&wc->xb.pdev->dev, "Loopdown detected, disabling remote loop\n");
 		__t13x_framer_set(wc, 0x36, 0x08);	/* LIM0: Disable
 							   any local loop */
 		__t13x_framer_set(wc, 0x37, 0xf0);	/* LIM1: Disable
@@ -2238,7 +2237,8 @@ static void timer_work_func(struct work_struct *work)
 	static int work_count;
 
 	if (debug)
-		dev_notice(&wc->dev->dev, "Timer work: %d!\n", ++work_count);
+		dev_notice(&wc->xb.pdev->dev, "Timer work: %d!\n",
+			   ++work_count);
 
 	t13x_debounce_alarms(wc);
 	if (!dahdi_is_e1_span(&wc->span))
@@ -2270,7 +2270,7 @@ static void handle_falc_int(struct t13x *wc)
 	isr4 = (gis & FRMR_GIS_ISR4) ? __t13x_framer_get(wc, FRMR_ISR4) : 0;
 
 	if ((debug) && !(isr3 & ISR3_SEC)) {
-		dev_info(&wc->dev->dev, "gis: %02x, isr0: %02x, isr1: %02x, "\
+		dev_info(&wc->xb.pdev->dev, "gis: %02x, isr0: %02x, isr1: %02x, "\
 			"isr2: %02x, isr3: %02x, isr4: %02x, intcount=%u\n",
 			gis, isr0, isr1, isr2, isr3, isr4, intcount);
 	}
@@ -2485,7 +2485,6 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 		return -ENOMEM;
 	}
 
-	wc->dev = pdev;
 	wc->devtype = d;
 	dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
 
@@ -2544,7 +2543,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 
 	wc->ddev->hardware_id = t13x_read_serial(wc);
 	if (!wc->ddev->hardware_id) {
-		dev_info(&wc->dev->dev, "No serial number found.\n");
+		dev_info(&wc->xb.pdev->dev, "No serial number found.\n");
 		res = -EIO;
 		goto fail_exit;
 	}
@@ -2566,11 +2565,11 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	if (latency > 0 && latency < DRING_SIZE) {
 		wcxb_set_minlatency(&wc->xb, latency);
 		if (WCXB_DEFAULT_LATENCY != latency)
-			dev_info(&wc->dev->dev,
+			dev_info(&wc->xb.pdev->dev,
 				"latency manually overridden to %d\n",
 				latency);
 	} else {
-		dev_info(&wc->dev->dev,
+		dev_info(&wc->xb.pdev->dev,
 			"latency module parameter must be between 1 and %d\n",
 			DRING_SIZE);
 		res = -EPERM;
@@ -2608,9 +2607,9 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	/* Span is in red alarm by default */
 	wc->span.alarms = DAHDI_ALARM_NONE;
 
-	res = dahdi_register_device(wc->ddev, &wc->dev->dev);
+	res = dahdi_register_device(wc->ddev, &wc->xb.pdev->dev);
 	if (res) {
-		dev_info(&wc->dev->dev, "Unable to register with DAHDI\n");
+		dev_info(&wc->xb.pdev->dev, "Unable to register with DAHDI\n");
 		goto fail_exit;
 	}
 
@@ -2618,10 +2617,10 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	mod_timer(&wc->timer, jiffies + HZ/5);
 
 	if (wc->ddev->hardware_id) {
-		dev_info(&wc->dev->dev, "Found a %s (SN: %s)\n",
+		dev_info(&wc->xb.pdev->dev, "Found a %s (SN: %s)\n",
 				wc->devtype->name, wc->ddev->hardware_id);
 	} else {
-		dev_info(&wc->dev->dev, "Found a %s\n",
+		dev_info(&wc->xb.pdev->dev, "Found a %s\n",
 				wc->devtype->name);
 	}
 
@@ -2638,7 +2637,7 @@ fail_exit:
 static void __devexit te13xp_remove_one(struct pci_dev *pdev)
 {
 	struct t13x *wc = pci_get_drvdata(pdev);
-	dev_info(&wc->dev->dev, "Removing a Wildcard TE13xP.\n");
+	dev_info(&wc->xb.pdev->dev, "Removing a Wildcard TE13xP.\n");
 	if (!wc)
 		return;
 
@@ -2679,7 +2678,7 @@ static DEFINE_PCI_DEVICE_TABLE(te13xp_pci_tbl) = {
 static void te13xp_shutdown(struct pci_dev *pdev)
 {
 	struct t13x *wc = pci_get_drvdata(pdev);
-	dev_info(&wc->dev->dev, "Quiescing a Wildcard TE13xP.\n");
+	dev_info(&wc->xb.pdev->dev, "Quiescing a Wildcard TE13xP.\n");
 	if (!wc)
 		return;
 
