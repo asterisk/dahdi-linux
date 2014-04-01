@@ -2454,6 +2454,7 @@ t43x_init_one_span(struct t43x *wc, struct t43x_span *ts, enum linemode type)
 	default:
 		spin_unlock_irqrestore(&wc->reglock, flags);
 		res = -EINVAL;
+		enable_irq(wc->xb.pdev->irq);
 		goto error_exit;
 	}
 
@@ -2476,7 +2477,6 @@ t43x_init_one_span(struct t43x *wc, struct t43x_span *ts, enum linemode type)
 	return 0;
 
 error_exit:
-	enable_irq(wc->xb.pdev->irq);
 
 	for (x = 0; x < ARRAY_SIZE(chans); ++x) {
 		kfree(chans[x]);
