@@ -1797,7 +1797,6 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 	clear_bit(INITIALIZED, &wc->bit_flags);
 	disable_irq(wc->xb.pdev->irq);
 
-	synchronize_irq(wc->xb.pdev->irq);
 	smp_mb__after_clear_bit();
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
