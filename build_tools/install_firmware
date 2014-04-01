@@ -5,16 +5,14 @@
 FIRMWARE_PATTERN=$1
 FIRMWARE_VERSION=$2
 DESTDIR=$3
+target="$DESTDIR/lib/firmware"
 
-if ! test -f ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION} || ! test -f ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}; then
-	echo "Installing ${FIRMWARE_PATTERN}.bin to hotplug firmware directories"
+if ! test -f $target/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}; then
+	echo "Installing ${FIRMWARE_PATTERN}.bin to $target"
 	tar --no-same-owner -xf ${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}.tar.gz || exit 1
-	install -m 644 ${FIRMWARE_PATTERN}.bin ${DESTDIR}/usr/lib/hotplug/firmware || exit 1
-	rm -rf ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-*
-	touch ${DESTDIR}/usr/lib/hotplug/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}
-	install -m 644 ${FIRMWARE_PATTERN}.bin ${DESTDIR}/lib/firmware || exit 1
-	rm -rf ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-*
-	touch ${DESTDIR}/lib/firmware/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}
+	install -m 644 ${FIRMWARE_PATTERN}.bin $target || exit 1
+	rm -rf $target/.${FIRMWARE_PATTERN}-*
+	touch $target/.${FIRMWARE_PATTERN}-${FIRMWARE_VERSION}
 	# Remove the .bin file so that if the version is reverted, it will not
 	# be installed with a non-matching ${FIRMARE_VERSION} file.
 	rm ${FIRMWARE_PATTERN}.bin
