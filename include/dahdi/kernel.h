@@ -1592,6 +1592,10 @@ struct mutex {
 #define	chan_err(chan, fmt, ...)	chan_printk(ERR, "", chan, fmt, \
 						## __VA_ARGS__)
 
+#ifndef pr_fmt
+#define pr_fmt(fmt)             KBUILD_MODNAME ": " fmt
+#endif
+
 #ifndef pr_err
 #define pr_err(fmt, ...) \
 	printk(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
