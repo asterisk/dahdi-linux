@@ -1040,6 +1040,13 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
 		XBUS_ERR(xbus, "dahdi_registration_mutex already taken\n");
 		return;
 	}
+	if (!xbus_is_registered(xbus)) {
+		/*
+		 * Ignore duplicate unregistrations
+		 */
+		XBUS_DBG(DEVICES, xbus, "Already unregistered to DAHDI\n");
+		goto err;
+	}
 	for (i = 0; i < MAX_XPDS; i++) {
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_preunregister(xpd);
@@ -1054,6 +1061,7 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
 		xpd_t *xpd = xpd_of(xbus, i);
 		xpd_dahdi_postunregister(xpd);
 	}
+err:
 	mutex_unlock(&dahdi_registration_mutex);
 }
 
