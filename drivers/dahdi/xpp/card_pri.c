@@ -1231,7 +1231,7 @@ static int pri_chanconfig(struct file *file, struct dahdi_chan *chan,
 		if (priv->pri_protocol != PRI_PROTO_E1 && priv->is_cas != 0)
 			set_mode_cas(xpd, 0);
 	} else {
-		if (chan->channo == 1) {
+		if (chan->chanpos == 1) {
 			XPD_DBG(GENERAL, xpd,
 				"channel %d (%s) marked a not DChan\n",
 				chan->channo, chan->name);
