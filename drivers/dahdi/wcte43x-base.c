@@ -65,7 +65,9 @@ static inline int delayed_work_pending(struct work_struct *work)
 #endif
 
 static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
+static const char *TE436_FW_FILENAME = "dahdi-fw-te436.bin";
 static const u32 TE435_VERSION = 0xe0019;
+static const u32 TE436_VERSION = 0x10017;
 
 /* #define RPC_RCLK */
 
@@ -794,6 +796,8 @@ struct t43x_desc {
 
 static const struct t43x_desc te435 = {"Wildcard TE435"}; /* pci express quad */
 static const struct t43x_desc te235 = {"Wildcard TE235"}; /* pci express dual */
+static const struct t43x_desc te436 = {"Wildcard TE436"}; /* pci quad */
+static const struct t43x_desc te236 = {"Wildcard TE236"}; /* pci dual */
 
 static int __t43x_pci_get(struct t43x *wc, unsigned int addr)
 {
@@ -3449,12 +3453,6 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 		goto fail_exit;
 	}
 
-	/* Check for field updatable firmware */
-	res = wcxb_check_firmware(&wc->xb, TE435_VERSION,
-			TE435_FW_FILENAME, force_firmware, WCXB_RESET_NOW);
-	if (res)
-		goto fail_exit;
-
 	wc->ddev->hardware_id = t43x_read_serial(wc);
 
 	if (wc->ddev->hardware_id == NULL) {
@@ -3464,11 +3462,21 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 	}
 
 	if (strncmp(wc->ddev->hardware_id, "1TE435F", 7) == 0) {
+		/* Quad-span PCIE */
 		wc->numspans = 4;
 		wc->devtype = &te435;
 	} else if (strncmp(wc->ddev->hardware_id, "1TE235F", 7) == 0) {
+		/* Dual-span PCIE */
 		wc->numspans = 2;
 		wc->devtype = &te235;
+	} else if (strncmp(wc->ddev->hardware_id, "1TE436F", 7) == 0) {
+		/* Quad-span PCI */
+		wc->numspans = 4;
+		wc->devtype = &te436;
+	} else if (strncmp(wc->ddev->hardware_id, "1TE236F", 7) == 0) {
+		/* Dual-span PCI */
+		wc->numspans = 2;
+		wc->devtype = &te236;
 	} else {
 		dev_info(&wc->xb.pdev->dev,
 			"Unable to identify board type from serial number %s\n",
@@ -3476,6 +3484,20 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 		res = -EIO;
 		goto fail_exit;
 	}
+
+	/* Check for field updatable firmware */
+	if ((wc->devtype == &te435) || (wc->devtype == &te235)) {
+		res = wcxb_check_firmware(&wc->xb, TE435_VERSION,
+			TE435_FW_FILENAME, force_firmware, WCXB_RESET_NOW);
+	} else if ((wc->devtype == &te436) || (wc->devtype == &te236)) {
+		res = wcxb_check_firmware(&wc->xb, TE436_VERSION,
+			TE436_FW_FILENAME, force_firmware, WCXB_RESET_NOW);
+	} else {
+		res = -EIO;
+	}
+
+	if (res)
+		goto fail_exit;
 
 	for (x = 0; x < wc->numspans; x++) {
 		ts = kzalloc(sizeof(*wc->tspans[x]), GFP_KERNEL);
@@ -3595,6 +3617,7 @@ static void __devexit t43x_remove_one(struct pci_dev *pdev)
 
 static DEFINE_PCI_DEVICE_TABLE(t43x_pci_tbl) = {
 	{ 0xd161, 0x800e, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
+	{ 0xd161, 0x8013, PCI_ANY_ID, PCI_ANY_ID, 0, 0, 0},
 	{ 0 }
 };
 
