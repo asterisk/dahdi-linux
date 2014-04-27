@@ -524,9 +524,12 @@ static void PRI_card_pcm_recompute(xpd_t *xpd, xpp_line_t pcm_mask)
 	//XPD_DBG(SIGNAL, xpd, "pcm_mask=0x%X\n", pcm_mask);
 	/* Add/remove all the trivial cases */
 	pcm_mask |= PHONEDEV(xpd).offhook_state;
+	if (priv->is_cas)
+		pcm_mask |= BITMASK(PHONEDEV(xpd).channels);
 	for_each_line(xpd, i)
 	    if (IS_SET(pcm_mask, i))
 		line_count++;
+	    else
 	if (priv->is_cas) {
 		if (priv->pri_protocol == PRI_PROTO_E1) {
 			/* CAS: Don't send PCM to D-Channel */
