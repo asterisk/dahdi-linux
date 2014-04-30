@@ -51,6 +51,19 @@
 #include "wcxb_spi.h"
 #include "wcxb_flash.h"
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+#  ifdef RHEL_RELEASE_VERSION
+#    if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5, 6)
+#      define T43X_HAVE_CANCEL_WORK_SYNC
+#    endif
+#  else
+static inline int delayed_work_pending(struct work_struct *work)
+{
+	return test_bit(0, &work->pending);
+}
+#  endif
+#endif
+
 static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
 static const u32 TE435_VERSION = 0xe0019;
 
@@ -3477,7 +3490,12 @@ static void __devexit t43x_remove_one(struct pci_dev *pdev)
 	wc->vpm = NULL;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+#  ifdef T43X_HAVE_CANCEL_WORK_SYNC 
 	cancel_work_sync(&wc->clksrc_work.work);
+#  else
+	cancel_delayed_work(&wc->clksrc_work.work);
+	flush_workqueue(wc->wq);
+#  endif
 #else
 	cancel_delayed_work_sync(&wc->clksrc_work.work);
 #endif
