@@ -1210,7 +1210,7 @@ static void t43x_clksrc_work_fn(struct work_struct *data)
  * @mode:	The clock mode that we would like to move to.
  * @master:	If true, drive the clock on the timing header.
  *
- * The clock srouce cannot be changed while DMA is active, so this function
+ * The clock source cannot be changed while DMA is active, so this function
  * will stop the DMA, then queue a delayed work item in order to come back and
  * check that DMA was actually stopped before changing the source of the clock.
  *
