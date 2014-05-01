@@ -1533,6 +1533,29 @@ wctc4xxp_cleanup_descriptor_ring(struct wctc4xxp_descriptor_ring *dr)
 		dr->desc, dr->desc_dma);
 }
 
+static void wctc4xxp_timeout_all_commands(struct wcdte *wc)
+{
+	struct tcb *cmd;
+	struct tcb *temp;
+	unsigned long flags;
+	LIST_HEAD(local_list);
+
+	spin_lock_irqsave(&wc->cmd_list_lock, flags);
+	list_splice_init(&wc->waiting_for_response_list, &local_list);
+	list_splice_init(&wc->cmd_list, &local_list);
+	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+
+	list_for_each_entry_safe(cmd, temp, &local_list, node) {
+		list_del_init(&cmd->node);
+		if (cmd->flags & DO_NOT_AUTO_FREE) {
+			cmd->flags |= DTE_CMD_TIMEOUT;
+			complete(&cmd->complete);
+		} else {
+			free_cmd(cmd);
+		}
+	}
+}
+
 static void wctc4xxp_cleanup_command_list(struct wcdte *wc)
 {
 	struct tcb *cmd;
@@ -1713,7 +1736,7 @@ wctc4xxp_cleanup_channel_private(struct wcdte *wc,
 	}
 }
 
-static int
+static void
 wctc4xxp_mark_channel_complement_built(struct wcdte *wc,
 	struct dahdi_transcoder_channel *dtc)
 {
@@ -1740,8 +1763,6 @@ wctc4xxp_mark_channel_complement_built(struct wcdte *wc,
 	compl_cpvt->chan_out_num = cpvt->chan_in_num;
 	dahdi_tc_set_built(compl_dtc);
 	wctc4xxp_cleanup_channel_private(wc, dtc);
-
-	return 0;
 }
 
 static int
@@ -1783,6 +1804,7 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	if (res) {
 		/* There was a problem creating the channel.... */
 		up(&wc->chansem);
+		dev_err(&wc->pdev->dev, "Failed to create channel pair.\n");
 		return res;
 	}
 	/* Mark this channel as built */
@@ -1793,10 +1815,10 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	  dtc->srcfmt);
 	/* Mark the channel complement (other half of encoder/decoder pair) as
 	 * built */
-	res = wctc4xxp_mark_channel_complement_built(wc, dtc);
+	wctc4xxp_mark_channel_complement_built(wc, dtc);
 	up(&wc->chansem);
 	dahdi_transcoder_alert(dtc);
-	return res;
+	return 0;
 }
 
 static void
@@ -2404,8 +2426,19 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 				wctc4xxp_send_ack(wc, hdr->seq_num,
 						  hdr->channel);
 			}
-			dev_warn(&wc->pdev->dev,
-				 "Received diagnostic message:\n");
+
+			if (hdr->function == 0x0000) {
+				u16 alert_type = le16_to_cpu(hdr->params[0]);
+				dev_err(&wc->pdev->dev,
+				   "Received alert (0x%04x) from dsp. Please reload driver.\n",
+				   alert_type);
+
+				set_bit(DTE_SHUTDOWN, &wc->flags);
+				wctc4xxp_timeout_all_commands(wc);
+			} else {
+				dev_warn(&wc->pdev->dev,
+					 "Received diagnostic message:\n");
+			}
 			print_command(wc, cmd);
 			free_cmd(cmd);
 		} else {
