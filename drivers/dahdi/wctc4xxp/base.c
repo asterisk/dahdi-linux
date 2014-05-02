@@ -618,28 +618,6 @@ wctc4xxp_net_waitfor_promiscuous(struct wcdte *wc)
 	}
 }
 
-static int  wctc4xxp_turn_off_booted_led(struct wcdte *wc);
-static void wctc4xxp_turn_on_booted_led(struct wcdte *wc);
-
-static int
-wctc4xxp_net_ioctl(struct net_device *netdev, struct ifreq *ifr, int cmd)
-{
-	struct wcdte *wc = wcdte_from_netdev(netdev);
-	switch (cmd) {
-	case 0x89f0:
-		down(&wc->chansem);
-		wctc4xxp_turn_off_booted_led(wc);
-		break;
-	case 0x89f1:
-		wctc4xxp_turn_on_booted_led(wc);
-		up(&wc->chansem);
-		break;
-	default:
-		return -EOPNOTSUPP;
-	};
-	return 0;
-}
-
 #ifdef HAVE_NET_DEVICE_OPS
 static const struct net_device_ops wctc4xxp_netdev_ops = {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
@@ -651,7 +629,6 @@ static const struct net_device_ops wctc4xxp_netdev_ops = {
 	.ndo_stop = &wctc4xxp_net_down,
 	.ndo_start_xmit = &wctc4xxp_net_hard_start_xmit,
 	.ndo_get_stats = &wctc4xxp_net_get_stats,
-	.ndo_do_ioctl = &wctc4xxp_net_ioctl,
 };
 #endif
 
@@ -686,7 +663,6 @@ wctc4xxp_net_register(struct wcdte *wc)
 	netdev->stop = &wctc4xxp_net_down;
 	netdev->hard_start_xmit = &wctc4xxp_net_hard_start_xmit;
 	netdev->get_stats = &wctc4xxp_net_get_stats;
-	netdev->do_ioctl = &wctc4xxp_net_ioctl;
 #	endif
 
 	netdev->promiscuity = 0;
