@@ -2217,7 +2217,7 @@ wctc4xxp_send_ack(struct wcdte *wc, u8 seqno, __be16 channel)
 	wctc4xxp_transmit_cmd(wc, cmd);
 }
 
-static bool do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
+static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 {
 	const struct csm_encaps_hdr *listhdr, *rxhdr;
 	struct tcb *pos, *temp;
@@ -2228,7 +2228,7 @@ static bool do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 		/* We received a duplicate response. */
 		if (rxhdr->seq_num == wc->last_rx_seq_num) {
 			free_cmd(cmd);
-			return false;
+			return;
 		}
 		wc->last_rx_seq_num = rxhdr->seq_num;
 	}
@@ -2261,10 +2261,7 @@ static bool do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 			"Freeing unhandled response ch:(%04x)\n",
 			be16_to_cpu(rxhdr->channel));
 		free_cmd(cmd);
-		return false;
 	}
-
-	return true;
 }
 
 static void
@@ -2363,7 +2360,8 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 			u8 seq_num = hdr->seq_num;
 			__be16 channel = hdr->channel;
 
-			if (do_rx_response_packet(wc, cmd) && !suppress_ack)
+			do_rx_response_packet(wc, cmd);
+			if (!suppress_ack)
 				wctc4xxp_send_ack(wc, seq_num, channel);
 
 		} else if (0xc1 == hdr->type) {
