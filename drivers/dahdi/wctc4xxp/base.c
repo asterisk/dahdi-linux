@@ -1658,7 +1658,6 @@ static int wctc4xxp_create_channel_pair(struct wcdte *wc,
 		struct channel_pvt *cpvt, u8 simple, u8 complicated);
 static int wctc4xxp_destroy_channel_pair(struct wcdte *wc,
 		struct channel_pvt *cpvt);
-static int __wctc4xxp_setup_channels(struct wcdte *wc);
 
 static void
 wctc4xxp_init_state(struct channel_pvt *cpvt, int encoder,
@@ -1750,18 +1749,13 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	u8 wctc4xxp_dstfmt; /* Digium Transcoder Engine Dest Format */
 	int res;
 
-#ifndef DEBUG_WCTC4XXP
-	mutex_lock(&wc->chanlock);
-#else
 	if (mutex_lock_interruptible(&wc->chanlock))
 		return -EINTR;
-#endif
 
 	/* Check again to see if the channel was built after grabbing the
 	 * channel lock, in case the previous holder of the lock
 	 * built this channel as a complement to itself. */
 	if (dahdi_tc_is_built(dtc)) {
-		mutex_unlock(&wc->chanlock);
 		DTE_DEBUG(DTE_DEBUG_CHANNEL_SETUP,
 		  "Allocating channel %p which is already built.\n", dtc);
 		return 0;
@@ -1779,7 +1773,6 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 		wctc4xxp_dstfmt);
 	if (res) {
 		/* There was a problem creating the channel.... */
-		mutex_unlock(&wc->chanlock);
 		dev_err(&wc->pdev->dev, "Failed to create channel pair.\n");
 		return res;
 	}
@@ -1792,7 +1785,6 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	/* Mark the channel complement (other half of encoder/decoder pair) as
 	 * built */
 	wctc4xxp_mark_channel_complement_built(wc, dtc);
-	mutex_unlock(&wc->chanlock);
 	dahdi_transcoder_alert(dtc);
 	return 0;
 }
@@ -1829,12 +1821,22 @@ wctc4xxp_enable_polling(struct wcdte *wc)
 static int
 wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 {
+	int res;
 	struct wcdte *wc = ((struct channel_pvt *)(dtc->pvt))->wc;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	mutex_lock(&wc->chanlock);
+#else
+	res = mutex_lock_killable(&wc->chanlock);
+	if (res)
+		return res;
+#endif
 
 	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
 		/* The shudown flags can also be set if there is a
 		 * catastrophic failure. */
-		return -EIO;
+		res = -EIO;
+		goto error_exit;
 	}
 
 	atomic_inc(&wc->open_channels);
@@ -1848,7 +1850,11 @@ wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 		  "Allocating channel %p which is already built.\n", dtc);
 		return 0;
 	}
-	return do_channel_allocate(dtc);
+	res = do_channel_allocate(dtc);
+
+error_exit:
+	mutex_unlock(&wc->chanlock);
+	return res;
 }
 
 static void
@@ -1874,18 +1880,20 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 	BUG_ON(!cpvt);
 	BUG_ON(!wc);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	mutex_lock(&wc->chanlock);
+#else
+	res = mutex_lock_killable(&wc->chanlock);
+	if (res)
+		return res;
+#endif
+
 	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
 		/* The shudown flags can also be set if there is a
 		 * catastrophic failure. */
-		return -EIO;
+		res = -EIO;
+		goto error_exit;
 	}
-
-#ifndef DEBUG_WCTC4XXP
-	mutex_lock(&wc->chanlock);
-#else
-	if (mutex_lock_interruptible(&wc->chanlock))
-		return -EINTR;
-#endif
 
 	atomic_dec(&wc->open_channels);
 
@@ -3141,7 +3149,7 @@ error_exit:
 
 
 static int
-__wctc4xxp_setup_channels(struct wcdte *wc)
+wctc4xxp_setup_channels(struct wcdte *wc)
 {
 	struct tcb *cmd;
 	int tdm_bus;
@@ -3196,22 +3204,6 @@ __wctc4xxp_setup_channels(struct wcdte *wc)
 error_exit:
 	free_cmd(cmd);
 	return -1;
-}
-
-static int
-wctc4xxp_setup_channels(struct wcdte *wc)
-{
-	int ret;
-#ifndef DEBUG_WCTC4XXP
-	mutex_lock(&wc->chanlock);
-#else
-	if (mutex_lock_interruptible(&wc->chanlock))
-		return -EINTR;
-#endif
-	ret = __wctc4xxp_setup_channels(wc);
-	mutex_unlock(&wc->chanlock);
-
-	return ret;
 }
 
 static void wctc4xxp_setup_file_operations(struct file_operations *fops)
