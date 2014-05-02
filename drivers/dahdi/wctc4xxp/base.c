@@ -310,7 +310,7 @@ struct wcdte {
 	struct list_head node;
 	spinlock_t reglock;
 	wait_queue_head_t waitq;
-	struct semaphore chansem;
+	struct mutex chanlock;
 #define DTE_READY	1
 #define DTE_SHUTDOWN	2
 #define DTE_POLLING	3
@@ -1751,17 +1751,17 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	int res;
 
 #ifndef DEBUG_WCTC4XXP
-	down(&wc->chansem);
+	mutex_lock(&wc->chanlock);
 #else
-	if (down_interruptible(&wc->chansem))
+	if (mutex_lock_interruptible(&wc->chanlock))
 		return -EINTR;
 #endif
 
 	/* Check again to see if the channel was built after grabbing the
-	 * channel semaphore, in case the previous holder of the semaphore
+	 * channel lock, in case the previous holder of the lock
 	 * built this channel as a complement to itself. */
 	if (dahdi_tc_is_built(dtc)) {
-		up(&wc->chansem);
+		mutex_unlock(&wc->chanlock);
 		DTE_DEBUG(DTE_DEBUG_CHANNEL_SETUP,
 		  "Allocating channel %p which is already built.\n", dtc);
 		return 0;
@@ -1779,7 +1779,7 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 		wctc4xxp_dstfmt);
 	if (res) {
 		/* There was a problem creating the channel.... */
-		up(&wc->chansem);
+		mutex_unlock(&wc->chanlock);
 		dev_err(&wc->pdev->dev, "Failed to create channel pair.\n");
 		return res;
 	}
@@ -1792,7 +1792,7 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	/* Mark the channel complement (other half of encoder/decoder pair) as
 	 * built */
 	wctc4xxp_mark_channel_complement_built(wc, dtc);
-	up(&wc->chansem);
+	mutex_unlock(&wc->chanlock);
 	dahdi_transcoder_alert(dtc);
 	return 0;
 }
@@ -1881,9 +1881,9 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 	}
 
 #ifndef DEBUG_WCTC4XXP
-	down(&wc->chansem);
+	mutex_lock(&wc->chanlock);
 #else
-	if (down_interruptible(&wc->chansem))
+	if (mutex_lock_interruptible(&wc->chanlock))
 		return -EINTR;
 #endif
 
@@ -1944,7 +1944,7 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 	compl_cpvt->chan_in_num = INVALID;
 	compl_cpvt->chan_out_num = INVALID;
 error_exit:
-	up(&wc->chansem);
+	mutex_unlock(&wc->chanlock);
 	return res;
 }
 
@@ -3205,13 +3205,13 @@ wctc4xxp_setup_channels(struct wcdte *wc)
 {
 	int ret;
 #ifndef DEBUG_WCTC4XXP
-	down(&wc->chansem);
+	mutex_lock(&wc->chanlock);
 #else
-	if (down_interruptible(&wc->chansem))
+	if (mutex_lock_interruptible(&wc->chanlock))
 		return -EINTR;
 #endif
 	ret = __wctc4xxp_setup_channels(wc);
-	up(&wc->chansem);
+	mutex_unlock(&wc->chanlock);
 
 	return ret;
 }
@@ -3462,7 +3462,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		return -EIO;
 	}
 
-	sema_init(&wc->chansem, 1);
+	mutex_init(&wc->chanlock);
 	spin_lock_init(&wc->reglock);
 	spin_lock_init(&wc->cmd_list_lock);
 	spin_lock_init(&wc->rx_list_lock);
