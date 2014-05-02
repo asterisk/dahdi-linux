@@ -1807,7 +1807,7 @@ wctc4xxp_setintmask(struct wcdte *wc, unsigned int intmask)
 static void
 wctc4xxp_enable_interrupts(struct wcdte *wc)
 {
-	wctc4xxp_setintmask(wc, 0x000180c0);
+	wctc4xxp_setintmask(wc, 0x0001a0c0);
 }
 
 static void
@@ -2617,8 +2617,8 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 		if ((ints & 0x00008000) && debug)
 			dev_info(&wc->pdev->dev, "Abnormal Interrupt.\n");
 
-		if ((ints & 0x00002000) && debug)
-			dev_info(&wc->pdev->dev, "Fatal Bus Error INT\n");
+		if (ints & 0x00002000)
+			dev_err(&wc->pdev->dev, "Fatal Bus Error Detected.\n");
 
 		if ((ints & 0x00000100) && debug)
 			dev_info(&wc->pdev->dev, "Receive Stopped INT\n");
