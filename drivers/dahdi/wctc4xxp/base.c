@@ -207,7 +207,6 @@ struct tcb {
 	struct completion complete;
 	/* The number of bytes available in data. */
 	int data_len;
-	spinlock_t lock;
 };
 
 static inline const struct csm_encaps_hdr *
@@ -223,7 +222,6 @@ initialize_cmd(struct tcb *cmd, unsigned long cmd_flags)
 	INIT_LIST_HEAD(&cmd->node);
 	init_completion(&cmd->complete);
 	cmd->flags = cmd_flags;
-	spin_lock_init(&cmd->lock);
 }
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
@@ -2248,7 +2246,6 @@ static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 		if ((listhdr->function == rxhdr->function) &&
 		    (listhdr->channel == rxhdr->channel)) {
 
-			spin_lock(&pos->lock);
 			list_del_init(&pos->node);
 			pos->flags &= ~(__WAIT_FOR_RESPONSE);
 			pos->response = cmd;
@@ -2256,7 +2253,6 @@ static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 			 * be completed in service_tx_ring. */
 			if (pos->flags & TX_COMPLETE)
 				complete(&pos->complete);
-			spin_unlock(&pos->lock);
 			handled = true;
 
 			break;
@@ -2294,19 +2290,15 @@ do_rx_ack_packet(struct wcdte *wc, struct tcb *cmd)
 			complete(&pos->complete);
 		} else if ((listhdr->seq_num == rxhdr->seq_num) &&
 			   (listhdr->channel == rxhdr->channel)) {
-			spin_lock(&pos->lock);
 			if (pos->flags & __WAIT_FOR_RESPONSE) {
 				pos->flags &= ~(__WAIT_FOR_ACK);
-				spin_unlock(&pos->lock);
 			} else {
 				list_del_init(&pos->node);
 
 				if (pos->flags & DO_NOT_AUTO_FREE) {
 					WARN_ON(!(pos->flags & TX_COMPLETE));
 					complete(&pos->complete);
-					spin_unlock(&pos->lock);
 				} else {
-					spin_unlock(&pos->lock);
 					free_cmd(pos);
 				}
 			}
@@ -2511,7 +2503,6 @@ static void service_tx_ring(struct wcdte *wc)
 	struct tcb *cmd;
 	unsigned long flags;
 	while ((cmd = wctc4xxp_retrieve(wc->txd))) {
-		spin_lock_irqsave(&cmd->lock, flags);
 		cmd->flags |= TX_COMPLETE;
 		if (!(cmd->flags & (__WAIT_FOR_ACK | __WAIT_FOR_RESPONSE))) {
 			/* If we're not waiting for an ACK or Response from
@@ -2519,15 +2510,11 @@ static void service_tx_ring(struct wcdte *wc)
 			 * lists. */
 			WARN_ON(!list_empty(&cmd->node));
 			if (DO_NOT_AUTO_FREE & cmd->flags) {
-				spin_unlock_irqrestore(&cmd->lock, flags);
 				WARN_ON(!(cmd->flags & TX_COMPLETE));
 				complete(&cmd->complete);
 			} else {
-				spin_unlock_irqrestore(&cmd->lock, flags);
 				free_cmd(cmd);
 			}
-		} else {
-			spin_unlock_irqrestore(&cmd->lock, flags);
 		}
 
 		/* We've freed up a spot in the hardware ring buffer.  If
