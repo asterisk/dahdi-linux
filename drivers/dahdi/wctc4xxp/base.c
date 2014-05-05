@@ -1624,8 +1624,6 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 		wctc4xxp_add_to_response_list(wc, cmd);
 		mod_timer(&wc->watchdog, jiffies + HZ/2);
 	}
-	if (!(cmd->flags & DO_NOT_CAPTURE))
-		wctc4xxp_net_capture_cmd(wc, cmd);
 	res = wctc4xxp_submit(wc->txd, cmd);
 	if (-EBUSY == res) {
 		/* Looks like we're out of room in the descriptor
@@ -1636,6 +1634,8 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 		wctc4xxp_remove_from_response_list(wc, cmd);
 		wctc4xxp_add_to_command_list(wc, cmd);
 	} else if (0 == res) {
+		if (!(cmd->flags & DO_NOT_CAPTURE))
+			wctc4xxp_net_capture_cmd(wc, cmd);
 		wctc4xxp_transmit_demand_poll(wc);
 	} else {
 		/* Unknown return value... */
