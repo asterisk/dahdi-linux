@@ -2208,7 +2208,7 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 }
 
 static void
-wctc4xxp_send_ack(struct wcdte *wc, u8 seqno, __be16 channel)
+wctc4xxp_send_ack(struct wcdte *wc, u8 seqno, __be16 channel, __le16 function)
 {
 	struct tcb *cmd;
 	struct csm_encaps_hdr *hdr;
@@ -2224,6 +2224,7 @@ wctc4xxp_send_ack(struct wcdte *wc, u8 seqno, __be16 channel)
 	hdr->seq_num = seqno;
 	hdr->control = 0xe0;
 	hdr->channel = channel;
+	hdr->function = function;
 
 	wctc4xxp_transmit_cmd(wc, cmd);
 }
@@ -2375,8 +2376,10 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 	if (!(hdr->control & MESSAGE_PACKET)) {
 		const bool suppress_ack = ((hdr->control & SUPPRESS_ACK) > 0);
 
-		if (!suppress_ack)
-			wctc4xxp_send_ack(wc, hdr->seq_num, hdr->channel);
+		if (!suppress_ack) {
+			wctc4xxp_send_ack(wc, hdr->seq_num, hdr->channel,
+					  hdr->function);
+		}
 
 		if (is_response(hdr)) {
 
