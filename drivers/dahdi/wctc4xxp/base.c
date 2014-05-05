@@ -2374,19 +2374,15 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 
 	if (!(hdr->control & MESSAGE_PACKET)) {
 		const bool suppress_ack = ((hdr->control & SUPPRESS_ACK) > 0);
+
+		if (!suppress_ack)
+			wctc4xxp_send_ack(wc, hdr->seq_num, hdr->channel);
+
 		if (is_response(hdr)) {
-			u8 seq_num = hdr->seq_num;
-			__be16 channel = hdr->channel;
 
 			do_rx_response_packet(wc, cmd);
-			if (!suppress_ack)
-				wctc4xxp_send_ack(wc, seq_num, channel);
 
 		} else if (0xc1 == hdr->type) {
-			if (!suppress_ack) {
-				wctc4xxp_send_ack(wc, hdr->seq_num,
-						  hdr->channel);
-			}
 
 			if (0x75 == hdr->class) {
 				dev_warn(&wc->pdev->dev,
@@ -2395,10 +2391,6 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 			}
 			free_cmd(cmd);
 		} else if (0xd4 == hdr->type) {
-			if (!suppress_ack) {
-				wctc4xxp_send_ack(wc, hdr->seq_num,
-						  hdr->channel);
-			}
 			if (hdr->params[0] != le16_to_cpu(0xffff)) {
 				dev_warn(&wc->pdev->dev,
 				   "DTE Failed self test (%04x).\n",
@@ -2414,10 +2406,6 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 			}
 			free_cmd(cmd);
 		} else if (MONITOR_LIVE_INDICATION_TYPE == hdr->type) {
-			if (!suppress_ack) {
-				wctc4xxp_send_ack(wc, hdr->seq_num,
-						  hdr->channel);
-			}
 
 			if (hdr->function == 0x0000) {
 				u16 alert_type = le16_to_cpu(hdr->params[0]);
@@ -2434,10 +2422,6 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 			print_command(wc, cmd);
 			free_cmd(cmd);
 		} else {
-			if (!suppress_ack) {
-				wctc4xxp_send_ack(wc, hdr->seq_num,
-						  hdr->channel);
-			}
 			dev_warn(&wc->pdev->dev,
 			  "Unknown command type received. %02x\n", hdr->type);
 			free_cmd(cmd);
