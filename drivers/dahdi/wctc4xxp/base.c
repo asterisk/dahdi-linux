@@ -204,6 +204,7 @@ struct tcb {
 #define WAIT_FOR_RESPONSE (__WAIT_FOR_RESPONSE | DO_NOT_AUTO_FREE)
 	unsigned long flags;
 	struct tcb *response;
+	struct channel_pvt *cpvt;
 	struct completion complete;
 	/* The number of bytes available in data. */
 	int data_len;
@@ -289,6 +290,7 @@ struct channel_pvt {
 	u16 seqno;
 	u8 cmd_seqno;
 	u8 ssrc;
+	u8 last_rx_seq_num;
 	u16 timeslot_in_num;	/* DTE timeslot to receive from */
 	u16 timeslot_out_num;	/* DTE timeslot to send data to */
 	u16 chan_in_num;	/* DTE channel to receive from */
@@ -1041,6 +1043,7 @@ create_supervisor_cmd(struct wcdte *wc, struct tcb *cmd, u8 type, u8 class,
 
 	cmd->flags = WAIT_FOR_RESPONSE;
 	cmd->data_len = SIZE_WITH_N_PARAMETERS(num_parameters);
+	cmd->cpvt = NULL;
 }
 
 static void
@@ -1069,6 +1072,7 @@ create_channel_cmd(struct channel_pvt *pvt, struct tcb *cmd, u8 type, u8 class,
 
 	cmd->flags = WAIT_FOR_RESPONSE;
 	cmd->data_len = SIZE_WITH_N_PARAMETERS(num_parameters);
+	cmd->cpvt = pvt;
 }
 
 static int
@@ -1669,6 +1673,7 @@ wctc4xxp_init_state(struct channel_pvt *cpvt, int encoder,
 	cpvt->ssrc = 0x78;
 	cpvt->timeslot_in_num = channel*2;
 	cpvt->timeslot_out_num = channel*2;
+	cpvt->last_rx_seq_num = 0xff;
 	if (encoder)
 		++cpvt->timeslot_out_num;
 	else
@@ -2223,15 +2228,18 @@ wctc4xxp_send_ack(struct wcdte *wc, u8 seqno, __be16 channel)
 	wctc4xxp_transmit_cmd(wc, cmd);
 }
 
+
 static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 {
-	const struct csm_encaps_hdr *listhdr, *rxhdr;
+	struct csm_encaps_hdr *rxhdr;
+	const struct csm_encaps_hdr *listhdr;
 	struct tcb *pos, *temp;
 	unsigned long flags;
 	bool handled = false;
 	rxhdr = cmd->data;
+
+	/* Check if duplicated response on the supervisor channel. */
 	if (SUPERVISOR_CHANNEL == rxhdr->channel) {
-		/* We received a duplicate response. */
 		if (rxhdr->seq_num == wc->last_rx_seq_num) {
 			free_cmd(cmd);
 			return;
@@ -2245,6 +2253,16 @@ static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 		listhdr = pos->data;
 		if ((listhdr->function == rxhdr->function) &&
 		    (listhdr->channel == rxhdr->channel)) {
+
+			/* If this is a channel command, do not complete it if
+			 * the seq_num is the same as previous. */
+			if (pos->cpvt) {
+				if (rxhdr->seq_num ==
+				    pos->cpvt->last_rx_seq_num) {
+					break;
+				}
+				pos->cpvt->last_rx_seq_num = rxhdr->seq_num;
+			}
 
 			list_del_init(&pos->node);
 			pos->flags &= ~(__WAIT_FOR_RESPONSE);
@@ -3029,6 +3047,8 @@ wctc4xxp_create_channel_pair(struct wcdte *wc, struct channel_pvt *cpvt,
 	decoder_pvt = wc->udecode->channels[decoder_timeslot/2].pvt;
 	BUG_ON(!encoder_pvt);
 	BUG_ON(!decoder_pvt);
+	encoder_pvt->last_rx_seq_num = 0xff;
+	decoder_pvt->last_rx_seq_num = 0xff;
 
 	WARN_ON(encoder_timeslot == decoder_timeslot);
 	/* First, let's create two channels, one for the simple -> complex
