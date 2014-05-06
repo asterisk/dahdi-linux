@@ -192,20 +192,15 @@ struct tcb {
 	struct list_head node;
 	unsigned long timeout;
 	unsigned long retries;
-	/* NOTE:  these flags aren't bit fields because some of the flags are
-	 * combinations of the other ones. */
-#define DO_NOT_AUTO_FREE        (1 << 0)
 #define TX_COMPLETE             (1 << 1)
 #define DO_NOT_CAPTURE          (1 << 2)
-#define __WAIT_FOR_ACK          (1 << 3)
-#define __WAIT_FOR_RESPONSE     (1 << 4)
+#define WAIT_FOR_ACK		(1 << 3)
+#define WAIT_FOR_RESPONSE	(1 << 4)
 #define DTE_CMD_TIMEOUT         (1 << 5)
-#define WAIT_FOR_ACK (__WAIT_FOR_ACK | DO_NOT_AUTO_FREE)
-#define WAIT_FOR_RESPONSE (__WAIT_FOR_RESPONSE | DO_NOT_AUTO_FREE)
 	unsigned long flags;
+	struct completion *complete;
 	struct tcb *response;
 	struct channel_pvt *cpvt;
-	struct completion complete;
 	/* The number of bytes available in data. */
 	int data_len;
 };
@@ -221,7 +216,6 @@ static inline void
 initialize_cmd(struct tcb *cmd, unsigned long cmd_flags)
 {
 	INIT_LIST_HEAD(&cmd->node);
-	init_completion(&cmd->complete);
 	cmd->flags = cmd_flags;
 }
 
@@ -1525,9 +1519,9 @@ static void wctc4xxp_timeout_all_commands(struct wcdte *wc)
 
 	list_for_each_entry_safe(cmd, temp, &local_list, node) {
 		list_del_init(&cmd->node);
-		if (cmd->flags & DO_NOT_AUTO_FREE) {
+		if (cmd->complete) {
 			cmd->flags |= DTE_CMD_TIMEOUT;
-			complete(&cmd->complete);
+			complete(cmd->complete);
 		} else {
 			free_cmd(cmd);
 		}
@@ -1592,10 +1586,10 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 	/* If we're shutdown all commands will timeout. Just complete the
 	 * command here with the timeout flag */
 	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
-		if (cmd->flags & DO_NOT_AUTO_FREE) {
+		if (cmd->complete) {
 			cmd->flags |= DTE_CMD_TIMEOUT;
 			list_del_init(&cmd->node);
-			complete(&cmd->complete);
+			complete(cmd->complete);
 		} else {
 			list_del(&cmd->node);
 			free_cmd(cmd);
@@ -1611,8 +1605,8 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 	WARN_ON(cmd->response);
 	WARN_ON(cmd->flags & TX_COMPLETE);
 	cmd->timeout = jiffies + HZ/4;
-	if (cmd->flags & (__WAIT_FOR_ACK | __WAIT_FOR_RESPONSE)) {
-		if (cmd->flags & __WAIT_FOR_RESPONSE) {
+	if (cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE)) {
+		if (cmd->flags & WAIT_FOR_RESPONSE) {
 			/* We don't need both an ACK and a response.  Let's
 			 * tell the DTE not to generate an ACK, and we'll just
 			 * retry if we do not get the response within the
@@ -1646,9 +1640,11 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 static int
 wctc4xxp_transmit_cmd_and_wait(struct wcdte *wc, struct tcb *cmd)
 {
-	cmd->flags |= DO_NOT_AUTO_FREE;
+	DECLARE_COMPLETION_ONSTACK(done);
+	cmd->complete = &done;
 	wctc4xxp_transmit_cmd(wc, cmd);
-	wait_for_completion(&cmd->complete);
+	wait_for_completion(&done);
+	cmd->complete = NULL;
 	if (cmd->flags & DTE_CMD_TIMEOUT) {
 		DTE_DEBUG(DTE_DEBUG_GENERAL, "Timeout waiting for command.\n");
 		return -EIO;
@@ -2266,12 +2262,12 @@ static void do_rx_response_packet(struct wcdte *wc, struct tcb *cmd)
 			}
 
 			list_del_init(&pos->node);
-			pos->flags &= ~(__WAIT_FOR_RESPONSE);
+			pos->flags &= ~(WAIT_FOR_RESPONSE);
 			pos->response = cmd;
 			/* If this isn't TX_COMPLETE yet, then this packet will
 			 * be completed in service_tx_ring. */
-			if (pos->flags & TX_COMPLETE)
-				complete(&pos->complete);
+			if (pos->flags & TX_COMPLETE && pos->complete)
+				complete(pos->complete);
 			handled = true;
 
 			break;
@@ -2302,21 +2298,21 @@ do_rx_ack_packet(struct wcdte *wc, struct tcb *cmd)
 		listhdr = pos->data;
 		if (cpu_to_be16(0xefed) == listhdr->ethhdr.h_proto) {
 			wc->seq_num = (rxhdr->seq_num + 1) & 0xff;
-			WARN_ON(!(pos->flags & DO_NOT_AUTO_FREE));
+			WARN_ON(!(pos->complete));
 			WARN_ON(!(pos->flags & TX_COMPLETE));
 			list_del_init(&pos->node);
-			WARN_ON(!(pos->flags & TX_COMPLETE));
-			complete(&pos->complete);
+			if (pos->complete)
+				complete(pos->complete);
 		} else if ((listhdr->seq_num == rxhdr->seq_num) &&
 			   (listhdr->channel == rxhdr->channel)) {
-			if (pos->flags & __WAIT_FOR_RESPONSE) {
-				pos->flags &= ~(__WAIT_FOR_ACK);
+			if (pos->flags & WAIT_FOR_RESPONSE) {
+				pos->flags &= ~(WAIT_FOR_ACK);
 			} else {
 				list_del_init(&pos->node);
 
-				if (pos->flags & DO_NOT_AUTO_FREE) {
+				if (pos->complete) {
 					WARN_ON(!(pos->flags & TX_COMPLETE));
-					complete(&pos->complete);
+					complete(pos->complete);
 				} else {
 					free_cmd(pos);
 				}
@@ -2368,6 +2364,11 @@ print_command(struct wcdte *wc, const struct tcb *cmd)
 	kfree(buffer);
 }
 
+static inline void wctc4xxp_reset_processor(struct wcdte *wc)
+{
+	wctc4xxp_setctl(wc, 0x00A0, 0x04000000);
+}
+
 static void
 receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 {
@@ -2416,6 +2417,7 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 				   "Received alert (0x%04x) from dsp. Please reload driver.\n",
 				   alert_type);
 
+				wctc4xxp_reset_processor(wc);
 				set_bit(DTE_SHUTDOWN, &wc->flags);
 				wctc4xxp_timeout_all_commands(wc);
 			} else {
@@ -2509,14 +2511,14 @@ static void service_tx_ring(struct wcdte *wc)
 	unsigned long flags;
 	while ((cmd = wctc4xxp_retrieve(wc->txd))) {
 		cmd->flags |= TX_COMPLETE;
-		if (!(cmd->flags & (__WAIT_FOR_ACK | __WAIT_FOR_RESPONSE))) {
+		if (!(cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE))) {
 			/* If we're not waiting for an ACK or Response from
 			 * the DTE, this message should not be sitting on any
 			 * lists. */
 			WARN_ON(!list_empty(&cmd->node));
-			if (DO_NOT_AUTO_FREE & cmd->flags) {
+			if (cmd->complete) {
 				WARN_ON(!(cmd->flags & TX_COMPLETE));
-				complete(&cmd->complete);
+				complete(cmd->complete);
 			} else {
 				free_cmd(cmd);
 			}
@@ -2882,6 +2884,7 @@ wctc4xxp_load_firmware(struct wcdte *wc, const struct firmware *firmware)
 	unsigned int byteloc;
 	unsigned int length;
 	struct tcb *cmd;
+	DECLARE_COMPLETION_ONSTACK(done);
 
 	byteloc = 17;
 
@@ -2902,8 +2905,9 @@ wctc4xxp_load_firmware(struct wcdte *wc, const struct firmware *firmware)
 		memcpy(cmd->data, &firmware->data[byteloc], length);
 		byteloc += length;
 		cmd->flags = WAIT_FOR_ACK;
+		cmd->complete = &done;
 		wctc4xxp_transmit_cmd(wc, cmd);
-		wait_for_completion(&cmd->complete);
+		wait_for_completion(&done);
 		if (cmd->flags & DTE_CMD_TIMEOUT) {
 			free_cmd(cmd);
 			dev_err(&wc->pdev->dev, "Failed to load firmware.\n");
@@ -2938,8 +2942,7 @@ wctc4xxp_turn_off_booted_led(struct wcdte *wc)
 	DTE_DEBUG(DTE_DEBUG_GENERAL, "PHY register 0 = %X\n",
 	   wctc4xxp_read_phy(wc, 0));
 
-	/* Set reset */
-	wctc4xxp_setctl(wc, 0x00A0, 0x04000000);
+	wctc4xxp_reset_processor(wc);
 
 	/* Wait 4 ms to ensure processor reset */
 	msleep(4);
@@ -3306,8 +3309,10 @@ wctc4xxp_watchdog(unsigned long data)
 
 					cmd->flags |= DTE_CMD_TIMEOUT;
 					list_del_init(&cmd->node);
-					complete(&cmd->complete);
+					if (cmd->complete)
+						complete(cmd->complete);
 
+					wctc4xxp_reset_processor(wc);
 					set_bit(DTE_SHUTDOWN, &wc->flags);
 					spin_unlock(&wc->cmd_list_lock);
 					_wctc4xxp_stop_dma(wc);
@@ -3323,7 +3328,8 @@ wctc4xxp_watchdog(unsigned long data)
 				 */
 				cmd->flags |= DTE_CMD_TIMEOUT;
 				list_del_init(&cmd->node);
-				complete(&cmd->complete);
+				if (cmd->complete)
+					complete(cmd->complete);
 			} else if (cmd->flags & TX_COMPLETE) {
 				/* Move this to the local list because we're
 				 * going to resend it once we free the locks
