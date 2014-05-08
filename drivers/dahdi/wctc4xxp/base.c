@@ -2505,23 +2505,6 @@ queue_rtp_packet(struct wcdte *wc, struct tcb *cmd)
 	return;
 }
 
-static inline void
-wctc4xxp_receiveprep(struct wcdte *wc, struct tcb *cmd)
-{
-	const struct ethhdr *ethhdr = (const struct ethhdr *)(cmd->data);
-
-	if (cpu_to_be16(ETH_P_IP) == ethhdr->h_proto) {
-		queue_rtp_packet(wc, cmd);
-	} else if (cpu_to_be16(ETH_P_CSM_ENCAPS) == ethhdr->h_proto) {
-		receive_csm_encaps_packet(wc, cmd);
-	} else {
-		DTE_DEBUG(DTE_DEBUG_GENERAL,
-		   "Unknown packet protocol received: %04x.\n",
-		   be16_to_cpu(ethhdr->h_proto));
-		free_cmd(cmd);
-	}
-}
-
 static void service_tx_ring(struct wcdte *wc)
 {
 	struct tcb *cmd;
@@ -2571,11 +2554,23 @@ static void service_rx_ring(struct wcdte *wc)
 	 * Process the received packets
 	 */
 	while (!list_empty(&local_list)) {
+		const struct ethhdr *ethhdr;
+
 		cmd = container_of(local_list.next, struct tcb, node);
+		ethhdr = (const struct ethhdr *)(cmd->data);
 		list_del_init(&cmd->node);
 
 		wctc4xxp_net_capture_cmd(wc, cmd);
-		wctc4xxp_receiveprep(wc, cmd);
+		if (cpu_to_be16(ETH_P_IP) == ethhdr->h_proto) {
+			queue_rtp_packet(wc, cmd);
+		} else if (cpu_to_be16(ETH_P_CSM_ENCAPS) == ethhdr->h_proto) {
+			receive_csm_encaps_packet(wc, cmd);
+		} else {
+			DTE_DEBUG(DTE_DEBUG_GENERAL,
+			   "Unknown packet protocol received: %04x.\n",
+			   be16_to_cpu(ethhdr->h_proto));
+			free_cmd(cmd);
+		}
 	}
 	wctc4xxp_receive_demand_poll(wc);
 }
