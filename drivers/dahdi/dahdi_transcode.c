@@ -168,8 +168,9 @@ static void dtc_release(struct dahdi_transcoder_channel *chan)
 	BUG_ON(!chan);
 	if (chan->parent && chan->parent->release) {
 		chan->parent->release(chan);
+	} else {
+		dahdi_tc_clear_busy(chan);
 	}
-	dahdi_tc_clear_busy(chan);
 }
 
 static int dahdi_tc_release(struct inode *inode, struct file *file)

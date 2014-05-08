@@ -1421,7 +1421,7 @@ static struct tcb *
 wctc4xxp_create_rtp_cmd(struct wcdte *wc, struct dahdi_transcoder_channel *dtc,
 	size_t inbytes)
 {
-	const struct channel_pvt *cpvt = dtc->pvt;
+	struct channel_pvt *cpvt = dtc->pvt;
 	struct rtp_packet *packet;
 	struct tcb *cmd;
 
@@ -1429,6 +1429,7 @@ wctc4xxp_create_rtp_cmd(struct wcdte *wc, struct dahdi_transcoder_channel *dtc,
 	if (!cmd)
 		return NULL;
 
+	cmd->cpvt = cpvt;
 	packet = cmd->data;
 
 	BUG_ON(cmd->data_len < sizeof(*packet));
@@ -1698,6 +1699,16 @@ wctc4xxp_cleanup_channel_private(struct wcdte *wc,
 	unsigned long flags;
 	LIST_HEAD(local_list);
 
+	/* Once we cleanup this channel, we do not want any queued packets
+	 * waiting to be transmitted. Anything on the hardware descriptor ring
+	 * will be flushed by the csm_encaps command to shutdown the channel. */
+	spin_lock_irqsave(&wc->cmd_list_lock, flags);
+	list_for_each_entry_safe(cmd, temp, &wc->cmd_list, node) {
+		if (cmd->cpvt == cpvt)
+			list_move(&cmd->node, &local_list);
+	}
+	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+
 	spin_lock_irqsave(&cpvt->lock, flags);
 	list_splice_init(&cpvt->rx_queue, &local_list);
 	dahdi_tc_clear_data_waiting(dtc);
@@ -1913,7 +1924,9 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 			packets_sent, packets_received);
 	}
 
+
 	/* Remove any packets that are waiting on the outbound queue. */
+	dahdi_tc_clear_busy(dtc);
 	wctc4xxp_cleanup_channel_private(wc, dtc);
 	index = cpvt->timeslot_in_num/2;
 	BUG_ON(index >= wc->numchannels);
@@ -2480,11 +2493,15 @@ queue_rtp_packet(struct wcdte *wc, struct tcb *cmd)
 	}
 
 	cpvt = dtc->pvt;
-	spin_lock_irqsave(&cpvt->lock, flags);
-	list_add_tail(&cmd->node, &cpvt->rx_queue);
-	dahdi_tc_set_data_waiting(dtc);
-	spin_unlock_irqrestore(&cpvt->lock, flags);
-	dahdi_transcoder_alert(dtc);
+	if (dahdi_tc_is_busy(dtc)) {
+		spin_lock_irqsave(&cpvt->lock, flags);
+		list_add_tail(&cmd->node, &cpvt->rx_queue);
+		dahdi_tc_set_data_waiting(dtc);
+		spin_unlock_irqrestore(&cpvt->lock, flags);
+		dahdi_transcoder_alert(dtc);
+	} else {
+		free_cmd(cmd);
+	}
 	return;
 }
 
