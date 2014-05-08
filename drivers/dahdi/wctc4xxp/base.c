@@ -182,8 +182,11 @@ struct csm_encaps_hdr {
 #define MAX_FRAME_SIZE 1518
 #define SFRAME_SIZE MAX_FRAME_SIZE
 
-#define DRING_SIZE (1 << 7) /* Must be a power of two */
-#define DRING_MASK (DRING_SIZE-1)
+#define DEFAULT_RX_DRING_SIZE (1 << 6) /* Must be a power of two */
+
+/* Keep the TX ring shorter in order to reduce the amount of time needed to
+ * bring up channels when sending high priority csm_encaps packets. */
+#define DEFAULT_TX_DRING_SIZE (1 << 4) /* Must be a power of two */
 #define MIN_PACKET_LEN  64
 
 /* Transcoder buffer (tcb) */
@@ -765,7 +768,7 @@ struct wctc4xxp_descriptor_ring {
 	/* Write ready buffers to the tail. */
 	unsigned int 	tail;
 	/* Array to save the kernel virtual address of pending commands. */
-	struct tcb *pending[DRING_SIZE];
+	struct tcb **pending;
 	/* PCI Bus address of the descriptor list. */
 	dma_addr_t	desc_dma;
 	/*! either DMA_FROM_DEVICE or DMA_TO_DEVICE */
@@ -778,6 +781,8 @@ struct wctc4xxp_descriptor_ring {
 	spinlock_t      lock;
 	/*! PCI device for the card associated with this ring. */
 	struct pci_dev  *pdev;
+	/*! The size of the dring. */
+	unsigned long size;
 };
 
 /**
@@ -797,13 +802,14 @@ wctc4xxp_descriptor(struct wctc4xxp_descriptor_ring *dr, int index)
 
 static int
 wctc4xxp_initialize_descriptor_ring(struct pci_dev *pdev,
-	struct wctc4xxp_descriptor_ring *dr, u32 des1, unsigned int direction)
+	struct wctc4xxp_descriptor_ring *dr, u32 des1, unsigned int direction,
+	unsigned long size)
 {
 	int i;
 	const u32 END_OF_RING = 0x02000000;
 	u8 cache_line_size = 0;
-	struct wctc4xxp_descriptor *d;
 	int add_padding;
+	struct wctc4xxp_descriptor *d = NULL;
 
 	BUG_ON(!pdev);
 	BUG_ON(!dr);
@@ -812,6 +818,7 @@ wctc4xxp_initialize_descriptor_ring(struct pci_dev *pdev,
 		return -EIO;
 
 	memset(dr, 0, sizeof(*dr));
+	dr->size = size;
 
 	/*
 	 * Add some padding to each descriptor to ensure that they are
@@ -825,14 +832,19 @@ wctc4xxp_initialize_descriptor_ring(struct pci_dev *pdev,
 	if (add_padding)
 		dr->padding = (cache_line_size*sizeof(u32)) - sizeof(*d);
 
-	dr->desc = pci_alloc_consistent(pdev,
-			(sizeof(*d)+dr->padding)*DRING_SIZE, &dr->desc_dma);
-
-	if (!dr->desc)
+	dr->pending = kmalloc(sizeof(struct tcb *) * dr->size, GFP_KERNEL);
+	if (!dr->pending)
 		return -ENOMEM;
 
-	memset(dr->desc, 0, (sizeof(*d) + dr->padding) * DRING_SIZE);
-	for (i = 0; i < DRING_SIZE; ++i) {
+	dr->desc = pci_alloc_consistent(pdev,
+			(sizeof(*d)+dr->padding)*dr->size, &dr->desc_dma);
+	if (!dr->desc) {
+		kfree(dr->pending);
+		return -ENOMEM;
+	}
+
+	memset(dr->desc, 0, (sizeof(*d) + dr->padding) * dr->size);
+	for (i = 0; i < dr->size; ++i) {
 		d = wctc4xxp_descriptor(dr, i);
 		memset(d, 0, sizeof(*d));
 		d->des1 = cpu_to_le32(des1);
@@ -880,7 +892,7 @@ wctc4xxp_submit(struct wctc4xxp_descriptor_ring *dr, struct tcb *c)
 
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
 	dr->pending[dr->tail] = c;
-	dr->tail = (dr->tail + 1) & DRING_MASK;
+	dr->tail = (dr->tail + 1) & (dr->size-1);
 	++dr->count;
 	spin_unlock_irqrestore(&dr->lock, flags);
 	return 0;
@@ -900,7 +912,7 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 			SFRAME_SIZE, dr->direction);
 		c = dr->pending[head];
 		WARN_ON(!c);
-		dr->head = (++head) & DRING_MASK;
+		dr->head = (++head) & (dr->size-1);
 		d->buffer1 = 0;
 		--dr->count;
 		WARN_ON(!c);
@@ -1484,7 +1496,7 @@ wctc4xxp_cleanup_descriptor_ring(struct wctc4xxp_descriptor_ring *dr)
 	if (!dr || !dr->desc)
 		return;
 
-	for (i = 0; i < DRING_SIZE; ++i) {
+	for (i = 0; i < dr->size; ++i) {
 		d = wctc4xxp_descriptor(dr, i);
 		if (d->buffer1) {
 			pci_unmap_single(dr->pdev, d->buffer1,
@@ -1501,8 +1513,9 @@ wctc4xxp_cleanup_descriptor_ring(struct wctc4xxp_descriptor_ring *dr)
 	dr->head = 0;
 	dr->tail = 0;
 	dr->count = 0;
-	pci_free_consistent(dr->pdev, (sizeof(*d)+dr->padding) * DRING_SIZE,
+	pci_free_consistent(dr->pdev, (sizeof(*d)+dr->padding) * dr->size,
 		dr->desc, dr->desc_dma);
+	kfree(dr->pending);
 }
 
 static void wctc4xxp_timeout_all_commands(struct wcdte *wc)
@@ -2697,7 +2710,7 @@ wctc4xxp_start_dma(struct wcdte *wc)
 	u32 reg;
 	struct tcb *cmd;
 
-	for (i = 0; i < DRING_SIZE; ++i) {
+	for (i = 0; i < wc->rxd->size; ++i) {
 		cmd = alloc_cmd(SFRAME_SIZE);
 		if (!cmd) {
 			WARN_ALWAYS();
@@ -3463,7 +3476,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	res = wctc4xxp_initialize_descriptor_ring(wc->pdev, wc->txd,
-		0xe0800000, DMA_TO_DEVICE);
+		0xe0800000, DMA_TO_DEVICE, DEFAULT_TX_DRING_SIZE);
 	if (res)
 		goto error_exit_swinit;
 
@@ -3474,7 +3487,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	res = wctc4xxp_initialize_descriptor_ring(wc->pdev, wc->rxd, 0,
-		DMA_FROM_DEVICE);
+		DMA_FROM_DEVICE, DEFAULT_RX_DRING_SIZE);
 	if (res)
 		goto error_exit_swinit;
 
