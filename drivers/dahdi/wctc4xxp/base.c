@@ -1548,6 +1548,12 @@ static void wctc4xxp_cleanup_command_list(struct wcdte *wc)
 	}
 }
 
+static inline bool is_rtp_packet(const struct tcb *cmd)
+{
+	const struct ethhdr *ethhdr = cmd->data;
+	return (cpu_to_be16(ETH_P_IP) == ethhdr->h_proto);
+}
+
 static void
 wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 {
@@ -1590,6 +1596,14 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 		WARN_ON(!list_empty(&cmd->node));
 		list_add_tail(&cmd->node, &wc->waiting_for_response_list);
 		mod_timer(&wc->watchdog, jiffies + HZ/2);
+	}
+	if (!list_empty(&wc->cmd_list)) {
+		if (is_rtp_packet(cmd))
+			list_add_tail(&cmd->node, &wc->cmd_list);
+		else
+			list_move(&cmd->node, &wc->cmd_list);
+		spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
+		return;
 	}
 	res = wctc4xxp_submit(wc->txd, cmd);
 	if (-EBUSY == res) {
@@ -2482,6 +2496,7 @@ static void service_tx_ring(struct wcdte *wc)
 	struct tcb *cmd;
 	unsigned long flags;
 	while ((cmd = wctc4xxp_retrieve(wc->txd))) {
+		spin_lock_irqsave(&wc->cmd_list_lock, flags);
 		cmd->flags |= TX_COMPLETE;
 		if (!(cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE))) {
 			/* If we're not waiting for an ACK or Response from
@@ -2499,17 +2514,16 @@ static void service_tx_ring(struct wcdte *wc)
 		/* We've freed up a spot in the hardware ring buffer.  If
 		 * another packet is queued up, let's submit it to the
 		 * hardware. */
-		spin_lock_irqsave(&wc->cmd_list_lock, flags);
 		if (!list_empty(&wc->cmd_list)) {
 			cmd = list_entry(wc->cmd_list.next, struct tcb, node);
 			list_del_init(&cmd->node);
-		} else {
-			cmd = NULL;
+			if (cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE)) {
+				list_add_tail(&cmd->node,
+					      &wc->waiting_for_response_list);
+			}
+			wctc4xxp_submit(wc->txd, cmd);
 		}
 		spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-
-		if (cmd)
-			wctc4xxp_transmit_cmd(wc, cmd);
 	}
 }
 
