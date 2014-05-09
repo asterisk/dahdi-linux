@@ -355,7 +355,7 @@ struct wcdte {
 	struct napi_struct napi;
 #endif
 	struct timer_list watchdog;
-	atomic_t open_channels;
+	u16 open_channels;
 #if HZ > 100
 	unsigned long jiffies_at_last_poll;
 #endif
@@ -1744,9 +1744,6 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	u8 wctc4xxp_dstfmt; /* Digium Transcoder Engine Dest Format */
 	int res;
 
-	if (mutex_lock_interruptible(&wc->chanlock))
-		return -EINTR;
-
 	/* Check again to see if the channel was built after grabbing the
 	 * channel lock, in case the previous holder of the lock
 	 * built this channel as a complement to itself. */
@@ -1837,8 +1834,8 @@ wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 		goto error_exit;
 	}
 
-	atomic_inc(&wc->open_channels);
-	if (atomic_read(&wc->open_channels) > POLLING_CALL_THRESHOLD) {
+	++wc->open_channels;
+	if (wc->open_channels > POLLING_CALL_THRESHOLD) {
 		if (!test_bit(DTE_POLLING, &wc->flags))
 			wctc4xxp_enable_polling(wc);
 	}
@@ -1846,9 +1843,10 @@ wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 	if (dahdi_tc_is_built(dtc)) {
 		DTE_DEBUG(DTE_DEBUG_CHANNEL_SETUP,
 		  "Allocating channel %p which is already built.\n", dtc);
-		return 0;
+		res = 0;
+	} else {
+		res = do_channel_allocate(dtc);
 	}
-	res = do_channel_allocate(dtc);
 
 error_exit:
 	mutex_unlock(&wc->chanlock);
@@ -1894,14 +1892,16 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 		goto error_exit;
 	}
 
-	atomic_dec(&wc->open_channels);
+	if (wc->open_channels) {
+		--wc->open_channels;
 
 #if !defined(CONFIG_WCTC4XXP_POLLING)
-	if (atomic_read(&wc->open_channels) < POLLING_CALL_THRESHOLD) {
-		if (test_bit(DTE_POLLING, &wc->flags))
-			wctc4xxp_disable_polling(wc);
-	}
+		if (wc->open_channels < POLLING_CALL_THRESHOLD) {
+			if (test_bit(DTE_POLLING, &wc->flags))
+				wctc4xxp_disable_polling(wc);
+		}
 #endif
+	}
 
 	packets_received = atomic_read(&cpvt->stats.packets_received);
 	packets_sent = atomic_read(&cpvt->stats.packets_sent);
