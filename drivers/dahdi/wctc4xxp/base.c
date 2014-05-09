@@ -78,7 +78,7 @@
 
 /* The total number of active channels over which the driver will start polling
  * the card every 10 ms. */
-#define POLLING_CALL_THRESHOLD 40
+#define POLLING_CALL_THRESHOLD 8
 
 #define INVALID 999 /* Used to mark invalid channels, commands, etc.. */
 #define MAX_CHANNEL_PACKETS  5
@@ -356,7 +356,6 @@ struct wcdte {
 #endif
 	struct timer_list watchdog;
 	atomic_t open_channels;
-	struct timer_list polling;
 #if HZ > 100
 	unsigned long jiffies_at_last_poll;
 #endif
@@ -1792,10 +1791,12 @@ wctc4xxp_setintmask(struct wcdte *wc, unsigned int intmask)
 	wctc4xxp_setctl(wc, 0x0038, intmask);
 }
 
+static const u32 DEFAULT_INTERRUPTS = 0x0001a0c0;
+
 static void
 wctc4xxp_enable_interrupts(struct wcdte *wc)
 {
-	wctc4xxp_setintmask(wc, 0x0001a0c0);
+	wctc4xxp_setintmask(wc, DEFAULT_INTERRUPTS);
 }
 
 static void
@@ -1810,8 +1811,9 @@ static void
 wctc4xxp_enable_polling(struct wcdte *wc)
 {
 	set_bit(DTE_POLLING, &wc->flags);
-	mod_timer(&wc->polling, jiffies + 1);
-	wctc4xxp_disable_interrupts(wc);
+	wctc4xxp_setctl(wc, 0x0058, 0x1000a);
+	/* Enable the general purpose timer interrupt. */
+	wctc4xxp_setintmask(wc, (DEFAULT_INTERRUPTS | (1 << 11)) & ~0x41);
 }
 
 static int
@@ -1857,6 +1859,7 @@ static void
 wctc4xxp_disable_polling(struct wcdte *wc)
 {
 	clear_bit(DTE_POLLING, &wc->flags);
+	wctc4xxp_setctl(wc, 0x0058, 0x0);
 	wctc4xxp_enable_interrupts(wc);
 }
 
@@ -2014,23 +2017,6 @@ wctc4xxp_handle_receive_ring(struct wcdte *wc)
 	return count;
 }
 
-static void
-__wctc4xxp_polling(struct wcdte *wc)
-{
-	if (wctc4xxp_handle_receive_ring(wc))
-		schedule_work(&wc->deferred_work);
-}
-
-static void
-wctc4xxp_polling(unsigned long data)
-{
-	struct wcdte *wc = (struct wcdte *)data;
-	__wctc4xxp_polling(wc);
-	if (test_bit(DTE_POLLING, &wc->flags))
-		mod_timer(&wc->polling, jiffies + 1);
-}
-
-
 /* Called with a buffer in which to copy a transcoded frame. */
 static ssize_t
 wctc4xxp_read(struct file *file, char __user *frame, size_t count, loff_t *ppos)
@@ -2186,18 +2172,6 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 
 	atomic_inc(&cpvt->stats.packets_sent);
 	wctc4xxp_transmit_cmd(wc, cmd);
-
-	if (test_bit(DTE_POLLING, &wc->flags)) {
-#if HZ == 100
-		__wctc4xxp_polling(wc);
-#else
-		if (jiffies != wc->jiffies_at_last_poll) {
-			wc->jiffies_at_last_poll = jiffies;
-			__wctc4xxp_polling(wc);
-		}
-#endif
-	}
-
 
 	return count;
 }
@@ -2581,7 +2555,9 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 	u32 reg;
 #define TX_COMPLETE_INTERRUPT 0x00000001
 #define RX_COMPLETE_INTERRUPT 0x00000040
-#define NORMAL_INTERRUPTS (TX_COMPLETE_INTERRUPT | RX_COMPLETE_INTERRUPT)
+#define TIMER_INTERRUPT	      (1<<11)
+#define NORMAL_INTERRUPTS (TX_COMPLETE_INTERRUPT | RX_COMPLETE_INTERRUPT | \
+			   TIMER_INTERRUPT)
 
 	/* Read and clear interrupts */
 	ints = __wctc4xxp_getctl(wc, 0x0028);
@@ -2599,6 +2575,11 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 		if (ints & RX_COMPLETE_INTERRUPT) {
 			wctc4xxp_handle_receive_ring(wc);
 			reg |= RX_COMPLETE_INTERRUPT;
+		}
+
+		if (ints & TIMER_INTERRUPT) {
+			wctc4xxp_handle_receive_ring(wc);
+			reg |= TIMER_INTERRUPT;
 		}
 
 #if DEFERRED_PROCESSING == WORKQUEUE
@@ -3556,14 +3537,6 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	setup_timer(&wc->watchdog, wctc4xxp_watchdog, (unsigned long)wc);
 #	endif
 
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-	wc->polling.function = wctc4xxp_polling;
-	wc->polling.data = (unsigned long)wc;
-	init_timer(&wc->polling);
-#	else
-	setup_timer(&wc->polling, wctc4xxp_polling, (unsigned long)wc);
-#	endif
-
 	/* ------------------------------------------------------------------
 	 * Load the firmware and start the DTE.
 	 * --------------------------------------------------------------- */
@@ -3684,9 +3657,6 @@ static void __devexit wctc4xxp_remove_one(struct pci_dev *pdev)
 
 	/* This should already be stopped, but it doesn't hurt to make sure. */
 	clear_bit(DTE_POLLING, &wc->flags);
-	if (del_timer_sync(&wc->polling))
-		del_timer_sync(&wc->polling);
-
 	wctc4xxp_net_unregister(wc);
 
 	/* Stop any DMA */
