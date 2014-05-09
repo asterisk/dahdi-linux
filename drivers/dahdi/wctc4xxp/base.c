@@ -1548,41 +1548,11 @@ static void wctc4xxp_cleanup_command_list(struct wcdte *wc)
 	}
 }
 
-/**
- * The command list is used to store commands that couldn't fit in the tx
- * descriptor list when they were requested.
- */
-static void
-wctc4xxp_add_to_command_list(struct wcdte *wc, struct tcb *cmd)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
-	list_add_tail(&cmd->node, &wc->cmd_list);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-}
-
-static void
-wctc4xxp_add_to_response_list(struct wcdte *wc, struct tcb *cmd)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
-	list_add_tail(&cmd->node, &wc->waiting_for_response_list);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-}
-
-static void
-wctc4xxp_remove_from_response_list(struct wcdte *wc, struct tcb *cmd)
-{
-	unsigned long flags;
-	spin_lock_irqsave(&wc->cmd_list_lock, flags);
-	list_del_init(&cmd->node);
-	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
-}
-
 static void
 wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 {
 	int res;
+	unsigned long flags;
 
 	/* If we're shutdown all commands will timeout. Just complete the
 	 * command here with the timeout flag */
@@ -1606,6 +1576,8 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 	WARN_ON(cmd->response);
 	WARN_ON(cmd->flags & TX_COMPLETE);
 	cmd->timeout = jiffies + HZ/4;
+
+	spin_lock_irqsave(&wc->cmd_list_lock, flags);
 	if (cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE)) {
 		if (cmd->flags & WAIT_FOR_RESPONSE) {
 			/* We don't need both an ACK and a response.  Let's
@@ -1616,7 +1588,7 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 			hdr->control |= SUPPRESS_ACK;
 		}
 		WARN_ON(!list_empty(&cmd->node));
-		wctc4xxp_add_to_response_list(wc, cmd);
+		list_add_tail(&cmd->node, &wc->waiting_for_response_list);
 		mod_timer(&wc->watchdog, jiffies + HZ/2);
 	}
 	res = wctc4xxp_submit(wc->txd, cmd);
@@ -1626,8 +1598,7 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 		 * and the interrupt service routine will pull from
 		 * this list as it clears up room in the descriptor
 		 * ring. */
-		wctc4xxp_remove_from_response_list(wc, cmd);
-		wctc4xxp_add_to_command_list(wc, cmd);
+		list_move_tail(&cmd->node, &wc->cmd_list);
 	} else if (0 == res) {
 		if (!(cmd->flags & DO_NOT_CAPTURE))
 			wctc4xxp_net_capture_cmd(wc, cmd);
@@ -1636,6 +1607,7 @@ wctc4xxp_transmit_cmd(struct wcdte *wc, struct tcb *cmd)
 		/* Unknown return value... */
 		WARN_ON(1);
 	}
+	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 }
 
 static int
