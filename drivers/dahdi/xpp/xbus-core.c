@@ -80,7 +80,13 @@ static struct proc_dir_entry *proc_xbuses;
 
 static struct xbus_desc {
 	xbus_t *xbus;
+	int shutting_down;
 } xbuses_array[MAX_BUSES];
+
+static int xbus_is_shutting_down(int num)
+{
+	return xbuses_array[num].shutting_down;
+}
 
 static xbus_t *xbus_byhwid(const char *hwid)
 {
@@ -149,6 +155,8 @@ static void init_xbus(uint num, xbus_t *xbus)
 	BUG_ON(num >= ARRAY_SIZE(xbuses_array));
 	desc = &xbuses_array[num];
 	desc->xbus = xbus;
+	if (xbus)
+		desc->shutting_down = 0;
 }
 
 xbus_t *xbus_num(uint num)
@@ -188,9 +196,12 @@ static void finalize_xbuses_array(void)
 static void xbus_destroy(struct kref *kref)
 {
 	xbus_t *xbus;
+	int num;
 
 	xbus = kref_to_xbus(kref);
 	XBUS_NOTICE(xbus, "%s\n", __func__);
+	num = xbus->num;
+	xbuses_array[num].shutting_down = 1;
 	xbus_sysfs_remove(xbus);
 }
 
@@ -199,6 +210,11 @@ xbus_t *get_xbus(const char *msg, uint num)
 	unsigned long flags;
 	xbus_t *xbus;
 
+	if (xbus_is_shutting_down(num)) {
+		DBG(DEVICES, "%s(%s): XBUS-%d: shutting down\n", __func__,
+				msg, num);
+		return NULL;
+	}
 	spin_lock_irqsave(&xbuses_lock, flags);
 	xbus = xbus_num(num);
 	if (xbus != NULL) {
@@ -212,6 +228,13 @@ xbus_t *get_xbus(const char *msg, uint num)
 
 void put_xbus(const char *msg, xbus_t *xbus)
 {
+	if (xbus_is_shutting_down(xbus->num)) {
+		if (!refcount_xbus(xbus)) {
+			DBG(DEVICES, "%s(%s): XBUS-%d: shutting down\n",
+					__func__, msg, xbus->num);
+			return;
+		}
+	}
 	XBUS_DBG(DEVICES, xbus, "%s: refcount_xbus=%d\n", msg,
 		 refcount_xbus(xbus));
 	kref_put(&xbus->kref, xbus_destroy);
@@ -561,6 +584,14 @@ static void receive_tasklet_func(unsigned long data)
 void xbus_receive_xframe(xbus_t *xbus, xframe_t *xframe)
 {
 	BUG_ON(!xbus);
+	if (xbus_is_shutting_down(xbus->num)) {
+		static int rate_limit;
+
+		if ((rate_limit++ % 1000) == 0)
+			XBUS_NOTICE(xbus, "%s: during shutdown (%d)\n",
+					__func__, rate_limit);
+		return;
+	}
 	if (rx_tasklet) {
 		xframe_enqueue_recv(xbus, xframe);
 	} else {
@@ -1483,6 +1514,7 @@ void xbus_free(xbus_t *xbus)
 	num = xbus->num;
 	BUG_ON(!xbuses_array[num].xbus);
 	BUG_ON(xbus != xbuses_array[num].xbus);
+	init_xbus(num, NULL);
 	spin_unlock_irqrestore(&xbuses_lock, flags);
 #ifdef CONFIG_PROC_FS
 	if (xbus->proc_xbus_dir) {
@@ -1509,7 +1541,6 @@ void xbus_free(xbus_t *xbus)
 #endif
 	spin_lock_irqsave(&xbuses_lock, flags);
 	XBUS_DBG(DEVICES, xbus, "Going to free...\n");
-	init_xbus(num, NULL);
 	spin_unlock_irqrestore(&xbuses_lock, flags);
 	KZFREE(xbus);
 }
