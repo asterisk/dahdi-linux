@@ -30,6 +30,7 @@
 #include <linux/workqueue.h>
 #include <linux/device.h>
 #include <linux/delay.h>	/* for msleep() to debug */
+#include <linux/sched.h>
 #include "xpd.h"
 #include "xpp_dahdi.h"
 #include "xbus-core.h"
@@ -967,10 +968,13 @@ void xbus_sysfs_remove(xbus_t *xbus)
 	struct device *astribank;
 
 	BUG_ON(!xbus);
-	XBUS_DBG(DEVICES, xbus, "\n");
 	astribank = &xbus->astribank;
-	if (!dev_get_drvdata(astribank))
+	if (!dev_get_drvdata(astribank)) {
+		XBUS_NOTICE(xbus, "%s: already removed\n", __func__);
 		return;
+	}
+	XBUS_DBG(DEVICES, xbus, "going to unregister: refcount=%d\n",
+		atomic_read(&astribank->kobj.kref.refcount));
 	BUG_ON(dev_get_drvdata(astribank) != xbus);
 	device_unregister(astribank);
 	dev_set_drvdata(astribank, NULL);
