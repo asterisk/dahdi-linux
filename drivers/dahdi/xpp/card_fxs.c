@@ -1957,7 +1957,7 @@ static DEVICE_ATTR_WRITER(fxs_ring_registers_store, dev, buf, count)
 				regno);
 			goto invalid_input;
 		}
-		XPD_INFO(xpd, "%s Indirect 0x%X <=== 0x%X 0x%X\n",
+		XPD_DBG(SIGNAL, xpd, "%s Indirect 0x%X <=== 0x%X 0x%X\n",
 			rtype_name, regno, h_val, l_val);
 	} else {
 		if (ret != 3) {
@@ -1968,7 +1968,7 @@ static DEVICE_ATTR_WRITER(fxs_ring_registers_store, dev, buf, count)
 		}
 		l_val = h_val;
 		h_val = 0;
-		XPD_INFO(xpd, "%s Direct 0x%X <=== 0x%X\n",
+		XPD_DBG(SIGNAL, xpd, "%s Direct 0x%X <=== 0x%X\n",
 			rtype_name, regno, h_val);
 	}
 	spin_lock_irqsave(&xpd->lock, flags);

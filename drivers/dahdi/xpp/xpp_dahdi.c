@@ -476,7 +476,7 @@ int phonedev_alloc_channels(xpd_t *xpd, int channels)
 	int old_channels = phonedev->channels;
 	unsigned int x;
 
-	XPD_NOTICE(xpd, "Reallocating channels: %d -> %d\n",
+	XPD_DBG(DEVICES, xpd, "Reallocating channels: %d -> %d\n",
 			old_channels, channels);
 	phonedev_cleanup(xpd);
 	phonedev->channels = channels;

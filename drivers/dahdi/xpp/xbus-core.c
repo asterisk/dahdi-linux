@@ -199,7 +199,7 @@ static void xbus_destroy(struct kref *kref)
 	int num;
 
 	xbus = kref_to_xbus(kref);
-	XBUS_NOTICE(xbus, "%s\n", __func__);
+	XBUS_DBG(DEVICES, xbus, "%s\n", __func__);
 	num = xbus->num;
 	xbuses_array[num].shutting_down = 1;
 	xbus_sysfs_remove(xbus);
@@ -1066,7 +1066,7 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
 	int i;
 	int ret;
 
-	XBUS_NOTICE(xbus, "%s\n", __func__);
+	XBUS_DBG(DEVICES, xbus, "%s\n", __func__);
 	ret = mutex_lock_interruptible(&dahdi_registration_mutex);
 	if (ret < 0) {
 		XBUS_ERR(xbus, "dahdi_registration_mutex already taken\n");
@@ -1085,8 +1085,8 @@ void xbus_unregister_dahdi_device(xbus_t *xbus)
 	}
 	if (xbus->ddev) {
 		dahdi_unregister_device(xbus->ddev);
-		XBUS_NOTICE(xbus, "%s: finished dahdi_unregister_device()\n",
-			    __func__);
+		XBUS_DBG(DEVICES, xbus,
+			"%s: finished dahdi_unregister_device()\n", __func__);
 		xbus_free_ddev(xbus);
 	}
 	for (i = 0; i < MAX_XPDS; i++) {
@@ -1220,8 +1220,7 @@ static void worker_reset(xbus_t *xbus)
 	name = (xbus) ? xbus->busname : "detached";
 	DBG(DEVICES, "%s\n", name);
 	if (!worker->xpds_init_done) {
-		NOTICE("%s: worker(%s)->xpds_init_done=%d\n", __func__, name,
-		       worker->xpds_init_done);
+		XBUS_NOTICE(xbus, "XPDS initialization was not finished\n");
 	}
 	spin_lock_irqsave(&worker->worker_lock, flags);
 	list_for_each_safe(card, next_card, &worker->card_list) {
