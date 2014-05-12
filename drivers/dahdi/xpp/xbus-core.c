@@ -1238,13 +1238,15 @@ static void worker_reset(xbus_t *xbus)
 	spin_unlock_irqrestore(&worker->worker_lock, flags);
 }
 
+/*
+ * Called only after worker_reset(xbus)
+ */
 static void worker_destroy(xbus_t *xbus)
 {
 	struct xbus_workqueue *worker;
 
 	BUG_ON(!xbus);
 	worker = &xbus->worker;
-	worker_reset(xbus);
 	XBUS_DBG(DEVICES, xbus, "Waiting for worker to finish...\n");
 	down(&worker->running_initialization);
 	XBUS_DBG(DEVICES, xbus, "Waiting for worker to finish -- done\n");
@@ -1297,6 +1299,7 @@ static int worker_run(xbus_t *xbus)
 	}
 	return 1;
 err:
+	worker_reset(xbus);
 	worker_destroy(xbus);
 	return 0;
 }
@@ -1464,6 +1467,7 @@ void xbus_disconnect(xbus_t *xbus)
 	del_timer_sync(&xbus->command_timer);
 	transportops_put(xbus);
 	transport_destroy(xbus);
+	/* worker_reset(xbus) was called in xbus_deactivate(xbus) */
 	worker_destroy(xbus);
 	XBUS_DBG(DEVICES, xbus, "Deactivated refcount_xbus=%d\n",
 		 refcount_xbus(xbus));
