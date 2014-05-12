@@ -1640,10 +1640,6 @@ int waitfor_xpds(xbus_t *xbus, char *buf)
 	 * FIXME: worker is created before ?????
 	 * So by now it exists and initialized.
 	 */
-	/* until end of waitfor_xpds_show(): */
-	xbus = get_xbus(__func__, xbus->num);
-	if (!xbus)
-		return -ENODEV;
 	worker = &xbus->worker;
 	BUG_ON(!worker);
 	if (!worker->wq) {
@@ -1682,7 +1678,6 @@ int waitfor_xpds(xbus_t *xbus, char *buf)
 		spin_unlock_irqrestore(&xbus->lock, flags);
 	}
 out:
-	put_xbus(__func__, xbus);	/* from start of waitfor_xpds_show() */
 	return len;
 }
 
