@@ -722,7 +722,7 @@ int xpp_open(struct dahdi_chan *chan)
 	xpd_t *xpd;
 	xbus_t *xbus;
 	int pos;
-	unsigned long flags;
+	int open_counter;
 
 	if (!chan) {
 		NOTICE("open called on a null chan\n");
@@ -743,11 +743,9 @@ int xpp_open(struct dahdi_chan *chan)
 		LINE_NOTICE(xpd, pos, "Cannot open -- device not ready\n");
 		return -ENODEV;
 	}
-	spin_lock_irqsave(&xbus->lock, flags);
-	atomic_inc(&PHONEDEV(xpd).open_counter);
+	open_counter = atomic_inc_return(&PHONEDEV(xpd).open_counter);
 	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n", current->comm,
-		 current->pid, atomic_read(&PHONEDEV(xpd).open_counter));
-	spin_unlock_irqrestore(&xbus->lock, flags);
+		 current->pid, open_counter);
 	if (PHONE_METHOD(card_open, xpd))
 		CALL_PHONE_METHOD(card_open, xpd, pos);
 	return 0;
@@ -757,17 +755,15 @@ EXPORT_SYMBOL(xpp_open);
 int xpp_close(struct dahdi_chan *chan)
 {
 	xpd_t *xpd = chan->pvt;
-	xbus_t *xbus = xpd->xbus;
 	int pos = chan->chanpos - 1;
-	unsigned long flags;
+	int open_counter;
 
-	spin_lock_irqsave(&xbus->lock, flags);
-	spin_unlock_irqrestore(&xbus->lock, flags);
 	if (PHONE_METHOD(card_close, xpd))
 		CALL_PHONE_METHOD(card_close, xpd, pos);
+	/* from xpp_open(): */
+	open_counter = atomic_dec_return(&PHONEDEV(xpd).open_counter);
 	LINE_DBG(DEVICES, xpd, pos, "%s[%d]: open_counter=%d\n", current->comm,
-		 current->pid, atomic_read(&PHONEDEV(xpd).open_counter));
-	atomic_dec(&PHONEDEV(xpd).open_counter);	/* from xpp_open() */
+		 current->pid, open_counter);
 	return 0;
 }
 EXPORT_SYMBOL(xpp_close);
