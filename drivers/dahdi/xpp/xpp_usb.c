@@ -211,7 +211,7 @@ static xusb_t *xusb_array[MAX_BUSES] = { };
 static unsigned bus_count;
 
 /* prevent races between open() and disconnect() */
-static DEFINE_SEMAPHORE(disconnect_sem);
+static DEFINE_MUTEX(protect_xusb_devices);
 
 /*
  * AsteriskNow kernel has backported the "lean" callback from 2.6.20
@@ -652,6 +652,7 @@ static int xusb_probe(struct usb_interface *interface,
 		    iface_desc->desc.bInterfaceNumber, model_info->iface_num);
 		return -ENODEV;
 	}
+	mutex_lock(&protect_xusb_devices);
 	if ((retval = usb_reset_device(udev)) < 0) {
 		ERR("usb_reset_device failed: %d\n", retval);
 		goto probe_failed;
@@ -759,6 +760,7 @@ static int xusb_probe(struct usb_interface *interface,
 	for (i = 0; i < 10; i++)
 		xusb_listen(xusb);
 	xbus_connect(xbus);
+	mutex_unlock(&protect_xusb_devices);
 	return retval;
 probe_failed:
 	ERR("Failed to initialize xpp usb bus: %d\n", retval);
@@ -785,6 +787,7 @@ probe_failed:
 		ERR("Calling xbus_disconnect()\n");
 		xbus_disconnect(xbus);	// Blocking until fully deactivated!
 	}
+	mutex_unlock(&protect_xusb_devices);
 	return retval;
 }
 
@@ -810,7 +813,7 @@ static void xusb_disconnect(struct usb_interface *interface)
 	DBG(DEVICES, "CALLED on interface #%d\n",
 	    iface_desc->desc.bInterfaceNumber);
 	/* prevent races with open() */
-	down(&disconnect_sem);
+	mutex_lock(&protect_xusb_devices);
 
 	xusb = usb_get_intfdata(interface);
 	usb_set_intfdata(interface, NULL);
@@ -844,7 +847,7 @@ static void xusb_disconnect(struct usb_interface *interface)
 	XUSB_INFO(xusb, "now disconnected\n");
 	KZFREE(xusb);
 
-	up(&disconnect_sem);
+	mutex_unlock(&protect_xusb_devices);
 }
 
 static void xpp_send_callback(USB_PASS_CB(urb))
