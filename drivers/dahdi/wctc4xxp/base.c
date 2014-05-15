@@ -2641,31 +2641,42 @@ static int
 wctc4xxp_hardware_init(struct wcdte *wc)
 {
 	/* Hardware stuff */
+	enum {
+		/* Software Reset */
+		SWR		= (1 << 0),
+		/* Bus Arbitration (1 for priority transmit) */
+		BAR		= (1 << 1),
+		/* Memory Write Invalidate */
+		MWI		= (1 << 24),
+		/* Memory Read Line */
+		MRL		= (1 << 23),
+		/* Descriptor Skip Length */
+		DSLShift	= 2,
+		/* Cache Alignment */
+		CALShift	= 14,
+		/* Transmit Auto Pollling */
+		TAPShift	= 17,
+	};
 	u32 reg;
 	unsigned long newjiffies;
 	u8 cache_line_size;
-	const u32 DEFAULT_PCI_ACCESS = 0xfff80000;
-
-	/* Enable I/O Access */
-	pci_read_config_dword(wc->pdev, 0x0004, &reg);
-	reg |= 0x00000007;
-	pci_write_config_dword(wc->pdev, 0x0004, reg);
+	const u32 DEFAULT_PCI_ACCESS = (MWI | (11 << TAPShift));
 
 	if (pci_read_config_byte(wc->pdev, 0x0c, &cache_line_size))
 		return -EIO;
 
 	switch (cache_line_size) {
 	case 0x08:
-		reg = DEFAULT_PCI_ACCESS | (0x1 << 14);
+		reg = DEFAULT_PCI_ACCESS | (0x1 << CALShift);
 		break;
 	case 0x10:
-		reg = DEFAULT_PCI_ACCESS | (0x2 << 14);
+		reg = DEFAULT_PCI_ACCESS | (0x2 << CALShift);
 		break;
 	case 0x20:
-		reg = DEFAULT_PCI_ACCESS | (0x3 << 14);
+		reg = DEFAULT_PCI_ACCESS | (0x3 << CALShift);
 		break;
 	default:
-		reg = 0xfe584202;
+		reg = (11 << TAPShift);
 		break;
 	}
 
