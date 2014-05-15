@@ -3462,6 +3462,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 			pci_resource_len(wc->pdev, 1));
 		if (wc->iobase)
 			pci_iounmap(wc->pdev, wc->iobase);
+		pci_clear_mwi(wc->pdev);
 		dev_warn(&wc->pdev->dev, "No suitable DMA available.\n");
 		return -EIO;
 	}
@@ -3564,6 +3565,11 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		dev_err(&wc->pdev->dev, "Failed to enable device.\n");
 		goto error_exit_swinit;;
 	}
+	res = pci_set_mwi(wc->pdev);
+	if (res) {
+		dev_warn(&wc->pdev->dev,
+			 "Failed to set Memory-Write Invalidate Command Bit..\n");
+	}
 	pci_set_master(pdev);
 	pci_set_drvdata(pdev, wc);
 	res = request_irq(pdev->irq, wctc4xxp_interrupt,
@@ -3635,6 +3641,7 @@ error_exit_swinit:
 		pci_resource_len(wc->pdev, 1));
 	if (wc->iobase)
 		pci_iounmap(wc->pdev, wc->iobase);
+	pci_clear_mwi(wc->pdev);
 	wctc4xxp_remove_from_device_list(wc);
 	kfree(wc);
 	return res;
@@ -3693,6 +3700,7 @@ static void __devexit wctc4xxp_remove_one(struct pci_dev *pdev)
 		pci_resource_len(wc->pdev, 1));
 	if (wc->iobase)
 		pci_iounmap(wc->pdev, wc->iobase);
+	pci_clear_mwi(wc->pdev);
 	wctc4xxp_cleanup_descriptor_ring(wc->txd);
 	kfree(wc->txd);
 	wctc4xxp_cleanup_descriptor_ring(wc->rxd);
