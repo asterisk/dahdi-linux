@@ -2670,7 +2670,9 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 {
 	struct wcdte *wc = dev_id;
 	u32 ints;
-	u32 reg;
+#define NORMAL_INTERRUPT_SUMMARY (1<<16)
+#define ABNORMAL_INTERRUPT_SUMMARY (1<<15)
+
 #define TX_COMPLETE_INTERRUPT 0x00000001
 #define RX_COMPLETE_INTERRUPT 0x00000040
 #define TIMER_INTERRUPT	      (1<<11)
@@ -2680,25 +2682,16 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 	/* Read and clear interrupts */
 	ints = __wctc4xxp_getctl(wc, 0x0028);
 
-	ints &= wc->intmask;
-
-	if (!ints)
+	if (!(ints & (NORMAL_INTERRUPT_SUMMARY|ABNORMAL_INTERRUPT_SUMMARY)))
 		return IRQ_NONE;
 
+	/* Clear all the pending interrupts. */
+	__wctc4xxp_setctl(wc, 0x0028, ints);
+
 	if (likely(ints & NORMAL_INTERRUPTS)) {
-		reg = 0;
-		if (ints & TX_COMPLETE_INTERRUPT)
-			reg |= TX_COMPLETE_INTERRUPT;
 
-		if (ints & RX_COMPLETE_INTERRUPT) {
+		if (ints & (RX_COMPLETE_INTERRUPT | TIMER_INTERRUPT))
 			wctc4xxp_handle_receive_ring(wc);
-			reg |= RX_COMPLETE_INTERRUPT;
-		}
-
-		if (ints & TIMER_INTERRUPT) {
-			wctc4xxp_handle_receive_ring(wc);
-			reg |= TIMER_INTERRUPT;
-		}
 
 #if DEFERRED_PROCESSING == WORKQUEUE
 		schedule_work(&wc->deferred_work);
@@ -2709,7 +2702,6 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 #error "Define a deferred processing function in kernel/wctc4xxp/wctc4xxp.h"
 #endif
 
-		__wctc4xxp_setctl(wc, 0x0028, reg);
 	} else {
 		if ((ints & 0x00008000) && debug)
 			dev_info(&wc->pdev->dev, "Abnormal Interrupt.\n");
@@ -2736,9 +2728,6 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 			dev_info(&wc->pdev->dev,
 				 "Transmit Processor Stopped INT\n");
 		}
-
-		/* Clear all the pending interrupts. */
-		__wctc4xxp_setctl(wc, 0x0028, ints);
 	}
 	return IRQ_HANDLED;
 }
