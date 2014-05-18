@@ -52,6 +52,7 @@ With driver:	303826  (1.5 %)
 #include <linux/moduleparam.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
+#include <linux/delay.h>
 #include <asm/io.h>
 #include <asm/delay.h> 
 
@@ -481,8 +482,6 @@ static void rbi_out(struct pciradio *rad, int n, unsigned char *rbicmd)
 {
 unsigned long flags;
 int	x;
-DECLARE_WAIT_QUEUE_HEAD(mywait);
-
 
 	for(;;)
 	{
@@ -490,7 +489,8 @@ DECLARE_WAIT_QUEUE_HEAD(mywait);
 		x = rad->remote_locked || (__pciradio_getcreg(rad,0xc) & 2);
 		if (!x) rad->remote_locked = 1;
 		spin_unlock_irqrestore(&rad->lock,flags);
-		if (x) interruptible_sleep_on_timeout(&mywait,2);
+		if (x)
+			msleep_interruptible(20);
 		else break;
 	}	
 	spin_lock_irqsave(&rad->lock,flags);
@@ -527,7 +527,6 @@ static void mx828_command(struct pciradio *rad,int channel, unsigned char comman
 
 static void mx828_command_wait(struct pciradio *rad,int channel, unsigned char command, unsigned char *byte1, unsigned char *byte2)
 {
-DECLARE_WAIT_QUEUE_HEAD(mywait);
 unsigned long flags;
 
 
@@ -535,7 +534,7 @@ unsigned long flags;
 	while(rad->encdec.state)
 	{
 		spin_unlock_irqrestore(&rad->lock,flags);  
-		interruptible_sleep_on_timeout(&mywait,2);   
+		msleep_interruptible(20);
 		spin_lock_irqsave(&rad->lock,flags);  
 	}
 	rad->encdec.lastcmd = jiffies + 1000;
@@ -967,7 +966,6 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 	} stack;
 
 	struct pciradio *rad = chan->pvt;
-	DECLARE_WAIT_QUEUE_HEAD(mywait);
 
 	switch (cmd) {
 	case DAHDI_RADIO_GETPARAM:
@@ -1255,7 +1253,7 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 				__pciradio_setcreg(rad,8,byte2);
 				spin_unlock_irqrestore(&rad->lock,flags);
 				if (i || (jiffies < rad->lastremcmd + 10))
-					interruptible_sleep_on_timeout(&mywait,10);
+					msleep_interruptible(100);
 				rad->lastremcmd = jiffies;
 				rbi_out(rad,chan->chanpos - 1,(unsigned char *)&stack.p.data);
 				spin_lock_irqsave(&rad->lock,flags);
@@ -1270,7 +1268,8 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 				x = rad->remote_locked || (__pciradio_getcreg(rad,0xc) & 2);
 				if (!x) rad->remote_locked = 1;
 				spin_unlock_irqrestore(&rad->lock,flags);
-				if (x) interruptible_sleep_on_timeout(&mywait,2);
+				if (x)
+					msleep_interruptible(20);
 				else break;
 			}	
 			spin_lock_irqsave(&rad->lock,flags);
@@ -1287,14 +1286,14 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 			__pciradio_setcreg(rad,8,byte2);
 			spin_unlock_irqrestore(&rad->lock,flags);
 			if (byte1 != byte2) 
-				interruptible_sleep_on_timeout(&mywait,3);
+				msleep_interruptible(30);
 			while (jiffies < rad->lastremcmd + 10)
-				interruptible_sleep_on_timeout(&mywait,10);
+				msleep_interruptible(100);
 			rad->lastremcmd = jiffies;
 			for(;;)
 			{
 				if (!(__pciradio_getcreg(rad,0xc) & 2)) break;
- 				interruptible_sleep_on_timeout(&mywait,2);
+				msleep_interruptible(20);
 			}
 			spin_lock_irqsave(&rad->lock,flags);
 			/* enable and address async serializer */
@@ -1316,7 +1315,7 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 					(!strchr((char *)rad->rxbuf,'\r'))))
 				{
 					spin_unlock_irqrestore(&rad->lock,flags);
-					interruptible_sleep_on_timeout(&mywait,2);
+					msleep_interruptible(20);
 					spin_lock_irqsave(&rad->lock,flags);
 					continue;
 				}
@@ -1336,7 +1335,7 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 				while(rad->txlen && (rad->txindex < rad->txlen))
 				{
 					spin_unlock_irqrestore(&rad->lock,flags);
-					interruptible_sleep_on_timeout(&mywait,2);
+					msleep_interruptible(20);
 					spin_lock_irqsave(&rad->lock,flags);
 				}
 				/* disable and un-address async serializer */
@@ -1345,7 +1344,7 @@ static int pciradio_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned lo
 			rad->remote_locked = 0;
 			spin_unlock_irqrestore(&rad->lock,flags);
 			if (rad->remmode[chan->chanpos - 1] == DAHDI_RADPAR_REM_SERIAL_ASCII)
-				interruptible_sleep_on_timeout(&mywait,100);
+				msleep_interruptible(1000);
 			if (copy_to_user((__user void *) data, &stack.p, sizeof(stack.p))) return -EFAULT;
 			return 0;
 		default:
