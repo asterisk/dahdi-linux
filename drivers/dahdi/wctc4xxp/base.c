@@ -300,7 +300,7 @@ struct channel_pvt {
 	u16 timeslot_out_num;	/* DTE timeslot to send data to */
 	u16 chan_in_num;	/* DTE channel to receive from */
 	u16 chan_out_num;	/* DTE channel to send data to */
-	u32 timestamp;
+	u32 last_timestamp;
 	struct {
 		u8 encoder:1;	/* If we're an encoder */
 	};
@@ -1511,6 +1511,22 @@ static void wctc4xxp_match_packet_counts(struct wcdte *wc)
 	free_cmd(cmd);
 }
 
+static inline u32 wctc4xxp_bytes_to_samples(u32 fmt, size_t count)
+{
+	switch (fmt) {
+	case DAHDI_FORMAT_G723_1:
+		return count * (G723_SAMPLES/G723_5K_BYTES);
+	case DAHDI_FORMAT_ULAW:
+	case DAHDI_FORMAT_ALAW:
+		return count;
+	case DAHDI_FORMAT_G729A:
+		return count * (G729_SAMPLES/G729_BYTES);
+	default:
+		WARN_ON(1);
+		return 0;
+	}
+}
+
 static struct tcb *
 wctc4xxp_create_rtp_cmd(struct wcdte *wc, struct dahdi_transcoder_channel *dtc,
 	size_t inbytes)
@@ -1564,8 +1580,11 @@ wctc4xxp_create_rtp_cmd(struct wcdte *wc, struct dahdi_transcoder_channel *dtc,
 	packet->rtphdr.marker =	    0;
 	packet->rtphdr.type =	    wctc4xxp_dahdifmt_to_dtefmt(dtc->srcfmt);
 	packet->rtphdr.seqno =	    cpu_to_be16(cpvt->seqno);
-	packet->rtphdr.timestamp =  cpu_to_be32(cpvt->timestamp);
+	packet->rtphdr.timestamp =  cpu_to_be32(cpvt->last_timestamp);
 	packet->rtphdr.ssrc =	    cpu_to_be32(cpvt->ssrc);
+
+	cpvt->last_timestamp +=     wctc4xxp_bytes_to_samples(dtc->srcfmt,
+							      inbytes);
 
 	WARN_ON(cmd->data_len > SFRAME_SIZE);
 	return cmd;
@@ -2259,12 +2278,6 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 			   G723_6K_BYTES, G723_SID_BYTES);
 			return -EINVAL;
 		}
-		cpvt->timestamp += G723_SAMPLES;
-	} else if (DAHDI_FORMAT_G723_1 == dtc->dstfmt) {
-		cpvt->timestamp = G723_SAMPLES;
-	} else {
-		/* Same for ulaw and alaw */
-		cpvt->timestamp += G729_SAMPLES;
 	}
 
 	cmd = wctc4xxp_create_rtp_cmd(wc, dtc, count);
