@@ -306,6 +306,11 @@ struct channel_pvt {
 	};
 	struct channel_stats stats;
 	struct list_head rx_queue; /* Transcoded packets for this channel. */
+
+	/* Used to prevent user space from flooding the firmware. */
+	struct list_head node;
+	long samples_in_flight;
+	unsigned long send_time;
 };
 
 struct wcdte {
@@ -1812,6 +1817,7 @@ wctc4xxp_cleanup_channel_private(struct wcdte *wc,
 	spin_lock_irqsave(&cpvt->lock, flags);
 	list_splice_init(&cpvt->rx_queue, &local_list);
 	dahdi_tc_clear_data_waiting(dtc);
+	cpvt->samples_in_flight = 0;
 	spin_unlock_irqrestore(&cpvt->lock, flags);
 
 	memset(&cpvt->stats, 0, sizeof(cpvt->stats));
@@ -2035,12 +2041,10 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 	packets_received = atomic_read(&cpvt->stats.packets_received);
 	packets_sent = atomic_read(&cpvt->stats.packets_sent);
 
-	if ((packets_sent - packets_received) > 5) {
-		DTE_DEBUG(DTE_DEBUG_GENERAL, "%s channel %d sent %d packets "
-			"and received %d packets.\n", (cpvt->encoder) ?
-			"encoder" : "decoder", cpvt->chan_out_num,
-			packets_sent, packets_received);
-	}
+	DTE_DEBUG(DTE_DEBUG_ETH_STATS,
+		"%s channel %d sent %d packets and received %d packets.\n",
+		(cpvt->encoder) ?  "encoder" : "decoder", cpvt->chan_out_num,
+		packets_sent, packets_received);
 
 
 	/* Remove any packets that are waiting on the outbound queue. */
@@ -2243,6 +2247,9 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 	struct channel_pvt *cpvt = dtc->pvt;
 	struct wcdte *wc = cpvt->wc;
 	struct tcb *cmd;
+	u32 samples;
+	unsigned long flags;
+	const unsigned long MAX_SAMPLES_IN_FLIGHT = 640;
 
 	BUG_ON(!cpvt);
 	BUG_ON(!wc);
@@ -2279,6 +2286,24 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 			return -EINVAL;
 		}
 	}
+
+	/* Do not flood the firmware with packets. This can result in out of
+	 * memory conditions in the firmware. */
+	spin_lock_irqsave(&cpvt->lock, flags);
+	if (time_after(jiffies, cpvt->send_time)) {
+		cpvt->samples_in_flight = max(0L,
+					      cpvt->samples_in_flight - 160L);
+	}
+	samples = wctc4xxp_bytes_to_samples(dtc->srcfmt, count);
+	if ((cpvt->samples_in_flight + samples) > MAX_SAMPLES_IN_FLIGHT) {
+		spin_unlock_irqrestore(&cpvt->lock, flags);
+		/* This should most likely be an error, but it results in
+		 * codec_dahdi spamming when it's not set to wait for new
+		 * packets. Instead we will silently drop the bytes. */
+		return count;
+	}
+	cpvt->send_time = jiffies + msecs_to_jiffies(20);
+	spin_unlock_irqrestore(&cpvt->lock, flags);
 
 	cmd = wctc4xxp_create_rtp_cmd(wc, dtc, count);
 	if (!cmd)
@@ -2548,6 +2573,7 @@ queue_rtp_packet(struct wcdte *wc, struct tcb *cmd)
 	struct channel_pvt *cpvt;
 	struct rtp_packet *packet = cmd->data;
 	unsigned long flags;
+	long samples;
 
 	if (unlikely(ip_fast_csum((void *)(&packet->iphdr),
 		packet->iphdr.ihl))) {
@@ -2584,15 +2610,20 @@ queue_rtp_packet(struct wcdte *wc, struct tcb *cmd)
 	}
 
 	cpvt = dtc->pvt;
-	if (dahdi_tc_is_busy(dtc)) {
-		spin_lock_irqsave(&cpvt->lock, flags);
-		list_add_tail(&cmd->node, &cpvt->rx_queue);
-		dahdi_tc_set_data_waiting(dtc);
-		spin_unlock_irqrestore(&cpvt->lock, flags);
-		dahdi_transcoder_alert(dtc);
-	} else {
+	if (!dahdi_tc_is_busy(dtc)) {
 		free_cmd(cmd);
+		return;
 	}
+
+	spin_lock_irqsave(&cpvt->lock, flags);
+	samples = wctc4xxp_bytes_to_samples(dtc->dstfmt,
+			be16_to_cpu(packet->udphdr.len) -
+			sizeof(struct rtphdr) - sizeof(struct udphdr));
+	cpvt->samples_in_flight = max(cpvt->samples_in_flight - samples, 0L);
+	list_add_tail(&cmd->node, &cpvt->rx_queue);
+	dahdi_tc_set_data_waiting(dtc);
+	spin_unlock_irqrestore(&cpvt->lock, flags);
+	dahdi_transcoder_alert(dtc);
 	return;
 }
 
