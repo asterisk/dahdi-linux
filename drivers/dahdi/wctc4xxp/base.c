@@ -78,7 +78,7 @@
 
 /* The total number of active channels over which the driver will start polling
  * the card every 10 ms. */
-#define POLLING_CALL_THRESHOLD 8
+#define POLLING_CALL_THRESHOLD 40
 
 #define INVALID 999 /* Used to mark invalid channels, commands, etc.. */
 #define MAX_CHANNEL_PACKETS  5
@@ -1904,7 +1904,7 @@ static void
 wctc4xxp_enable_polling(struct wcdte *wc)
 {
 	set_bit(DTE_POLLING, &wc->flags);
-	wctc4xxp_setctl(wc, 0x0058, 0x1000a);
+	wctc4xxp_setctl(wc, 0x0058, 0x10003);
 	/* Enable the general purpose timer interrupt. */
 	wctc4xxp_setintmask(wc, (DEFAULT_INTERRUPTS | (1 << 11)) & ~0x41);
 }
