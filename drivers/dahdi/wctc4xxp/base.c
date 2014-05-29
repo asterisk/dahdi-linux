@@ -2600,8 +2600,8 @@ static void service_tx_ring(struct wcdte *wc)
 {
 	struct tcb *cmd;
 	unsigned long flags;
+	spin_lock_irqsave(&wc->cmd_list_lock, flags);
 	while ((cmd = wctc4xxp_retrieve(wc->txd))) {
-		spin_lock_irqsave(&wc->cmd_list_lock, flags);
 		cmd->flags |= TX_COMPLETE;
 		if (!(cmd->flags & (WAIT_FOR_ACK | WAIT_FOR_RESPONSE))) {
 			/* If we're not waiting for an ACK or Response from
@@ -2628,8 +2628,8 @@ static void service_tx_ring(struct wcdte *wc)
 			}
 			wctc4xxp_submit(wc->txd, cmd);
 		}
-		spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 	}
+	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 }
 
 static void service_rx_ring(struct wcdte *wc)
@@ -2675,13 +2675,13 @@ static void deferred_work_func(struct work_struct *work)
 {
 	struct wcdte *wc = container_of(work, struct wcdte, deferred_work);
 #endif
-	service_tx_ring(wc);
 	service_rx_ring(wc);
 }
 
 DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 {
 	struct wcdte *wc = dev_id;
+	bool packets_to_process = false;
 	u32 ints;
 #define NORMAL_INTERRUPT_SUMMARY (1<<16)
 #define ABNORMAL_INTERRUPT_SUMMARY (1<<15)
@@ -2703,11 +2703,14 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 
 	if (likely(ints & NORMAL_INTERRUPTS)) {
 
-		if (ints & (RX_COMPLETE_INTERRUPT | TIMER_INTERRUPT))
-			wctc4xxp_handle_receive_ring(wc);
+		if (ints & (RX_COMPLETE_INTERRUPT | TIMER_INTERRUPT)) {
+			packets_to_process = !wctc4xxp_handle_receive_ring(wc);
+			service_tx_ring(wc);
+		}
 
 #if DEFERRED_PROCESSING == WORKQUEUE
-		schedule_work(&wc->deferred_work);
+		if (packets_to_process)
+			schedule_work(&wc->deferred_work);
 #elif DEFERRED_PROCESSING == INTERRUPT
 #error "You will need to change the locks if you want to run the processing " \
 		"in the interrupt handler."
