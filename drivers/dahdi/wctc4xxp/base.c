@@ -2732,12 +2732,9 @@ DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
 	/* Clear all the pending interrupts. */
 	__wctc4xxp_setctl(wc, 0x0028, ints);
 
-	if (likely(ints & NORMAL_INTERRUPTS)) {
-
-		if (ints & (RX_COMPLETE_INTERRUPT | TIMER_INTERRUPT)) {
-			packets_to_process = !wctc4xxp_handle_receive_ring(wc);
-			service_tx_ring(wc);
-		}
+	if (ints & (RX_COMPLETE_INTERRUPT | TIMER_INTERRUPT)) {
+		packets_to_process = wctc4xxp_handle_receive_ring(wc) > 0;
+		service_tx_ring(wc);
 
 #if DEFERRED_PROCESSING == WORKQUEUE
 		if (packets_to_process)
