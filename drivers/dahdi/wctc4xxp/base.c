@@ -50,6 +50,9 @@
 #define WORKQUEUE 1
 #define TASKLET   2
 
+/* Define if you want a debug attribute to test alert processing. */
+#undef EXPORT_FOR_ALERT_ATTRIBUTE
+
 #ifndef DEFERRED_PROCESSING
 #	define DEFERRED_PROCESSING WORKQUEUE
 #endif
@@ -324,6 +327,7 @@ struct wcdte {
 #define DTE_READY	1
 #define DTE_SHUTDOWN	2
 #define DTE_POLLING	3
+#define DTE_RELOAD	4
 	unsigned long flags;
 
 	/* This is a device-global list of commands that are waiting to be
@@ -1885,8 +1889,12 @@ do_channel_allocate(struct dahdi_transcoder_channel *dtc)
 	res = wctc4xxp_create_channel_pair(wc, cpvt, wctc4xxp_srcfmt,
 		wctc4xxp_dstfmt);
 	if (res) {
-		/* There was a problem creating the channel.... */
 		dev_err(&wc->pdev->dev, "Failed to create channel pair.\n");
+		/* A failure to create a channel pair is normally a critical
+		 * error in the firmware state. Reload the firmware when this
+		 * handle is closed. */
+		set_bit(DTE_RELOAD, &wc->flags);
+		set_bit(DTE_SHUTDOWN, &wc->flags);
 		return res;
 	}
 	/* Mark this channel as built */
@@ -1934,10 +1942,30 @@ wctc4xxp_enable_polling(struct wcdte *wc)
 	wctc4xxp_setintmask(wc, (DEFAULT_INTERRUPTS | (1 << 11)) & ~0x41);
 }
 
+static int wctc4xxp_reset_driver_state(struct wcdte *wc);
+
+static bool wctc4xxp_need_firmware_reload(struct wcdte *wc)
+{
+	return !!test_bit(DTE_RELOAD, &wc->flags) &&
+		(1 == wc->open_channels);
+}
+
+static int wctc4xxp_reload_firmware(struct wcdte *wc)
+{
+	int res;
+	clear_bit(DTE_SHUTDOWN, &wc->flags);
+	res = wctc4xxp_reset_driver_state(wc);
+	if (res)
+		set_bit(DTE_SHUTDOWN, &wc->flags);
+	else
+		clear_bit(DTE_RELOAD, &wc->flags);
+	return res;
+}
+
 static int
 wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 {
-	int res;
+	int res = 0;
 	struct wcdte *wc = ((struct channel_pvt *)(dtc->pvt))->wc;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
@@ -1948,14 +1976,19 @@ wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 		return res;
 #endif
 
-	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
-		/* The shudown flags can also be set if there is a
-		 * catastrophic failure. */
+	++wc->open_channels;
+
+	if (test_bit(DTE_SHUTDOWN, &wc->flags)) {
 		res = -EIO;
-		goto error_exit;
+		if (wctc4xxp_need_firmware_reload(wc)) 
+			res = wctc4xxp_reload_firmware(wc);
+	} else if (wctc4xxp_need_firmware_reload(wc)) {
+		res = wctc4xxp_reload_firmware(wc);
 	}
 
-	++wc->open_channels;
+	if (res)
+		goto error_exit;
+
 	if (wc->open_channels > POLLING_CALL_THRESHOLD) {
 		if (!test_bit(DTE_POLLING, &wc->flags))
 			wctc4xxp_enable_polling(wc);
@@ -1999,7 +2032,7 @@ static void wctc4xxp_check_for_rx_errors(struct wcdte *wc)
 static int
 wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 {
-	int res;
+	int res = 0;
 	int index;
 	/* This is the 'complimentary channel' to dtc.  I.e., if dtc is an
 	 * encoder, compl_dtc is the decoder and vice-versa */
@@ -2020,11 +2053,17 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 		return res;
 #endif
 
-	if (unlikely(test_bit(DTE_SHUTDOWN, &wc->flags))) {
-		/* The shudown flags can also be set if there is a
-		 * catastrophic failure. */
+	if (test_bit(DTE_SHUTDOWN, &wc->flags)) {
+		/* On shutdown, if we reload the firmware we will reset the
+		 * state of all the channels. Therefore we do not want to
+		 * process any of the channel release logic even if the firmware
+		 * was reloaded successfully. */
+		if (wctc4xxp_need_firmware_reload(wc)) 
+			wctc4xxp_reload_firmware(wc);
 		res = -EIO;
-		goto error_exit;
+	} else if (wctc4xxp_need_firmware_reload(wc)) {
+		wctc4xxp_reload_firmware(wc);
+		res = -EIO;
 	}
 
 	if (wc->open_channels) {
@@ -2037,6 +2076,9 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 		}
 #endif
 	}
+
+	if (res)
+		goto error_exit;
 
 	packets_received = atomic_read(&cpvt->stats.packets_received);
 	packets_sent = atomic_read(&cpvt->stats.packets_sent);
@@ -2460,10 +2502,9 @@ is_response(const struct csm_encaps_hdr *hdr)
 }
 
 static void
-print_command(struct wcdte *wc, const struct tcb *cmd)
+print_command(struct wcdte *wc, const struct csm_encaps_hdr *hdr)
 {
 	int i, curlength;
-	const struct csm_encaps_hdr *hdr = cmd->data;
 	char *buffer;
 	const int BUFFER_SIZE = 1024;
 	int parameters = ((hdr->cmd.length - 8)/sizeof(__le16));
@@ -2494,6 +2535,48 @@ print_command(struct wcdte *wc, const struct tcb *cmd)
 static inline void wctc4xxp_reset_processor(struct wcdte *wc)
 {
 	wctc4xxp_setctl(wc, 0x00A0, 0x04000000);
+}
+
+
+static void handle_csm_alert(struct wcdte *wc,
+			      const struct csm_encaps_hdr *hdr)
+{
+	const struct csm_encaps_cmd *c = &hdr->cmd;
+	if (c->function == 0x0000) {
+		u16 alert_type = le16_to_cpu(c->params[0]);
+		u16 action_required = le16_to_cpu(c->params[1]) >> 8;
+		const bool fatal_error = action_required != 0;
+
+		dev_err(&wc->pdev->dev,
+			"Received alert (0x%04x) from dsp. Firmware will be reloaded when possible.\n",
+			alert_type);
+
+		if (fatal_error) {
+			/* If any fatal errors are reported we'll just shut
+			 * everything down so that we do not hang up any user
+			 * process trying to wait for commands to complete. */
+			wctc4xxp_reset_processor(wc);
+			set_bit(DTE_RELOAD, &wc->flags);
+			set_bit(DTE_SHUTDOWN, &wc->flags);
+			wctc4xxp_timeout_all_commands(wc);
+		} else {
+			/* For non-fatal errors we'll try to proceed and reload
+			 * the firmware when all open channels are closed. This
+			 * will prevent impacting any normal calls in progress.
+			 *
+			 */
+			set_bit(DTE_RELOAD, &wc->flags);
+		}
+	} else {
+		if (debug) {
+			dev_warn(&wc->pdev->dev,
+				 "Received diagnostic message:\n");
+		}
+	}
+
+	if (debug) {
+		print_command(wc, hdr);
+	}
 }
 
 static void
@@ -2538,21 +2621,7 @@ receive_csm_encaps_packet(struct wcdte *wc, struct tcb *cmd)
 			}
 			free_cmd(cmd);
 		} else if (MONITOR_LIVE_INDICATION_TYPE == c->type) {
-
-			if (c->function == 0x0000) {
-				u16 alert_type = le16_to_cpu(c->params[0]);
-				dev_err(&wc->pdev->dev,
-					"Received alert (0x%04x) from dsp. Please reload driver.\n",
-					alert_type);
-
-				wctc4xxp_reset_processor(wc);
-				set_bit(DTE_SHUTDOWN, &wc->flags);
-				wctc4xxp_timeout_all_commands(wc);
-			} else {
-				dev_warn(&wc->pdev->dev,
-					 "Received diagnostic message:\n");
-			}
-			print_command(wc, cmd);
+			handle_csm_alert(wc, hdr);
 			free_cmd(cmd);
 		} else {
 			dev_warn(&wc->pdev->dev,
@@ -3026,6 +3095,8 @@ wctc4xxp_load_firmware(struct wcdte *wc, const struct firmware *firmware)
 	wctc4xxp_enable_polling(wc);
 #endif
 
+	clear_bit(DTE_READY, &wc->flags);
+
 	while (byteloc < (firmware->size-20)) {
 		length = (firmware->data[byteloc] << 8) |
 				firmware->data[byteloc+1];
@@ -3107,7 +3178,6 @@ wctc4xxp_boot_processor(struct wcdte *wc, const struct firmware *firmware)
 	int ret;
 
 	wctc4xxp_turn_off_booted_led(wc);
-
 	ret = wctc4xxp_load_firmware(wc, firmware);
 	if (ret)
 		return ret;
@@ -3740,6 +3810,130 @@ static struct wctc4xxp_desc wctce400 = {
 	.long_name = "Wildcard TCE400+TC400M",
 };
 
+static void wctc4xxp_cleanup_channels(struct wcdte *wc);
+
+static int wctc4xxp_reset_and_reload_firmware(struct wcdte *wc,
+					      const struct firmware *firmware)
+{
+	int res;
+
+	wctc4xxp_cleanup_command_list(wc);
+	wctc4xxp_cleanup_channels(wc);
+
+	res = wctc4xxp_boot_processor(wc, firmware);
+	if (res)
+		return res;
+
+#if defined(CONFIG_WCTC4XXP_POLLING)
+	wctc4xxp_enable_polling(wc);
+#endif
+	res = wctc4xxp_setup_device(wc);
+	if (res) {
+		dev_err(&wc->pdev->dev, "Failed to setup DTE\n");
+		return res;
+	}
+
+	return 0;
+}
+
+static int wctc4xxp_reset_driver_state(struct wcdte *wc)
+{
+	int res;
+	struct firmware embedded_firmware;
+	unsigned long flags;
+	const struct firmware *firmware = &embedded_firmware;
+#if !defined(HOTPLUG_FIRMWARE)
+	extern void _binary_dahdi_fw_tc400m_bin_size;
+	extern u8 _binary_dahdi_fw_tc400m_bin_start[];
+	embedded_firmware.data = _binary_dahdi_fw_tc400m_bin_start;
+	embedded_firmware.size = (size_t) &_binary_dahdi_fw_tc400m_bin_size;
+#else
+	static const char tc400m_firmware[] = "dahdi-fw-tc400m.bin";
+
+	res = request_firmware(&firmware, tc400m_firmware, &wc->pdev->dev);
+	if (res || !firmware) {
+		dev_err(&wc->pdev->dev,
+		  "Firmware %s not available from userspace. (%d)\n",
+		  tc400m_firmware, res);
+		return res;
+	}
+#endif
+	res = wctc4xxp_reset_and_reload_firmware(wc, firmware);
+	if (firmware != &embedded_firmware)
+		release_firmware(firmware);
+	spin_lock_irqsave(&wc->rxd->lock, flags);
+	wc->rxd->packet_errors = 0;
+	spin_unlock_irqrestore(&wc->rxd->lock, flags);
+	return res;
+}
+
+#ifdef EXPORT_FOR_ALERT_ATTRIBUTE
+
+static ssize_t wctc4xxp_force_alert_store(struct device *dev,
+				    struct device_attribute *attr,
+				    const char *buf, size_t count)
+{
+	int res;
+	unsigned int alert_type;
+	struct wcdte *wc = dev_get_drvdata(dev);
+	struct tcb *cmd  = alloc_cmd(SFRAME_SIZE);
+	u16 parameters[] = {0};
+	if (!cmd)
+		return -ENOMEM;
+
+	res = sscanf(buf, "%x", &alert_type);
+	if (1 != res) {
+		free_cmd(cmd);
+		return -EINVAL;
+	}
+
+	dev_info(&wc->pdev->dev, "Forcing alert type: 0x%x\n", alert_type);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
+	mutex_lock(&wc->chanlock);
+#else
+	res = mutex_lock_killable(&wc->chanlock);
+	if (res) {
+		free_cmd(cmd);
+		return -EAGAIN;
+	}
+#endif
+
+
+	parameters[0] = alert_type;
+
+	create_supervisor_cmd(wc, cmd, CONFIG_CHANGE_TYPE,
+		CONFIG_DEVICE_CLASS, 0x0409, parameters,
+		ARRAY_SIZE(parameters));
+
+	wctc4xxp_transmit_cmd(wc, cmd);
+
+	mutex_unlock(&wc->chanlock);
+
+	return count;
+}
+
+static DEVICE_ATTR(force_alert, 0200, NULL, wctc4xxp_force_alert_store);
+
+static void wctc4xxp_create_sysfs_files(struct wcdte *wc)
+{
+	int ret;
+	ret = device_create_file(&wc->pdev->dev, &dev_attr_force_alert);
+	if (ret) {
+		dev_info(&wc->pdev->dev,
+			"Failed to create device attributes.\n");
+	}
+}
+
+static void wctc4xxp_remove_sysfs_files(struct wcdte *wc)
+{
+	device_remove_file(&wc->pdev->dev, &dev_attr_force_alert);
+}
+
+#else
+static inline void wctc4xxp_create_sysfs_files(struct wcdte *wc) { return; }
+static inline void wctc4xxp_remove_sysfs_files(struct wcdte *wc) { return; }
+#endif
+
 static int __devinit
 wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
@@ -3923,16 +4117,10 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 	wctc4xxp_enable_interrupts(wc);
 	wctc4xxp_start_dma(wc);
-	res = wctc4xxp_boot_processor(wc, firmware);
+
+	res = wctc4xxp_reset_and_reload_firmware(wc, firmware);
 	if (firmware != &embedded_firmware)
 		release_firmware(firmware);
-	if (res)
-		goto error_exit_hwinit;
-
-#if defined(CONFIG_WCTC4XXP_POLLING)
-	wctc4xxp_enable_polling(wc);
-#endif
-	res = wctc4xxp_setup_device(wc);
 	if (res)
 		goto error_exit_hwinit;
 
@@ -3952,6 +4140,8 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	dahdi_transcoder_register(wc->udecode);
 
 	wctc4xxp_match_packet_counts(wc);
+
+	wctc4xxp_create_sysfs_files(wc);
 
 	return 0;
 
@@ -3987,13 +4177,29 @@ static void wctc4xxp_cleanup_channels(struct wcdte *wc)
 {
 	int i;
 	struct dahdi_transcoder_channel *dtc_en, *dtc_de;
+	struct channel_pvt *cpvt;
 
 	for (i = 0; i < wc->numchannels; ++i) {
 		dtc_en = &(wc->uencode->channels[i]);
 		wctc4xxp_cleanup_channel_private(wc, dtc_en);
+		dahdi_tc_clear_busy(dtc_en);
+		dahdi_tc_clear_built(dtc_en);
+
+		dtc_en->built_fmts = 0;
+		cpvt = dtc_en->pvt;
+		cpvt->chan_in_num = INVALID;
+		cpvt->chan_out_num = INVALID;
+
 
 		dtc_de = &(wc->udecode->channels[i]);
 		wctc4xxp_cleanup_channel_private(wc, dtc_de);
+		dahdi_tc_clear_busy(dtc_de);
+		dahdi_tc_clear_built(dtc_de);
+
+		dtc_de->built_fmts = 0;
+		cpvt = dtc_de->pvt;
+		cpvt->chan_in_num = INVALID;
+		cpvt->chan_out_num = INVALID;
 	}
 }
 
@@ -4003,6 +4209,8 @@ static void __devexit wctc4xxp_remove_one(struct pci_dev *pdev)
 
 	if (!wc)
 		return;
+
+	wctc4xxp_remove_sysfs_files(wc);
 
 	wctc4xxp_remove_from_device_list(wc);
 
