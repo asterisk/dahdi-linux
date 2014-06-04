@@ -311,7 +311,6 @@ struct channel_pvt {
 	struct list_head rx_queue; /* Transcoded packets for this channel. */
 
 	/* Used to prevent user space from flooding the firmware. */
-	struct list_head node;
 	long samples_in_flight;
 	unsigned long send_time;
 };
@@ -376,9 +375,6 @@ struct wcdte {
 #endif
 	struct timer_list watchdog;
 	u16 open_channels;
-#if HZ > 100
-	unsigned long jiffies_at_last_poll;
-#endif
 };
 
 struct wcdte_netdev_priv {
