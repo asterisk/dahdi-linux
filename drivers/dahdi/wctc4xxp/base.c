@@ -2292,6 +2292,7 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 	u32 samples;
 	unsigned long flags;
 	const unsigned long MAX_SAMPLES_IN_FLIGHT = 640;
+	const unsigned long MAX_RTP_PAYLOAD = 500;
 
 	BUG_ON(!cpvt);
 	BUG_ON(!wc);
@@ -2309,11 +2310,10 @@ wctc4xxp_write(struct file *file, const char __user *frame,
 		return -EINVAL;
 	}
 
-	if (unlikely(count > SFRAME_SIZE - sizeof(struct rtp_packet))) {
+	if (count > MAX_RTP_PAYLOAD) {
 		DTE_DEBUG(DTE_DEBUG_GENERAL,
-		   "Cannot transcode packet of %Zu bytes. This exceeds the " \
-		   "maximum size of %Zu bytes.\n", count,
-		   SFRAME_SIZE - sizeof(struct rtp_packet));
+		   "Cannot transcode packet of %Zu bytes. This exceeds the maximum size of %lu bytes.\n",
+		   count, MAX_RTP_PAYLOAD);
 		return -EINVAL;
 	}
 
