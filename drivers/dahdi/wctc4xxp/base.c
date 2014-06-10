@@ -3693,10 +3693,11 @@ wctc4xxp_watchdog(unsigned long data)
 	LIST_HEAD(cmds_to_retry);
 	const int MAX_RETRIES = 5;
 	int reschedule_timer = 0;
+	unsigned long flags;
 
 	service_tx_ring(wc);
 
-	spin_lock(&wc->cmd_list_lock);
+	spin_lock_irqsave(&wc->cmd_list_lock, flags);
 	/* Go through the list of messages that are waiting for responses from
 	 * the DTE, and complete or retry any that have timed out. */
 	list_for_each_entry_safe(cmd, temp,
@@ -3715,12 +3716,13 @@ wctc4xxp_watchdog(unsigned long data)
 
 				wctc4xxp_reset_processor(wc);
 				set_bit(DTE_SHUTDOWN, &wc->flags);
-				spin_unlock(&wc->cmd_list_lock);
+				spin_unlock_irqrestore(&wc->cmd_list_lock,
+						       flags);
 				_wctc4xxp_stop_dma(wc);
 				dev_err(&wc->pdev->dev,
 				  "Board malfunctioning. Halting operation.\n");
 				reschedule_timer = 0;
-				spin_lock(&wc->cmd_list_lock);
+				spin_lock_irqsave(&wc->cmd_list_lock, flags);
 				break;
 			}
 			/* ERROR:  We've retried the command and
@@ -3749,7 +3751,7 @@ wctc4xxp_watchdog(unsigned long data)
 			reschedule_timer = 1;
 		}
 	}
-	spin_unlock(&wc->cmd_list_lock);
+	spin_unlock_irqrestore(&wc->cmd_list_lock, flags);
 
 	if (list_empty(&cmds_to_retry) && reschedule_timer)
 		mod_timer(&wc->watchdog, jiffies + HZ/2);
