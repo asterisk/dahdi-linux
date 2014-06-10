@@ -3701,52 +3701,52 @@ wctc4xxp_watchdog(unsigned long data)
 	 * the DTE, and complete or retry any that have timed out. */
 	list_for_each_entry_safe(cmd, temp,
 		&wc->waiting_for_response_list, node) {
-		if (time_after(jiffies, cmd->timeout)) {
-			if (++cmd->retries > MAX_RETRIES) {
-				if (!(cmd->flags & TX_COMPLETE)) {
 
-					cmd->flags |= DTE_CMD_TIMEOUT;
-					list_del_init(&cmd->node);
-					if (cmd->complete)
-						complete(cmd->complete);
+		if (!time_after(jiffies, cmd->timeout))
+			continue;
 
-					wctc4xxp_reset_processor(wc);
-					set_bit(DTE_SHUTDOWN, &wc->flags);
-					spin_unlock(&wc->cmd_list_lock);
-					_wctc4xxp_stop_dma(wc);
-					dev_err(&wc->pdev->dev,
-					  "Board malfunctioning.  " \
-					  "Halting operation.\n");
-					reschedule_timer = 0;
-					spin_lock(&wc->cmd_list_lock);
-					break;
-				}
-				/* ERROR:  We've retried the command and
-				 * haven't received the ACK or the response.
-				 */
+		if (++cmd->retries > MAX_RETRIES) {
+			if (!(cmd->flags & TX_COMPLETE)) {
+
 				cmd->flags |= DTE_CMD_TIMEOUT;
 				list_del_init(&cmd->node);
 				if (cmd->complete)
 					complete(cmd->complete);
-			} else if (cmd->flags & TX_COMPLETE) {
-				/* Move this to the local list because we're
-				 * going to resend it once we free the locks
-				 */
-				list_move_tail(&cmd->node, &cmds_to_retry);
-				cmd->flags &= ~(TX_COMPLETE);
-			} else {
-				/* The command is still sitting on the tx
-				 * descriptor ring.  We don't want to move it
-				 * off any lists, lets just reset the timeout
-				 * and tell the hardware to look for another
-				 * command . */
-				dev_warn(&wc->pdev->dev,
-				  "Retrying command that was " \
-				  "still on descriptor list.\n");
-				cmd->timeout = jiffies + HZ/4;
-				wctc4xxp_transmit_demand_poll(wc);
-				reschedule_timer = 1;
+
+				wctc4xxp_reset_processor(wc);
+				set_bit(DTE_SHUTDOWN, &wc->flags);
+				spin_unlock(&wc->cmd_list_lock);
+				_wctc4xxp_stop_dma(wc);
+				dev_err(&wc->pdev->dev,
+				  "Board malfunctioning. Halting operation.\n");
+				reschedule_timer = 0;
+				spin_lock(&wc->cmd_list_lock);
+				break;
 			}
+			/* ERROR:  We've retried the command and
+			 * haven't received the ACK or the response.
+			 */
+			cmd->flags |= DTE_CMD_TIMEOUT;
+			list_del_init(&cmd->node);
+			if (cmd->complete)
+				complete(cmd->complete);
+		} else if (cmd->flags & TX_COMPLETE) {
+			/* Move this to the local list because we're
+			 * going to resend it once we free the locks
+			 */
+			list_move_tail(&cmd->node, &cmds_to_retry);
+			cmd->flags &= ~(TX_COMPLETE);
+		} else {
+			/* The command is still sitting on the tx
+			 * descriptor ring.  We don't want to move it
+			 * off any lists, lets just reset the timeout
+			 * and tell the hardware to look for another
+			 * command . */
+			dev_warn(&wc->pdev->dev,
+			  "Retrying command that was still on descriptor list.\n");
+			cmd->timeout = jiffies + HZ/4;
+			wctc4xxp_transmit_demand_poll(wc);
+			reschedule_timer = 1;
 		}
 	}
 	spin_unlock(&wc->cmd_list_lock);
