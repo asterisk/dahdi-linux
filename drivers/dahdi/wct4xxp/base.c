@@ -2724,7 +2724,7 @@ static void __t4_configure_t1(struct t4 *wc, int unit, int lineconfig, int txlev
 	if (lineconfig & DAHDI_CONFIG_AMI) {
 		line = "AMI";
 		/* workaround for errata #2 in ES v3 09-10-16 */
-		fmr0 = (wc->falc31) ? 0xb0 : 0xa0;
+		fmr0 = (is_octal(wc) || wc->falc31) ? 0xb0 : 0xa0;
 	} else {
 		line = "B8ZS";
 		fmr0 = 0xf0;
@@ -2823,7 +2823,7 @@ static void __t4_configure_e1(struct t4 *wc, int unit, int lineconfig)
 	if (lineconfig & DAHDI_CONFIG_AMI) {
 		line = "AMI";
 		/* workaround for errata #2 in ES v3 09-10-16 */
-		fmr0 = (wc->falc31) ? 0xb0 : 0xa0;
+		fmr0 = (is_octal(wc) || wc->falc31) ? 0xb0 : 0xa0;
 	} else {
 		line = "HDB3";
 		fmr0 = 0xf0;
