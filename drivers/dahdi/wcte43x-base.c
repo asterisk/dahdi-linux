@@ -91,10 +91,9 @@ struct t43x;
 struct t43x_span {
 	struct t43x *owner;
 	struct dahdi_span span;
-	struct {
-		unsigned int nmf:1;
-		unsigned int sendingyellow:1;
-	} flags;
+#define NMF_FLAGBIT		1
+#define SENDINGYELLOW_FLAGBIT	2
+	unsigned long bit_flags;
 	unsigned char txsigs[16];	/* Copy of tx sig registers */
 	unsigned long lofalarmtimer;
 	unsigned long losalarmtimer;
@@ -2677,10 +2676,9 @@ static void t43x_check_alarms(struct t43x *wc, int span_idx)
 			/* No multiframe found, force RAI high after 400ms only
 			 * if we haven't found a multiframe since last loss of
 			 * frame */
-			if (!ts->flags.nmf) {
+			if (!test_and_set_bit(NMF_FLAGBIT, &ts->bit_flags)) {
 				/* LIM0: Force RAI High */
 				__t43x_framer_set(wc, fidx, 0x20, 0x9f | 0x20);
-				ts->flags.nmf = 1;
 				dev_info(&wc->xb.pdev->dev,
 					 "NMF workaround on!\n");
 			}
@@ -2691,10 +2689,9 @@ static void t43x_check_alarms(struct t43x *wc, int span_idx)
 			/* Force Resync */
 			__t43x_framer_set(wc, fidx, 0x1c, 0xf0);
 		} else if (!(c & 0x02)) {
-			if (ts->flags.nmf) {
+			if (test_and_clear_bit(NMF_FLAGBIT, &ts->bit_flags)) {
 				/* LIM0: Clear forced RAI */
 				__t43x_framer_set(wc, fidx, 0x20, 0x9f);
-				ts->flags.nmf = 0;
 				dev_info(&wc->xb.pdev->dev,
 						"NMF workaround off!\n");
 			}
@@ -2868,21 +2865,19 @@ static void t43x_debounce_alarms(struct t43x *wc, int span_idx)
 	/* If receiving alarms (except Yellow), go into Yellow alarm state */
 	if (alarms & (DAHDI_ALARM_RED|DAHDI_ALARM_BLUE|
 				DAHDI_ALARM_NOTOPEN|DAHDI_ALARM_RECOVER)) {
-		if (!ts->flags.sendingyellow) {
+		if (!test_and_set_bit(SENDINGYELLOW_FLAGBIT, &ts->bit_flags)) {
 			dev_info(&wc->xb.pdev->dev, "Setting yellow alarm\n");
 			/* We manually do yellow alarm to handle RECOVER
 			 * and NOTOPEN, otherwise it's auto anyway */
 			fmr4 = __t43x_framer_get(wc, fidx, 0x20);
 			__t43x_framer_set(wc, fidx, 0x20, fmr4 | 0x20);
-			ts->flags.sendingyellow = 1;
 		}
 	} else {
-		if (ts->flags.sendingyellow) {
+		if (test_and_clear_bit(SENDINGYELLOW_FLAGBIT, &ts->bit_flags)) {
 			dev_info(&wc->xb.pdev->dev, "Clearing yellow alarm\n");
 			/* We manually do yellow alarm to handle RECOVER  */
 			fmr4 = __t43x_framer_get(wc, fidx, 0x20);
 			__t43x_framer_set(wc, fidx, 0x20, fmr4 & ~0x20);
-			ts->flags.sendingyellow = 0;
 		}
 	}
 
