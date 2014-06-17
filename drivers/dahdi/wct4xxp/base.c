@@ -1832,16 +1832,6 @@ t4_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	return 0;
 }
 
-static int t4_open(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
-static int t4_close(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
 static int set_span_devicetype(struct t4 *wc)
 {
 #ifdef VPM_SUPPORT
@@ -2334,8 +2324,6 @@ static const struct dahdi_span_ops t4_gen1_span_ops = {
 	.shutdown = t4_shutdown,
 	.rbsbits = t4_rbsbits,
 	.maint = t4_maint,
-	.open = t4_open,
-	.close  = t4_close,
 	.ioctl = t4_ioctl,
 	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
 	.assigned = t4_span_assigned,
@@ -2350,8 +2338,6 @@ static const struct dahdi_span_ops t4_gen2_span_ops = {
 	.shutdown = t4_shutdown,
 	.rbsbits = t4_rbsbits,
 	.maint = t4_maint,
-	.open = t4_open,
-	.close  = t4_close,
 	.ioctl = t4_ioctl,
 	.hdlc_hard_xmit = t4_hdlc_hard_xmit,
 	.dacs = t4_dacs,
