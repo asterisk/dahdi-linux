@@ -92,9 +92,10 @@ struct t13x {
 	unsigned long loopuptimer;
 	unsigned long loopdntimer;
 	const char *name;
-#define INITIALIZED    1
-#define SHUTDOWN       2
-#define READY	       3
+#define INITIALIZED		1
+#define SHUTDOWN		2
+#define READY			3
+#define HAVE_OPEN_CHANNELS	4
 	unsigned long bit_flags;
 	u32 ledstate;
 	struct dahdi_device *ddev;
@@ -1285,6 +1286,18 @@ static int te13xp_check_for_interrupts(struct t13x *wc)
 	return 0;
 }
 
+static bool have_open_channels(const struct t13x *wc)
+{
+	int x, j;
+	for (x = 0, j = 0; x < wc->span.channels; x++) {
+		const struct dahdi_chan *chan = wc->span.chans[x];
+		if (test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags) ||
+		    dahdi_have_netdev(chan))
+			return true;
+	}
+	return false;
+}
+
 static int t13x_startup(struct file *file, struct dahdi_span *span)
 {
 	struct t13x *wc = container_of(span, struct t13x, span);
@@ -1314,6 +1327,12 @@ static int t13x_startup(struct file *file, struct dahdi_span *span)
 
 	dev_info(&wc->xb.pdev->dev,
 			"Calling startup (flags is %lu)\n", span->flags);
+
+	/* Check for "open channels" here in case some channels have netdev. */
+	if (have_open_channels(wc))
+		clear_bit(HAVE_OPEN_CHANNELS, &wc->bit_flags);
+	else
+		set_bit(HAVE_OPEN_CHANNELS, &wc->bit_flags);
 
 	/* Get this party started */
 	local_irq_save(flags);
@@ -1904,7 +1923,6 @@ static void t13x_check_alarms(struct t13x *wc)
 {
 	unsigned char c, d;
 	int alarms;
-	int x, j;
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &wc->span.flags)))
 		return;
@@ -1943,11 +1961,7 @@ static void t13x_check_alarms(struct t13x *wc)
 	}
 
 	if (wc->span.lineconfig & DAHDI_CONFIG_NOTOPEN) {
-		for (x = 0, j = 0; x < wc->span.channels; x++)
-			if ((wc->span.chans[x]->flags & DAHDI_FLAG_OPEN) ||
-			    dahdi_have_netdev(wc->span.chans[x]))
-				j++;
-		if (!j)
+		if (!test_bit(HAVE_OPEN_CHANNELS, &wc->bit_flags))
 			alarms |= DAHDI_ALARM_NOTOPEN;
 		else
 			alarms &= ~DAHDI_ALARM_NOTOPEN;
@@ -2348,6 +2362,41 @@ static void te13xp_timer(unsigned long data)
 static inline void create_sysfs_files(struct t13x *wc) { return; }
 static inline void remove_sysfs_files(struct t13x *wc) { return; }
 
+static int t13x_open(struct dahdi_chan *chan)
+{
+	struct t13x *wc = chan->pvt;
+	unsigned long flags;
+
+	if (!(wc->span.lineconfig & DAHDI_CONFIG_NOTOPEN))
+		return 0;
+
+	if (!test_and_set_bit(HAVE_OPEN_CHANNELS, &wc->bit_flags)) {
+		local_irq_save(flags);
+		t13x_check_alarms(wc);
+		local_irq_restore(flags);
+	}
+
+	return 0;
+}
+
+static int t13x_close(struct dahdi_chan *chan)
+{
+	struct t13x *wc = chan->pvt;
+	unsigned long flags;
+
+	if (!(wc->span.lineconfig & DAHDI_CONFIG_NOTOPEN))
+		return 0;
+
+	if (!have_open_channels(wc)) {
+		if (test_and_clear_bit(HAVE_OPEN_CHANNELS, &wc->bit_flags)) {
+			local_irq_save(flags);
+			t13x_check_alarms(wc);
+			local_irq_restore(flags);
+		}
+	}
+	return 0;
+}
+
 static const struct dahdi_span_ops t13x_span_ops = {
 	.owner = THIS_MODULE,
 	.spanconfig = t13x_spanconfig,
@@ -2359,6 +2408,8 @@ static const struct dahdi_span_ops t13x_span_ops = {
 	.set_spantype = t13x_set_linemode,
 	.echocan_create = t13x_echocan_create,
 	.echocan_name = t13x_echocan_name,
+	.open = t13x_open,
+	.close = t13x_close,
 };
 
 #define SPI_BASE 0x200
