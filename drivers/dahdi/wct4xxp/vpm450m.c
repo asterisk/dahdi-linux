@@ -239,7 +239,7 @@ static void vpm450m_setecmode(struct vpm450m *vpm450m, int channel, int mode)
 
 	if (vpm450m->ecmode[channel] == mode)
 		return;
-	modify = kmalloc(sizeof(tOCT6100_CHANNEL_MODIFY), GFP_ATOMIC);
+	modify = kzalloc(sizeof(*modify), GFP_ATOMIC);
 	if (!modify) {
 		printk(KERN_NOTICE "wct4xxp: Unable to allocate memory for setec!\n");
 		return;
@@ -269,7 +269,7 @@ void vpm450m_setdtmf(struct vpm450m *vpm450m, int channel, int detect, int mute)
 		return;
 	}
 
-	modify = kmalloc(sizeof(tOCT6100_CHANNEL_MODIFY), GFP_KERNEL);
+	modify = kzalloc(sizeof(*modify), GFP_KERNEL);
 	if (!modify) {
 		printk(KERN_NOTICE "wct4xxp: Unable to allocate memory for setdtmf!\n");
 		return;
@@ -454,27 +454,26 @@ struct vpm450m *init_vpm450m(struct device *device, int *isalaw,
 	struct vpm450m *vpm450m;
 	int x,y,law;
 	
-	if (!(vpm450m = kmalloc(sizeof(struct vpm450m), GFP_KERNEL)))
+	vpm450m = kzalloc(sizeof(*vpm450m), GFP_KERNEL);
+	if (!vpm450m)
 		return NULL;
 
-	memset(vpm450m, 0, sizeof(struct vpm450m));
 	vpm450m->context.dev = device;
 	vpm450m->context.ops = &wct4xxp_oct612x_ops;
 
-	if (!(ChipOpen = kmalloc(sizeof(tOCT6100_CHIP_OPEN), GFP_KERNEL))) {
+	ChipOpen = kzalloc(sizeof(*ChipOpen), GFP_KERNEL);
+	if (!ChipOpen) {
+		kfree(vpm450m);
 		kfree(vpm450m);
 		return NULL;
 	}
 
-	memset(ChipOpen, 0, sizeof(tOCT6100_CHIP_OPEN));
-
-	if (!(ChannelOpen = kmalloc(sizeof(tOCT6100_CHANNEL_OPEN), GFP_KERNEL))) {
+	ChannelOpen = kzalloc(sizeof(*ChannelOpen), GFP_KERNEL);
+	if (!ChannelOpen) {
 		kfree(vpm450m);
 		kfree(ChipOpen);
 		return NULL;
 	}
-
-	memset(ChannelOpen, 0, sizeof(tOCT6100_CHANNEL_OPEN));
 
 	for (x = 0; x < ARRAY_SIZE(vpm450m->ecmode); x++)
 		vpm450m->ecmode[x] = -1;
