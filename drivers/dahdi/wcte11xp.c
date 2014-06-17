@@ -225,7 +225,7 @@ static inline void __select_control(struct t1 *wc)
 	}
 }
 
-static int t1xxp_open(struct dahdi_chan *chan)
+static int _t1xxp_open(struct dahdi_chan *chan)
 {
 	struct t1 *wc = chan->pvt;
 	if (wc->dead)
@@ -233,6 +233,16 @@ static int t1xxp_open(struct dahdi_chan *chan)
 	wc->usecount++;
 
 	return 0;
+}
+
+static int t1xxp_open(struct dahdi_chan *chan)
+{
+	unsigned long flags;
+	int res;
+	spin_lock_irqsave(&chan->lock, flags);
+	res = _t1xxp_open(chan);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
 }
 
 static int __control_set_reg(struct t1 *wc, int reg, unsigned char val)

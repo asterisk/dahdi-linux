@@ -2144,7 +2144,7 @@ static int wctdm_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long 
 
 }
 
-static int wctdm_open(struct dahdi_chan *chan)
+static int _wctdm_open(struct dahdi_chan *chan)
 {
 	struct wctdm *wc = chan->pvt;
 	if (!(wc->cardflag & (1 << (chan->chanpos - 1))))
@@ -2153,6 +2153,16 @@ static int wctdm_open(struct dahdi_chan *chan)
 		return -ENODEV;
 	wc->usecount++;
 	return 0;
+}
+
+static int wctdm_open(struct dahdi_chan *chan)
+{
+	unsigned long flags;
+	int res;
+	spin_lock_irqsave(&chan->lock, flags);
+	res = _wctdm_open(chan);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
 }
 
 static inline struct wctdm *wctdm_from_span(struct dahdi_span *span)

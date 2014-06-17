@@ -3057,57 +3057,64 @@ static const struct file_operations dahdi_chan_fops;
 
 static int dahdi_specchan_open(struct file *file)
 {
-	int res = 0;
+	int res = -ENXIO;
 	struct dahdi_chan *const chan = chan_from_file(file);
 
-	if (chan && chan->sig) {
-		/* Make sure we're not already open, a net device, or a slave device */
-		if (dahdi_have_netdev(chan))
-			res = -EBUSY;
-		else if (chan->master != chan)
-			res = -EBUSY;
-		else if ((chan->sig & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS)
-			res = -EBUSY;
-		else if (!test_and_set_bit(DAHDI_FLAGBIT_OPEN, &chan->flags)) {
-			unsigned long flags;
-			res = initialize_channel(chan);
-			if (res) {
-				/* Reallocbufs must have failed */
-				clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
-				return res;
-			}
-			spin_lock_irqsave(&chan->lock, flags);
-			if (is_pseudo_chan(chan))
-				chan->flags |= DAHDI_FLAG_AUDIO;
-			if (chan->span) {
-				const struct dahdi_span_ops *const ops =
-								chan->span->ops;
-				if (!try_module_get(ops->owner)) {
-					res = -ENXIO;
-				} else if (ops->open) {
-					res = ops->open(chan);
-					if (res)
-						module_put(ops->owner);
-				}
-			}
-			if (!res) {
-				chan->file = file;
-				file->private_data = chan;
-				/* Since we know we're a channel now, we can
-				 * update the f_op pointer and bypass a few of
-				 * the checks on the minor number. */
-				file->f_op = &dahdi_chan_fops;
-				spin_unlock_irqrestore(&chan->lock, flags);
-			} else {
-				spin_unlock_irqrestore(&chan->lock, flags);
-				close_channel(chan);
-				clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
-			}
-		} else {
-			res = -EBUSY;
+	if (!chan || !chan->sig)
+		return -ENXIO;
+
+	/* Make sure we're not already open, a net device, or a slave
+	 * device */
+	if (dahdi_have_netdev(chan))
+		res = -EBUSY;
+	else if (chan->master != chan)
+		res = -EBUSY;
+	else if ((chan->sig & __DAHDI_SIG_DACS) == __DAHDI_SIG_DACS)
+		res = -EBUSY;
+	else if (!test_and_set_bit(DAHDI_FLAGBIT_OPEN, &chan->flags)) {
+		unsigned long flags;
+		const struct dahdi_span_ops *const ops =
+		       (!is_pseudo_chan(chan)) ? chan->span->ops : NULL;
+
+		if (ops && !try_module_get(ops->owner)) {
+			clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
+			return -ENXIO;
 		}
-	} else
-		res = -ENXIO;
+
+		res = initialize_channel(chan);
+		if (res) {
+			/* Reallocbufs must have failed */
+			clear_bit(DAHDI_FLAGBIT_OPEN, &chan->flags);
+			return res;
+		}
+
+		spin_lock_irqsave(&chan->lock, flags);
+		if (is_pseudo_chan(chan))
+			chan->flags |= DAHDI_FLAG_AUDIO;
+		chan->file = file;
+		file->private_data = chan;
+		/* Since we know we're a channel now, we can
+		 * update the f_op pointer and bypass a few of
+		 * the checks on the minor number. */
+		file->f_op = &dahdi_chan_fops;
+		spin_unlock_irqrestore(&chan->lock, flags);
+
+		if (ops && ops->open) {
+			res = ops->open(chan);
+			if (res) {
+				spin_lock_irqsave(&chan->lock, flags);
+				chan->file = NULL;
+				file->private_data = NULL;
+				spin_unlock_irqrestore(&chan->lock, flags);
+				module_put(ops->owner);
+				close_channel(chan);
+				clear_bit(DAHDI_FLAGBIT_OPEN,
+					  &chan->flags);
+			}
+		}
+	} else {
+		res = -EBUSY;
+	}
 	return res;
 }
 

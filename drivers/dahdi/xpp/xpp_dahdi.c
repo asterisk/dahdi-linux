@@ -714,10 +714,10 @@ EXPORT_SYMBOL(hookstate_changed);
 /*------------------------- Dahdi Interfaces -----------------------*/
 
 /*
- * Called from dahdi with spinlock held on chan. Must not call back
+ * Called with spinlock held on chan. Must not call back
  * dahdi functions.
  */
-int xpp_open(struct dahdi_chan *chan)
+static int _xpp_open(struct dahdi_chan *chan)
 {
 	xpd_t *xpd;
 	xbus_t *xbus;
@@ -749,6 +749,16 @@ int xpp_open(struct dahdi_chan *chan)
 	if (PHONE_METHOD(card_open, xpd))
 		CALL_PHONE_METHOD(card_open, xpd, pos);
 	return 0;
+}
+
+int xpp_open(struct dahdi_chan *chan)
+{
+	unsigned long flags;
+	int res;
+	spin_lock_irqsave(&chan->lock, flags);
+	res = _xpp_open(chan);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
 }
 EXPORT_SYMBOL(xpp_open);
 

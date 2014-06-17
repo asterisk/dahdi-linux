@@ -2430,7 +2430,7 @@ b4xxp_chanconfig(struct file *file, struct dahdi_chan *chan, int sigtype)
 	return 0;
 }
 
-static int b4xxp_open(struct dahdi_chan *chan)
+static int _b4xxp_open(struct dahdi_chan *chan)
 {
 	struct b4xxp *b4 = chan->pvt;
 	struct b4xxp_span *bspan = &b4->spans[chan->span->offset];
@@ -2444,6 +2444,15 @@ static int b4xxp_open(struct dahdi_chan *chan)
 	return 0;
 }
 
+static int b4xxp_open(struct dahdi_chan *chan)
+{
+	unsigned long flags;
+	int res;
+	spin_lock_irqsave(&chan->lock, flags);
+	res = _b4xxp_open(chan);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
+}
 
 static int b4xxp_close(struct dahdi_chan *chan)
 {

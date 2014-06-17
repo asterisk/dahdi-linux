@@ -570,13 +570,23 @@ static inline struct wcfxo *wcfxo_from_span(struct dahdi_span *span)
 	return container_of(span, struct wcfxo, span);
 }
 
-static int wcfxo_open(struct dahdi_chan *chan)
+static int _wcfxo_open(struct dahdi_chan *chan)
 {
 	struct wcfxo *wc = chan->pvt;
 	if (wc->dead)
 		return -ENODEV;
 	wc->usecount++;
 	return 0;
+}
+
+static int wcfxo_open(struct dahdi_chan *chan)
+{
+	int res;
+	unsigned long flags;
+	spin_lock_irqsave(&chan->lock, flags);
+	res = _wcfxo_open(chan);
+	spin_unlock_irqrestore(&chan->lock, flags);
+	return res;
 }
 
 static int wcfxo_watchdog(struct dahdi_span *span, int event)
