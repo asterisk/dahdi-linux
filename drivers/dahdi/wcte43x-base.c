@@ -91,8 +91,9 @@ struct t43x;
 struct t43x_span {
 	struct t43x *owner;
 	struct dahdi_span span;
-#define NMF_FLAGBIT		1
-#define SENDINGYELLOW_FLAGBIT	2
+#define NMF_FLAGBIT			1
+#define SENDINGYELLOW_FLAGBIT		2
+#define HAVE_OPEN_CHANNELS_FLAGBIT	3
 	unsigned long bit_flags;
 	unsigned char txsigs[16];	/* Copy of tx sig registers */
 	unsigned long lofalarmtimer;
@@ -1719,10 +1720,21 @@ static void t43x_configure_e1(struct t43x *wc, int span_idx, int lineconfig)
 			framing, line, crc4);
 }
 
+static bool have_open_channels(const struct t43x_span *ts)
+{
+	int x, j;
+	for (x = 0, j = 0; x < ts->span.channels; x++) {
+		const struct dahdi_chan *chan = ts->span.chans[x];
+		if (test_bit(DAHDI_FLAGBIT_OPEN, &chan->flags) ||
+		    dahdi_have_netdev(chan))
+			return true;
+	}
+	return false;
+}
+
 static void t43x_framer_start(struct t43x *wc)
 {
 	int unit;
-	struct t43x_span *ts;
 	unsigned long flags;
 	int res;
 
@@ -1739,7 +1751,7 @@ static void t43x_framer_start(struct t43x *wc)
 		dev_warn(&wc->xb.pdev->dev, "DMA engine did not stop.\n");
 
 	for (unit = 0; unit < wc->numspans; unit++) {
-		ts = wc->tspans[unit];
+		struct t43x_span *ts = wc->tspans[unit];
 		if (dahdi_is_e1_span(&ts->span)) {
 			t43x_configure_e1(wc, unit, ts->span.lineconfig);
 		} else { /* is a T1 card */
@@ -1753,6 +1765,15 @@ static void t43x_framer_start(struct t43x *wc)
 
 	for (unit = 0; unit < wc->numspans; unit++) {
 		/* Get this party started */
+		struct t43x_span *ts = wc->tspans[unit];
+
+		/* Check for "open channels" here in case some channels have
+		 * netdev. */
+		if (have_open_channels(ts))
+			clear_bit(HAVE_OPEN_CHANNELS_FLAGBIT, &ts->bit_flags);
+		else
+			set_bit(HAVE_OPEN_CHANNELS_FLAGBIT, &ts->bit_flags);
+
 		local_irq_save(flags);
 		t43x_check_alarms(wc, unit);
 		t43x_check_sigbits(wc, unit);
@@ -1774,7 +1795,7 @@ static void t43x_framer_start(struct t43x *wc)
 
 	/* Clear all counters */
 	for (unit = 0; unit < wc->numspans; unit++) {
-		ts = wc->tspans[unit];
+		struct t43x_span *ts = wc->tspans[unit];
 		memset(&ts->span.count, 0, sizeof(ts->span.count));
 	}
 
@@ -2657,7 +2678,6 @@ static void t43x_check_alarms(struct t43x *wc, int span_idx)
 	struct t43x_span *ts = wc->tspans[span_idx];
 	unsigned char c, d;
 	int alarms;
-	int x, j;
 	int fidx = (wc->numspans == 2) ? span_idx+1 : span_idx;
 
 	if (!(test_bit(DAHDI_FLAGBIT_RUNNING, &ts->span.flags)))
@@ -2699,11 +2719,7 @@ static void t43x_check_alarms(struct t43x *wc, int span_idx)
 	}
 
 	if (ts->span.lineconfig & DAHDI_CONFIG_NOTOPEN) {
-		for (x = 0, j = 0; x < ts->span.channels; x++)
-			if ((ts->chans[x]->flags & DAHDI_FLAG_OPEN) ||
-			    dahdi_have_netdev(ts->chans[x]))
-				j++;
-		if (!j)
+		if (!test_bit(HAVE_OPEN_CHANNELS_FLAGBIT, &ts->bit_flags))
 			alarms |= DAHDI_ALARM_NOTOPEN;
 		else
 			alarms &= ~DAHDI_ALARM_NOTOPEN;
@@ -3157,6 +3173,45 @@ static void t43x_timer(unsigned long data)
 	return;
 }
 
+static int t43x_open(struct dahdi_chan *chan)
+{
+	struct t43x *wc = chan->pvt;
+	struct t43x_span *ts = container_of(chan->span, struct t43x_span, span);
+	unsigned long flags;
+
+	if (!(ts->span.lineconfig & DAHDI_CONFIG_NOTOPEN))
+		return 0;
+
+	if (!test_and_set_bit(HAVE_OPEN_CHANNELS_FLAGBIT, &ts->bit_flags)) {
+		local_irq_save(flags);
+		t43x_check_alarms(wc, ts->span.offset);
+		local_irq_restore(flags);
+	}
+
+	return 0;
+}
+
+static int t43x_close(struct dahdi_chan *chan)
+{
+	struct t43x *wc = chan->pvt;
+	struct t43x_span *ts = container_of(chan->span, struct t43x_span, span);
+	unsigned long flags;
+
+	if (!(ts->span.lineconfig & DAHDI_CONFIG_NOTOPEN))
+		return 0;
+
+	if (have_open_channels(ts))
+		return 0;
+
+	if (!test_and_set_bit(HAVE_OPEN_CHANNELS_FLAGBIT, &ts->bit_flags)) {
+		local_irq_save(flags);
+		t43x_check_alarms(wc, ts->span.offset);
+		local_irq_restore(flags);
+	}
+
+	return 0;
+}
+
 static const struct dahdi_span_ops t43x_span_ops = {
 	.owner = THIS_MODULE,
 	.spanconfig = t43x_spanconfig,
@@ -3169,6 +3224,8 @@ static const struct dahdi_span_ops t43x_span_ops = {
 	.set_spantype = t43x_set_linemode,
 	.echocan_create = t43x_echocan_create,
 	.echocan_name = t43x_echocan_name,
+	.open = t43x_open,
+	.close = t43x_close,
 };
 
 /**
