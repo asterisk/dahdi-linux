@@ -254,16 +254,6 @@ static int tor2_chanconfig(struct file *file,
 	return 0;
 }
 
-static int tor2_open(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
-static int tor2_close(struct dahdi_chan *chan)
-{
-	return 0;
-}
-
 static const struct dahdi_span_ops tor2_span_ops = {
 	.owner = THIS_MODULE,
 	.spanconfig = tor2_spanconfig,
@@ -272,8 +262,6 @@ static const struct dahdi_span_ops tor2_span_ops = {
 	.shutdown = tor2_shutdown,
 	.rbsbits = tor2_rbsbits,
 	.maint = tor2_maint,
-	.open = tor2_open,
-	.close  = tor2_close,
 	.ioctl = tor2_ioctl,
 };
 
