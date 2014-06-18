@@ -129,7 +129,7 @@ $Octasic_Revision: 16 $
 /*****************************  TYPES  ***************************************/
 
 /*Change this type if your platform uses 64bits semaphores/locks */ 
-typedef UINT32 tOCT6100_USER_SERIAL_OBJECT;
+typedef void* tOCT6100_USER_SERIAL_OBJECT;
 
 typedef struct _OCT6100_GET_TIME_
 {

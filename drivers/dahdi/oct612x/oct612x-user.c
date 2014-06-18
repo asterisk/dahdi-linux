@@ -59,29 +59,38 @@ UINT32 Oct6100UserMemCopy(PVOID f_pDestination, const void *f_pSource,
 UINT32 Oct6100UserCreateSerializeObject(
 			tPOCT6100_CREATE_SERIALIZE_OBJECT f_pCreate)
 {
+	struct oct612x_context *context = f_pCreate->pProcessContext;
+	struct mutex *lock = kzalloc(sizeof(*lock), GFP_KERNEL);
+	if (!lock) {
+		dev_err(context->dev, "Out of memory in %s.\n", __func__);
+		return cOCT6100_ERR_BASE;
+	}
+	mutex_init(lock);
+	f_pCreate->ulSerialObjHndl = lock;
 	return cOCT6100_ERR_OK;
 }
 
 UINT32 Oct6100UserDestroySerializeObject(
 			tPOCT6100_DESTROY_SERIALIZE_OBJECT f_pDestroy)
 {
-#ifdef OCTASIC_DEBUG
-	pr_debug("I should never be called! (destroy serialize object)\n");
-#endif
+	struct mutex *lock = f_pDestroy->ulSerialObjHndl;
+	kfree(lock);
 	return cOCT6100_ERR_OK;
 }
 
 UINT32 Oct6100UserSeizeSerializeObject(
 		tPOCT6100_SEIZE_SERIALIZE_OBJECT f_pSeize)
 {
-	/* Not needed */
+	struct mutex *lock = f_pSeize->ulSerialObjHndl;
+	mutex_lock(lock);
 	return cOCT6100_ERR_OK;
 }
 
 UINT32 Oct6100UserReleaseSerializeObject(
 		tPOCT6100_RELEASE_SERIALIZE_OBJECT f_pRelease)
 {
-	/* Not needed */
+	struct mutex *lock = f_pRelease->ulSerialObjHndl;
+	mutex_unlock(lock);
 	return cOCT6100_ERR_OK;
 }
 
