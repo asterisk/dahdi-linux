@@ -991,10 +991,13 @@ static int dahdi_seq_show(struct seq_file *sfile, void *data)
 
 		seq_fill_alarm_string(sfile, chan->chan_alarms);
 
-		if (chan->ec_factory)
+		mutex_lock(&chan->mutex);
+		if (chan->ec_factory) {
 			seq_printf(sfile, "(EC: %s - %s) ",
 					chan->ec_factory->get_name(chan),
 					chan->ec_state ? "ACTIVE" : "INACTIVE");
+		}
+		mutex_unlock(&chan->mutex);
 
 		seq_printf(sfile, "\n");
 	}
@@ -1489,14 +1492,13 @@ static const struct dahdi_echocan_factory hwec_factory = {
 static int dahdi_enable_hw_preechocan(struct dahdi_chan *chan)
 {
 	int res;
-	unsigned long flags;
 
-	spin_lock_irqsave(&chan->lock, flags);
+	mutex_lock(&chan->mutex);
 	if (chan->ec_factory != &hwec_factory)
 		res = -ENODEV;
 	else
 		res = 0;
-	spin_unlock_irqrestore(&chan->lock, flags);
+	mutex_unlock(&chan->mutex);
 
 	if (-ENODEV == res)
 		return 0;
@@ -2303,10 +2305,10 @@ static void dahdi_chan_unreg(struct dahdi_chan *chan)
 		 */
 	}
 
-	spin_lock_irqsave(&chan->lock, flags);
+	mutex_lock(&chan->mutex);
 	release_echocan(chan->ec_factory);
 	chan->ec_factory = NULL;
-	spin_unlock_irqrestore(&chan->lock, flags);
+	mutex_unlock(&chan->mutex);
 
 #ifdef CONFIG_DAHDI_NET
 	if (dahdi_have_netdev(chan)) {
@@ -5227,7 +5229,6 @@ static bool dahdi_is_hwec_available(const struct dahdi_chan *chan)
 
 static int dahdi_ioctl_attach_echocan(unsigned long data)
 {
-	unsigned long flags;
 	struct dahdi_chan *chan;
 	struct dahdi_attach_echocan ae;
 	const struct dahdi_echocan_factory *new = NULL, *old;
@@ -5269,10 +5270,10 @@ static int dahdi_ioctl_attach_echocan(unsigned long data)
 		}
 	}
 
-	spin_lock_irqsave(&chan->lock, flags);
+	mutex_lock(&chan->mutex);
 	old = chan->ec_factory;
 	chan->ec_factory = new;
-	spin_unlock_irqrestore(&chan->lock, flags);
+	mutex_unlock(&chan->mutex);
 
 	if (old)
 		release_echocan(old);
