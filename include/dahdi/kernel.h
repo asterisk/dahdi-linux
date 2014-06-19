@@ -425,6 +425,7 @@ struct dahdi_chan {
 	int lastnumbufs;
 #endif
 	spinlock_t lock;
+	struct mutex mutex;
 	char name[40];
 	/* Specified by DAHDI */
 	/*! \brief DAHDI channel number */

@@ -1884,6 +1884,7 @@ static void __dahdi_init_chan(struct dahdi_chan *chan)
 	might_sleep();
 
 	spin_lock_init(&chan->lock);
+	mutex_init(&chan->mutex);
 	init_waitqueue_head(&chan->waitq);
 	if (!chan->master)
 		chan->master = chan;
@@ -6331,6 +6332,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 
 	if (ecp->tap_length == 0) {
 		/* disable mode, don't need to inspect params */
+		mutex_lock(&chan->mutex);
 		spin_lock_irqsave(&chan->lock, flags);
 		ec_state = chan->ec_state;
 		chan->ec_state = NULL;
@@ -6341,7 +6343,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 			ec_state->ops->echocan_free(chan, ec_state);
 			release_echocan(ec_current);
 		}
-
+		mutex_unlock(&chan->mutex);
 		return 0;
 	}
 
@@ -6358,6 +6360,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 		goto exit_with_free;
 	}
 
+	mutex_lock(&chan->mutex);
 	/* free any echocan that may be on the channel already */
 	spin_lock_irqsave(&chan->lock, flags);
 	ec_state = chan->ec_state;
@@ -6428,6 +6431,7 @@ ioctl_echocancel(struct dahdi_chan *chan, struct dahdi_echocanparams *ecp,
 	}
 
 exit_with_free:
+	mutex_unlock(&chan->mutex);
 	kfree(params);
 
 	return ret;
