@@ -371,9 +371,14 @@ struct t4 {
 	dma_addr_t	writedma;
 	void __iomem	*membase;	/* Base address of card */
 
-	/* Flags for our bottom half */
+#define T4_CHECK_VPM		0
+#define T4_LOADING_FW		1
+#define T4_STOP_DMA		2
+#define T4_CHECK_TIMING		3
+#define T4_CHANGE_LATENCY	4
+#define T4_IGNORE_LATENCY	5
 	unsigned long checkflag;
-	struct tasklet_struct t4_tlet;
+	struct work_struct  bh_work;
 	/* Latency related additions */
 	unsigned char rxident;
 	unsigned char lastindex;
@@ -548,8 +553,6 @@ static void t4_check_sigbits(struct t4 *wc, int span);
 #define LLBAD (1 << 3)
 
 #define MAX_T4_CARDS 64
-
-static void t4_isr_bh(unsigned long data);
 
 static struct t4 *cards[MAX_T4_CARDS];
 
@@ -2115,6 +2118,8 @@ static void t4_span_assigned(struct dahdi_span *span)
 static void free_wc(struct t4 *wc)
 {
 	unsigned int x, y;
+
+	flush_scheduled_work();
 
 	for (x = 0; x < ARRAY_SIZE(wc->tspans); x++) {
 		if (!wc->tspans[x])
@@ -4056,9 +4061,15 @@ static void t4_increase_latency(struct t4 *wc, int newlatency)
 
 }
 
-static void t4_isr_bh(unsigned long data)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+static void t4_work_func(void *data)
 {
-	struct t4 *wc = (struct t4 *)data;
+	struct t4 *wc = data;
+#else
+static void t4_work_func(struct work_struct *work)
+{
+	struct t4 *wc = container_of(work, struct t4, bh_work);
+#endif
 
 	if (test_bit(T4_CHANGE_LATENCY, &wc->checkflag)) {
 		if (wc->needed_latency != wc->numbufs) {
@@ -4265,7 +4276,7 @@ static irqreturn_t _t4_interrupt_gen2(int irq, void *dev_id)
 
 out:
 	if (unlikely(test_bit(T4_CHANGE_LATENCY, &wc->checkflag) || test_bit(T4_CHECK_VPM, &wc->checkflag)))
-		tasklet_schedule(&wc->t4_tlet);
+		schedule_work(&wc->bh_work);
 
 #ifndef ENABLE_WORKQUEUES
 	__t4_pci_out(wc, WC_INTR, 0);
@@ -5146,7 +5157,11 @@ static int __devinit t4_launch(struct t4 *wc)
 			      &wc->ddev->spans);
 	}
 
-	tasklet_init(&wc->t4_tlet, t4_isr_bh, (unsigned long)wc);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
+	INIT_WORK(&wc->bh_work, t4_work_func, wc);
+#else
+	INIT_WORK(&wc->bh_work, t4_work_func);
+#endif
 
 	res = dahdi_register_device(wc->ddev, &wc->dev->dev);
 	if (res) {

@@ -131,13 +131,6 @@ struct t4_reg {
 	unsigned int val;
 };
 
-#define T4_CHECK_VPM		0
-#define T4_LOADING_FW		1
-#define T4_STOP_DMA		2
-#define T4_CHECK_TIMING		3
-#define T4_CHANGE_LATENCY	4
-#define T4_IGNORE_LATENCY	5
-
 #define WCT4_GET_REGS	_IOW(DAHDI_CODE, 60, struct t4_regs)
 #define WCT4_GET_REG	_IOW(DAHDI_CODE, 61, struct t4_reg)
 #define WCT4_SET_REG	_IOW(DAHDI_CODE, 62, struct t4_reg)
