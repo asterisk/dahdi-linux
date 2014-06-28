@@ -3296,8 +3296,6 @@ static void t4_check_sigbits(struct t4 *wc, int span)
 		dev_notice(&wc->dev->dev, "Checking sigbits on span %d\n",
 				span + 1);
 
-	if (!(ts->span.flags & DAHDI_FLAG_RUNNING))
-		return;
 	if (E1 == ts->linemode) {
 		for (i = 0; i < 15; i++) {
 			a = t4_framer_in(wc, span, 0x71 + i);
@@ -3687,6 +3685,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 	struct t4_span *ts = wc->tspans[span];
 	struct dahdi_chan *sigchan;
 	unsigned long flags;
+	bool recheck_sigbits = false;
 
 
 	/* 1st gen cards isn't used interrupts */
@@ -3712,6 +3711,8 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
 		ts->span.count.ebit += __t4_framer_in(wc, span, EBCL_T);
 		ts->span.count.be += __t4_framer_in(wc, span, BECL_T);
 		ts->span.count.prbs = __t4_framer_in(wc, span, FRS1_T);
+		if (DAHDI_RXSIG_INITIAL == ts->span.chans[0]->rxhooksig)
+			recheck_sigbits = true;
 	}
 	spin_unlock_irqrestore(&wc->reglock, flags);
  
@@ -3720,7 +3721,7 @@ static inline void t4_framer_interrupt(struct t4 *wc, int span)
  		ts->span.count.errsec += 1;
  	}
  
-	if (isr0)
+	if (isr0 & 0x08 || recheck_sigbits)
 		t4_check_sigbits(wc, span);
 
 	if (E1 == ts->linemode) {
