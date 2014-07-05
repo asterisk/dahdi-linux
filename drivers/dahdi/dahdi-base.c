@@ -1811,6 +1811,17 @@ static int start_tone(struct dahdi_chan *chan, int tone)
 	return res;
 }
 
+/**
+ * stop_tone - Stops any tones on a channel.
+ *
+ * Must be called with chan->lock held.
+ *
+ */
+static inline int stop_tone(struct dahdi_chan *chan)
+{
+	return start_tone(chan, -1);
+}
+
 static int set_tone_zone(struct dahdi_chan *chan, int zone)
 {
 	int res = 0;
@@ -1838,6 +1849,9 @@ static int set_tone_zone(struct dahdi_chan *chan, int zone)
 		return -ENODATA;
 
 	spin_lock_irqsave(&chan->lock, flags);
+
+	stop_tone(chan);
+
 	if (chan->curzone) {
 		struct dahdi_zone *zone = chan->curzone;
 		chan->curzone = NULL;
