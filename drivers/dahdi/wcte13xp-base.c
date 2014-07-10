@@ -110,6 +110,7 @@ struct t13x {
 	struct vpm450m *vpm;
 	struct mutex lock;
 	struct wcxb xb;
+	u32    lineconfig_fingerprint;
 };
 
 static void te13x_handle_transmit(struct wcxb *xb, void *vfp);
@@ -1675,12 +1676,37 @@ static void t13x_chan_set_sigcap(struct dahdi_span *span, int x)
 	}
 }
 
+static bool t13x_lineconfig_changed(struct t13x *wc,
+				    const struct dahdi_lineconfig *lc)
+{
+	unsigned long flags;
+	bool result;
+	u32 crc = crc32(~0, lc, sizeof(*lc));
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	result = (crc != wc->lineconfig_fingerprint);
+	spin_unlock_irqrestore(&wc->reglock, flags);
+	return result;
+}
+
+static void t13x_save_lineconfig(struct t13x *wc,
+				 const struct dahdi_lineconfig *lc)
+{
+	unsigned long flags;
+	u32 crc = crc32(~0, lc, sizeof(*lc));
+
+	spin_lock_irqsave(&wc->reglock, flags);
+	wc->lineconfig_fingerprint = crc;
+	spin_unlock_irqrestore(&wc->reglock, flags);
+}
+
 static int
 t13x_spanconfig(struct file *file, struct dahdi_span *span,
 		 struct dahdi_lineconfig *lc)
 {
 	struct t13x *wc = container_of(span, struct t13x, span);
 	int i;
+	int res = 0;
 
 	if (file->f_flags & O_NONBLOCK)
 		return -EAGAIN;
@@ -1693,10 +1719,13 @@ t13x_spanconfig(struct file *file, struct dahdi_span *span,
 		t13x_chan_set_sigcap(span, i);
 
 	/* If already running, apply changes immediately */
-	if (test_bit(DAHDI_FLAGBIT_RUNNING, &span->flags))
-		return t13x_startup(file, span);
-
-	return 0;
+	if (test_bit(DAHDI_FLAGBIT_RUNNING, &span->flags) &&
+	    t13x_lineconfig_changed(wc, lc)) {
+		res = t13x_startup(file, span);
+		if (!res)
+			t13x_save_lineconfig(wc, lc);
+	}
+	return res;
 }
 
 /**
