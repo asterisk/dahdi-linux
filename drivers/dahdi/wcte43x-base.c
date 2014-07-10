@@ -110,6 +110,7 @@ struct t43x_span {
 	bool debounce;
 	int syncpos;
 	int sync;
+	u32 lineconfig_fingerprint;
 };
 
 struct t43x_clksrc_work {
@@ -2377,6 +2378,30 @@ static void t43x_chan_set_sigcap(struct dahdi_span *span, int x)
 	}
 }
 
+static bool t43x_lineconfig_changed(struct t43x_span *ts,
+				    const struct dahdi_lineconfig *lc)
+{
+	unsigned long flags;
+	bool result;
+	u32 crc = crc32(~0, lc, sizeof(*lc));
+
+	spin_lock_irqsave(&ts->owner->reglock, flags);
+	result = (crc != ts->lineconfig_fingerprint);
+	spin_unlock_irqrestore(&ts->owner->reglock, flags);
+	return result;
+}
+
+static void t43x_save_lineconfig(struct t43x_span *ts,
+				 const struct dahdi_lineconfig *lc)
+{
+	unsigned long flags;
+	u32 crc = crc32(~0, lc, sizeof(*lc));
+
+	spin_lock_irqsave(&ts->owner->reglock, flags);
+	ts->lineconfig_fingerprint = crc;
+	spin_unlock_irqrestore(&ts->owner->reglock, flags);
+}
+
 static int
 t43x_spanconfig(struct file *file, struct dahdi_span *span,
 		 struct dahdi_lineconfig *lc)
@@ -2384,6 +2409,7 @@ t43x_spanconfig(struct file *file, struct dahdi_span *span,
 	struct t43x_span *ts = container_of(span, struct t43x_span, span);
 	struct t43x *wc = ts->owner;
 	int i;
+	int res = 0;
 
 	if (debug)
 		dev_info(&wc->xb.pdev->dev, "%s\n", __func__);
@@ -2420,10 +2446,13 @@ t43x_spanconfig(struct file *file, struct dahdi_span *span,
 		t43x_chan_set_sigcap(span, i);
 
 	/* If already running, apply changes immediately */
-	if (test_bit(DAHDI_FLAGBIT_RUNNING, &span->flags))
-		return t43x_startup(file, span);
-
-	return 0;
+	if (test_bit(DAHDI_FLAGBIT_RUNNING, &span->flags) &&
+	    t43x_lineconfig_changed(ts, lc)) {
+		res = t43x_startup(file, span);
+		if (!res)
+			t43x_save_lineconfig(ts, lc);
+	}
+	return res;
 }
 
 /*
