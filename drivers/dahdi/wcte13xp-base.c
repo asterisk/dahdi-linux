@@ -1316,6 +1316,10 @@ static int t13x_startup(struct file *file, struct dahdi_span *span)
 	/* Reset framer with proper parameters and start */
 	t13x_framer_start(wc);
 
+	/* Reset span alarm state to RED to prevent false
+	 * temporary GREEN state on span bringup */
+	span->alarms |= DAHDI_ALARM_RED;
+
 	/* Do we want to SYNC on receive or not. This must always happen after
 	 * the framer is fully reset. */
 	wcxb_set_clksrc(&wc->xb,
