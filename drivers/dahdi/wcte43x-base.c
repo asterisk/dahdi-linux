@@ -1766,6 +1766,10 @@ static void t43x_framer_start(struct t43x *wc)
 		t43x_set_cas_mode(wc, unit);
 
 		set_bit(DAHDI_FLAGBIT_RUNNING, &ts->span.flags);
+
+		/* Reset span alarm state to RED to prevent false
+		 * temporary GREEN state on span bringup */
+		ts->span.alarms |= DAHDI_ALARM_RED;
 	}
 
 	for (unit = 0; unit < wc->numspans; unit++) {
