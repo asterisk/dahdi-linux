@@ -282,7 +282,12 @@ static void hdlc_setup(struct net_device *dev)
 struct net_device *alloc_hdlcdev(void *priv)
 {
 	struct net_device *dev;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)
+	dev = alloc_netdev(sizeof(hdlc_device), "hdlc%d",
+				NET_NAME_UNKNOWN, hdlc_setup);
+#else
 	dev = alloc_netdev(sizeof(hdlc_device), "hdlc%d", hdlc_setup);
+#endif
 	if (dev)
 		dev_to_hdlc(dev)->priv = priv;
 	return dev;

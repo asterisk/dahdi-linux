@@ -207,7 +207,13 @@ int vb_net_register(struct voicebus *vb, const char *board_name)
 	struct voicebus_netdev_priv *priv;
 	const char our_mac[] = { 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)
+	netdev = alloc_netdev(sizeof(*priv), board_name,
+				NET_NAME_UNKNOWN, ether_setup);
+#else
 	netdev = alloc_netdev(sizeof(*priv), board_name, ether_setup);
+#endif
+
 	if (!netdev)
 		return -ENOMEM;
 	priv = netdev_priv(netdev);

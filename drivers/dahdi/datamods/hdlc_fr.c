@@ -1063,12 +1063,23 @@ static int fr_add_pvc(struct net_device *master, unsigned int dlci, int type)
 
 	used = pvc_is_used(pvc);
 
-	if (type == ARPHRD_ETHER)
+	if (type == ARPHRD_ETHER) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)
+		dev = alloc_netdev(sizeof(struct net_device_stats),
+				   "pvceth%d", NET_NAME_UNKNOWN, ether_setup);
+#else
 		dev = alloc_netdev(sizeof(struct net_device_stats),
 				   "pvceth%d", ether_setup);
-	else
+#endif
+	} else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 17, 0)
+		dev = alloc_netdev(sizeof(struct net_device_stats),
+				   "pvc%d", NET_NAME_UNKNOWN, dlci_setup);
+#else
 		dev = alloc_netdev(sizeof(struct net_device_stats),
 				   "pvc%d", dlci_setup);
+#endif
+	}
 
 	if (!dev) {
 		printk(KERN_WARNING "%s: Memory squeeze on fr_pvc()\n",
