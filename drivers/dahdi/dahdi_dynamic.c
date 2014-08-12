@@ -201,7 +201,9 @@ static void dahdi_dynamic_sendmessage(struct dahdi_dynamic *d)
 static void __dahdi_dynamic_run(void)
 {
 	struct dahdi_dynamic *d;
+#ifdef ENABLE_TASKLETS
 	struct dahdi_dynamic_driver *drv;
+#endif
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(d, &dspan_list, list) {
@@ -211,6 +213,13 @@ static void __dahdi_dynamic_run(void)
 	}
 
 #ifdef ENABLE_TASKLETS
+	list_for_each_entry_rcu(drv, &driver_list, list) {
+		/* Flush any traffic still pending in the driver */
+		if (drv->flush) {
+			drv->flush();
+		}
+	}
+#else
 	/* If tasklets are not enabled, the above section will be called in
 	 * interrupt context and the flushing of each driver will be called in a
 	 * separate tasklet that only handles that. This is necessary since some
@@ -221,13 +230,6 @@ static void __dahdi_dynamic_run(void)
 	 *
 	 */
 	tasklet_hi_schedule(&dahdi_dynamic_flush_tlet);
-#else
-	list_for_each_entry_rcu(drv, &driver_list, list) {
-		/* Flush any traffic still pending in the driver */
-		if (drv->flush) {
-			drv->flush();
-		}
-	}
 #endif
 	rcu_read_unlock();
 }
