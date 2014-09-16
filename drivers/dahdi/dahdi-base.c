@@ -10284,6 +10284,18 @@ MODULE_PARM_DESC(auto_assign_spans,
 		 "channel numbers assigned by the driver. If 0, user space "
 		 "will need to assign them via /sys/bus/dahdi_devices.");
 
+
+static ssize_t dahdi_no_read(struct file *file, char __user *usrbuf,
+			     size_t count, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+static ssize_t dahdi_no_write(struct file *file, const char __user *usrbuf,
+			      size_t count, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+
 static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,
 	.open    = dahdi_open,
@@ -10297,6 +10309,8 @@ static const struct file_operations dahdi_fops = {
 	.ioctl   = dahdi_ioctl,
 #endif
 	.poll    = dahdi_poll,
+	.read    = dahdi_no_read,
+	.write   = dahdi_no_write,
 };
 
 static const struct file_operations dahdi_timer_fops = {
@@ -10311,6 +10325,8 @@ static const struct file_operations dahdi_timer_fops = {
 	.ioctl   = dahdi_timer_ioctl,
 #endif
 	.poll    = dahdi_timer_poll,
+	.read    = dahdi_no_read,
+	.write   = dahdi_no_write,
 };
 
 /*
