@@ -2110,7 +2110,7 @@ static int t1xxp_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 	 * them. */
 	clear_bit(INITIALIZED, &wc->bit_flags);
 	synchronize_irq(wc->vb.pdev->irq);
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
 
@@ -3076,7 +3076,7 @@ static void __devexit te12xp_remove_one(struct pci_dev *pdev)
 	remove_sysfs_files(wc);
 
 	clear_bit(INITIALIZED, &wc->bit_flags);
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);

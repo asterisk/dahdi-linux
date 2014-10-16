@@ -3581,7 +3581,7 @@ static void __devexit t43x_remove_one(struct pci_dev *pdev)
 		return;
 
 	wc->not_ready = 1;
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 
 	/* Stop everything */
 	wcxb_stop(&wc->xb);

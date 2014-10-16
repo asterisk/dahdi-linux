@@ -1849,7 +1849,7 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 	clear_bit(INITIALIZED, &wc->bit_flags);
 	disable_irq(wc->xb.pdev->irq);
 
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);
 
@@ -2725,7 +2725,7 @@ static void __devexit te13xp_remove_one(struct pci_dev *pdev)
 		return;
 
 	clear_bit(INITIALIZED, &wc->bit_flags);
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 
 	/* Quiesce DMA engine interrupts */
 	wcxb_stop(&wc->xb);
