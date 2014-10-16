@@ -1408,6 +1408,17 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0)
+
+/* DAHDI only was using the xxx_clear_bit variants. */
+#ifndef smp_mb__before_atomic
+#define smp_mb__before_atomic smp_mb__before_clear_bit
+#endif
+
+#ifndef smp_mb__after_atomic
+#define smp_mb__after_atomic smp_mb__after_clear_bit
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #ifdef RHEL_RELEASE_VERSION
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(6, 5)
@@ -1523,6 +1534,7 @@ static inline int strcasecmp(const char *s1, const char *s2)
 #endif /* 2.6.27 */
 #endif /* 2.6.31 */
 #endif /* 3.10.0 */
+#endif /* 3.16.0 */
 
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED

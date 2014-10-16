@@ -3823,7 +3823,7 @@ static void wcaxx_back_out_gracefully(struct wcaxx *wc)
 	unsigned long flags;
 
 	clear_bit(INITIALIZED, &wc->bit_flags);
-	smp_mb__after_clear_bit();
+	smp_mb__after_atomic();
 
 	/* Make sure we're not on the card list anymore. */
 	mutex_lock(&card_list_lock);
