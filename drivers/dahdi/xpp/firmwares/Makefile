@@ -20,7 +20,12 @@ install:
 	mkdir -p $(TARGET)
 	install $(SCRIPTS) $(TARGET)/
 	install -m 644 ../XppConfig.pm $(FIRMWARES) $(TARGET)/
-	if [ ! -r $(TARGET)/USB_FW.202.hex ]; then \
-		ln -s USB_FW.201.hex $(TARGET)/USB_FW.202.hex;\
+	for id in 202 203; do \
+		if [ ! -r $(TARGET)/USB_FW.$$id.hex ]; then \
+			ln -s USB_FW.201.hex $(TARGET)/USB_FW.$$id.hex;\
+		fi; \
+	done
+	if [ ! -r $(TARGET)/FPGA_1161.203.hex ]; then \
+		ln -s FPGA_1161.201.hex $(TARGET)/FPGA_1161.203.hex;\
 	fi
 
