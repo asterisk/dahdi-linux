@@ -266,6 +266,7 @@ static void ztdeth_destroy(struct dahdi_dynamic *dyn)
 	struct ztdeth *z = dyn->pvt;
 	unsigned long flags;
 	struct ztdeth *prev=NULL, *cur;
+
 	spin_lock_irqsave(&zlock, flags);
 	cur = zdevs;
 	while(cur) {
@@ -279,12 +280,14 @@ static void ztdeth_destroy(struct dahdi_dynamic *dyn)
 		prev = cur;
 		cur = cur->next;
 	}
+	spin_unlock_irqrestore(&zlock, flags);
+
 	if (cur == z) {	/* Successfully removed */
 		dyn->pvt = NULL;
+		dev_put(z->dev);
 		printk(KERN_INFO "TDMoE: Removed interface for %s\n", z->span->name);
 		kfree(z);
 	}
-	spin_unlock_irqrestore(&zlock, flags);
 }
 
 static int ztdeth_create(struct dahdi_dynamic *dyn, const char *addr)
