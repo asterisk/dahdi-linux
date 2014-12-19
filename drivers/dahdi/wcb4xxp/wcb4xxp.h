@@ -248,8 +248,8 @@
 #define V_ROUT_TX_STIO2		(0x3 << 6)	/* output data to STIO2 */
 #define V_ROUT_RX_DIS		(0x0 << 6)	/* disabled, input data ignored */
 #define V_ROUT_RX_LOOP		(0x1 << 6)	/* internally looped, input data ignored */
-#define V_ROUT_RX_STIO2		(0x2 << 6)	/* channel data comes from STIO1 */
-#define V_ROUT_RX_STIO1		(0x3 << 6)	/* channel data comes from STIO2 */
+#define V_ROUT_RX_STIO2		(0x2 << 6)	/* channel data from STIO2 */
+#define V_ROUT_RX_STIO1		(0x3 << 6)	/* channel data from STIO1 */
 
 #define V_CH_SNUM_SHIFT		(1)
 #define V_CH_SNUM_MASK		(31 << 1)
@@ -385,7 +385,8 @@
 
 struct b4xxp_span {
 	struct b4xxp *parent;
-	int port;				/* which S/T port this span belongs to */
+	int port;				/* virtual port */
+	int phy_port;				/* physical port */
 
 	unsigned char writechunk[WCB4XXP_CHANNELS_PER_SPAN * DAHDI_CHUNKSIZE];
 	unsigned char readchunk[WCB4XXP_CHANNELS_PER_SPAN * DAHDI_CHUNKSIZE];
@@ -426,7 +427,8 @@ enum cards_ids {	/* Cards ==> Brand & Model 		*/
 	BN4S0,		/* Beronet BN4S0			*/
 	BN8S0,		/* BeroNet BN8S0			*/
 	BSWYX_SX2,	/* Swyx 4xS0 SX2 QuadBri		*/
-	QUADBRI_EVAL	/* HFC-4S CCD Eval. Board		*/
+	QUADBRI_EVAL,	/* HFC-4S CCD Eval. Board		*/
+	B430P		/* Digium B430P				*/
 	};
 
 /* This structure exists one per card */
