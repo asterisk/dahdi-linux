@@ -98,7 +98,11 @@
 #define chan_to_netdev(h) ((h)->hdlcnetdev->netdev)
 
 /* macro-oni for determining a unit (channel) number */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 #define	UNIT(file) MINOR(file->f_dentry->d_inode->i_rdev)
+#else
+#define	UNIT(file) MINOR(file->f_path.dentry->d_inode->i_rdev)
+#endif
 
 EXPORT_SYMBOL(dahdi_transcode_fops);
 EXPORT_SYMBOL(dahdi_init_tone_state);
