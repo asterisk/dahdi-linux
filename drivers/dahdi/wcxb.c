@@ -66,7 +66,6 @@
 #define DRING_SIZE_MASK		(DRING_SIZE-1)
 #define DESC_EOR		(1 << 0)
 #define DESC_INT		(1 << 1)
-#define DESC_IO_ERROR		(1 << 30)
 #define DESC_OWN		(1 << 31)
 #define DESC_DEFAULT_STATUS	0xdeadbe00
 #define DMA_CHAN_SIZE		128
@@ -358,45 +357,25 @@ static void _wcxb_reset_dring(struct wcxb *xb)
 	hdesc->control |= cpu_to_be32(DESC_EOR);
 #ifdef DEBUG
 	xb->last_retry_count = 0;
+	xb->max_retry_count = 0;
+	xb->last_dma_time = 0;
+	xb->max_dma_time = 0;
 #endif
 	iowrite32be(xb->hw_dring_phys, xb->membase + TDM_DRING_ADDR);
 }
 
 static void wcxb_handle_dma(struct wcxb *xb)
 {
-#ifdef DEBUG
-	bool did_retry_dma = false;
-	u8 retry;
-#endif
 	struct wcxb_meta_desc *mdesc;
 	struct wcxb_hw_desc *tail = &(xb->hw_dring[xb->dma_tail]);
 
 	while (!(tail->control & cpu_to_be32(DESC_OWN))) {
 		u_char *frame;
 
-		if (tail->control & cpu_to_be32(DESC_IO_ERROR)) {
-			u32 ier;
-			unsigned long flags;
-
-			/* The firmware detected an error condition on the bus.
-			 * Force an underrun by disabling the descriptor
-			 * complete interrupt. When the driver processes the
-			 * underrun it will reset the TDM engine. */
-			xb->flags.io_error = 1;
-
-			spin_lock_irqsave(&xb->lock, flags);
-			ier = ioread32be(xb->membase + IER);
-			iowrite32be(ier & ~DESC_COMPLETE, xb->membase + IER);
-			spin_unlock_irqrestore(&xb->lock, flags);
-			return;
-		}
-
 #ifdef DEBUG
-		retry = be32_to_cpu(tail->status) & 0xff;
-		if (xb->last_retry_count != retry) {
-			xb->last_retry_count = retry;
-			did_retry_dma = true;
-		}
+		xb->last_retry_count =
+			((be32_to_cpu(tail->control) & 0x0000ff00) >> 8);
+		xb->last_dma_time = (be32_to_cpu(tail->status));
 #endif
 
 		mdesc = &xb->meta_dring[xb->dma_tail];
@@ -420,9 +399,17 @@ static void wcxb_handle_dma(struct wcxb *xb)
 	}
 
 #ifdef DEBUG
-	if (did_retry_dma) {
+	if (xb->last_retry_count > xb->max_retry_count) {
+		xb->max_retry_count = xb->last_retry_count;
 		dev_info(&xb->pdev->dev,
-			 "DMA retries detected: %d\n", xb->last_retry_count);
+			"New DMA max retries detected: %d\n",
+			xb->max_retry_count);
+	}
+	if (xb->last_dma_time > xb->max_dma_time) {
+		xb->max_dma_time = xb->last_dma_time;
+		dev_info(&xb->pdev->dev,
+			"New DMA max transfer time detected: %d\n",
+			xb->max_dma_time);
 	}
 #endif
 }
@@ -451,14 +438,7 @@ static irqreturn_t _wcxb_isr(int irq, void *dev_id)
 
 			spin_lock(&xb->lock);
 
-			if (xb->flags.io_error) {
-				/* Since an IO error is not necessarily because
-				 * the host could not keep up, we do not want to
-				 * bump the latency. */
-				xb->flags.io_error = 0;
-				dev_warn(&xb->pdev->dev,
-					 "IO error reported by firmware.\n");
-			} else if (!xb->flags.latency_locked) {
+			if (!xb->flags.latency_locked) {
 				/* bump latency */
 
 				xb->latency = min(xb->latency + 1,
