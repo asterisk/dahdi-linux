@@ -24,7 +24,7 @@
 #define __WCXB_H__
 
 #define WCXB_DEFAULT_LATENCY	3U
-#define WCXB_DEFAULT_MAXLATENCY 20U
+#define WCXB_DEFAULT_MAXLATENCY 12U
 #define WCXB_DMA_CHAN_SIZE	128
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
@@ -66,7 +66,7 @@ struct wcxb {
 #ifdef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
 		u32	is_pcie:1;
 #endif
-		u32	io_error:1;
+		u32	dma_ins:1;
 	} flags;
 	void __iomem			*membase;
 	struct wcxb_meta_desc		*meta_dring;
@@ -78,6 +78,9 @@ struct wcxb {
 	unsigned long			framecount;
 #ifdef DEBUG
 	u8				last_retry_count;
+	u8				max_retry_count;
+	u32				last_dma_time;
+	u32				max_dma_time;
 #endif
 };
 

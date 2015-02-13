@@ -66,7 +66,7 @@ static inline int delayed_work_pending(struct work_struct *work)
 
 static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
 static const char *TE436_FW_FILENAME = "dahdi-fw-te436.bin";
-static const u32 TE435_VERSION = 0xe0019;
+static const u32 TE435_VERSION = 0x13001e;
 static const u32 TE436_VERSION = 0x10017;
 
 /* #define RPC_RCLK */
