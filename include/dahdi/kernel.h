@@ -1502,6 +1502,8 @@ void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state);
 #define list_first_entry(ptr, type, member) \
 	list_entry((ptr)->next, type, member)
 
+#define strncasecmp strnicmp
+
 #ifndef __packed
 #define __packed  __attribute__((packed))
 #endif 
