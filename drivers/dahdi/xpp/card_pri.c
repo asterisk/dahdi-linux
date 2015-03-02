@@ -2399,11 +2399,11 @@ static DEVICE_ATTR_WRITER(pri_protocol_store, dev, buf, count)
 			buf, i);
 		return -EINVAL;
 	}
-	if (strnicmp(buf, "E1", 2) == 0)
+	if (strncasecmp(buf, "E1", 2) == 0)
 		new_protocol = PRI_PROTO_E1;
-	else if (strnicmp(buf, "T1", 2) == 0)
+	else if (strncasecmp(buf, "T1", 2) == 0)
 		new_protocol = PRI_PROTO_T1;
-	else if (strnicmp(buf, "J1", 2) == 0)
+	else if (strncasecmp(buf, "J1", 2) == 0)
 		new_protocol = PRI_PROTO_J1;
 	else {
 		XPD_NOTICE(xpd,
