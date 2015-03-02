@@ -1665,9 +1665,11 @@ struct mutex {
 				chan_printk(DEBUG, "-" #bits, chan, \
 					"%s: " fmt, __func__, ## __VA_ARGS__)))
 #define dahdi_dev_dbg(bits, dev, fmt, ...)         \
-			((void)((debug & (DAHDI_DBG_ ## bits)) && \
+		do { if (debug & (DAHDI_DBG_ ## bits)) { \
 			dev_printk(KERN_DEBUG, dev, \
-			"DBG-%s(%s): " fmt, #bits, __func__, ## __VA_ARGS__)))
+			"DBG-%s(%s): " fmt, #bits, __func__, ## __VA_ARGS__); \
+		} } while (0)
+
 #endif /* DAHDI_PRINK_MACROS_USE_debug */
 
 #endif /* _DAHDI_KERNEL_H */
