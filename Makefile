@@ -196,7 +196,8 @@ test:
 docs: $(GENERATED_DOCS)
 
 README.html: README
-	$(ASCIIDOC_CMD) -o $@ $<
+	date=`stat -c "%y" $<`
+	$(ASCIIDOC_CMD)  -a revdate="$$date" -o $@ $<
 
 dahdi-api.html: drivers/dahdi/dahdi-base.c
 	build_tools/kernel-doc --kernel $(KSRC) $^ >$@
