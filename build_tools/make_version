@@ -2,119 +2,18 @@
 
 if [ -f ${1}/.version ]; then
 	cat ${1}/.version
-elif [ -f ${1}/.svnrevision ]; then
-	echo SVN-`cat ${1}/.svnbranch`-r`cat ${1}/.svnrevision`
-elif [ -d ${1}/.svn ]; then
-    PARTS=`LANG=C svn info ${1} | grep URL | awk '{print $2;}' | sed -e s:^.*/svn/${2}/:: | sed -e 's:/: :g'`
-    BRANCH=0
-    TEAM=0
-    
-    REV=`svnversion -c ${1} | cut -d: -f2`
-    
-    if [ "${PARTS}" = "trunk" ]
-	then
-	echo SVN-'trunk'-r${REV}
-	exit 0
-    fi
-    
-    for PART in $PARTS
-      do
-      if [ ${BRANCH} != 0 ]
-	  then
-	  RESULT="${RESULT}-${PART}"
-	  break
-      fi
-      
-      if [ ${TEAM} != 0 ]
-	  then
-	  RESULT="${RESULT}-${PART}"
-	  continue
-      fi
-      
-      if [ "${PART}" = "branches" ]
-	  then
-	  BRANCH=1
-	  RESULT="branch"
-	  continue
-      fi
-      
-      if [ "${PART}" = "tags" ]
-	  then
-	  BRANCH=1
-	  RESULT="tag"
-	  continue
-      fi
-      
-      if [ "${PART}" = "team" ]
-	  then
-	  TEAM=1
-	  continue
-      fi
-    done
-    
-    echo SVN-${RESULT##-}-r${REV}
 elif [ -d ${1}/.git ]; then
-    # If the first log commit messages indicates that this is checked into
-    # subversion, we'll just use the SVN- form of the revision.
-    MODIFIED=""
-    SVN_REV=`git log --pretty=full -1 | grep -F "git-svn-id:" | sed -e "s/.*\@\([^\s]*\)\s.*/\1/g"`
-    if [ -z "$SVN_REV" ]; then
-        VERSION=`git describe --tags --dirty=M 2> /dev/null | sed -e "s/^v\([0-9]\)/\1/"`
-        if [ $? -ne 0 ]; then
-            if [ "`git ls-files -m | wc -l`" != "0" ]; then
-                MODIFIED="M"
-            fi
-            # Some older versions of git do not support all the above
-            # options.
-            VERSION=GIT-`git rev-parse --short --verify HEAD`${MODIFIED}
-        fi
-        echo ${VERSION}
-    else
-        PARTS=`LANG=C git log --pretty=full | grep -F "git-svn-id:" | head -1 | awk '{print $2;}' | sed -e s:^.*/svn/$2/:: | sed -e 's:/: :g' | sed -e 's/@.*$//g'`
-        BRANCH=0
-        TEAM=0
-
+    VERSION=`git describe --tags --dirty=M 2> /dev/null | sed -e "s/^v\([0-9]\)/\1/"`
+    if [ $? -ne 0 ]; then
+        MODIFIED=""
         if [ "`git ls-files -m | wc -l`" != "0" ]; then
             MODIFIED="M"
         fi
-
-        if [ "${PARTS}" = "trunk" ]; then
-            echo SVN-'trunk'-r${SVN_REV}${MODIFIED}
-            exit 0
-        fi
-
-        for PART in $PARTS
-          do
-              if [ ${BRANCH} != 0 ]; then
-              RESULT="${RESULT}-${PART}"
-              break
-          fi
-
-          if [ ${TEAM} != 0 ]; then
-              RESULT="${RESULT}-${PART}"
-              continue
-          fi
-
-          if [ "${PART}" = "branches" ]; then
-              BRANCH=1
-              RESULT="branch"
-              continue
-          fi
-
-          if [ "${PART}" = "tags" ]; then
-              BRANCH=1
-              RESULT="tag"
-              continue
-          fi
-
-          if [ "${PART}" = "team" ]; then
-              TEAM=1
-              continue
-          fi
-        done
-
-        echo SVN-${RESULT##-}-r${SVN_REV}${MODIFIED}
+        # Some older versions of git do not support all the above
+        # options.
+        VERSION=GIT-`git rev-parse --short --verify HEAD`${MODIFIED}
     fi
+    echo ${VERSION}
 else
 	# Use the directory information in the absence of any other version
 	# information
