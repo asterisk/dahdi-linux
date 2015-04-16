@@ -375,6 +375,7 @@ struct wcdte {
 #endif
 	struct timer_list watchdog;
 	u16 open_channels;
+	unsigned long packet_errors;
 };
 
 struct wcdte_netdev_priv {
@@ -2019,14 +2020,16 @@ wctc4xxp_disable_polling(struct wcdte *wc)
 
 static void wctc4xxp_check_for_rx_errors(struct wcdte *wc)
 {
-	static unsigned long last_errors = 0;
+	/* get_packet_errors() returns the accumulated total errors */
 	unsigned long errors = wctc4xxp_get_packet_errors(wc->rxd);
-	if (last_errors != errors) {
+
+	/* Print warning when the number of errors changes */
+	if (wc->packet_errors != errors) {
 		if (printk_ratelimit()) {
 			dev_err(&wc->pdev->dev,
 				"%lu errored receive packets.\n",
-				errors - last_errors);
-			last_errors = errors;
+				errors - wc->packet_errors);
+			wc->packet_errors = errors;
 		}
 	}
 }
