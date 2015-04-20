@@ -1885,7 +1885,7 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 		goto cleanup;
 
 #if !defined(CONFIG_VOICEBUS_TIMER)
-	retval = request_irq(vb->pdev->irq, vb_isr, DAHDI_IRQ_SHARED,
+	retval = request_irq(vb->pdev->irq, vb_isr, IRQF_SHARED,
 			     board_name, vb);
 	if (retval) {
 		dev_warn(&vb->pdev->dev, "Failed to request interrupt line.\n");

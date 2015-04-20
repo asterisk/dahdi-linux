@@ -972,7 +972,7 @@ static int __devinit wcfxo_init_one(struct pci_dev *pdev, const struct pci_devic
 	/* Keep track of which device we are */
 	pci_set_drvdata(pdev, wc);
 
-	if (request_irq(pdev->irq, wcfxo_interrupt, DAHDI_IRQ_SHARED, "wcfxo", wc)) {
+	if (request_irq(pdev->irq, wcfxo_interrupt, IRQF_SHARED, "wcfxo", wc)) {
 		printk(KERN_NOTICE "wcfxo: Unable to request IRQ %d\n", pdev->irq);
 		if (wc->freeregion)
 			release_region(wc->ioaddr, 0xff);

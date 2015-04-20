@@ -1333,7 +1333,8 @@ static int __devinit t1xxp_init_one(struct pci_dev *pdev, const struct pci_devic
 	/* Keep track of which device we are */
 	pci_set_drvdata(pdev, wc);
 	
-	if (request_irq(pdev->irq, t1xxp_interrupt, DAHDI_IRQ_SHARED_DISABLED, "t1xxp", wc)) {
+	if (request_irq(pdev->irq, t1xxp_interrupt,
+			IRQF_SHARED | IRQF_DISABLED, "t1xxp", wc)) {
 		printk(KERN_NOTICE "t1xxp: Unable to request IRQ %d\n", pdev->irq);
 		kfree(wc);
 		return -EIO;

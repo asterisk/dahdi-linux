@@ -1784,7 +1784,8 @@ static int __devinit pciradio_init_one(struct pci_dev *pdev, const struct pci_de
 
 			}
 
-			if (request_irq(pdev->irq, pciradio_interrupt, DAHDI_IRQ_SHARED, "pciradio", rad)) {
+			if (request_irq(pdev->irq, pciradio_interrupt,
+					IRQF_SHARED, "pciradio", rad)) {
 				printk(KERN_NOTICE "pciradio: Unable to request IRQ %d\n", pdev->irq);
 				if (rad->freeregion)
 					release_region(rad->ioaddr, 0xff);
