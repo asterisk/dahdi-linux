@@ -2951,7 +2951,8 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 
 	create_sysfs_files(b4);
 
-	if (request_irq(pdev->irq, b4xxp_interrupt, DAHDI_IRQ_SHARED_DISABLED, "b4xxp", b4)) {
+	if (request_irq(pdev->irq, b4xxp_interrupt,
+			IRQF_SHARED | IRQF_DISABLED, "b4xxp", b4)) {
 		dev_err(&b4->pdev->dev, "Unable to request IRQ %d\n",
 			pdev->irq);
 		ret = -EIO;

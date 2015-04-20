@@ -2684,7 +2684,8 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			/* Keep track of which device we are */
 			pci_set_drvdata(pdev, wc);
 
-			if (request_irq(pdev->irq, wctdm_interrupt, DAHDI_IRQ_SHARED, "wctdm", wc)) {
+			if (request_irq(pdev->irq, wctdm_interrupt,
+					IRQF_SHARED, "wctdm", wc)) {
 				printk(KERN_NOTICE "wctdm: Unable to request IRQ %d\n", pdev->irq);
 				if (wc->freeregion)
 					release_region(wc->ioaddr, 0xff);

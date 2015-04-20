@@ -5334,7 +5334,7 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 #ifdef SUPPORT_GEN1
 	if (request_irq(pdev->irq, (wc->devtype->flags & FLAG_2NDGEN) ?
 					t4_interrupt_gen2 : t4_interrupt,
-			DAHDI_IRQ_SHARED,
+			IRQF_SHARED,
 			(wc->numspans == 8) ? "wct8xxp" :
 					      (wc->numspans == 2) ? "wct2xxp" :
 								    "wct4xxp",
@@ -5348,7 +5348,7 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	if (request_irq(pdev->irq, t4_interrupt_gen2,
-			DAHDI_IRQ_SHARED, "t4xxp", wc)) {
+			IRQF_SHARED, "t4xxp", wc)) {
 #endif
 		dev_notice(&wc->dev->dev, "Unable to request IRQ %d\n",
 				pdev->irq);

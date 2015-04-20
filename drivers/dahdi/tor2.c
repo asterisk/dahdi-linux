@@ -543,7 +543,8 @@ static int __devinit tor2_probe(struct pci_dev *pdev, const struct pci_device_id
 	for (x = 0; x < 256; x++)
 		writel(0x7f7f7f7f, &tor->mem32[x]);
 
-	if (request_irq(tor->irq, tor2_intr, DAHDI_IRQ_SHARED_DISABLED, "tor2", tor)) {
+	if (request_irq(tor->irq, tor2_intr,
+			IRQF_SHARED | IRQF_DISABLED, "tor2", tor)) {
 		printk(KERN_ERR "Unable to request tormenta IRQ %d\n", tor->irq);
 		goto err_out_release_all;
 	}

@@ -4105,7 +4105,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	pci_set_master(pdev);
 	pci_set_drvdata(pdev, wc);
 	res = request_irq(pdev->irq, wctc4xxp_interrupt,
-		DAHDI_IRQ_SHARED, wc->board_name, wc);
+			  IRQF_SHARED, wc->board_name, wc);
 	if (res) {
 		dev_err(&wc->pdev->dev,
 			"Unable to request IRQ %d\n", pdev->irq);

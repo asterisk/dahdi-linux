@@ -685,7 +685,7 @@ int wcxb_init(struct wcxb *xb, const char *board_name, u32 int_mode)
 	xb->flags.have_msi = (int_mode) ? 0 : (0 == pci_enable_msi(pdev));
 
 	if (request_irq(pdev->irq, wcxb_isr,
-			(xb->flags.have_msi) ? 0 : DAHDI_IRQ_SHARED,
+			(xb->flags.have_msi) ? 0 : IRQF_SHARED,
 			board_name, xb)) {
 		dev_notice(&xb->pdev->dev, "Unable to request IRQ %d\n",
 			   pdev->irq);
