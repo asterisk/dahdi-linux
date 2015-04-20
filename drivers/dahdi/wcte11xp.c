@@ -1351,6 +1351,8 @@ DAHDI_IRQ_HANDLER(t1xxp_interrupt)
 	if (!ints)
 		return IRQ_NONE;
 
+	local_irq_save(flags);
+
 	outb(ints, wc->ioaddr + WC_INTSTAT);
 
 	if (!wc->intcount) {
@@ -1365,13 +1367,13 @@ DAHDI_IRQ_HANDLER(t1xxp_interrupt)
 		t1xxp_receiveprep(wc, ints);
 		t1xxp_transmitprep(wc, ints);
 	}
-	spin_lock_irqsave(&wc->lock, flags);
+	spin_lock(&wc->lock);
 
 #if 1
 	__handle_leds(wc);
 #endif
 
-	spin_unlock_irqrestore(&wc->lock, flags);
+	spin_unlock(&wc->lock);
 
 	/* Count down timers */
 	t1_do_counters(wc);
@@ -1398,6 +1400,7 @@ DAHDI_IRQ_HANDLER(t1xxp_interrupt)
 	if (ints & 0x20)
 		printk(KERN_NOTICE "PCI Target abort\n");
 
+	local_irq_restore(flags);
 	return IRQ_RETVAL(1);
 }
 
@@ -1535,7 +1538,7 @@ static int __devinit t1xxp_init_one(struct pci_dev *pdev, const struct pci_devic
 	pci_set_drvdata(pdev, wc);
 	
 	if (request_irq(pdev->irq, t1xxp_interrupt,
-			IRQF_SHARED | IRQF_DISABLED, "wcte11xp", wc)) {
+			IRQF_SHARED, "wcte11xp", wc)) {
 		printk(KERN_NOTICE "wcte11xp: Unable to request IRQ %d\n", pdev->irq);
 		kfree(wc);
 		return -EIO;

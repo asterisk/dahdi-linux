@@ -2953,6 +2953,7 @@ DAHDI_IRQ_HANDLER(b4xxp_interrupt)
 {
 	struct b4xxp *b4 = dev_id;
 	unsigned char status;
+	unsigned long flags;
 	int i;
 
 	/* Make sure it's really for us */
@@ -2966,6 +2967,8 @@ DAHDI_IRQ_HANDLER(b4xxp_interrupt)
  * That way if we get behind, we don't lose anything.
  * We don't actually do any processing here, we simply flag the bottom-half to do the heavy lifting.
  */
+	local_irq_save(flags);
+
 	if (status & V_FR_IRQSTA) {
 		b4->fifo_irqstatus[0] |= __pci_in8(b4, R_IRQ_FIFO_BL0);
 		b4->fifo_irqstatus[1] |= __pci_in8(b4, R_IRQ_FIFO_BL1);
@@ -3000,6 +3003,8 @@ DAHDI_IRQ_HANDLER(b4xxp_interrupt)
 /* kick off bottom-half handler */
 	/* tasklet_hi_schedule(&b4->b4xxp_tlet); */
 	b4xxp_bottom_half((unsigned long)b4);
+
+	local_irq_restore(flags);
 
 	return IRQ_RETVAL(1);
 }
@@ -3354,8 +3359,7 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 
 	create_sysfs_files(b4);
 
-	if (request_irq(pdev->irq, b4xxp_interrupt,
-			IRQF_SHARED | IRQF_DISABLED, "b4xxp", b4)) {
+	if (request_irq(pdev->irq, b4xxp_interrupt, IRQF_SHARED, "b4xxp", b4)) {
 		dev_err(&b4->pdev->dev, "Unable to request IRQ %d\n",
 			pdev->irq);
 		ret = -EIO;
