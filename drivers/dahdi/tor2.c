@@ -543,8 +543,7 @@ static int __devinit tor2_probe(struct pci_dev *pdev, const struct pci_device_id
 	for (x = 0; x < 256; x++)
 		writel(0x7f7f7f7f, &tor->mem32[x]);
 
-	if (request_irq(tor->irq, tor2_intr,
-			IRQF_SHARED | IRQF_DISABLED, "tor2", tor)) {
+	if (request_irq(tor->irq, tor2_intr, IRQF_SHARED, "tor2", tor)) {
 		printk(KERN_ERR "Unable to request tormenta IRQ %d\n", tor->irq);
 		goto err_out_release_all;
 	}
@@ -1201,12 +1200,15 @@ DAHDI_IRQ_HANDLER(tor2_intr)
 	unsigned char c, rxc;
 	unsigned char abits, bbits;
 	struct tor2 *tor = (struct tor2 *) dev_id;	
+	unsigned long flags;
 
 	  /* make sure its a real interrupt for us */
 	if (!(readb(&tor->mem8[STATREG]) & INTACTIVE)) /* if not, just return */
 	   {
 		return IRQ_NONE;
 	   }
+
+	local_irq_save(flags);
 
 	if (tor->cardtype == TYPE_E1) {
 		/* set outbit, interrupt enable, and ack interrupt */
@@ -1505,6 +1507,8 @@ DAHDI_IRQ_HANDLER(tor2_intr)
 	else
 		/* clear OUTBIT and enable interrupts */
 		writeb(INTENA | tor->master, &tor->mem8[CTLREG]);
+
+	local_irq_restore(flags);
 	return IRQ_RETVAL(1);
 }
 
