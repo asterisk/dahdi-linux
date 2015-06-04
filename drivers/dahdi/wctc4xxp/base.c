@@ -375,7 +375,7 @@ struct wcdte {
 #endif
 	struct timer_list watchdog;
 	u16 open_channels;
-	unsigned long packet_errors;
+	unsigned long reported_packet_errors;
 };
 
 struct wcdte_netdev_priv {
@@ -2024,12 +2024,12 @@ static void wctc4xxp_check_for_rx_errors(struct wcdte *wc)
 	unsigned long errors = wctc4xxp_get_packet_errors(wc->rxd);
 
 	/* Print warning when the number of errors changes */
-	if (wc->packet_errors != errors) {
+	if (wc->reported_packet_errors != errors) {
 		if (printk_ratelimit()) {
 			dev_err(&wc->pdev->dev,
 				"%lu errored receive packets.\n",
-				errors - wc->packet_errors);
-			wc->packet_errors = errors;
+				errors - wc->reported_packet_errors);
+			wc->reported_packet_errors = errors;
 		}
 	}
 }
@@ -3870,6 +3870,7 @@ static int wctc4xxp_reset_driver_state(struct wcdte *wc)
 		release_firmware(firmware);
 	spin_lock_irqsave(&wc->rxd->lock, flags);
 	wc->rxd->packet_errors = 0;
+	wc->reported_packet_errors = 0;
 	spin_unlock_irqrestore(&wc->rxd->lock, flags);
 	return res;
 }
