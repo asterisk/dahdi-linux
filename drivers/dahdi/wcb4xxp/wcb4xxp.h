@@ -428,7 +428,8 @@ enum cards_ids {	/* Cards ==> Brand & Model 		*/
 	BN8S0,		/* BeroNet BN8S0			*/
 	BSWYX_SX2,	/* Swyx 4xS0 SX2 QuadBri		*/
 	QUADBRI_EVAL,	/* HFC-4S CCD Eval. Board		*/
-	B430P		/* Digium B430P				*/
+	B430P,		/* Digium B430P				*/
+	B230P		/* Digium B230P				*/
 	};
 
 /* This structure exists one per card */

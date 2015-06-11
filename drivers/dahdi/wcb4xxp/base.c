@@ -110,7 +110,7 @@ static int led_fader_table[] = {
 	20, 18, 16, 13, 11,  9,  8,  6,  4,  3,  2,  1,  0,  0,
 };
 
-// #define CREATE_WCB4XXP_PROCFS_ENTRY 
+#undef CREATE_WCB4XXP_PROCFS_ENTRY
 #ifdef CREATE_WCB4XXP_PROCFS_ENTRY
 #define PROCFS_NAME 		"wcb4xxp"
 static struct proc_dir_entry *myproc;
@@ -132,6 +132,8 @@ static struct devtype wcb41xp = {"Wildcard B410P", .ports = 4,
 					.card_type = B410P};
 static struct devtype wcb43xp = {"Wildcard B430P", .ports = 4,
 					.card_type = B430P};
+static struct devtype wcb23xp = {"Wildcard B230P", .ports = 2,
+					.card_type = B230P};
 static struct devtype hfc2s =	 {"HFC-2S Junghanns.NET duoBRI PCI", .ports = 2, .card_type = DUOBRI };
 static struct devtype hfc4s =	 {"HFC-4S Junghanns.NET quadBRI PCI", .ports = 4, .card_type = QUADBRI };
 static struct devtype hfc8s =	 {"HFC-8S Junghanns.NET octoBRI PCI", .ports = 8, .card_type = OCTOBRI };
@@ -146,8 +148,10 @@ static struct devtype hfc4s_EV = {"CCD HFC-4S Eval. Board", .ports = 4,
 					.card_type = QUADBRI_EVAL };
 
 #define IS_B430P(card) ((card)->card_type == B430P)
+#define IS_B230P(card) ((card)->card_type == B230P)
+#define IS_GEN2(card) (IS_B430P(card) || IS_B230P(card))
 #define IS_B410P(card) ((card)->card_type == B410P)
-#define CARD_HAS_EC(card) (IS_B410P(card) || IS_B430P(card))
+#define CARD_HAS_EC(card) (IS_B410P(card) || IS_B430P(card) || IS_B230P(card))
 
 static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec);
 static void b4xxp_update_leds(struct b4xxp *b4);
@@ -289,7 +293,7 @@ static inline unsigned char b4xxp_getreg8(struct b4xxp *b4, const unsigned int r
 		 * the same. */
 retry:
 		ret = __pci_in8(b4, reg);
-		if (ret != __pci_in8(b4, reg)) 
+		if (ret != __pci_in8(b4, reg))
 			goto retry;
 		break;
 	default:
@@ -415,7 +419,7 @@ static unsigned char b4xxp_getreg_ra(struct b4xxp *b4, unsigned char r, unsigned
  * cleared, as it's used for reset */
 static void hfc_gpio_set(struct b4xxp *b4, unsigned char bits)
 {
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		b4xxp_setreg8(b4, R_GPIO_OUT1, bits | 0x01);
 		flush_pci();
 	} else {
@@ -449,7 +453,7 @@ static void hfc_gpio_init(struct b4xxp *b4)
 	/* GPIO0..7 input */
 	b4xxp_setreg8(b4, R_GPIO_EN0, 0x00);
 
-	if (IS_B430P(b4))
+	if (IS_GEN2(b4))
 		b4xxp_setreg8(b4, R_GPIO_EN1, 0xf1);
 	else
 		b4xxp_setreg8(b4, R_GPIO_EN1, 0xf7);
@@ -481,7 +485,7 @@ static void hfc_gpio_init(struct b4xxp *b4)
  * This came from mattf, I don't even pretend to understand it,
  * It seems to be using undocumented features in the HFC.
  * I just added the __pci_in8() to ensure the PCI writes made it
- * to hardware by the time these functions return. 
+ * to hardware by the time these functions return.
  */
 static inline void enablepcibridge(struct b4xxp *b4)
 {
@@ -835,7 +839,7 @@ static void ec_init(struct b4xxp *b4)
 		return;
 
 	/* Short circuit to the new zarlink echocan logic */
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		zl_init(b4);
 		return;
 	}
@@ -1030,7 +1034,7 @@ static void hfc_reset(struct b4xxp *b4)
 	b4xxp_setreg8(b4, R_PCM_MD0, V_PCM_MD | V_PCM_IDX_MD1);
 	flush_pci();
 
-	if (IS_B430P(b4))
+	if (IS_GEN2(b4))
 		b4xxp_setreg8(b4, R_PCM_MD1, V_PLL_ADJ_00 | V_PCM_DR_4096);
 	else
 		b4xxp_setreg8(b4, R_PCM_MD1, V_PLL_ADJ_00 | V_PCM_DR_2048);
@@ -1137,7 +1141,7 @@ static void hfc_assign_bchan_fifo_ec(struct b4xxp *b4, int port, int bchan)
 
 /* PCM RX -> Host TX FIFO, transparent mode, enable IRQ. */
 	hfc_setreg_waitbusy(b4, R_FIFO, (fifo << V_FIFO_NUM_SHIFT) | V_FIFO_DIR);
-	b4xxp_setreg8(b4, A_CON_HDLC, V_IFF | V_HDLC_TRP | V_DATA_FLOW_001); 
+	b4xxp_setreg8(b4, A_CON_HDLC, V_IFF | V_HDLC_TRP | V_DATA_FLOW_001);
 	b4xxp_setreg8(b4, A_CHANNEL, ((16 + hfc_chan) << V_CH_FNUM_SHIFT) | V_CH_FDIR);
 	b4xxp_setreg8(b4, R_SLOT, ((ts + 1) << V_SL_NUM_SHIFT) | 1);
 	b4xxp_setreg8(b4, A_SL_CFG, V_ROUT_RX_STIO2 | ((16 + hfc_chan) << V_CH_SNUM_SHIFT) | 1);
@@ -1195,7 +1199,10 @@ static void hfc_assign_fifo_zl(struct b4xxp *b4, int port, int bchan)
 	}
 
 	/* record the host's FIFO # in the span fifo array */
-	b4->spans[3-port].fifos[bchan] = fifo;
+	if (IS_B230P(b4))
+		b4->spans[2-port].fifos[bchan] = fifo;
+	else
+		b4->spans[3-port].fifos[bchan] = fifo;
 	spin_lock_irqsave(&b4->fifolock, irq_flags);
 
 	if (DBG) {
@@ -1348,6 +1355,8 @@ static void hfc_assign_dchan_fifo(struct b4xxp *b4, int port)
 /* record the host's FIFO # in the span fifo array */
 	if (IS_B430P(b4))
 		b4->spans[3-port].fifos[2] = fifo;
+	else if (IS_B230P(b4))
+		b4->spans[2-port].fifos[2] = fifo;
 	else
 		b4->spans[port].fifos[2] = fifo;
 
@@ -1409,11 +1418,15 @@ static void hfc_reset_fifo_pair(struct b4xxp *b4, int fifo, int reset, int force
 static void b4xxp_set_sync_src(struct b4xxp *b4, int port)
 {
 	int b;
+	struct b4xxp_span *bspan;
 
-	if (port == -1) 		/* automatic */
+	/* -1 = no timing selection */
+	if (port == -1) {
 		b = 0;
-	else
-		b = (port & V_SYNC_SEL_MASK) | V_MAN_SYNC;
+	} else {
+		bspan = &b4->spans[port];
+		b = (bspan->phy_port & V_SYNC_SEL_MASK) | V_MAN_SYNC;
+	}
 
 	b4xxp_setreg8(b4, R_ST_SYNC, b);
 	b4->syncspan = port;
@@ -1481,7 +1494,7 @@ static void remove_sysfs_files(struct b4xxp *b4)
  * Performs no hardware access whatsoever, but does use GFP_KERNEL so do not call from IRQ context.
  * if full == 1, prints a "full" dump; otherwise just prints current state.
  */
-static char *hfc_decode_st_state(struct b4xxp *b4, int port, unsigned char state, int full)
+static char *hfc_decode_st_state(struct b4xxp *b4, struct b4xxp_span *span, unsigned char state, int full)
 {
 	int nt, sta;
 	char s[128], *str;
@@ -1498,10 +1511,10 @@ static char *hfc_decode_st_state(struct b4xxp *b4, int port, unsigned char state
 		return NULL;
 	}
 
-	nt = (b4->spans[port].te_mode == 0);
+	nt = !span->te_mode;
 	sta = (state & V_ST_STA_MASK);
 
-	sprintf(str, "P%d: %s state %c%d (%s)", port + 1, (nt ? "NT" : "TE"), (nt ? 'G' : 'F'), sta, ststr[nt][sta]);
+	sprintf(str, "P%d: %s state %c%d (%s)", span->port + 1, (nt ? "NT" : "TE"), (nt ? 'G' : 'F'), sta, ststr[nt][sta]);
 
 	if (full) {
 		sprintf(s, " SYNC: %s, RX INFO0: %s", ((state & V_FR_SYNC) ? "yes" : "no"), ((state & V_INFO0) ? "yes" : "no"));
@@ -1522,28 +1535,29 @@ static char *hfc_decode_st_state(struct b4xxp *b4, int port, unsigned char state
  * if 'auto' is nonzero, will put the state machine back in auto mode after setting the state.
  */
 static void hfc_handle_state(struct b4xxp_span *s);
-static void hfc_force_st_state(struct b4xxp *b4, int port, int state, int resume_auto)
+static void hfc_force_st_state(struct b4xxp *b4, struct b4xxp_span *s, int state, int resume_auto)
 {
-	b4xxp_setreg_ra(b4, R_ST_SEL, port, A_ST_RD_STA, state | V_ST_LD_STA);
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port,
+			A_ST_RD_STA, state | V_ST_LD_STA);
 
 	udelay(6);
 
 	if (resume_auto) {
-		b4xxp_setreg_ra(b4, R_ST_SEL, port, A_ST_RD_STA, state);
+		b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_RD_STA, state);
 	}
 
 	if (DBG_ST) {
 		char *x;
 
-		x = hfc_decode_st_state(b4, port, state, 1);
+		x = hfc_decode_st_state(b4, s, state, 1);
 		dev_info(&b4->pdev->dev,
-			 "forced port %d to state %d (auto: %d), "
-			 "new decode: %s\n", port + 1, state, resume_auto, x);
+			 "forced port %d to state %d (auto: %d), new decode: %s\n",
+			s->port + 1, state, resume_auto, x);
 		kfree(x);
 	}
 
 /* make sure that we activate any timers/etc needed by this state change */
-	hfc_handle_state(&b4->spans[port]);
+	hfc_handle_state(s);
 }
 
 static void hfc_stop_st(struct b4xxp_span *s);
@@ -1578,10 +1592,10 @@ static void hfc_timer_expire(struct b4xxp_span *s, int t_no)
 
 	switch(t_no) {
 	case HFC_T1:					/* switch to G4 (pending deact.), resume auto mode */
-		hfc_force_st_state(b4, s->phy_port, 4, 1);
+		hfc_force_st_state(b4, s, 4, 1);
 		break;
 	case HFC_T2:					/* switch to G1 (deactivated), resume auto mode */
-		hfc_force_st_state(b4, s->phy_port, 1, 1);
+		hfc_force_st_state(b4, s, 1, 1);
 		break;
 	case HFC_T3:					/* switch to F3 (deactivated), resume auto mode */
 		hfc_stop_st(s);
@@ -1659,7 +1673,7 @@ static void hfc_handle_state(struct b4xxp_span *s)
 	if (DBG_ST) {
 		char *x;
 
-		x = hfc_decode_st_state(b4, s->phy_port, state, 1);
+		x = hfc_decode_st_state(b4, s, state, 1);
 		dev_info(&b4->pdev->dev,
 			 "port %d phy_port %d A_ST_RD_STA old=0x%02x now=0x%02x, decoded: %s\n",
 			s->port + 1, s->phy_port, s->oldstate, state, x);
@@ -1846,7 +1860,7 @@ static void hfc_init_all_st(struct b4xxp *b4)
 	struct b4xxp_span *s;
 
 	/* All other cards supported by this driver read jumpers for modes */
-	if (!IS_B430P(b4))
+	if (!IS_GEN2(b4))
 		gpio = b4xxp_getreg8(b4, R_GPI_IN3);
 
 	for (i=0; i < b4->numspans; i++) {
@@ -1857,6 +1871,11 @@ static void hfc_init_all_st(struct b4xxp *b4)
 			/* The physical ports are reversed on the b430 */
 			/* Port 0-3 in b4->spans[] are physically ports 3-0 */
 			s->phy_port = b4->numspans-1-i;
+			s->port = i;
+		} else if (IS_B230P(b4)) {
+			/* The physical ports are reversed on the b230 */
+			/* Port 0-1 in b4->spans[] are physically ports 2-1 */
+			s->phy_port = b4->numspans - i;
 			s->port = i;
 		} else {
 			s->phy_port = i;
@@ -1870,8 +1889,8 @@ static void hfc_init_all_st(struct b4xxp *b4)
 		 */
 		if (IS_B410P(b4)) {
 			nt = ((gpio & (1 << (i + 4))) == 0);
-		} else if (IS_B430P(b4)) {
-			/* Read default digital lineconfig reg on B430 */
+		} else if (IS_GEN2(b4)) {
+			/* Read default digital lineconfig reg on GEN2 */
 			int reg;
 			unsigned long flags;
 
@@ -2257,7 +2276,7 @@ static void b4xxp_init_stage1(struct b4xxp *b4)
 	 * incoming clock.
 	 */
 
-	if (IS_B410P(b4) || IS_B430P(b4) || (b4->card_type == QUADBRI_EVAL))
+	if (IS_B410P(b4) || IS_GEN2(b4) || (b4->card_type == QUADBRI_EVAL))
 		b4xxp_setreg8(b4, R_BRG_PCM_CFG, 0x02);
 	else
 		b4xxp_setreg8(b4, R_BRG_PCM_CFG, V_PCM_CLK);
@@ -2293,7 +2312,7 @@ static void b4xxp_init_stage2(struct b4xxp *b4)
 	b4xxp_setreg8(b4, R_PCM_MD0, V_PCM_MD | V_PCM_IDX_MD1);
 	flush_pci();
 
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		b4xxp_setreg8(b4, R_PCM_MD1, V_PLL_ADJ_00 | V_PCM_DR_4096);
 		b4xxp_setreg8(b4, R_PWM_MD, 0x50);
 		b4xxp_setreg8(b4, R_PWM0, 0x38);
@@ -2352,6 +2371,10 @@ static void b4xxp_init_stage2(struct b4xxp *b4)
 			hfc_assign_fifo_zl(b4, span, 0);
 			hfc_assign_fifo_zl(b4, span, 1);
 			hfc_assign_dchan_fifo(b4, span);
+		} else if (IS_B230P(b4)) {
+			hfc_assign_fifo_zl(b4, span + 1, 0);
+			hfc_assign_fifo_zl(b4, span + 1, 1);
+			hfc_assign_dchan_fifo(b4, span + 1);
 		} else {
 			if ((vpmsupport) && (CARD_HAS_EC(b4))) {
 				hfc_assign_bchan_fifo_ec(b4, span, 0);
@@ -2454,11 +2477,16 @@ static void b4xxp_update_leds_hfc(struct b4xxp *b4)
 
 static void b4xxp_set_span_led(struct b4xxp *b4, int span, unsigned char val)
 {
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		unsigned long flags;
 
-		b4->ledreg &= ~(0x03 << span*2);
-		b4->ledreg |= (val << span*2);
+		if (IS_B230P(b4)) {
+			b4->ledreg &= ~(0x03 << (span + 1)*2);
+			b4->ledreg |= (val << (span + 1)*2);
+		} else {
+			b4->ledreg &= ~(0x03 << span*2);
+			b4->ledreg |= (val << span*2);
+		}
 
 		spin_lock_irqsave(&b4->seqlock, flags);
 		/* Set multiplexer for led R/W */
@@ -2488,7 +2516,7 @@ static void b4xxp_update_leds(struct b4xxp *b4)
 		return;
 	}
 
-	if (!IS_B410P(b4) && !IS_B430P(b4)) {
+	if (!IS_B410P(b4) && !IS_GEN2(b4)) {
 		/* Use the alternative function for non-Digium HFC-4S cards */
 		b4xxp_update_leds_hfc(b4);
 		return;
@@ -2535,7 +2563,7 @@ static const char *b4xxp_echocan_name(const struct dahdi_chan *chan)
 	if (IS_B410P(bspan->parent))
 		return "LASVEGAS2";
 
-	if (IS_B430P(bspan->parent))
+	if (IS_GEN2(bspan->parent))
 		return "ZARLINK";
 
 	return NULL;
@@ -2568,16 +2596,16 @@ static int b4xxp_echocan_create(struct dahdi_chan *chan,
 
 	if (DBG_EC)
 		printk("Enabling echo cancellation on chan %d span %d\n", chan->chanpos, chan->span->offset);
-
-	channel = (chan->span->offset * 8) + ((chan->chanpos - 1) * 4) + 1;
 	
-	if (IS_B430P(bspan->parent)) {
-		/* Zarlink has 4 groups of 2 channel echo cancelers */
-		/* Each channel has it's own individual control reg */
-		int group = (3 - chan->span->offset) * 0x40;
+	if (IS_GEN2(bspan->parent)) {
+		int group;
 		int chan_offset = (chan->chanpos % 2) ? 0x00 : 0x20;
 		int reg;
 		unsigned long flags;
+
+		/* Zarlink has 4 groups of 2 channel echo cancelers */
+		/* Each channel has it's own individual control reg */
+		group = bspan->phy_port * 0x40;
 
 		spin_lock_irqsave(&bspan->parent->seqlock, flags);
 		reg = __zl_read(bspan->parent, group + chan_offset);
@@ -2585,6 +2613,7 @@ static int b4xxp_echocan_create(struct dahdi_chan *chan,
 		__zl_write(bspan->parent, group + chan_offset, reg);
 		spin_unlock_irqrestore(&bspan->parent->seqlock, flags);
 	} else {
+		channel = (chan->span->offset * 8) + ((chan->chanpos - 1) * 4) + 1;
 		ec_write(bspan->parent, chan->chanpos - 1, channel, 0x7e);
 	}
 
@@ -2601,15 +2630,15 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 	if (DBG_EC)
 		printk("Disabling echo cancellation on chan %d span %d\n", chan->chanpos, chan->span->offset);
 
-	channel = (chan->span->offset * 8) + ((chan->chanpos - 1) * 4) + 1;
-
-	if (IS_B430P(bspan->parent)) {
-		/* Zarlink has 4 groups of 2 channel echo cancelers */
-		/* Each channel has it's own individual control reg */
-		int group = (3 - chan->span->offset) * 0x40;
+	if (IS_GEN2(bspan->parent)) {
+		int group;
 		int chan_offset = (chan->chanpos % 2) ? 0x00 : 0x20;
 		int reg;
 		unsigned long flags;
+
+		/* Zarlink has 4 groups of 2 channel echo cancelers */
+		/* Each channel has it's own individual control reg */
+		group = bspan->phy_port * 0x40;
 
 		spin_lock_irqsave(&bspan->parent->seqlock, flags);
 		reg = __zl_read(bspan->parent, group + chan_offset);
@@ -2617,6 +2646,7 @@ static void echocan_free(struct dahdi_chan *chan, struct dahdi_echocan_state *ec
 		__zl_write(bspan->parent, group + chan_offset, reg);
 		spin_unlock_irqrestore(&bspan->parent->seqlock, flags);
 	} else {
+		channel = (chan->span->offset * 8) + ((chan->chanpos - 1) * 4) + 1;
 		ec_write(bspan->parent, chan->chanpos - 1, channel, 0x01);
 	}
 }
@@ -2677,7 +2707,7 @@ static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
 	if (DBG)
 		dev_info(&b4->pdev->dev, "Configuring span %d offset %d to be sync %d\n", span->spanno, span->offset, lc->sync);
 
-	if (lc->sync < 0 || lc->sync > 4) {
+	if (lc->sync < 0 || lc->sync > b4->numspans) {
 		dev_info(&b4->pdev->dev,
 			 "Span %d has invalid sync priority (%d), removing "
 			 "from sync source list\n", span->spanno, lc->sync);
@@ -2695,7 +2725,7 @@ static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
 		b4->spans[lc->sync - 1].sync = (span->offset + 1);
 
 	/* B430 sets TE/NT and Termination resistance modes via dahdi_cfg */
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		int te_mode, term, reg;
 		unsigned long flags;
 
@@ -2703,7 +2733,7 @@ static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
 		term = (lc->lineconfig & DAHDI_CONFIG_TERM) ? 1 : 0;
 		dev_info(&b4->pdev->dev,
 			"Configuring span %d in %s mode with termination resistance %s\n",
-			bspan->port+1, (te_mode) ? "TE" : "NT",
+			bspan->port + 1, (te_mode) ? "TE" : "NT",
 			(term) ? "ENABLED" : "DISABLED");
 
 		if (!te_mode && lc->sync) {
@@ -2718,22 +2748,24 @@ static int b4xxp_spanconfig(struct file *file, struct dahdi_span *span,
 		spin_lock_irqsave(&b4->seqlock, flags);
 		hfc_gpio_set(b4, 0x20);
 		reg = hfc_sram_read(b4);
+		hfc_gpio_set(b4, 0x00);
 
 		if (te_mode)
-			reg &= ~(1 << (4 + bspan->port));
+			reg &= ~(1 << (7 - bspan->phy_port));
 		else
-			reg |= (1 << (4 + bspan->port));
+			reg |= (1 << (7 - bspan->phy_port));
 
 		/* Setup Termination resistance */
 		/* Bits 4 downto 0 correspond to spans 4-1 */
 		/* 1 sets resistance mode, 0 sets no resistance */
 		if (term)
-			reg |= (1 << (bspan->port));
+			reg |= (1 << (3 - bspan->phy_port));
 		else
-			reg &= ~(1 << (bspan->port));
+			reg &= ~(1 << (3 - bspan->phy_port));
 
 		hfc_gpio_set(b4, 0x20);
 		hfc_sram_write(b4, reg);
+		hfc_gpio_set(b4, 0x00);
 		spin_unlock_irqrestore(&b4->seqlock, flags);
 
 		bspan->te_mode = te_mode;
@@ -2902,8 +2934,8 @@ static void init_spans(struct b4xxp *b4)
 			bspan->span.deflaw = DAHDI_LAW_ALAW;
 		/* For simplicty, we'll accept all line modes since BRI
 		 * ignores this setting anyway.*/
-		bspan->span.linecompat = DAHDI_CONFIG_AMI | 
-			DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 | 
+		bspan->span.linecompat = DAHDI_CONFIG_AMI |
+			DAHDI_CONFIG_B8ZS | DAHDI_CONFIG_D4 |
 			DAHDI_CONFIG_ESF | DAHDI_CONFIG_HDB3 |
 			DAHDI_CONFIG_CCS | DAHDI_CONFIG_CRC4 |
 			DAHDI_CONFIG_NTTE | DAHDI_CONFIG_TERM;
@@ -3026,68 +3058,97 @@ static void b4xxp_bottom_half(unsigned long data)
 	if (b4->shutdown)
 		return;
 
-	/* HFC-4S d-chan fifos 8-11 *** HFC-8S d-chan fifos 16-23 */
-	if (b4->numspans == 8) {
-		fifo_low = 16;
-		fifo_high = 23;
-	} else {
-		fifo_low = 8;
-		fifo_high = 11;
-	}
+	if (IS_GEN2(b4)) {
+		unsigned long timeout = jiffies + (HZ/10);
+		int i;
+		struct b4xxp_span *bspan;
 
-	for (i=0; i < 8; i++) {
-		b = b2 = b4->fifo_irqstatus[i];
-
-		for (j=0; j < b4->numspans; j++) {
-			fifo = i*4 + j;
+		for (i = 0; i < b4->numspans; i++) {
+			/* Map the ports from the virtual ports to the fifos */
+			bspan = &b4->spans[i];
+			b = (b4->fifo_irqstatus[2] >> (2 * bspan->phy_port));
 
 			if (b & V_IRQ_FIFOx_TX) {
-				if (fifo >= fifo_low && fifo <= fifo_high) {
-					/* d-chan fifos */
-/*
- * WOW I don't like this.
- * It's bad enough that I have to send a fake frame to get an HDLC TX FIFO interrupt,
- * but now, I have to loop until the whole frame is read, or I get RX interrupts
- * (even though the chip says HDLC mode gives an IRQ when a *full frame* is received).
- * Yuck.  It works well, but yuck.
- */
-					do {
-						if (IS_B430P(b4))
-							k = hdlc_tx_frame(&b4->spans[3-(fifo - fifo_low)]);
-						else
-							k = hdlc_tx_frame(&b4->spans[fifo - fifo_low]);
-					}  while (k);
-				} else {
-					if (printk_ratelimit())
-						dev_warn(&b4->pdev->dev, "Got FIFO TX int from non-d-chan FIFO %d??\n", fifo);
+				while (hdlc_tx_frame(&b4->spans[i])) {
+					if (time_after(jiffies, timeout)) {
+						dev_err(&b4->pdev->dev,
+							"bottom_half timed out\n");
+						break;
+					}
 				}
 			}
 
 			if (b & V_IRQ_FIFOx_RX) {
-				if (fifo >= fifo_low && fifo <= fifo_high) {	/* dchan fifos */
-/*
- * I have to loop here until hdlc_rx_frame says there are no more frames waiting.
- * for whatever reason, the HFC will not generate another interrupt if there are
- * still HDLC frames waiting to be received.
- * i.e. I get an int when F1 changes, not when F1 != F2.
- */
-					do {
-						if (IS_B430P(b4))
-							k = hdlc_rx_frame(&b4->spans[3-(fifo - fifo_low)]);
-						else 
-							k = hdlc_rx_frame(&b4->spans[fifo - fifo_low]);
-					} while (k);
-				} else {
-					if (printk_ratelimit())
-						dev_warn(&b4->pdev->dev, "Got FIFO RX int from non-d-chan FIFO %d??\n", fifo);
+				while (hdlc_rx_frame(&b4->spans[i])) {
+					if (time_after(jiffies, timeout)) {
+						dev_err(&b4->pdev->dev,
+							"bottom_half timed out\n");
+						break;
+					}
 				}
 			}
-
-			b >>= 2;
 		}
 
-/* zero the bits we just processed */
-		b4->fifo_irqstatus[i] &= ~b2;
+		b4->fifo_irqstatus[2] = 0;
+	} else {
+
+		/* HFC-4S d-chan fifos 8-11 *** HFC-8S d-chan fifos 16-23 */
+		if (b4->numspans == 8) {
+			fifo_low = 16;
+			fifo_high = 23;
+		} else {
+			fifo_low = 8;
+			fifo_high = 11;
+		}
+
+		for (i = 0; i < 8; i++) {
+			b = b2 = b4->fifo_irqstatus[i];
+
+			for (j = 0; j < b4->numspans; j++) {
+				fifo = i*4 + j;
+
+				if (b & V_IRQ_FIFOx_TX) {
+					if (fifo >= fifo_low && fifo <= fifo_high) {
+						/* d-chan fifos */
+	/*
+	 * WOW I don't like this.
+	 * It's bad enough that I have to send a fake frame to get an HDLC TX FIFO interrupt,
+	 * but now, I have to loop until the whole frame is read, or I get RX interrupts
+	 * (even though the chip says HDLC mode gives an IRQ when a *full frame* is received).
+	 * Yuck.  It works well, but yuck.
+	 */
+						do {
+							k = hdlc_tx_frame(&b4->spans[fifo - fifo_low]);
+						}  while (k);
+					} else {
+						if (printk_ratelimit())
+							dev_warn(&b4->pdev->dev, "Got FIFO TX int from non-d-chan FIFO %d??\n", fifo);
+					}
+				}
+
+				if (b & V_IRQ_FIFOx_RX) {
+					if (fifo >= fifo_low && fifo <= fifo_high) {	/* dchan fifos */
+	/*
+	 * I have to loop here until hdlc_rx_frame says there are no more frames waiting.
+	 * for whatever reason, the HFC will not generate another interrupt if there are
+	 * still HDLC frames waiting to be received.
+	 * i.e. I get an int when F1 changes, not when F1 != F2.
+	 */
+						do {
+							k = hdlc_rx_frame(&b4->spans[fifo - fifo_low]);
+						} while (k);
+					} else {
+						if (printk_ratelimit())
+							dev_warn(&b4->pdev->dev, "Got FIFO RX int from non-d-chan FIFO %d??\n", fifo);
+					}
+				}
+
+				b >>= 2;
+			}
+
+	/* zero the bits we just processed */
+			b4->fifo_irqstatus[i] &= ~b2;
+		}
 	}
 
 /*
@@ -3112,12 +3173,17 @@ static void b4xxp_bottom_half(unsigned long data)
 			b = b4xxp_getreg8(b4, R_SCI);
 			if (b) {
 				for (i=0; i < b4->numspans; i++) {
-					if (b & (1 << i)) {
-						/* physical spans are reversed for b430 */
-						if (IS_B430P(b4))
-							hfc_handle_state(&b4->spans[b4->numspans-1-i]);
-						else
-							hfc_handle_state(&b4->spans[i]);
+					if (IS_B230P(b4)) {
+						if (b & (1 << (i+1)))
+							hfc_handle_state(&b4->spans[1-i]);
+					} else {
+						if (b & (1 << i)) {
+							/* physical spans are reversed for b430 */
+							if (IS_B430P(b4))
+								hfc_handle_state(&b4->spans[b4->numspans-1-i]);
+							else
+								hfc_handle_state(&b4->spans[i]);
+						}
 					}
 				}
 			}
@@ -3134,7 +3200,7 @@ static void b4xxp_bottom_half(unsigned long data)
  * The HFC does not generate TX interrupts when there is room to send, so
  * I use an atomic counter that is incremented every time DAHDI wants to send
  * a frame, and decremented every time I send a frame.  It'd be better if I could
- * just use the interrupt handler, but the HFC seems to trigger a FIFO TX IRQ 
+ * just use the interrupt handler, but the HFC seems to trigger a FIFO TX IRQ
  * only when it has finished sending a frame, not when one can be sent.
  */
 	for (i=0; i < b4->numspans; i++) {
@@ -3189,7 +3255,7 @@ static int b4xxp_proc_read_one(char *buf, struct b4xxp *b4)
 		struct b4xxp_span *s = &b4->spans[i];
 
 		state = b4xxp_getreg_ra(b4, R_ST_SEL, s->port, A_ST_RD_STA);
-		x = hfc_decode_st_state(b4, s->port, state, 0);
+		x = hfc_decode_st_state(b4, s, state, 0);
 		sprintf(str, "%s\n", x);
 		strcat(sBuf, str);
 		kfree(x);
@@ -3338,7 +3404,7 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 
 	b4xxp_init_stage1(b4);
 
-	if (IS_B430P(b4)) {
+	if (IS_GEN2(b4)) {
 		int version;
 		unsigned long flags;
 
@@ -3472,6 +3538,8 @@ static DEFINE_PCI_DEVICE_TABLE(b4xx_ids) =
 	{0xd161, 0xb410, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb41xp},
 	{0xd161, 0x8014, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb43xp},
 	{0xd161, 0x8015, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb43xp},
+	{0xd161, 0x8016, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb23xp},
+	{0xd161, 0x8017, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long)&wcb23xp},
 	{0x1397, 0x16b8, 0x1397, 0xb552, 0, 0, (unsigned long)&hfc8s},
 	{0x1397, 0x16b8, 0x1397, 0xb55b, 0, 0, (unsigned long)&hfc8s},
 	{0x1397, 0x08b4, 0x1397, 0xb520, 0, 0, (unsigned long)&hfc4s},
