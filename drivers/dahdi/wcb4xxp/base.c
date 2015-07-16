@@ -740,7 +740,8 @@ static void zl_init(struct b4xxp *b4)
 	int i, offset;
 	int group_addr[4] = {0x00, 0x40, 0x80, 0xc0};
 
-	dev_info(&b4->pdev->dev, "Initializing Zarlink echocan\n");
+	if (!b4->shutdown)
+		dev_info(&b4->pdev->dev, "Initializing Zarlink echocan\n");
 
 	/* There are 4 "groups" of echocans with two channels in each */
 	/* Main group control reg 0-3 */
