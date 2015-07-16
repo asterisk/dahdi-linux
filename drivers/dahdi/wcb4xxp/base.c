@@ -1645,7 +1645,7 @@ static void hfc_handle_state(struct b4xxp_span *s)
 {
 	struct b4xxp *b4;
 	unsigned char state, sta;
-	int nt, newsync, oldalarm;
+	int nt, oldalarm;
 	unsigned long oldtimer;
 
 	b4 = s->parent;
@@ -1733,17 +1733,6 @@ static void hfc_handle_state(struct b4xxp_span *s)
 			}
 			hfc_start_st(s);
 		}
-	}
-
-/* read in R_BERT_STA to determine where our current sync source is */
-	newsync = b4xxp_getreg8(b4, R_BERT_STA) & 0x07;
-	if (newsync != b4->syncspan) {
-		if (printk_ratelimit() || DBG) {
-			dev_info(&b4->pdev->dev,
-				 "new card sync source: port %d\n",
-				 newsync + 1);
-		}
-		b4->syncspan = newsync;
 	}
 }
 
