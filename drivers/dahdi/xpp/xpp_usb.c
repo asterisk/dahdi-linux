@@ -49,7 +49,9 @@ static DEF_PARM(int, debug, 0, 0644, "Print DBG statements");
 static DEF_PARM(int, usb1, 0, 0644, "Allow using USB 1.1 interfaces");
 static DEF_PARM(uint, tx_sluggish, 2000, 0644, "A sluggish transmit (usec)");
 static DEF_PARM(uint, drop_pcm_after, 6, 0644,
-		"Number of consecutive tx_sluggish to drop a PCM frame");
+		"Number of consecutive tx_sluggish to start dropping PCM");
+static DEF_PARM(uint, sluggish_pcm_keepalive, 50, 0644,
+		"During sluggish -- Keep-alive PCM (1 every #)");
 
 #include "dahdi_debug.h"
 
@@ -117,6 +119,8 @@ enum {
 	XUSB_N_TX_FRAMES,
 	XUSB_N_RX_ERRORS,
 	XUSB_N_TX_ERRORS,
+	XUSB_N_RX_DROPS,
+	XUSB_N_TX_DROPS,
 	XUSB_N_RCV_ZERO_LEN,
 };
 
@@ -127,8 +131,14 @@ enum {
 static struct xusb_counters {
 	char *name;
 } xusb_counters[] = {
-C_(RX_FRAMES), C_(TX_FRAMES), C_(RX_ERRORS), C_(TX_ERRORS),
-	    C_(RCV_ZERO_LEN),};
+	C_(RX_FRAMES),
+	C_(TX_FRAMES),
+	C_(RX_ERRORS),
+	C_(TX_ERRORS),
+	C_(RX_DROPS),
+	C_(TX_DROPS),
+	C_(RCV_ZERO_LEN),
+};
 
 #undef C_
 
@@ -194,8 +204,7 @@ struct xusb {
 	unsigned int max_tx_delay;
 	uint usb_tx_delay[NUM_BUCKETS];
 	uint sluggish_debounce;
-	bool drop_next_pcm;	/* due to sluggishness */
-	atomic_t pcm_tx_drops;
+	bool drop_pcm;	/* due to sluggishness */
 	atomic_t usb_sluggish_count;
 
 	const char *manufacturer;
@@ -400,12 +409,23 @@ static int xframe_send_pcm(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(!xframe);
 	xusb = xusb_of(xbus);
 	BUG_ON(!xusb);
-	if (xusb->drop_next_pcm) {
-		FREE_SEND_XFRAME(xbus, xframe);	/* return to pool */
-		xusb->drop_next_pcm = 0;
-		return -EIO;
+	if (xusb->drop_pcm) {
+		static int rate_limit;
+
+		if ((rate_limit++ % 1000) == 0)
+			XUSB_ERR(xusb, "Sluggish USB: drop tx-pcm (%d)\n",
+					rate_limit);
+		/* Let trickle of TX-PCM, so Astribank will not reset */
+		if (sluggish_pcm_keepalive &&
+				((rate_limit % sluggish_pcm_keepalive) != 0)) {
+			XUSB_COUNTER(xusb, TX_DROPS)++;
+			goto err;
+		}
 	}
 	return do_send_xframe(xbus, xframe);
+err:
+	FREE_SEND_XFRAME(xbus, xframe);	/* return to pool */
+	return -EIO;
 }
 
 /*
@@ -674,7 +694,6 @@ static int xusb_probe(struct usb_interface *interface,
 	sema_init(&xusb->sem, 1);
 	atomic_set(&xusb->pending_writes, 0);
 	atomic_set(&xusb->pending_reads, 0);
-	atomic_set(&xusb->pcm_tx_drops, 0);
 	atomic_set(&xusb->usb_sluggish_count, 0);
 	xusb->udev = udev;
 	xusb->interface = interface;
@@ -878,7 +897,6 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 		i = NUM_BUCKETS - 1;
 	xusb->usb_tx_delay[i]++;
 	if (unlikely(usec > tx_sluggish)) {
-		atomic_inc(&xusb->usb_sluggish_count);
 		if (xusb->sluggish_debounce++ > drop_pcm_after) {
 			static int rate_limit;
 
@@ -888,12 +906,14 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 					"Sluggish USB. Dropping next PCM frame "
 					"(pending_writes=%d)\n",
 					writes);
-			atomic_inc(&xusb->pcm_tx_drops);
-			xusb->drop_next_pcm = 1;
+			atomic_inc(&xusb->usb_sluggish_count);
+			xusb->drop_pcm = 1;
 			xusb->sluggish_debounce = 0;
 		}
-	} else
+	} else {
 		xusb->sluggish_debounce = 0;
+		xusb->drop_pcm = 0;
+	}
 	/* sync/async unlink faults aren't errors */
 	if (urb->status
 	    && !(urb->status == -ENOENT || urb->status == -ECONNRESET)) {
@@ -956,6 +976,26 @@ static void xpp_receive_callback(USB_PASS_CB(urb))
 //      if (debug)
 //              dump_xframe("USB_FRAME_RECEIVE", xbus, xframe, debug);
 	XUSB_COUNTER(xusb, RX_FRAMES)++;
+	if (xusb->drop_pcm) {
+		/* some protocol analysis */
+		static int rate_limit;
+		xpacket_t *pack = (xpacket_t *)(xframe->packets);
+		bool is_pcm = XPACKET_IS_PCM(pack);
+
+		if (is_pcm) {
+			if ((rate_limit++ % 1000) == 0)
+				XUSB_ERR(xusb,
+					"Sluggish USB: drop rx-pcm (%d)\n",
+					rate_limit);
+			/* Let trickle of RX-PCM, so Astribank will not reset */
+			if (sluggish_pcm_keepalive &&
+					((rate_limit % sluggish_pcm_keepalive)
+					 != 0)) {
+				XUSB_COUNTER(xusb, RX_DROPS)++;
+				goto err;
+			}
+		}
+	}
 	/* Send UP */
 	xbus_receive_xframe(xbus, xframe);
 end:
@@ -1061,17 +1101,16 @@ static int xusb_read_proc_show(struct seq_file *sfile, void *data)
 		    stamp_last_pcm_read, accumulate_diff);
 #endif
 	memcpy(usb_tx_delay, xusb->usb_tx_delay, sizeof(usb_tx_delay));
-	seq_printf(sfile, "usb_tx_delay[%d,%d,%d]: ", USEC_BUCKET,
-		    BUCKET_START, NUM_BUCKETS);
+	seq_printf(sfile, "usb_tx_delay[%dus - %dus]: ",
+		USEC_BUCKET * BUCKET_START,
+		USEC_BUCKET * NUM_BUCKETS);
 	for (i = BUCKET_START; i < NUM_BUCKETS; i++) {
 		seq_printf(sfile, "%6d ", usb_tx_delay[i]);
 		if (i == mark_limit)
 			seq_printf(sfile, "| ");
 	}
-	seq_printf(sfile, "\nPCM_TX_DROPS: %5d (sluggish: %d)\n",
-		    atomic_read(&xusb->pcm_tx_drops),
-		    atomic_read(&xusb->usb_sluggish_count)
-	    );
+	seq_printf(sfile, "\nSluggish events: %d\n",
+		    atomic_read(&xusb->usb_sluggish_count));
 	seq_printf(sfile, "\nCOUNTERS:\n");
 	for (i = 0; i < XUSB_COUNTER_MAX; i++) {
 		seq_printf(sfile, "\t%-15s = %d\n", xusb_counters[i].name,
