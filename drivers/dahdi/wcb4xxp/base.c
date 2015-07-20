@@ -41,6 +41,7 @@
 #include <linux/moduleparam.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
+#include <linux/ctype.h>
 
 #include <dahdi/kernel.h>
 
@@ -3317,6 +3318,114 @@ static int b4xxp_startdefaultspan(struct b4xxp *b4)
 	return b4xxp_spanconfig(NULL, &b4->spans[0].span, &lc);
 }
 
+static void set_ufm(struct b4xxp *b4, int signal)
+{
+	int reg;
+
+	hfc_gpio_set(b4, 0x70);
+	reg = hfc_sram_read(b4);
+	hfc_gpio_set(b4, 0x00);
+
+	hfc_gpio_set(b4, 0x70);
+	hfc_sram_write(b4, reg | signal);
+	hfc_gpio_set(b4, 0x00);
+}
+
+static void clr_ufm(struct b4xxp *b4, int signal)
+{
+	int reg;
+
+	hfc_gpio_set(b4, 0x70);
+	reg = hfc_sram_read(b4);
+	hfc_gpio_set(b4, 0x00);
+
+	hfc_gpio_set(b4, 0x70);
+	hfc_sram_write(b4, reg & ~signal);
+	hfc_gpio_set(b4, 0x00);
+}
+
+static unsigned char read_ufm_status(struct b4xxp *b4)
+{
+	unsigned char ret;
+
+	hfc_gpio_set(b4, 0x00);
+	ret = hfc_sram_read(b4);
+	hfc_gpio_set(b4, 0x00);
+
+	return ret;
+}
+
+/* Try to read the serial number from 2nd gen devices */
+static int read_serial(struct b4xxp *b4, char *serial)
+{
+	unsigned long flags;
+	int i, j;
+	int ret = 0;
+
+	spin_lock_irqsave(&b4->seqlock, flags);
+
+	set_ufm(b4, UFM_ARSHIFT);
+	set_ufm(b4, UFM_ARCLK);
+	clr_ufm(b4, UFM_ARDIN);
+	set_ufm(b4, UFM_DRSHIFT);
+	set_ufm(b4, UFM_DRCLK);
+	clr_ufm(b4, UFM_ERASE);
+	clr_ufm(b4, UFM_PROGRAM);
+
+	for (i = 0; i < 255; i++) {
+		char data = 0;
+
+		/* Bang out address */
+		for (j = 0; j < 9; j++) {
+			int mask = 0x100 >> j;
+
+			if ((i & mask) == 0)
+				clr_ufm(b4, UFM_ARDIN);
+			else
+				set_ufm(b4, UFM_ARDIN);
+
+			clr_ufm(b4, UFM_ARCLK);
+			set_ufm(b4, UFM_ARCLK);
+		}
+
+		/* Latch the address */
+		clr_ufm(b4, UFM_DRCLK);
+		clr_ufm(b4, UFM_DRSHIFT);
+		set_ufm(b4, UFM_DRCLK);
+		set_ufm(b4, UFM_DRSHIFT);
+
+		/* Bang in data */
+		for (j = 0; j < 8; j++) {
+			int drdout = (read_ufm_status(b4) & 0x80) >> 7;
+
+			clr_ufm(b4, UFM_DRCLK);
+			set_ufm(b4, UFM_DRCLK);
+
+			if (drdout == 1)
+				data = data + (0x80 >> j);
+		}
+
+		/* Bang out the data padding */
+		for (j = 0; j < 8; j++) {
+			clr_ufm(b4, UFM_DRCLK);
+			set_ufm(b4, UFM_DRCLK);
+		}
+
+		if ((data >= 0x20) && (data < 0x7f)) {
+			serial[i] = data;
+		} else if (!i) {
+			ret = 1;
+			break;
+		} else {
+			break;
+		}
+	}
+
+	spin_unlock_irqrestore(&b4->seqlock, flags);
+
+	return ret;
+}
+
 static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	int x, ret;
@@ -3407,13 +3516,22 @@ static int __devinit b4xx_probe(struct pci_dev *pdev, const struct pci_device_id
 	if (IS_GEN2(b4)) {
 		int version;
 		unsigned long flags;
+		char serial[255];
 
+		/* Read and print firmware version */
 		spin_lock_irqsave(&b4->seqlock, flags);
 		hfc_gpio_set(b4, 0x60);
 		version = hfc_sram_read(b4);
 		spin_unlock_irqrestore(&b4->seqlock, flags);
 
 		dev_info(&b4->pdev->dev, "CPLD ver: %x\n", version);
+
+		/* Read and print serial number */
+		if (read_serial(b4, &serial[0]))
+			dev_info(&b4->pdev->dev,
+				"Unable to read serial number\n");
+		else
+			dev_info(&b4->pdev->dev, "serial: %s\n", serial);
 	}
 
 	create_sysfs_files(b4);

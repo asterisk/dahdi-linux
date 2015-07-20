@@ -367,6 +367,16 @@
 #define V_B2_RX_EN		(1 << 1)	/* 1=enable B2 RX */
 #define V_ST_TRI		(1 << 6)	/* 1=tristate S/T output buffer */
 
+/* User Flash Manager */
+#define UFM_PROGRAM	(1<<0)
+#define UFM_ERASE	(1<<1)
+#define UFM_DRSHIFT	(1<<2)
+#define UFM_DRDIN	(1<<3)
+#define UFM_DRCLK	(1<<4)
+#define UFM_ARSHIFT	(1<<5)
+#define UFM_ARDIN	(1<<6)
+#define UFM_ARCLK	(1<<7)
+
 #define NUM_REGS 0xff
 #define NUM_PCI 12
 
