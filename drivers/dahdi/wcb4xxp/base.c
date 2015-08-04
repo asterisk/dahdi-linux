@@ -1783,16 +1783,19 @@ static void hfc_reset_st(struct b4xxp_span *s)
 	else
 		b = 0x0c | (6 << V_ST_SMPL_SHIFT);
 
-	b4xxp_setreg8(b4, A_ST_CLK_DLY, b);
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_CLK_DLY, b);
 
 /* set TE/NT mode, enable B and D channels. */
 
-	b4xxp_setreg8(b4, A_ST_CTRL0, V_B1_EN | V_B2_EN | (s->te_mode ? 0 : V_ST_MD));
-	b4xxp_setreg8(b4, A_ST_CTRL1, V_G2_G3_EN | V_E_IGNO);
-	b4xxp_setreg8(b4, A_ST_CTRL2, V_B1_RX_EN | V_B2_RX_EN);
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_CTRL0,
+			V_B1_EN | V_B2_EN | (s->te_mode ? 0 : V_ST_MD));
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_CTRL1,
+			V_G2_G3_EN | V_E_IGNO);
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_CTRL2,
+			V_B1_RX_EN | V_B2_RX_EN);
 
 /* enable the state machine. */
-	b4xxp_setreg8(b4, A_ST_WR_STA, 0x00);
+	b4xxp_setreg_ra(b4, R_ST_SEL, s->phy_port, A_ST_WR_STA, 0x00);
 	flush_pci();
 
 	udelay(100);
