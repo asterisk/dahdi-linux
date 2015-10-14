@@ -12,6 +12,16 @@ Supported Hardware
 ------------------
 Digital Cards
 ~~~~~~~~~~~~~
+- wcte43x:
+  * Digium TE435: PCI express quad-port T1/E1/J1
+  * Digium TE436: PCI quad-port T1/E1/J1
+  * Digium TE235: PCI express dual-port T1/E1/J1
+  * Digium TE236: PCI dual-port T1/E1/J1
+- wcte13xp:
+  * Digium TE131: PCI express single-port T1/E1/J1
+  * Digium TE133: PCI express single-port T1/E1/J1 with echocan
+  * Digium TE132: PCI single-port T1/E1/J1
+  * Digium TE134: PCI single-port T1/E1/J1 with echocan
 - wct4xxp:
   * Digium TE205P/TE207P/TE210P/TE212P: PCI dual-port T1/E1/J1
   * Digium TE405P/TE407P/TE410P/TE412P: PCI quad-port T1/E1/J1
@@ -34,6 +44,11 @@ Digital Cards
 
 Analog Cards
 ~~~~~~~~~~~~
+- wcaxx:
+  * Digium A8A: PCI up to 8 mixed FXS/FXO ports
+  * Digium A8B: PCI express up to 8 mixed FXS/FXO ports
+  * Digium A4A: PCI up to 4 mixed FXS/FXO ports
+  * Digium A4B: PCI express up to 4 mixed FXS/FXO ports 
 - wctdm24xxp: 
   * Digium TDM2400P/AEX2400: up to 24 analog ports
   * Digium TDM800P/AEX800: up to 8 analog ports
