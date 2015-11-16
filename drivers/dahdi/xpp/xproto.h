@@ -204,6 +204,27 @@ typedef struct reg_cmd {
 #define	REG_XDATA(regptr)		((regptr)->alt.d.xdata)
 
 #ifdef __KERNEL__
+
+#define	XFRAME_NEW_REG_CMD(frm, p, xbus, card, variant, to) \
+	do {							\
+		int	pack_len = \
+				sizeof(struct xpacket_header) +		\
+				sizeof(struct reg_cmd_header) +		\
+				sizeof(struct reg_cmd_ ## variant);	\
+								\
+		if (!XBUS_FLAGS(xbus, CONNECTED))		\
+			return -ENODEV;				\
+		(frm) = ALLOC_SEND_XFRAME(xbus);		\
+		if (!(frm))					\
+			return -ENOMEM;				\
+		(p) = xframe_next_packet(frm, pack_len);	\
+		if (!(p))					\
+			return -ENOMEM;				\
+		XPACKET_INIT(p, card, REGISTER_REQUEST, to, 0, 0);		\
+		XPACKET_LEN(p) = pack_len;			\
+		(frm)->usec_towait = 0;				\
+	} while (0)
+
 /*----------------- protocol tables ----------------------------------*/
 
 typedef struct xproto_entry xproto_entry_t;

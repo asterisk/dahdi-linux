@@ -56,7 +56,7 @@ static int send_magic_request(xbus_t *xbus, unsigned unit, xportno_t portno,
 	 *   eoftx==1: Start sending us D-channel packets.
 	 *   eoftx==0: Stop sending us D-channel packets.
 	 */
-	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
+	XFRAME_NEW_REG_CMD(xframe, pack, xbus, GLOBAL, REG, unit);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
 	reg_cmd->h.bytes = 0;
 	reg_cmd->h.is_multibyte = 1;
@@ -373,8 +373,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 		DBG(REGS, "NO XBUS\n");
 		return -EINVAL;
 	}
-	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST,
-		       xpd->xbus_idx);
+	XFRAME_NEW_REG_CMD(xframe, pack, xbus, GLOBAL, REG, xpd->xbus_idx);
 	LINE_DBG(REGS, xpd, portno, "%c%c %02X %02X %02X %02X\n",
 		 (writing) ? 'W' : 'R', (do_subreg) ? 'S' : 'D', regnum, subreg,
 		 data_low, data_high);
