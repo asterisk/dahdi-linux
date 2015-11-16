@@ -487,11 +487,13 @@ static int fxo_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *FXO_card_new(xbus_t *xbus, int unit, int subunit,
-			   const xproto_table_t *proto_table, __u8 subtype,
-			   int subunits, int subunit_ports, bool to_phone)
+			   const xproto_table_t *proto_table,
+			   const struct unit_descriptor *unit_descriptor,
+			   bool to_phone)
 {
 	xpd_t *xpd = NULL;
 	int channels;
+	int subunit_ports;
 
 	if (to_phone) {
 		XBUS_NOTICE(xbus,
@@ -500,13 +502,14 @@ static xpd_t *FXO_card_new(xbus_t *xbus, int unit, int subunit,
 			unit, subunit);
 		return NULL;
 	}
-	if (subtype == 2)
+	subunit_ports = unit_descriptor->numchips * unit_descriptor->ports_per_chip;
+	if (unit_descriptor->subtype == 2)
 		channels = min(2, subunit_ports);
 	else
 		channels = min(8, subunit_ports);
 	xpd =
-	    xpd_alloc(xbus, unit, subunit, subtype, subunits,
-		      sizeof(struct FXO_priv_data), proto_table, channels);
+	    xpd_alloc(xbus, unit, subunit,
+		      sizeof(struct FXO_priv_data), proto_table, unit_descriptor, channels);
 	if (!xpd)
 		return NULL;
 	PHONEDEV(xpd).direction = TO_PSTN;

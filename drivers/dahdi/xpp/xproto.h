@@ -34,6 +34,8 @@
  */
 #define	XPP_PROTOCOL_VERSION	30
 
+struct unit_descriptor;
+
 struct xpd_addr {
 	uint8_t subunit:SUBUNIT_BITS;
 	uint8_t reserved:1;
@@ -277,8 +279,9 @@ struct phoneops {
 
 struct xops {
 	xpd_t *(*card_new) (xbus_t *xbus, int unit, int subunit,
-			    const xproto_table_t *proto_table, __u8 subtype,
-			    int subunits, int subunit_ports, bool to_phone);
+			    const xproto_table_t *proto_table,
+			    const struct unit_descriptor *unit_descriptor,
+			    bool to_phone);
 	int (*card_init) (xbus_t *xbus, xpd_t *xpd);
 	int (*card_remove) (xbus_t *xbus, xpd_t *xpd);
 	int (*card_tick) (xbus_t *xbus, xpd_t *xpd);

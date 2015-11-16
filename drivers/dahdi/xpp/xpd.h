@@ -78,14 +78,7 @@
 struct card_desc_struct {
 	struct list_head card_list;
 	u32 magic;
-	__u8 type;		/* LSB: 1 - to_phone, 0 - to_line */
-	__u8 subtype;
-	struct xpd_addr xpd_addr;
-	__u8 numchips;
-	__u8 ports_per_chip;
-	__u8 ports;
-	__u8 port_dir;
-	struct xpd_addr ec_addr;	/* echo canceler address */
+	struct unit_descriptor unit_descriptor;
 };
 
 typedef enum xpd_direction {
@@ -174,11 +167,12 @@ struct phonedev {
 struct xpd {
 	char xpdname[XPD_NAMELEN];
 	struct phonedev phonedev;
+	struct unit_descriptor unit_descriptor;
+#define	XPD_HW(xpd)	((xpd)->unit_descriptor)
 
 	const struct xops *xops;
 	xpd_type_t xpd_type;
 	const char *type_name;
-	__u8 subtype;
 	int subunits;		/* all siblings */
 	enum xpd_state xpd_state;
 	struct device xpd_dev;

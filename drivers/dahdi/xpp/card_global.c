@@ -544,21 +544,14 @@ HANDLER_DEF(GLOBAL, AB_DESCRIPTION)
 		}
 		card_desc->magic = CARD_DESC_MAGIC;
 		INIT_LIST_HEAD(&card_desc->card_list);
-		card_desc->type = this_unit->type;
-		card_desc->subtype = this_unit->subtype;
-		card_desc->xpd_addr = this_unit->addr;
-		card_desc->numchips = this_unit->numchips;
-		card_desc->ports_per_chip = this_unit->ports_per_chip;
-		card_desc->port_dir = this_unit->port_dir;
-		card_desc->ports =
-		    card_desc->numchips * card_desc->ports_per_chip;
+		card_desc->unit_descriptor = *this_unit;
 		XBUS_INFO(xbus,
-			"    CARD %d type=%d.%d ports=%d (%dx%d), "
+			"    CARD %d type=%d.%d ports=(%dx%d), "
 			"port-dir=0x%02X\n",
-			card_desc->xpd_addr.unit, card_desc->type,
-			card_desc->subtype, card_desc->ports,
-			card_desc->numchips, card_desc->ports_per_chip,
-			card_desc->port_dir);
+			this_unit->addr.unit, this_unit->type,
+			this_unit->subtype,
+			this_unit->numchips, this_unit->ports_per_chip,
+			this_unit->port_dir);
 		spin_lock_irqsave(&worker->worker_lock, flags);
 		worker->num_units++;
 		XBUS_COUNTER(xbus, UNITS)++;
@@ -710,6 +703,7 @@ int run_initialize_registers(xpd_t *xpd)
 	char xbuslabel[MAX_ENV_STR];
 	char init_card[MAX_PATH_STR];
 	__u8 direction_mask;
+	__u8 hw_type = XPD_HW(xpd).type;
 	int i;
 	char *argv[] = {
 		init_card,
@@ -756,6 +750,7 @@ int run_initialize_registers(xpd_t *xpd)
 	snprintf(busnumstr, MAX_ENV_STR, "XBUS_NUMBER=%d", xbus->num);
 	snprintf(modelstr, MAX_ENV_STR, "XBUS_MODEL_STRING=%s",
 		 xbus->transport.model_string);
+	snprintf(typestr, MAX_ENV_STR, "HW_TYPE=%d", hw_type);
 	snprintf(unitstr, MAX_ENV_STR, "UNIT_NUMBER=%d", xpd->addr.unit);
 	snprintf(typestr, MAX_ENV_STR, "UNIT_TYPE=%d", xpd->xpd_type);
 	snprintf(subunitsstr, MAX_ENV_STR, "UNIT_SUBUNITS=%d", xpd->subunits);
@@ -766,7 +761,7 @@ int run_initialize_registers(xpd_t *xpd)
 		 xbus->connector);
 	snprintf(xbuslabel, MAX_ENV_STR, "XBUS_LABEL=%s", xbus->label);
 	if (snprintf
-	    (init_card, MAX_PATH_STR, "%s/init_card_%d_%d", initdir, xpd->xpd_type,
+	    (init_card, MAX_PATH_STR, "%s/init_card_%d_%d", initdir, hw_type,
 	     xbus->revision) > MAX_PATH_STR) {
 		XPD_NOTICE(xpd,
 			"Cannot initialize. pathname is longer "

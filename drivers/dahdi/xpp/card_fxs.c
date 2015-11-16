@@ -445,11 +445,13 @@ static int fxs_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit,
-			   const xproto_table_t *proto_table, __u8 subtype,
-			   int subunits, int subunit_ports, bool to_phone)
+			   const xproto_table_t *proto_table,
+			   const struct unit_descriptor *unit_descriptor,
+			   bool to_phone)
 {
 	xpd_t *xpd = NULL;
 	int channels;
+	int subunit_ports;
 	int regular_channels;
 	struct FXS_priv_data *priv;
 	int i;
@@ -462,20 +464,21 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit,
 			    unit, subunit);
 		return NULL;
 	}
-	if (subtype == 2)
+	subunit_ports = unit_descriptor->numchips * unit_descriptor->ports_per_chip;
+	if (unit_descriptor->subtype == 2)
 		regular_channels = min(6, subunit_ports);
 	else
 		regular_channels = min(8, subunit_ports);
 	channels = regular_channels;
 	/* Calculate digital inputs/outputs */
-	if (unit == 0 && subtype != 4) {
+	if (unit == 0 && unit_descriptor->subtype != 4) {
 		channels += 6;	/* 2 DIGITAL OUTPUTS, 4 DIGITAL INPUTS */
 		d_inputs = LINES_DIGI_INP;
 		d_outputs = LINES_DIGI_OUT;
 	}
 	xpd =
-	    xpd_alloc(xbus, unit, subunit, subtype, subunits,
-		      sizeof(struct FXS_priv_data), proto_table, channels);
+	    xpd_alloc(xbus, unit, subunit,
+		      sizeof(struct FXS_priv_data), proto_table, unit_descriptor, channels);
 	if (!xpd)
 		return NULL;
 	/* Initialize digital inputs/outputs */
@@ -795,7 +798,7 @@ static int relay_out(xpd_t *xpd, int pos, bool on)
 
 	BUG_ON(!xpd);
 	/* map logical position to output port number (0/1) */
-	which -= (xpd->subtype == 2) ? 6 : 8;
+	which -= (XPD_HW(xpd).subtype == 2) ? 6 : 8;
 	LINE_DBG(SIGNAL, xpd, pos, "which=%d -- %s\n", which,
 		 (on) ? "on" : "off");
 	which = which % ARRAY_SIZE(relay_channels);

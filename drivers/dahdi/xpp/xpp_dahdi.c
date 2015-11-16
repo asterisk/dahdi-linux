@@ -216,33 +216,43 @@ EXPORT_SYMBOL(xpd_free);
  * Synchronous part of XPD detection.
  * Called from new_card()
  */
-int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table, int unit,
-	       int subunit, __u8 type, __u8 subtype, int subunits,
-	       int subunit_ports, __u8 port_dir)
+int create_xpd(xbus_t *xbus, const xproto_table_t *proto_table,
+               const struct unit_descriptor *unit_descriptor,
+               int unit,
+	       int subunit, __u8 type)
 {
 	xpd_t *xpd = NULL;
 	bool to_phone;
 
 	BUG_ON(type == XPD_TYPE_NOMODULE);
-	to_phone = BIT(subunit) & port_dir;
+	to_phone = BIT(subunit) & unit_descriptor->port_dir;
 	BUG_ON(!xbus);
 	xpd = xpd_byaddr(xbus, unit, subunit);
 	if (xpd) {
 		XPD_NOTICE(xpd, "XPD at %d%d already exists\n", unit, subunit);
 		return 0;
 	}
-	if (subunit_ports <= 0 || subunit_ports > CHANNELS_PERXPD) {
+	INFO("%s: [%d.%d] type=%d subtype=%d numchips=%d ports_per_chip=%d ports_dir=%d\n",
+		__func__,
+		unit_descriptor->addr.unit,
+		unit_descriptor->addr.subunit,
+		unit_descriptor->type,
+		unit_descriptor->subtype,
+		unit_descriptor->numchips,
+		unit_descriptor->ports_per_chip,
+		unit_descriptor->port_dir);
+	if (unit_descriptor->ports_per_chip <= 0 || unit_descriptor->ports_per_chip > CHANNELS_PERXPD) {
 		XBUS_NOTICE(xbus, "Illegal number of ports %d for XPD %d%d\n",
-			    subunit_ports, unit, subunit);
+			    unit_descriptor->ports_per_chip, unit, subunit);
 		return 0;
 	}
 	xpd =
 	    proto_table->xops->card_new(xbus, unit, subunit, proto_table,
-					subtype, subunits, subunit_ports,
+					unit_descriptor,
 					to_phone);
 	if (!xpd) {
-		XBUS_NOTICE(xbus, "card_new(%d,%d,%d,%d,%d) failed. Ignored.\n",
-			    unit, subunit, proto_table->type, subtype,
+		XBUS_NOTICE(xbus, "card_new(%d,%d,%d,%d) failed. Ignored.\n",
+			    unit, subunit, proto_table->type,
 			    to_phone);
 		return -EINVAL;
 	}
@@ -279,7 +289,8 @@ static int xpd_read_proc_show(struct seq_file *sfile, void *data)
 	seq_printf(sfile, "Address: U=%d S=%d\n", xpd->addr.unit,
 		    xpd->addr.subunit);
 	seq_printf(sfile, "Subunits: %d\n", xpd->subunits);
-	seq_printf(sfile, "Type: %d.%d\n\n", xpd->xpd_type, xpd->subtype);
+	seq_printf(sfile, "Type: %d.%d\n", xpd->xpd_type, XPD_HW(xpd).subtype);
+	seq_printf(sfile, "Hardware type: %d.%d\nn", XPD_HW(xpd).type, XPD_HW(xpd).subtype);
 	seq_printf(sfile, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
 	seq_printf(sfile, "wanted_pcm_mask=0x%04X\n\n",
 		    PHONEDEV(xpd).wanted_pcm_mask);
@@ -529,8 +540,10 @@ err:
  *
  */
 __must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit,
-	int subtype, int subunits, size_t privsize,
-	const xproto_table_t *proto_table, int channels)
+	size_t privsize,
+	const xproto_table_t *proto_table,
+	const struct unit_descriptor *unit_descriptor,
+	int channels)
 {
 	xpd_t *xpd = NULL;
 	size_t alloc_size = sizeof(xpd_t) + privsize;
@@ -556,10 +569,9 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit,
 	xpd->card_present = 0;
 	xpd->xpd_type = proto_table->type;
 	xpd->xproto = proto_table;
+	xpd->unit_descriptor = *unit_descriptor;
 	xpd->xops = proto_table->xops;
 	xpd->xpd_state = XPD_STATE_START;
-	xpd->subtype = subtype;
-	xpd->subunits = subunits;
 	kref_init(&xpd->kref);
 
 	/* For USB-1 disable some channels */

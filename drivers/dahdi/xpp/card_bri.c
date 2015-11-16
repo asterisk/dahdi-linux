@@ -686,20 +686,21 @@ static int bri_proc_create(xbus_t *xbus, xpd_t *xpd)
 }
 
 static xpd_t *BRI_card_new(xbus_t *xbus, int unit, int subunit,
-			   const xproto_table_t *proto_table, __u8 subtype,
-			   int subunits, int subunit_ports, bool to_phone)
+			   const xproto_table_t *proto_table,
+			   const struct unit_descriptor *unit_descriptor,
+			   bool to_phone)
 {
 	xpd_t *xpd = NULL;
 	int channels = min(3, CHANNELS_PERXPD);
 
-	if (subunit_ports != 1) {
-		XBUS_ERR(xbus, "Bad subunit_ports=%d\n", subunit_ports);
+	if (unit_descriptor->ports_per_chip != 1) {
+		XBUS_ERR(xbus, "Bad subunit_ports=%d\n", unit_descriptor->ports_per_chip);
 		return NULL;
 	}
 	XBUS_DBG(GENERAL, xbus, "\n");
 	xpd =
-	    xpd_alloc(xbus, unit, subunit, subtype, subunits,
-		      sizeof(struct BRI_priv_data), proto_table, channels);
+	    xpd_alloc(xbus, unit, subunit,
+		      sizeof(struct BRI_priv_data), proto_table, unit_descriptor, channels);
 	if (!xpd)
 		return NULL;
 	PHONEDEV(xpd).direction = (to_phone) ? TO_PHONE : TO_PSTN;

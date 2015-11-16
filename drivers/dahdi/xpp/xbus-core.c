@@ -687,10 +687,47 @@ int xbus_xpd_unbind(xbus_t *xbus, xpd_t *xpd)
 	return 0;
 }
 
-static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
-		    __u8 numchips, __u8 ports_per_chip, __u8 ports,
-		    __u8 port_dir)
+static xpd_type_t xpd_hw2xpd_type(const struct unit_descriptor *unit_descriptor)
 {
+	xpd_type_t xpd_type;
+
+	switch (unit_descriptor->type) {
+	case 1:
+	case 6:
+		xpd_type = XPD_TYPE_FXS;
+		break;
+	case 2:
+		xpd_type = XPD_TYPE_FXO;
+		break;
+	case 3:
+		xpd_type = XPD_TYPE_BRI;
+		break;
+	case 4:
+		xpd_type = XPD_TYPE_PRI;
+		break;
+	case 5:
+		xpd_type = XPD_TYPE_ECHO;
+		break;
+	case 7:
+		xpd_type = XPD_TYPE_NOMODULE;
+		break;
+	default:
+		NOTICE("WARNING: xpd hw type is: %d\n", unit_descriptor->type);
+		xpd_type = XPD_TYPE_NOMODULE;
+		break;
+	}
+	return xpd_type;
+}
+
+static int new_card(xbus_t *xbus, const struct unit_descriptor *unit_descriptor)
+{
+	int unit = unit_descriptor->addr.unit;
+	xpd_type_t xpd_type;
+	__u8 hw_type;
+	__u8 numchips;
+	__u8 ports_per_chip;
+	__u8 ports;
+	__u8 port_dir;
 	const xproto_table_t *proto_table;
 	int i;
 	int subunits;
@@ -698,12 +735,19 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 	int remaining_ports;
 	const struct echoops *echoops;
 
-	proto_table = xproto_get(type);
+	/* Translate parameters from "unit_descriptor" */
+	hw_type = unit_descriptor->type;
+	numchips = unit_descriptor->numchips;
+	ports_per_chip = unit_descriptor->ports_per_chip;
+	port_dir = unit_descriptor->port_dir;
+	ports = unit_descriptor->ports_per_chip * unit_descriptor->numchips;
+	xpd_type = xpd_hw2xpd_type(unit_descriptor);
+	proto_table = xproto_get(xpd_type);
 	if (!proto_table) {
 		XBUS_NOTICE(xbus,
-			"CARD %d: missing protocol table for type %d. "
+			"CARD %d: missing protocol table for xpd_type %d. "
 			"Ignored.\n",
-			unit, type);
+			unit, xpd_type);
 		return -EINVAL;
 	}
 	echoops = proto_table->echoops;
@@ -711,9 +755,9 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 		XBUS_INFO(xbus, "Detected ECHO Canceler (%d)\n", unit);
 		if (ECHOOPS(xbus)) {
 			XBUS_NOTICE(xbus,
-				"CARD %d: tryies to define echoops (type %d) "
+				"CARD %d: tryies to define echoops (xpd_type %d) "
 				"but we already have one. Ignored.\n",
-				unit, type);
+				unit, xpd_type);
 			return -EINVAL;
 		}
 		xbus->echo_state.echoops = echoops;
@@ -724,13 +768,13 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 	    (ports + proto_table->ports_per_subunit -
 	     1) / proto_table->ports_per_subunit;
 	XBUS_DBG(DEVICES, xbus,
-		"CARD %d type=%d.%d ports=%d (%dx%d), "
+		"CARD %d xpd_type=%d/hw_type=%d ports=%d (%dx%d), "
 		"%d subunits, port-dir=0x%02X\n",
-		unit, type, subtype, ports, numchips, ports_per_chip, subunits,
+		unit, xpd_type, hw_type, ports, numchips, ports_per_chip, subunits,
 		port_dir);
-	if (type == XPD_TYPE_PRI || type == XPD_TYPE_BRI)
+	if (xpd_type == XPD_TYPE_PRI || xpd_type == XPD_TYPE_BRI)
 		xbus->quirks.has_digital_span = 1;
-	if (type == XPD_TYPE_FXO)
+	if (xpd_type == XPD_TYPE_FXO)
 		xbus->quirks.has_fxo = 1;
 	xbus->worker.num_units += subunits - 1;
 	for (i = 0; i < subunits; i++) {
@@ -754,11 +798,10 @@ static int new_card(xbus_t *xbus, int unit, __u8 type, __u8 subtype,
 			goto out;
 		}
 		XBUS_DBG(DEVICES, xbus,
-			 "Creating XPD=%d%d type=%d.%d (%d ports)\n", unit, i,
-			 type, subtype, subunit_ports);
+			 "Creating XPD=%d%d xpd_type=%d.%d hw_type=%d (%d ports)\n", unit, i,
+			 xpd_type, unit_descriptor->subtype, hw_type, subunit_ports);
 		ret =
-		    create_xpd(xbus, proto_table, unit, i, type, subtype,
-			       subunits, subunit_ports, port_dir);
+		    create_xpd(xbus, proto_table, unit_descriptor, unit, i, xpd_type);
 		if (ret < 0) {
 			XBUS_ERR(xbus, "Creation of XPD=%d%d failed %d\n", unit,
 				 i, ret);
@@ -1130,11 +1173,7 @@ void xbus_populate(void *data)
 		BUG_ON(card_desc->magic != CARD_DESC_MAGIC);
 		/* Release/Reacquire locks around blocking calls */
 		spin_unlock_irqrestore(&xbus->worker.worker_lock, flags);
-		ret =
-		    new_card(xbus, card_desc->xpd_addr.unit, card_desc->type,
-			     card_desc->subtype, card_desc->numchips,
-			     card_desc->ports_per_chip, card_desc->ports,
-			     card_desc->port_dir);
+		ret = new_card(xbus, &card_desc->unit_descriptor);
 		spin_lock_irqsave(&xbus->worker.worker_lock, flags);
 		KZFREE(card_desc);
 		if (ret)
