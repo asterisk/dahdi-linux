@@ -753,7 +753,7 @@ int run_initialize_registers(xpd_t *xpd)
 	snprintf(modelstr, MAX_ENV_STR, "XBUS_MODEL_STRING=%s",
 		 xbus->transport.model_string);
 	snprintf(unitstr, MAX_ENV_STR, "UNIT_NUMBER=%d", xpd->addr.unit);
-	snprintf(typestr, MAX_ENV_STR, "UNIT_TYPE=%d", xpd->type);
+	snprintf(typestr, MAX_ENV_STR, "UNIT_TYPE=%d", xpd->xpd_type);
 	snprintf(subunitsstr, MAX_ENV_STR, "UNIT_SUBUNITS=%d", xpd->subunits);
 	snprintf(directionstr, MAX_ENV_STR, "UNIT_SUBUNITS_DIR=%d",
 		 direction_mask);
@@ -762,7 +762,7 @@ int run_initialize_registers(xpd_t *xpd)
 		 xbus->connector);
 	snprintf(xbuslabel, MAX_ENV_STR, "XBUS_LABEL=%s", xbus->label);
 	if (snprintf
-	    (init_card, MAX_PATH_STR, "%s/init_card_%d_%d", initdir, xpd->type,
+	    (init_card, MAX_PATH_STR, "%s/init_card_%d_%d", initdir, xpd->xpd_type,
 	     xbus->revision) > MAX_PATH_STR) {
 		XPD_NOTICE(xpd,
 			"Cannot initialize. pathname is longer "
@@ -779,7 +779,7 @@ int run_initialize_registers(xpd_t *xpd)
 		goto err;
 	}
 	XPD_DBG(DEVICES, xpd, "running '%s' for type=%d revision=%d\n",
-		init_card, xpd->type, xbus->revision);
+		init_card, xpd->xpd_type, xbus->revision);
 	ret = call_usermodehelper(init_card, argv, envp, UMH_WAIT_PROC);
 	/*
 	 * Carefully report results

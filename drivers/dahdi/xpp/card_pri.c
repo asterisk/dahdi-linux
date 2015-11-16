@@ -1287,7 +1287,7 @@ static int PRI_card_init(xbus_t *xbus, xpd_t *xpd)
 
 	BUG_ON(!xpd);
 	XPD_DBG(GENERAL, xpd, "\n");
-	xpd->type = XPD_TYPE_PRI;
+	xpd->xpd_type = XPD_TYPE_PRI;
 	priv = xpd->priv;
 	if (priv->pri_protocol == PRI_PROTO_0) {
 		/*
@@ -2635,9 +2635,9 @@ static int pri_xpd_probe(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if (xpd->type != XPD_TYPE_PRI) {
+	if (xpd->xpd_type != XPD_TYPE_PRI) {
 		XPD_ERR(xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
-			xpd->type);
+			xpd->xpd_type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
@@ -2720,7 +2720,7 @@ static int pri_xpd_remove(struct device *dev)
 }
 
 static struct xpd_driver pri_driver = {
-	.type = XPD_TYPE_PRI,
+	.xpd_type = XPD_TYPE_PRI,
 	.driver = {
 		   .name = "pri",
 		   .owner = THIS_MODULE,

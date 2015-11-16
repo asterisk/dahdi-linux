@@ -176,7 +176,7 @@ struct xpd {
 	struct phonedev phonedev;
 
 	const struct xops *xops;
-	xpd_type_t type;
+	xpd_type_t xpd_type;
 	const char *type_name;
 	__u8 subtype;
 	int subunits;		/* all siblings */
@@ -217,7 +217,7 @@ struct xpd {
 
 #define	for_each_line(xpd, i) \
 		for ((i) = 0; (i) < PHONEDEV(xpd).channels; (i)++)
-#define	IS_BRI(xpd)		((xpd)->type == XPD_TYPE_BRI)
+#define	IS_BRI(xpd)		((xpd)->xpd_type == XPD_TYPE_BRI)
 #define	TICK_TOLERANCE		500	/* usec */
 
 #ifdef	DEBUG_SYNC_PARPORT
@@ -237,7 +237,7 @@ static inline void *my_kzalloc(size_t size, gfp_t flags)
 }
 
 struct xpd_driver {
-	xpd_type_t type;
+	xpd_type_t xpd_type;
 
 	struct device_driver driver;
 #define	driver_to_xpd_driver(driver) \

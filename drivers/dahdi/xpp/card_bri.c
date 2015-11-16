@@ -1744,9 +1744,9 @@ static int bri_xpd_probe(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if (xpd->type != XPD_TYPE_BRI) {
+	if (xpd->xpd_type != XPD_TYPE_BRI) {
 		XPD_ERR(xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
-			xpd->type);
+			xpd->xpd_type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
@@ -1763,7 +1763,7 @@ static int bri_xpd_remove(struct device *dev)
 }
 
 static struct xpd_driver bri_driver = {
-	.type = XPD_TYPE_BRI,
+	.xpd_type = XPD_TYPE_BRI,
 	.driver = {
 		   .name = "bri",
 		   .owner = THIS_MODULE,

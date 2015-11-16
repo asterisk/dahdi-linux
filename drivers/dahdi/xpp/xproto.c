@@ -191,20 +191,20 @@ static int packet_process(xbus_t *xbus, xpacket_t *pack)
 			}
 			goto out;
 		}
-		xtable = xproto_table(xpd->type);
+		xtable = xproto_table(xpd->xpd_type);
 		if (!xtable) {
 			if (printk_ratelimit())
 				XPD_ERR(xpd,
-					"%s: no protocol table (type=%d)\n",
-					__func__, xpd->type);
+					"%s: no protocol table (xpd_type=%d)\n",
+					__func__, xpd->xpd_type);
 			goto out;
 		}
 		xe = xproto_card_entry(xtable, op);
 		if (!xe) {
 			if (printk_ratelimit()) {
 				XPD_NOTICE(xpd,
-					"%s: bad command (type=%d,opcode=0x%x)\n",
-					__func__, xpd->type, op);
+					"%s: bad command (xpd_type=%d,opcode=0x%x)\n",
+					__func__, xpd->xpd_type, op);
 				dump_packet("packet_process -- bad command",
 					pack, 1);
 			}

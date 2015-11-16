@@ -1991,9 +1991,9 @@ static int fxs_xpd_probe(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if (xpd->type != XPD_TYPE_FXS) {
+	if (xpd->xpd_type != XPD_TYPE_FXS) {
 		XPD_ERR(xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
-			xpd->type);
+			xpd->xpd_type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
@@ -2019,7 +2019,7 @@ static int fxs_xpd_remove(struct device *dev)
 }
 
 static struct xpd_driver fxs_driver = {
-	.type = XPD_TYPE_FXS,
+	.xpd_type = XPD_TYPE_FXS,
 	.driver = {
 		   .name = "fxs",
 		   .owner = THIS_MODULE,

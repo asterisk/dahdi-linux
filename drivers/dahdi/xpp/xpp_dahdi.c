@@ -279,7 +279,7 @@ static int xpd_read_proc_show(struct seq_file *sfile, void *data)
 	seq_printf(sfile, "Address: U=%d S=%d\n", xpd->addr.unit,
 		    xpd->addr.subunit);
 	seq_printf(sfile, "Subunits: %d\n", xpd->subunits);
-	seq_printf(sfile, "Type: %d.%d\n\n", xpd->type, xpd->subtype);
+	seq_printf(sfile, "Type: %d.%d\n\n", xpd->xpd_type, xpd->subtype);
 	seq_printf(sfile, "pcm_len=%d\n\n", PHONEDEV(xpd).pcm_len);
 	seq_printf(sfile, "wanted_pcm_mask=0x%04X\n\n",
 		    PHONEDEV(xpd).wanted_pcm_mask);
@@ -554,7 +554,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit,
 	xpd->priv = (__u8 *)xpd + sizeof(xpd_t);
 	spin_lock_init(&xpd->lock);
 	xpd->card_present = 0;
-	xpd->type = proto_table->type;
+	xpd->xpd_type = proto_table->type;
 	xpd->xproto = proto_table;
 	xpd->xops = proto_table->xops;
 	xpd->xpd_state = XPD_STATE_START;
@@ -949,13 +949,13 @@ const char *xpp_echocan_name(const struct dahdi_chan *chan)
 	 * quirks and limitations
 	 */
 	if (xbus->quirks.has_fxo) {
-		if (xbus->quirks.has_digital_span && xpd->type == XPD_TYPE_FXO) {
+		if (xbus->quirks.has_digital_span && xpd->xpd_type == XPD_TYPE_FXO) {
 			LINE_NOTICE(xpd, pos,
 				    "quirk: give up HWEC on FXO: "
 				    "AB has digital span\n");
 			return NULL;
 		} else if (xbus->sync_mode != SYNC_MODE_AB
-			   && xpd->type == XPD_TYPE_FXS) {
+			   && xpd->xpd_type == XPD_TYPE_FXS) {
 			LINE_NOTICE(xpd, pos,
 				    "quirk: give up HWEC on FXS: "
 				    "AB has FXO and is sync slave\n");

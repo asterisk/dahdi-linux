@@ -1552,9 +1552,9 @@ static int fxo_xpd_probe(struct device *dev)
 
 	xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if (xpd->type != XPD_TYPE_FXO) {
+	if (xpd->xpd_type != XPD_TYPE_FXO) {
 		XPD_ERR(xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
-			xpd->type);
+			xpd->xpd_type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, xpd, "SYSFS\n");
@@ -1580,7 +1580,7 @@ static int fxo_xpd_remove(struct device *dev)
 }
 
 static struct xpd_driver fxo_driver = {
-	.type = XPD_TYPE_FXO,
+	.xpd_type = XPD_TYPE_FXO,
 	.driver = {
 		   .name = "fxo",
 		   .owner = THIS_MODULE,

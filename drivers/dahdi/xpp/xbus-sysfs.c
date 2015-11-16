@@ -731,16 +731,16 @@ static int xpd_match(struct device *dev, struct device_driver *driver)
 
 	xpd_driver = driver_to_xpd_driver(driver);
 	xpd = dev_to_xpd(dev);
-	if (xpd_driver->type != xpd->type) {
+	if (xpd_driver->xpd_type != xpd->xpd_type) {
 		XPD_DBG(DEVICES, xpd,
-			"SYSFS match fail: xpd->type = %d, "
-			"xpd_driver->type = %d\n",
-			xpd->type, xpd_driver->type);
+			"SYSFS match fail: xpd->xpd_type = %d, "
+			"xpd_driver->xpd_type = %d\n",
+			xpd->xpd_type, xpd_driver->xpd_type);
 		return 0;
 	}
 	XPD_DBG(DEVICES, xpd,
-		"SYSFS MATCH: type=%d dev->bus_id = %s, driver->name = %s\n",
-		xpd->type, dev_name(dev), driver->name);
+		"SYSFS MATCH: xpd_type=%d dev->bus_id = %s, driver->name = %s\n",
+		xpd->xpd_type, dev_name(dev), driver->name);
 	return 1;
 }
 

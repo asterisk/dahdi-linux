@@ -80,7 +80,7 @@ static int ECHO_card_init(xbus_t *xbus, xpd_t *xpd)
 
 	BUG_ON(!xpd);
 	XPD_DBG(GENERAL, xpd, "\n");
-	xpd->type = XPD_TYPE_ECHO;
+	xpd->xpd_type = XPD_TYPE_ECHO;
 	XPD_DBG(DEVICES, xpd, "%s\n", xpd->type_name);
 	ret = CALL_EC_METHOD(ec_update, xbus, xbus);
 	return ret;
@@ -307,9 +307,9 @@ static int echo_xpd_probe(struct device *dev)
 
 	ec_xpd = dev_to_xpd(dev);
 	/* Is it our device? */
-	if (ec_xpd->type != XPD_TYPE_ECHO) {
+	if (ec_xpd->xpd_type != XPD_TYPE_ECHO) {
 		XPD_ERR(ec_xpd, "drop suggestion for %s (%d)\n", dev_name(dev),
-			ec_xpd->type);
+			ec_xpd->xpd_type);
 		return -EINVAL;
 	}
 	XPD_DBG(DEVICES, ec_xpd, "SYSFS\n");
@@ -326,7 +326,7 @@ static int echo_xpd_remove(struct device *dev)
 }
 
 static struct xpd_driver echo_driver = {
-	.type = XPD_TYPE_ECHO,
+	.xpd_type = XPD_TYPE_ECHO,
 	.driver = {
 		   .name = "echo",
 		   .owner = THIS_MODULE,
