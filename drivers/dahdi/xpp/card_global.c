@@ -600,7 +600,12 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 			"REGISTER_REPLY: missing card_register_reply()\n");
 		return -EINVAL;
 	}
-	return CALL_XMETHOD(card_register_reply, xpd, reg);
+	switch (reg->h.bytes) {
+	case REG_CMD_SIZE(REG):
+		return CALL_XMETHOD(card_register_reply, xpd, reg);
+	}
+	XPD_ERR(xpd, "REGISTER_REPLY: bad packet_len=%d\n", pack->head.packet_len);
+	return -EINVAL;
 }
 
 HANDLER_DEF(GLOBAL, SYNC_REPLY)

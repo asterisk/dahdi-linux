@@ -1579,17 +1579,19 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 {
 	unsigned long flags;
 	struct FXS_priv_data *priv;
-	__u8 regnum;
-	bool indirect;
+	__u8 regnum = 0;
+	bool indirect = 0;
 
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	indirect = (REG_FIELD(info, regnum) == 0x1E);
-	regnum = (indirect) ? REG_FIELD(info, subreg) : REG_FIELD(info, regnum);
-	XPD_DBG(REGS, xpd, "%s reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
-		(indirect) ? "I" : "D", regnum, REG_FIELD(info, data_low),
-		REG_FIELD(info, data_high));
+	if (info->h.bytes == REG_CMD_SIZE(REG)) {
+		indirect = (REG_FIELD(info, regnum) == 0x1E);
+		regnum = (indirect) ? REG_FIELD(info, subreg) : REG_FIELD(info, regnum);
+		XPD_DBG(REGS, xpd, "%s reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
+			(indirect) ? "I" : "D", regnum, REG_FIELD(info, data_low),
+			REG_FIELD(info, data_high));
+	}
 	if (!indirect && regnum == REG_DTMF_DECODE) {
 		__u8 val = REG_FIELD(info, data_low);
 
