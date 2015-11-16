@@ -127,7 +127,6 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 #define	XENTRY(prototab, module, op) \
 	[ XPROTO_NAME(module, op) ] = {			\
 		.handler = XPROTO_HANDLER(module, op),	\
-		.datalen = RPACKET_SIZE(module, op),	\
 		.name = #op,				\
 		.table = &PROTO_TABLE(prototab)		\
 	}
@@ -288,7 +287,6 @@ struct xops {
 
 struct xproto_entry {
 	xproto_handler_t handler;
-	int datalen;
 	const char *name;
 	xproto_table_t *table;
 };
