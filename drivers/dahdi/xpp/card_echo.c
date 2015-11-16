@@ -112,7 +112,7 @@ static int ECHO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/* Map UNIT + PORTNUM to XPD */
 	orig_xpd = xpd;
 	addr.unit = orig_xpd->addr.unit;
-	addr.subunit = info->portnum;
+	addr.subunit = info->h.portnum;
 	xpd = xpd_byaddr(xbus, addr.unit, addr.subunit);
 	if (!xpd) {
 		static int rate_limit;

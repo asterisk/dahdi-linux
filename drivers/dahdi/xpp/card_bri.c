@@ -467,8 +467,8 @@ static int rx_dchan(xpd_t *xpd, reg_cmd_t *regcmd)
 	int ret = 0;
 
 	src = REG_XDATA(regcmd);
-	len = regcmd->bytes;
-	eoframe = regcmd->eoframe;
+	len = regcmd->h.bytes;
+	eoframe = regcmd->h.eoframe;
 	if (len <= 0)
 		return 0;
 	if (!SPAN_REGISTERED(xpd))	/* Nowhere to copy data */
@@ -566,10 +566,10 @@ static void fill_multibyte(xpd_t *xpd, xpacket_t *pack,
 	XPACKET_INIT(pack, GLOBAL, REGISTER_REQUEST, xpd->xbus_idx, 0, 0);
 	XPACKET_LEN(pack) = RPACKET_SIZE(GLOBAL, REGISTER_REQUEST);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
-	reg_cmd->bytes = len;
-	reg_cmd->is_multibyte = 1;
-	reg_cmd->portnum = xpd->addr.subunit;
-	reg_cmd->eoframe = eoframe;
+	reg_cmd->h.bytes = len;
+	reg_cmd->h.is_multibyte = 1;
+	reg_cmd->h.portnum = xpd->addr.subunit;
+	reg_cmd->h.eoframe = eoframe;
 	p = REG_XDATA(reg_cmd);
 	memcpy(p, buf, len);
 	if (debug)
@@ -1537,7 +1537,7 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/* Map UNIT + PORTNUM to XPD */
 	orig_xpd = xpd;
 	addr.unit = orig_xpd->addr.unit;
-	addr.subunit = info->portnum;
+	addr.subunit = info->h.portnum;
 	xpd = xpd_byaddr(xbus, addr.unit, addr.subunit);
 	if (!xpd) {
 		static int rate_limit;
@@ -1562,9 +1562,9 @@ static int BRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			XPD_DBG(REGS, xpd, "Got SU_RD_STA=%02X\n",
 				REG_FIELD(info, data_low));
 	}
-	if (info->is_multibyte) {
+	if (info->h.is_multibyte) {
 		XPD_DBG(REGS, xpd, "Got Multibyte: %d bytes, eoframe: %d\n",
-			info->bytes, info->eoframe);
+			info->h.bytes, info->h.eoframe);
 		ret = rx_dchan(xpd, info);
 		if (ret < 0) {
 			priv->dchan_rx_drops++;

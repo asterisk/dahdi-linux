@@ -1246,7 +1246,7 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	portno = info->portnum;
+	portno = info->h.portnum;
 	switch (REG_FIELD(info, regnum)) {
 	case REG_INTERRUPT_SRC:
 		got_chip_interrupt(xpd, REG_FIELD(info, data_low), portno);
@@ -1264,7 +1264,7 @@ static int FXO_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 #endif
 	}
 	LINE_DBG(REGS, xpd, portno, "%c reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
-		 ((info->bytes == 3) ? 'I' : 'D'), REG_FIELD(info, regnum),
+		 ((info->h.bytes == 3) ? 'I' : 'D'), REG_FIELD(info, regnum),
 		 REG_FIELD(info, data_low), REG_FIELD(info, data_high));
 	/* Update /proc info only if reply relate to the last slic read request */
 	if (REG_FIELD(&xpd->requested_reply, regnum) ==

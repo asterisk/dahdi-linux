@@ -1484,7 +1484,7 @@ static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 {
 	int i;
 	bool offhook = (REG_FIELD(info, data_low) & 0x1) == 0;
-	xpp_line_t lines = BIT(info->portnum);
+	xpp_line_t lines = BIT(info->h.portnum);
 
 	/* Sanity check */
 	if (!PHONEDEV(xpd).digital_inputs) {
@@ -1593,7 +1593,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	if (!indirect && regnum == REG_DTMF_DECODE) {
 		__u8 val = REG_FIELD(info, data_low);
 
-		process_dtmf(xpd, info->portnum, val);
+		process_dtmf(xpd, info->h.portnum, val);
 	}
 #ifdef	POLL_DIGITAL_INPUTS
 	/*
@@ -1604,7 +1604,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 #endif
 	else if (!indirect && regnum == REG_LOOPCLOSURE) {	/* OFFHOOK ? */
 		__u8 val = REG_FIELD(info, data_low);
-		xpp_line_t mask = BIT(info->portnum);
+		xpp_line_t mask = BIT(info->h.portnum);
 		xpp_line_t offhook;
 
 		/*
@@ -1613,7 +1613,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		 */
 		if ((val & REG_LOOPCLOSURE_ZERO) == 0) {
 			offhook = (val & REG_LOOPCLOSURE_LCR) ? mask : 0;
-			LINE_DBG(SIGNAL, xpd, info->portnum,
+			LINE_DBG(SIGNAL, xpd, info->h.portnum,
 				"REG_LOOPCLOSURE: dataL=0x%X "
 				"(offhook=0x%X mask=0x%X)\n",
 				val, offhook, mask);

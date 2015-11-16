@@ -167,23 +167,30 @@ bool valid_xpd_addr(const struct xpd_addr *addr);
 
 #define	MULTIBYTE_MAX_LEN	5	/* FPGA firmware limitation */
 
-typedef struct reg_cmd {
+struct reg_cmd_header {
 	__u8 bytes:3;		/* Length (for Multibyte)       */
 	__u8 eoframe:1;		/* For BRI -- end of frame      */
 	__u8 portnum:3;		/* For port specific registers  */
 	__u8 is_multibyte:1;
+} PACKED;
+
+struct reg_cmd_REG {
+	__u8 reserved:3;
+	__u8 do_expander:1;
+	__u8 do_datah:1;
+	__u8 do_subreg:1;
+	__u8 read_request:1;
+	__u8 all_ports_broadcast:1;
+	__u8 regnum;
+	__u8 subreg;
+	__u8 data_low;
+	__u8 data_high;
+} PACKED;
+
+typedef struct reg_cmd {
+	struct reg_cmd_header h;
 	union {
-		struct {
-			__u8 reserved:4;
-			__u8 do_datah:1;
-			__u8 do_subreg:1;
-			__u8 read_request:1;
-			__u8 all_ports_broadcast:1;
-			__u8 regnum;
-			__u8 subreg;
-			__u8 data_low;
-			__u8 data_high;
-		} PACKED r;
+		struct reg_cmd_REG r;
 		/* For Write-Multibyte commands in BRI */
 		struct {
 			__u8 xdata[MULTIBYTE_MAX_LEN];
@@ -192,6 +199,7 @@ typedef struct reg_cmd {
 } PACKED reg_cmd_t;
 
 /* Shortcut access macros */
+#define	REG_CMD_SIZE(variant)		(sizeof(struct reg_cmd_ ## variant))
 #define	REG_FIELD(regptr, member)	((regptr)->alt.r.member)
 #define	REG_XDATA(regptr)		((regptr)->alt.d.xdata)
 

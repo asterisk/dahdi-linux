@@ -2253,7 +2253,7 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/* Map UNIT + PORTNUM to XPD */
 	orig_xpd = xpd;
 	addr.unit = orig_xpd->addr.unit;
-	addr.subunit = info->portnum;
+	addr.subunit = info->h.portnum;
 	regnum = REG_FIELD(info, regnum);
 	data_low = REG_FIELD(info, data_low);
 	xpd = xpd_byaddr(xbus, addr.unit, addr.subunit);
@@ -2267,9 +2267,9 @@ static int PRI_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	spin_lock_irqsave(&xpd->lock, flags);
 	priv = xpd->priv;
 	BUG_ON(!priv);
-	if (info->is_multibyte) {
+	if (info->h.is_multibyte) {
 		XPD_NOTICE(xpd, "Got Multibyte: %d bytes, eoframe: %d\n",
-			   info->bytes, info->eoframe);
+			   info->h.bytes, info->h.eoframe);
 		goto end;
 	}
 	if (regnum == REG_FRS0 && !REG_FIELD(info, do_subreg))

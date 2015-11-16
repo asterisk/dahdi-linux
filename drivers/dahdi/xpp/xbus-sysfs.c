@@ -524,7 +524,7 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 			    (do_datah) ? "\tDH" : "");
 		len +=
 		    sprintf(buf + len, "%2d\tRS\t%02X\t%02X\t%02X%s\n",
-			    regs->portnum, REG_FIELD(regs, regnum),
+			    regs->h.portnum, REG_FIELD(regs, regnum),
 			    REG_FIELD(regs, subreg), REG_FIELD(regs, data_low),
 			    datah_str);
 	} else {
@@ -532,7 +532,7 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 		    sprintf(buf + len, "#CH\tOP\tReg.\tDL%s\n",
 			    (do_datah) ? "\tDH" : "");
 		len +=
-		    sprintf(buf + len, "%2d\tRD\t%02X\t%02X%s\n", regs->portnum,
+		    sprintf(buf + len, "%2d\tRD\t%02X\t%02X%s\n", regs->h.portnum,
 			    REG_FIELD(regs, regnum), REG_FIELD(regs, data_low),
 			    datah_str);
 	}

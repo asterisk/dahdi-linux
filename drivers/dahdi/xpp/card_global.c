@@ -58,10 +58,10 @@ static int send_magic_request(xbus_t *xbus, unsigned unit, xportno_t portno,
 	 */
 	XFRAME_NEW_CMD(xframe, pack, xbus, GLOBAL, REGISTER_REQUEST, unit);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
-	reg_cmd->bytes = 0;
-	reg_cmd->is_multibyte = 1;
-	reg_cmd->portnum = portno;
-	reg_cmd->eoframe = eoftx;
+	reg_cmd->h.bytes = 0;
+	reg_cmd->h.is_multibyte = 1;
+	reg_cmd->h.portnum = portno;
+	reg_cmd->h.eoframe = eoftx;
 	PORT_DBG(REGS, xbus, unit, portno, "Magic Packet (eoftx=%d)\n", eoftx);
 	if (debug & DBG_REGS)
 		dump_xframe(__func__, xbus, xframe, debug);
@@ -380,16 +380,16 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 		 data_low, data_high);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
 	/* do not count the 'bytes' field */
-	reg_cmd->bytes = sizeof(*reg_cmd) - 1;
-	reg_cmd->is_multibyte = 0;
+	reg_cmd->h.bytes = REG_CMD_SIZE(REG);
+	reg_cmd->h.is_multibyte = 0;
 	if (portno == PORT_BROADCAST) {
-		reg_cmd->portnum = 0;
+		reg_cmd->h.portnum = 0;
 		REG_FIELD(reg_cmd, all_ports_broadcast) = 1;
 	} else {
-		reg_cmd->portnum = portno;
+		reg_cmd->h.portnum = portno;
 		REG_FIELD(reg_cmd, all_ports_broadcast) = 0;
 	}
-	reg_cmd->eoframe = 0;
+	reg_cmd->h.eoframe = 0;
 	REG_FIELD(reg_cmd, reserved) = 0;	/* force reserved bits to 0 */
 	REG_FIELD(reg_cmd, read_request) = (writing) ? 0 : 1;
 	REG_FIELD(reg_cmd, do_subreg) = do_subreg;
@@ -402,7 +402,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 		xpd->requested_reply = *reg_cmd;
 	if (debug & DBG_REGS) {
 		dump_reg_cmd("REG_REQ", 1, xbus, xpd->addr.unit,
-			     reg_cmd->portnum, reg_cmd);
+			     reg_cmd->h.portnum, reg_cmd);
 		dump_packet("REG_REQ", pack, 1);
 	}
 	if (!xframe->usec_towait) {	/* default processing time of SPI */
@@ -591,7 +591,7 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 		return -EPROTO;
 	}
 	if (debug & DBG_REGS) {
-		dump_reg_cmd("REG_REPLY", 0, xbus, xpd->addr.unit, reg->portnum,
+		dump_reg_cmd("REG_REPLY", 0, xbus, xpd->addr.unit, reg->h.portnum,
 			     reg);
 		dump_packet("REG_REPLY", pack, 1);
 	}
