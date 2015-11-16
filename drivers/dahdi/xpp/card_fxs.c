@@ -81,6 +81,9 @@ enum fxs_leds {
 #define	SLIC_INDIRECT_REQUEST(xbus, xpd, port, writing, reg, dL, dH)	\
 	xpp_register_request((xbus), (xpd), (port), \
 	(writing), 0x1E, 1, (reg), (dL), 1, (dH), 0)
+#define	RAM_REQUEST(xbus, xpd, port, writing, addr, data)	\
+	xpp_ram_request((xbus), (xpd), (port), \
+	(writing), (__u8)(addr), (__u8)((addr) >> 8), (__u8)(data), (__u8)((data) >> 8), (__u8)((data) >> 16), (__u8)((data) >> 24), 0)
 
 #define	VALID_PORT(port) \
 		(((port) >= 0 && (port) <= 7) || (port) == PORT_BROADCAST)
@@ -1595,7 +1598,24 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			(indirect) ? "I" : "D", regnum, REG_FIELD(info, data_low),
 			REG_FIELD(info, data_high));
 	}
-	if (!indirect && regnum == REG_TYPE1_DTMF_DECODE) {
+	if (info->h.bytes == REG_CMD_SIZE(RAM)) {
+		uint addr;
+		unsigned long val;
+		XPD_INFO(xpd, "RAM reply is not fully implemented(%s)\n", __func__);
+		XPD_DBG(REGS, xpd, "port=%d, addr_low=0x%X, addr_high=0x%X, data_0=0x%X data_1=0x%X data_2=0x%X data_3=0x%X\n",
+			info->h.portnum,
+			REG_FIELD_RAM(info, addr_low),
+			REG_FIELD_RAM(info, addr_high),
+			REG_FIELD_RAM(info, data_0),
+			REG_FIELD_RAM(info, data_1),
+			REG_FIELD_RAM(info, data_2),
+			REG_FIELD_RAM(info, data_3));
+		addr = (REG_FIELD_RAM(info, addr_high) << 8) | REG_FIELD_RAM(info, addr_low);
+		val = (REG_FIELD_RAM(info, data_3) << 24) |
+		      (REG_FIELD_RAM(info, data_2) << 16) |
+		      (REG_FIELD_RAM(info, data_1) << 8) |
+		       REG_FIELD_RAM(info, data_0);
+	} else if (!indirect && regnum == REG_TYPE1_DTMF_DECODE) {
 		__u8 val = REG_FIELD(info, data_low);
 
 		process_dtmf(xpd, info->h.portnum, val);

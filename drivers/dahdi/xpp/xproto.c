@@ -387,6 +387,25 @@ void dump_reg_cmd(const char msg[], bool writing, xbus_t *xbus,
 			    msg, regcmd->h.bytes);
 		return;
 	}
+	if (regcmd->h.bytes == REG_CMD_SIZE(RAM)) {
+		snprintf(port_buf, MAX_PROC_WRITE, "%d%s", regcmd->h.portnum,
+			 (REG_FIELD_RAM(regcmd, all_ports_broadcast)) ? "*" : "");
+		if (REG_FIELD_RAM(regcmd, read_request)) {
+			action = 'R';
+		} else {
+			action = 'W';
+		}
+		PORT_DBG(REGS, xbus, unit, port,
+			"%s: %s %cR %02X %02X %02X %02X %02X %02X\n",
+			msg, port_buf, action,
+			REG_FIELD_RAM(regcmd, addr_low),
+			REG_FIELD_RAM(regcmd, addr_high),
+			REG_FIELD_RAM(regcmd, data_0),
+			REG_FIELD_RAM(regcmd, data_1),
+			REG_FIELD_RAM(regcmd, data_2),
+			REG_FIELD_RAM(regcmd, data_3));
+		return;
+	}
 	if (regcmd->h.is_multibyte) {
 		char buf[MAX_PROC_WRITE + 1];
 		int i;

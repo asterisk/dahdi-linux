@@ -518,7 +518,19 @@ static DEVICE_ATTR_READER(chipregs_show, dev, buf)
 			 REG_FIELD(regs, data_high));
 	} else
 		datah_str[0] = '\0';
-	if (REG_FIELD(regs, do_subreg)) {
+	if (regs->h.bytes ==  REG_CMD_SIZE(RAM)) {
+		len +=
+		    sprintf(buf + len, "#CH\tOP\tAL\tAH\tD0\tD1\tD2\tD3\n");
+		len +=
+		    sprintf(buf + len, "%2d\tRR\t%02X\t%02X\t%02X\t%02X\t%02X\t%02X\n",
+			    regs->h.portnum,
+			    REG_FIELD_RAM(regs, addr_low),
+			    REG_FIELD_RAM(regs, addr_high),
+			    REG_FIELD_RAM(regs, data_0),
+			    REG_FIELD_RAM(regs, data_1),
+			    REG_FIELD_RAM(regs, data_2),
+			    REG_FIELD_RAM(regs, data_3));
+	} else if (REG_FIELD(regs, do_subreg)) {
 		len +=
 		    sprintf(buf + len, "#CH\tOP\tReg.\tSub\tDL%s\n",
 			    (do_datah) ? "\tDH" : "");

@@ -77,6 +77,15 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 			 bool should_reply);
 int send_multibyte_request(xbus_t *xbus, unsigned unit, xportno_t portno,
 			   bool eoftx, __u8 *buf, unsigned len);
+int xpp_ram_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
+			 bool writing,
+			__u8 addr_low,
+			__u8 addr_high,
+			__u8 data_0,
+			__u8 data_1,
+			__u8 data_2,
+			__u8 data_3,
+			 bool should_reply);
 extern xproto_table_t PROTO_TABLE(GLOBAL);
 int run_initialize_registers(xpd_t *xpd);
 int parse_chip_command(xpd_t *xpd, char *cmdline);

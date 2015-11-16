@@ -188,6 +188,20 @@ struct reg_cmd_REG {
 	__u8 data_high;
 } PACKED;
 
+struct reg_cmd_RAM {
+	__u8 reserved:4;
+	__u8 do_datah:1;
+	__u8 do_subreg:1;
+	__u8 read_request:1;
+	__u8 all_ports_broadcast:1;
+	__u8 addr_low;
+	__u8 addr_high;
+	__u8 data_0;
+	__u8 data_1;
+	__u8 data_2;
+	__u8 data_3;
+} PACKED;
+
 typedef struct reg_cmd {
 	struct reg_cmd_header h;
 	union {
@@ -196,6 +210,7 @@ typedef struct reg_cmd {
 		struct {
 			__u8 xdata[MULTIBYTE_MAX_LEN];
 		} PACKED d;
+		struct reg_cmd_RAM m;
 	} PACKED alt;
 } PACKED reg_cmd_t;
 
@@ -203,6 +218,7 @@ typedef struct reg_cmd {
 #define	REG_CMD_SIZE(variant)		(sizeof(struct reg_cmd_ ## variant))
 #define	REG_FIELD(regptr, member)	((regptr)->alt.r.member)
 #define	REG_XDATA(regptr)		((regptr)->alt.d.xdata)
+#define	REG_FIELD_RAM(regptr, member)	((regptr)->alt.m.member)
 
 #ifdef __KERNEL__
 

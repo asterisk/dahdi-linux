@@ -90,7 +90,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	int portno;
 	bool writing;
 	int op;			/* [W]rite, [R]ead */
-	int addr_mode;		/* [D]irect, [I]ndirect, [Mm]ulti */
+	int addr_mode;		/* [D]irect, [I]ndirect, [Mm]ulti, [R]AM */
 	bool do_subreg = 0;
 	int regnum;
 	int subreg;
@@ -169,6 +169,16 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		num_args--;	/* No data low */
 		//XPD_DBG(REGS, xpd, "Multibyte (%c)\n", addr_mode);
 		break;
+	case 'R':
+		switch (op) {
+		case 'W':
+			num_args += 5;	/* add: addr_high, data_[0-3] */
+			break;
+		case 'R':
+			num_args += 2;	/* add: addr_low, addr_high */
+			break;
+		}
+		break;
 	default:
 		XPD_ERR(xpd, "Unknown addressing type '%c'\n", addr_mode);
 		goto out;
@@ -195,6 +205,31 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		ret =
 		    send_magic_request(xpd->xbus, xpd->addr.unit, portno,
 				       addr_mode == 'm');
+		goto out;
+	}
+	if (addr_mode == 'R') {
+		__u8 input[6];
+		int i;
+
+		if (num_args - 2 > 6) {
+			XPD_ERR(xpd, "Too many args (%d) -- should be less than 6\n", num_args - 2);
+			goto out;
+		}
+		for (i = 0; i < num_args - 2; i++, argno++) {
+			input[i] = parse_hexbyte(argv[argno]);
+			if (input[i] < 0) {
+				XPD_ERR(xpd, "Illegal input[%d] number '%s'\n", i, argv[argno]);
+				goto out;
+			}
+		}
+		ret = xpp_ram_request(xpd->xbus, xpd, portno, writing,
+			input[0],
+			input[1],
+			input[2],
+			input[3],
+			input[4],
+			input[5],
+			1);
 		goto out;
 	}
 	/* Normal (non-Magic) register commands */
@@ -415,6 +450,67 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 }
 EXPORT_SYMBOL(xpp_register_request);
 
+int xpp_ram_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
+			 bool writing,
+			__u8 addr_low,
+			__u8 addr_high,
+			__u8 data_0,
+			__u8 data_1,
+			__u8 data_2,
+			__u8 data_3,
+			 bool should_reply)
+{
+	int ret = 0;
+	xframe_t *xframe;
+	xpacket_t *pack;
+	reg_cmd_t *reg_cmd;
+
+	if (!xbus) {
+		DBG(REGS, "NO XBUS\n");
+		return -EINVAL;
+	}
+	XFRAME_NEW_REG_CMD(xframe, pack, xbus, GLOBAL, RAM, xpd->xbus_idx);
+	LINE_DBG(REGS, xpd, portno, "%cR %02X %02X %02X %02X %02X %02X\n",
+		(writing) ? 'W' : 'R',
+		addr_low, addr_high,
+		data_0, data_1, data_2, data_3);
+	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
+	/* do not count the 'bytes' field */
+	reg_cmd->h.bytes = REG_CMD_SIZE(RAM);
+	reg_cmd->h.is_multibyte = 0;
+	if (portno == PORT_BROADCAST) {
+		reg_cmd->h.portnum = 0;
+		REG_FIELD_RAM(reg_cmd, all_ports_broadcast) = 1;
+	} else {
+		reg_cmd->h.portnum = portno;
+		REG_FIELD_RAM(reg_cmd, all_ports_broadcast) = 0;
+	}
+	reg_cmd->h.eoframe = 0;
+	REG_FIELD_RAM(reg_cmd, reserved) = 0;	/* force reserved bits to 0 */
+	REG_FIELD_RAM(reg_cmd, read_request) = (writing) ? 0 : 1;
+	REG_FIELD_RAM(reg_cmd, do_datah) = 1;
+	REG_FIELD_RAM(reg_cmd, do_subreg) = 1;
+	REG_FIELD_RAM(reg_cmd, addr_low) = addr_low;
+	REG_FIELD_RAM(reg_cmd, addr_high) = addr_high;
+	REG_FIELD_RAM(reg_cmd, data_0) = data_0;
+	REG_FIELD_RAM(reg_cmd, data_1) = data_1;
+	REG_FIELD_RAM(reg_cmd, data_2) = data_2;
+	REG_FIELD_RAM(reg_cmd, data_3) = data_3;
+	if (should_reply)
+		xpd->requested_reply = *reg_cmd;
+	if (debug & DBG_REGS) {
+		dump_reg_cmd("REG_RAM", 1, xbus, xpd->addr.unit,
+			     reg_cmd->h.portnum, reg_cmd);
+		dump_packet("REG_RAM", pack, 1);
+	}
+	if (!xframe->usec_towait) {	/* default processing time of SPI */
+		xframe->usec_towait = 1000;
+	}
+	ret = send_cmd_frame(xbus, xframe);
+	return ret;
+}
+EXPORT_SYMBOL(xpp_ram_request);
+
 /*
  * The XPD parameter is totaly ignored by the driver and firmware as well.
  */
@@ -594,6 +690,7 @@ HANDLER_DEF(GLOBAL, REGISTER_REPLY)
 	}
 	switch (reg->h.bytes) {
 	case REG_CMD_SIZE(REG):
+	case REG_CMD_SIZE(RAM):
 		return CALL_XMETHOD(card_register_reply, xpd, reg);
 	}
 	XPD_ERR(xpd, "REGISTER_REPLY: bad packet_len=%d\n", pack->head.packet_len);
