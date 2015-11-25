@@ -8,7 +8,7 @@ PIC_FW		= PIC_TYPE_1.hex PIC_TYPE_2.hex PIC_TYPE_3.hex PIC_TYPE_4.hex
 OCT_FW		= $(wildcard OCT6104E-256D.ima)
 FIRMWARES	= $(USB_FW) $(FPGA_FW) $(PIC_FW) $(OCT_FW)
 PROTO_VER	= 30
-SCRIPTS_BASE	= $(patsubst %,init_card_%_$(PROTO_VER),1 2 3 4 5)
+SCRIPTS_BASE	= $(patsubst %,init_card_%_$(PROTO_VER),1 2 3 4 5 6)
 SCRIPTS		= $(SCRIPTS_BASE:%=../%)
 TARGET		= $(DESTDIR)/usr/share/dahdi
 
