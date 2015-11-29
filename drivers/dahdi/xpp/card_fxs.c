@@ -128,7 +128,6 @@ static const struct file_operations proc_xpd_metering_ops;
 #endif
 static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos);
 
-#define	PROC_REGISTER_FNAME	"slics"
 #define	PROC_FXS_INFO_FNAME	"fxs_info"
 #ifdef	WITH_METERING
 #define	PROC_METERING_FNAME	"metering_gen"

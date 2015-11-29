@@ -85,8 +85,6 @@ static int pri_lineconfig(xpd_t *xpd, int lineconfig);
 static void send_idlebits(xpd_t *xpd, bool saveold);
 static int apply_pri_protocol(xpd_t *xpd);
 
-#define	PROC_REGISTER_FNAME	"slics"
-
 enum pri_protocol {
 	PRI_PROTO_0 = 0,
 	PRI_PROTO_E1 = 1,

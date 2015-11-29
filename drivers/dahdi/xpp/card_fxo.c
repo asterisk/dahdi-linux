@@ -115,7 +115,6 @@ static const struct file_operations proc_xpd_metering_ops;
 static void dahdi_report_battery(xpd_t *xpd, lineno_t chan);
 static void report_polarity_reversal(xpd_t *xpd, xportno_t portno, char *msg);
 
-#define	PROC_REGISTER_FNAME	"slics"
 #define	PROC_FXO_INFO_FNAME	"fxo_info"
 #ifdef	WITH_METERING
 #define	PROC_METERING_FNAME	"metering_read"

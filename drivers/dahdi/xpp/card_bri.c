@@ -162,7 +162,6 @@ static int bri_chanconfig(struct file *file, struct dahdi_chan *chan,
 static int bri_startup(struct file *file, struct dahdi_span *span);
 static int bri_shutdown(struct dahdi_span *span);
 
-#define	PROC_REGISTER_FNAME	"slics"
 #define	PROC_BRI_INFO_FNAME	"bri_info"
 
 enum led_state {
