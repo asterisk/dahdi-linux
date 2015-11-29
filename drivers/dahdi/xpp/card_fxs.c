@@ -85,7 +85,7 @@ enum fxs_leds {
 #define	VALID_PORT(port) \
 		(((port) >= 0 && (port) <= 7) || (port) == PORT_BROADCAST)
 
-#define	REG_DIGITAL_IOCTRL	0x06	/* LED and RELAY control */
+#define	REG_TYPE1_DIGITAL_IOCTRL	0x06	/* LED and RELAY control */
 
 /* Values of SLIC linefeed control register (0x40) */
 enum fxs_state {
@@ -107,14 +107,14 @@ enum fxs_state {
 /*
  * DTMF detection
  */
-#define REG_DTMF_DECODE		0x18	/* 24 - DTMF Decode Status */
-#define REG_BATTERY		0x42	/* 66 - Battery Feed Control */
-#define	REG_BATTERY_BATSL	BIT(1)	/* Battery Feed Select */
+#define REG_TYPE1_DTMF_DECODE		0x18	/* 24 - DTMF Decode Status */
+#define REG_TYPE1_BATTERY		0x42	/* 66 - Battery Feed Control */
+#define	REG_TYPE1_BATTERY_BATSL		BIT(1)	/* Battery Feed Select */
 
 /* 68 -  Loop Closure/Ring Trip Detect Status */
-#define	REG_LOOPCLOSURE		0x44
-#define	REG_LOOPCLOSURE_ZERO	0xF8	/* Loop Closure zero bits. */
-#define	REG_LOOPCLOSURE_LCR	BIT(0)	/* Loop Closure Detect Indicator. */
+#define	REG_TYPE1_LOOPCLOSURE		0x44
+#define	REG_TYPE1_LOOPCLOSURE_ZERO	0xF8	/* Loop Closure zero bits. */
+#define	REG_TYPE1_LOOPCLOSURE_LCR	BIT(0)	/* Loop Closure Detect Indicator. */
 
 /*---------------- FXS Protocol Commands ----------------------------------*/
 
@@ -200,8 +200,8 @@ static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 		return 0;
 	}
 	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
-	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_BATTERY,
-			(on) ? REG_BATTERY_BATSL : 0x00);
+	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_TYPE1_BATTERY,
+			(on) ? REG_TYPE1_BATTERY_BATSL : 0x00);
 }
 
 static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan,
@@ -302,7 +302,7 @@ static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 	if (on)
 		value |= led_register_vals[which];
 	ret =
-	    SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_DIGITAL_IOCTRL,
+	    SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_TYPE1_DIGITAL_IOCTRL,
 				value);
 out:
 	return ret;
@@ -553,7 +553,7 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 		    (PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).
 		     digital_inputs, i))
 			continue;
-		SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_LOOPCLOSURE,
+		SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_TYPE1_LOOPCLOSURE,
 				    0);
 	}
 	return 0;
@@ -808,7 +808,7 @@ static int relay_out(xpd_t *xpd, int pos, bool on)
 	if (on)
 		value |= led_register_vals[OUTPUT_RELAY];
 	return SLIC_DIRECT_REQUEST(xpd->xbus, xpd, relay_channels[which],
-				   SLIC_WRITE, REG_DIGITAL_IOCTRL, value);
+				   SLIC_WRITE, REG_TYPE1_DIGITAL_IOCTRL, value);
 }
 
 static int send_ring(xpd_t *xpd, lineno_t chan, bool on)
@@ -1595,7 +1595,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			(indirect) ? "I" : "D", regnum, REG_FIELD(info, data_low),
 			REG_FIELD(info, data_high));
 	}
-	if (!indirect && regnum == REG_DTMF_DECODE) {
+	if (!indirect && regnum == REG_TYPE1_DTMF_DECODE) {
 		__u8 val = REG_FIELD(info, data_low);
 
 		process_dtmf(xpd, info->h.portnum, val);
@@ -1604,10 +1604,10 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/*
 	 * Process digital inputs polling results
 	 */
-	else if (!indirect && regnum == REG_DIGITAL_IOCTRL)
+	else if (!indirect && regnum == REG_TYPE1_DIGITAL_IOCTRL)
 		process_digital_inputs(xpd, info);
 #endif
-	else if (!indirect && regnum == REG_LOOPCLOSURE) {	/* OFFHOOK ? */
+	else if (!indirect && regnum == REG_TYPE1_LOOPCLOSURE) {	/* OFFHOOK ? */
 		__u8 val = REG_FIELD(info, data_low);
 		xpp_line_t mask = BIT(info->h.portnum);
 		xpp_line_t offhook;
@@ -1616,10 +1616,10 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		 * Validate reply. Non-existing/disabled ports
 		 * will reply with 0xFF. Ignore these.
 		 */
-		if ((val & REG_LOOPCLOSURE_ZERO) == 0) {
-			offhook = (val & REG_LOOPCLOSURE_LCR) ? mask : 0;
+		if ((val & REG_TYPE1_LOOPCLOSURE_ZERO) == 0) {
+			offhook = (val & REG_TYPE1_LOOPCLOSURE_LCR) ? mask : 0;
 			LINE_DBG(SIGNAL, xpd, info->h.portnum,
-				"REG_LOOPCLOSURE: dataL=0x%X "
+				"REG_TYPE1_LOOPCLOSURE: dataL=0x%X "
 				"(offhook=0x%X mask=0x%X)\n",
 				val, offhook, mask);
 			process_hookstate(xpd, offhook, mask);
