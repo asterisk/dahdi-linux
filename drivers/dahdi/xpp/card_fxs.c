@@ -582,8 +582,13 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 		    (PHONEDEV(xpd).digital_outputs | PHONEDEV(xpd).
 		     digital_inputs, i))
 			continue;
-		SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_TYPE1_LOOPCLOSURE,
-				    0);
+		if (XPD_HW(xpd).type == 6) {
+			SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_TYPE6_LCRRTP,
+					    0);
+		} else {
+			SLIC_DIRECT_REQUEST(xbus, xpd, i, SLIC_READ, REG_TYPE1_LOOPCLOSURE,
+					    0);
+		}
 	}
 	return 0;
 err:
@@ -1653,7 +1658,7 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	else if (!indirect && regnum == REG_TYPE1_DIGITAL_IOCTRL)
 		process_digital_inputs(xpd, info);
 #endif
-	else if (!indirect && regnum == REG_TYPE1_LOOPCLOSURE) {	/* OFFHOOK ? */
+	else if (XPD_HW(xpd).type == 1 && !indirect && regnum == REG_TYPE1_LOOPCLOSURE) { /* OFFHOOK ? */
 		__u8 val = REG_FIELD(info, data_low);
 		xpp_line_t mask = BIT(info->h.portnum);
 		xpp_line_t offhook;
@@ -1666,6 +1671,23 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 			offhook = (val & REG_TYPE1_LOOPCLOSURE_LCR) ? mask : 0;
 			LINE_DBG(SIGNAL, xpd, info->h.portnum,
 				"REG_TYPE1_LOOPCLOSURE: dataL=0x%X "
+				"(offhook=0x%X mask=0x%X)\n",
+				val, offhook, mask);
+			process_hookstate(xpd, offhook, mask);
+		}
+	} else if (XPD_HW(xpd).type == 6 && !indirect && regnum == REG_TYPE6_LCRRTP) { /* OFFHOOK ? */
+		__u8 val = REG_FIELD(info, data_low);
+		xpp_line_t mask = BIT(info->h.portnum);
+		xpp_line_t offhook;
+
+		/*
+		 * Validate reply. Non-existing/disabled ports
+		 * will reply with 0xFF. Ignore these.
+		 */
+		if ((val & REG_TYPE6_LCRRTP_ZERO) == 0) {
+			offhook = (val & REG_TYPE6_LCRRTP_LCR) ? mask : 0;
+			LINE_DBG(SIGNAL, xpd, info->h.portnum,
+				"REG_TYPE6_LCRRTP: dataL=0x%X "
 				"(offhook=0x%X mask=0x%X)\n",
 				val, offhook, mask);
 			process_hookstate(xpd, offhook, mask);
