@@ -122,6 +122,29 @@ enum fxs_state {
 #define	REG_TYPE1_LOOPCLOSURE_ZERO	0xF8	/* Loop Closure zero bits. */
 #define	REG_TYPE1_LOOPCLOSURE_LCR	BIT(0)	/* Loop Closure Detect Indicator. */
 
+/* FXS type 6 registers */
+#define REG_TYPE6_RINGCON		0x26	/* 38 - Ringing Oscillator Control */
+
+/* 34 -  Loop Closure/Ring Trip Detect Status */
+#define	REG_TYPE6_LCRRTP		0x22
+#define	REG_TYPE6_LCRRTP_ZERO		0xF0	/* Loop Closure zero bits. */
+#define	REG_TYPE6_LCRRTP_LCR		BIT(1)	/* Loop Closure Detect Indicator. */
+
+#define	REG_TYPE6_TONEN			0x3E	/* 62 - Hardware DTMF detection */
+#define	REG_TYPE6_TONEN_DTMF_DIS	BIT(2)	/*      DTMF Disable */
+#define REG_TYPE6_TONDTMF		0x3C	/* 60 - DTMF Decode Status */
+#define	REG_TYPE6_EXP_GPIOA		0x12	/* I/O Expander GPIOA */
+#define	REG_TYPE6_EXP_GPIOB		0x13	/* I/O Expander GPIOB */
+#define	REG_TYPE6_ENHANCE		0x2F	/* 47 - Enhance */
+#define	REG_TYPE6_USERSTAT		0x42	/* 66 - Userstat */
+#define	REG_TYPE6_DIAG1			0x47	/* 71 - Diag1 */
+#define RAM_TYPE6_SLOPE_VLIM		634
+#define SLOPE_VLIM_DFLT			0x1E655196L
+#define SLOPE_VLIM_MWI			0x8000000L
+#define RAM_TYPE6_VBATH_EXPECT		767
+#define VBATH_EXPECT_DFLT		0x2B10A20L
+#define VBATH_EXPECT_MWI		0x6147AB2L
+
 /*---------------- FXS Protocol Commands ----------------------------------*/
 
 static bool fxs_packet_is_valid(xpacket_t *pack);
