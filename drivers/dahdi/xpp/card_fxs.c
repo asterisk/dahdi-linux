@@ -105,10 +105,18 @@ enum fxs_state {
 	FXS_LINE_RING_OPEN = 0x07	/* RING open */
 };
 
+enum neon_state {
+	END_NEON = 0,
+	INIT_NEON = 1,
+};
+
 #define	FXS_LINE_POL_ACTIVE \
 		((reversepolarity) ? FXS_LINE_REV_ACTIVE : FXS_LINE_ACTIVE)
 #define	FXS_LINE_POL_OHTRANS \
 		((reversepolarity) ? FXS_LINE_REV_OHTRANS : FXS_LINE_OHTRANS)
+
+/* FXS type 1 registers */
+#define REG_TYPE1_RINGCON		0x22	/* 34 - Ringing Oscillator Control */
 
 /*
  * DTMF detection
@@ -176,6 +184,7 @@ struct FXS_priv_data {
 	xpp_line_t want_dtmf_mute;	/* what dahdi want */
 	xpp_line_t prev_key_down;	/* DTMF down sets the bit */
 	xpp_line_t neon_blinking;
+	xpp_line_t neonstate;
 	xpp_line_t vbat_h;		/* High voltage */
 	struct timeval prev_key_time[CHANNELS_PERXPD];
 	int led_counter[NUM_LEDS][CHANNELS_PERXPD];
@@ -209,6 +218,9 @@ struct FXS_priv_data {
 #define	LED_BLINK_RING			(1000/8)	/* in ticks */
 
 /*---------------- FXS: Static functions ----------------------------------*/
+static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
+			   unsigned int msg_waiting);
+
 static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 {
 	struct FXS_priv_data *priv;
@@ -217,6 +229,10 @@ static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 
 	BUG_ON(!xbus);
 	BUG_ON(!xpd);
+	if (XPD_HW(xpd).type == 6) {
+		LINE_DBG(SIGNAL, xpd, chan, "is ignored in Si32260\n");
+		return 0;
+	}
 	priv = xpd->priv;
 	p = (unsigned long *)&priv->vbat_h;
 	if (on)
@@ -230,7 +246,7 @@ static int do_chan_power(xbus_t *xbus, xpd_t *xpd, lineno_t chan, bool on)
 	}
 	LINE_DBG(SIGNAL, xpd, chan, "%s\n", (on) ? "up" : "down");
 	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_TYPE1_BATTERY,
-			(on) ? REG_TYPE1_BATTERY_BATSL : 0x00);
+			(on) ? (int)REG_TYPE1_BATTERY_BATSL : 0x00);
 }
 
 static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan,
@@ -251,7 +267,20 @@ static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan,
 		do_chan_power(xbus, xpd, chan, want_vbat_h);
 	LINE_DBG(SIGNAL, xpd, chan, "value=0x%02X\n", value);
 	priv->lasttxhook[chan] = value;
-	return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x40, value);
+	if (XPD_HW(xpd).type == 6) {
+		int ret;
+
+		/* Make sure NEON state is off for */
+		if (value == FXS_LINE_POL_OHTRANS && IS_SET(priv->neon_blinking, chan))
+			set_vm_led_mode(xpd->xbus, xpd, chan, 0);
+		ret = SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x1E, value);
+		if (value == FXS_LINE_POL_ACTIVE && PHONEDEV(xpd).msg_waiting[chan])
+			set_vm_led_mode(xpd->xbus, xpd, chan, PHONEDEV(xpd).msg_waiting[chan]);
+		return ret;
+	} else {
+		return SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x40, value);
+	}
+	return 0;
 }
 
 static void vmwi_search(xpd_t *xpd, lineno_t pos, bool on)
@@ -324,17 +353,72 @@ static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 		else
 			BIT_CLR(priv->ledstate[which], chan);
 	}
-	LINE_DBG(LEDS, xpd, chan, "LED: which=%d -- %s\n", which,
+	LINE_DBG(LEDS, xpd, chan, "LED: (type=%d) which=%d -- %s\n", XPD_HW(xpd).type, which,
 		 (on) ? "on" : "off");
-	value = BIT(2) | BIT(3);
-	value |= ((BIT(5) | BIT(6) | BIT(7)) & ~led_register_mask[which]);
-	if (on)
-		value |= led_register_vals[which];
-	ret =
-	    SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_TYPE1_DIGITAL_IOCTRL,
-				value);
+	if (XPD_HW(xpd).type == 6) {
+		int mask = 1 << chan;
+		value = (on) << chan;
+		XPD_INFO(xpd, "LED(%d): 0x%0X (mask: 0x%0X)\n", chan, value, mask);
+		if (which == LED_GREEN) { /* other leds ignored */
+			ret = EXP_REQUEST(xbus, xpd, SLIC_WRITE,
+				REG_TYPE6_EXP_GPIOA, value, mask);
+		}
+	} else {
+		value = BIT(2) | BIT(3);
+		value |= ((BIT(5) | BIT(6) | BIT(7)) & ~led_register_mask[which]);
+		if (on)
+			value |= led_register_vals[which];
+		ret = SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE,
+				REG_TYPE1_DIGITAL_IOCTRL, value);
+	}
+	return 0;
 out:
 	return ret;
+}
+
+static inline void set_mwi_led(xpd_t *xpd, int pos, int on)
+{
+	struct FXS_priv_data *priv;
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+
+	if (XPD_HW(xpd).type != 6)
+		return;
+	if (on) {
+		if (! IS_SET(priv->neonstate, pos)) {
+			SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_ENHANCE, 0x00);
+			SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_USERSTAT, 0x04);
+			SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_DIAG1, 0x0F);
+			BIT_SET(priv->neonstate, pos);
+		}
+	} else {
+		if (IS_SET(priv->neonstate, pos)) {
+			SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_DIAG1, 0x00);
+			BIT_CLR(priv->neonstate, pos);
+		}
+	}
+}
+
+static void blink_mwi(xpd_t *xpd)
+{
+	struct FXS_priv_data *priv;
+	unsigned int timer_count;
+	int i;
+
+	BUG_ON(!xpd);
+	priv = xpd->priv;
+	timer_count = xpd->timer_count;
+	for_each_line(xpd, i) {
+		unsigned int msgs = PHONEDEV(xpd).msg_waiting[i];
+		/* LED duty cycle: 300ms on, 700ms off */
+		unsigned int in_range = (timer_count % 1000) >= 0 && (timer_count % 1000) <= 300;
+
+		if (!IS_OFFHOOK(xpd, i) && msgs && in_range && 
+			IS_SET(priv->neon_blinking,i) && priv->ohttimer[i] == 0)
+			set_mwi_led(xpd, i, 1);
+		else
+			set_mwi_led(xpd, i, 0);
+	}
 }
 
 static void handle_fxs_leds(xpd_t *xpd)
@@ -550,8 +634,13 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 	 */
 	/* Software controled ringing (for CID) */
 	/* Ringing Oscilator Control */
-	ret = SLIC_DIRECT_REQUEST(xbus, xpd, PORT_BROADCAST, SLIC_WRITE,
-		0x22, 0x00);
+	if (XPD_HW(xpd).type == 6) {
+		ret = SLIC_DIRECT_REQUEST(xbus, xpd, PORT_BROADCAST, SLIC_WRITE,
+			REG_TYPE6_RINGCON, 0x00);
+	} else {
+		ret = SLIC_DIRECT_REQUEST(xbus, xpd, PORT_BROADCAST, SLIC_WRITE,
+			REG_TYPE1_RINGCON, 0x00);
+	}
 	if (ret < 0)
 		goto err;
 	for_each_line(xpd, i) {
@@ -738,6 +827,34 @@ static struct ring_reg_params ring_parameters[] = {
 	REG_ENTRY(1,	0x1D,	0x00, 0x46,	0x00, 0x36,	0x00, 0x36),
 };
 
+static void set_neon_state(xbus_t *xbus, xpd_t *xpd, int pos,
+		enum neon_state ns)
+{
+	struct FXS_priv_data *priv;
+
+	LINE_DBG(SIGNAL, xpd, pos, "set NEON -> %d\n", ns);
+	priv = xpd->priv;
+	if (ns == INIT_NEON)
+		BIT_SET(priv->neon_blinking, pos);
+	else
+		BIT_CLR(priv->neon_blinking, pos);
+	if (XPD_HW(xpd).type == 6) {
+		switch (ns) {
+		case INIT_NEON:
+			RAM_REQUEST(xbus, xpd, pos, SLIC_WRITE, RAM_TYPE6_VBATH_EXPECT, VBATH_EXPECT_MWI << 3);
+			//RAM_REQUEST(xbus, xpd, pos, SLIC_WRITE, RAM_TYPE6_SLOPE_VLIM, SLOPE_VLIM_MWI << 3);
+			break;
+		default:
+			LINE_DBG(REGS, xpd, pos, "0x%04X: R 0x\n", RAM_TYPE6_SLOPE_VLIM);
+			set_mwi_led(xpd, pos, 0);	/* Cannot have NEON LED during OHT (type == 6) */
+			SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_USERSTAT, 0x00);
+			SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE, REG_TYPE6_ENHANCE, 0x10);
+			RAM_REQUEST(xbus, xpd, pos, SLIC_WRITE, RAM_TYPE6_VBATH_EXPECT, VBATH_EXPECT_DFLT << 3);
+			RAM_REQUEST(xbus, xpd, pos, SLIC_WRITE, RAM_TYPE6_SLOPE_VLIM, SLOPE_VLIM_DFLT << 3);
+			break;
+		}
+	}
+}
 static int send_ring_parameters(xbus_t *xbus, xpd_t *xpd, int pos,
 		enum ring_types rtype)
 {
@@ -746,6 +863,8 @@ static int send_ring_parameters(xbus_t *xbus, xpd_t *xpd, int pos,
 	int ret = 0;
 	int i;
 
+	if (XPD_HW(xpd).type == 6)
+		return 0;
 	if (rtype < RING_TYPE_NEON || rtype > RING_TYPE_NORMAL)
 		return -EINVAL;
 	for (i = 0; i < ARRAY_SIZE(ring_parameters); i++) {
@@ -791,15 +910,16 @@ static int set_vm_led_mode(xbus_t *xbus, xpd_t *xpd, int pos,
 	if (VMWI_NEON(priv, pos) && msg_waiting) {
 		/* A write to register 0x40 will now turn on/off the VM led */
 		LINE_DBG(SIGNAL, xpd, pos, "NEON\n");
-		BIT_SET(priv->neon_blinking, pos);
+		set_neon_state(xbus, xpd, pos, INIT_NEON);
 		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_NEON);
 	} else if (ring_trapez) {
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER: Trapez ring\n");
+		set_neon_state(xbus, xpd, pos, END_NEON);
 		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_TRAPEZ);
 	} else {
 		/* A write to register 0x40 will now turn on/off the ringer */
 		LINE_DBG(SIGNAL, xpd, pos, "RINGER\n");
-		BIT_CLR(priv->neon_blinking, pos);
+		set_neon_state(xbus, xpd, pos, END_NEON);
 		ret = send_ring_parameters(xbus, xpd, pos, RING_TYPE_NORMAL);
 	}
 	return (ret ? -EPROTO : 0);
@@ -818,10 +938,11 @@ static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos)
 	msgs = PHONEDEV(xpd).msg_waiting[pos];
 	LINE_DBG(SIGNAL, xpd, pos, "%s\n", (msgs) ? "ON" : "OFF");
 	set_vm_led_mode(xbus, xpd, pos, msgs);
-	do_chan_power(xbus, xpd, pos, msgs > 0);
-	linefeed_control(xbus, xpd, pos,
-			 (msgs >
-			  0) ? FXS_LINE_RING : priv->idletxhookstate[pos]);
+	if (XPD_HW(xpd).type == 1) {
+		do_chan_power(xbus, xpd, pos, msgs > 0);
+		linefeed_control(xbus, xpd, pos,
+			(msgs > 0) ? FXS_LINE_RING : priv->idletxhookstate[pos]);
+	}
 }
 
 static int relay_out(xpd_t *xpd, int pos, bool on)
@@ -1447,6 +1568,8 @@ static int FXS_card_tick(xbus_t *xbus, xpd_t *xpd)
 #endif
 	handle_fxs_leds(xpd);
 	handle_linefeed(xpd);
+	if (XPD_HW(xpd).type == 6)
+		blink_mwi(xpd);
 	/*
 	 * Hack alert (FIXME):
 	 *   Asterisk did FXS_card_open() and we wanted to report
