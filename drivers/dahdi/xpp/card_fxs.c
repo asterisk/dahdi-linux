@@ -1024,6 +1024,21 @@ static int set_vmwi(xpd_t *xpd, int pos, unsigned long arg)
 	return 0;
 }
 
+static int hardware_dtmf_control(xpd_t *xpd, int pos, bool on)
+{
+	int ret = 0;
+
+	LINE_DBG(SIGNAL, xpd, pos, "%s: %s\n", __func__, (on) ? "on" : "off");
+	if (XPD_HW(xpd).type == 6) {
+		int value = (on) ? 0xE0 : REG_TYPE6_TONEN_DTMF_DIS;
+		ret = SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE,
+			REG_TYPE6_TONEN, value);
+	} else {
+		ret = SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_WRITE, 0x17, on);
+	}
+	return ret;
+}
+
 /*
  * Private ioctl()
  * We don't need it now, since we detect vmwi via FSK patterns
@@ -1089,9 +1104,8 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 				 * Detection mode changed:
 				 * Disable DTMF interrupts
 				 */
-				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-						    0x17, 0);
 			}
+			hardware_dtmf_control(xpd, pos, 0);
 			BIT_CLR(priv->want_dtmf_events, pos);
 			BIT_CLR(priv->want_dtmf_mute, pos);
 			__do_mute_dtmf(xpd, pos, 0);
@@ -1113,8 +1127,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 				LINE_DBG(SIGNAL, xpd, pos,
 					"DAHDI_TONEDETECT: "
 					"Enable Hardware DTMF\n");
-				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-						    0x17, 1);
+				hardware_dtmf_control(xpd, pos, 1);
 			}
 			BIT_SET(priv->want_dtmf_events, pos);
 		} else {
@@ -1126,8 +1139,7 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 				LINE_DBG(SIGNAL, xpd, pos,
 					"DAHDI_TONEDETECT: "
 					"Disable Hardware DTMF\n");
-				SLIC_DIRECT_REQUEST(xbus, xpd, pos, SLIC_WRITE,
-						    0x17, 0);
+				hardware_dtmf_control(xpd, pos, 0);
 			}
 			BIT_CLR(priv->want_dtmf_events, pos);
 		}
@@ -1646,7 +1658,8 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		      (REG_FIELD_RAM(info, data_2) << 16) |
 		      (REG_FIELD_RAM(info, data_1) << 8) |
 		       REG_FIELD_RAM(info, data_0);
-	} else if (!indirect && regnum == REG_TYPE1_DTMF_DECODE) {
+	} else if ((XPD_HW(xpd).type == 1 && !indirect && regnum == REG_TYPE1_DTMF_DECODE) ||
+	    (XPD_HW(xpd).type == 6 && !indirect && regnum == REG_TYPE6_TONDTMF)) {
 		__u8 val = REG_FIELD(info, data_low);
 
 		process_dtmf(xpd, info->h.portnum, val);
