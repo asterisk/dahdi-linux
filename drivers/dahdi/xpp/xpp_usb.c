@@ -890,6 +890,8 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 	do_gettimeofday(&now);
 	xusb->last_tx = xframe->tv_submitted;
 	usec = usec_diff(&now, &xframe->tv_submitted);
+	if (usec < 0)
+		usec = 0; /* System clock jumped */
 	if (usec > xusb->max_tx_delay)
 		xusb->max_tx_delay = usec;
 	i = usec / USEC_BUCKET;
