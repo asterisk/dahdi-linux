@@ -977,7 +977,8 @@ static int BRI_card_tick(xbus_t *xbus, xpd_t *xpd)
 			0,		/* data_low     */
 			0,		/* do_datah     */
 			0,		/* data_high    */
-			0		/* should_reply */
+			0,		/* should_reply */
+			0		/* do_expander  */
 		    );
 
 		if (IS_NT(xpd) && nt_keepalive
@@ -1426,7 +1427,8 @@ static int write_state_register(xpd_t *xpd, __u8 value)
 		value,		/* data_low     */
 		0,		/* do_datah     */
 		0,		/* data_high    */
-		0		/* should_reply */
+		0,		/* should_reply */
+		0		/* do_expander */
 	    );
 	return ret;
 }

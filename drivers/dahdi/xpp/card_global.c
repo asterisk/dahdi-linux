@@ -97,6 +97,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 	int data_low;
 	bool do_datah;
 	int data_high;
+	bool do_expander = 0;
 	int ret = -EBADR;
 
 	num_args = 2;		/* port + operation */
@@ -157,6 +158,12 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 		do_subreg = 0;
 		num_args++;	/* register */
 		//XPD_DBG(REGS, xpd, "DIRECT\n");
+		break;
+	case 'X':
+		do_subreg = 0;
+		do_expander = 1;
+		num_args++;	/* register */
+		//XPD_DBG(REGS, xpd, "EXPANDER\n");
 		break;
 	case 'M':
 	case 'm':
@@ -299,17 +306,17 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 #if 0
 	XPD_DBG(REGS, xpd,
 		"portno=%d writing=%d regnum=%d do_subreg=%d subreg=%d "
-		"dataL=%d do_datah=%d dataH=%d\n",
+		"dataL=%d do_datah=%d dataH=%d do_expander=%d\n",
 		portno,			/* portno       */
 		writing,		/* writing      */
 		regnum, do_subreg,	/* use subreg   */
 		subreg,			/* subreg       */
 		data_low, do_datah,	/* use data_high */
-		data_high);
+		data_high, do_expander);
 #endif
 	ret = xpp_register_request(xpd->xbus, xpd, portno,
 		writing, regnum, do_subreg, subreg,
-		data_low, do_datah, data_high, 1);
+		data_low, do_datah, data_high, 1, do_expander);
 out:
 	return ret;
 }
@@ -397,7 +404,7 @@ static void global_packet_dump(const char *msg, xpacket_t *pack);
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 			 bool writing, __u8 regnum, bool do_subreg, __u8 subreg,
 			 __u8 data_low, bool do_datah, __u8 data_high,
-			 bool should_reply)
+			 bool should_reply, bool do_expander)
 {
 	int ret = 0;
 	xframe_t *xframe;
@@ -432,6 +439,7 @@ int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 	REG_FIELD(reg_cmd, do_datah) = do_datah;
 	REG_FIELD(reg_cmd, data_low) = data_low;
 	REG_FIELD(reg_cmd, data_high) = data_high;
+	REG_FIELD(reg_cmd, do_expander) = do_expander;
 	if (should_reply)
 		xpd->requested_reply = *reg_cmd;
 	if (debug & DBG_REGS) {

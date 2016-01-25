@@ -77,10 +77,13 @@ enum fxs_leds {
 #define	SLIC_READ	0
 #define	SLIC_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
 	xpp_register_request((xbus), (xpd), (port), \
-	(writing), (reg), 0, 0, (dL), 0, 0, 0)
+	(writing), (reg), 0, 0, (dL), 0, 0, 0, 0)
 #define	SLIC_INDIRECT_REQUEST(xbus, xpd, port, writing, reg, dL, dH)	\
 	xpp_register_request((xbus), (xpd), (port), \
-	(writing), 0x1E, 1, (reg), (dL), 1, (dH), 0)
+	(writing), 0x1E, 1, (reg), (dL), 1, (dH), 0, 0)
+#define	EXP_REQUEST(xbus, xpd, writing, reg, dL, dH)	\
+	xpp_register_request((xbus), (xpd), 0, \
+	(writing), (reg), 1, 0, (dL), 1, (dH), 0, 1)
 #define	RAM_REQUEST(xbus, xpd, port, writing, addr, data)	\
 	xpp_ram_request((xbus), (xpd), (port), \
 	(writing), (__u8)(addr), (__u8)((addr) >> 8), (__u8)(data), (__u8)((data) >> 8), (__u8)((data) >> 16), (__u8)((data) >> 24), 0)

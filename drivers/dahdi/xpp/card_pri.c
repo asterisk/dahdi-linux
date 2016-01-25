@@ -388,7 +388,8 @@ static int query_subunit(xpd_t *xpd, __u8 regnum)
 				    0,	/* data_L       */
 				    0,	/* do_datah     */
 				    0,	/* data_H       */
-				    0	/* should_reply */
+				    0,	/* should_reply */
+				    0	/* do_expander  */
 	    );
 }
 
@@ -404,7 +405,8 @@ static int write_subunit(xpd_t *xpd, __u8 regnum, __u8 val)
 			val,		/* data_L       */
 			0,		/* do_datah     */
 			0,		/* data_H       */
-			0		/* should_reply */
+			0,		/* should_reply */
+			0		/* do_expander  */
 	    );
 }
 
@@ -419,7 +421,8 @@ static int pri_write_reg(xpd_t *xpd, int regnum, __u8 val)
 				    val,	/* data_L       */
 				    0,	/* do_datah     */
 				    0,	/* data_H       */
-				    0	/* should_reply */
+				    0,	/* should_reply */
+				    0	/* do_expander  */
 	    );
 }
 

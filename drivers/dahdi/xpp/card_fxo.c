@@ -100,7 +100,7 @@ enum fxo_leds {
 #define	DAA_READ	0
 #define	DAA_DIRECT_REQUEST(xbus, xpd, port, writing, reg, dL)	\
 		xpp_register_request((xbus), (xpd), (port), \
-		(writing), (reg), 0, 0, (dL), 0, 0, 0)
+		(writing), (reg), 0, 0, (dL), 0, 0, 0, 0)
 
 /*---------------- FXO Protocol Commands ----------------------------------*/
 

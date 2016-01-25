@@ -74,7 +74,7 @@ DEF_RPACKET_DATA(GLOBAL, ERROR_CODE, __u8 category_code; __u8 errorbits;
 int xpp_register_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
 			 bool writing, __u8 regnum, bool do_subreg, __u8 subreg,
 			 __u8 data_low, bool do_datah, __u8 data_high,
-			 bool should_reply);
+			 bool should_reply, bool do_expander);
 int send_multibyte_request(xbus_t *xbus, unsigned unit, xportno_t portno,
 			   bool eoftx, __u8 *buf, unsigned len);
 int xpp_ram_request(xbus_t *xbus, xpd_t *xpd, xportno_t portno,
