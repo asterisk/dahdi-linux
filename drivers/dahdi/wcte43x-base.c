@@ -1709,7 +1709,7 @@ static void t43x_configure_e1(struct t43x *wc, int span_idx, int lineconfig)
 	__t43x_framer_set(wc, fidx, 0x21, 0x1c|cas);
 
 	/* Generate pulse mask for E1 */
-	__t43x_framer_set(wc, fidx, 0x26, 0x74);	/* XPM0 */
+	__t43x_framer_set(wc, fidx, 0x26, 0xb5);	/* XPM0 */
 	__t43x_framer_set(wc, fidx, 0x27, 0x02);	/* XPM1 */
 	__t43x_framer_set(wc, fidx, 0x28, 0x00);	/* XPM2 */
 
