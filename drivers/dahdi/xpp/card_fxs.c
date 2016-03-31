@@ -1257,17 +1257,34 @@ static int FXS_card_close(xpd_t *xpd, lineno_t chan)
  *	+-----+-----+-----+-----+-----+-----+-----+-----+
  *
  */
-static int input_channels[] = { 6, 7, 2, 3 };	// Slic numbers of input relays
+static int input_ports_type1[] = {
+	/* slic	= input_port */
+	[0]	= -1,
+	[1]	= -1,
+	[2]	= 2,
+	[3]	= 3,
+	[4]	= -1,
+	[5]	= -1,
+	[6]	= 0,
+	[7]	= 1,
+	};
 
 static void poll_inputs(xpd_t *xpd)
 {
 	int i;
 
 	BUG_ON(xpd->xbus_idx != 0);	// Only unit #0 has digital inputs
-	for (i = 0; i < ARRAY_SIZE(input_channels); i++) {
-		__u8 pos = input_channels[i];
-
-		SLIC_DIRECT_REQUEST(xpd->xbus, xpd, pos, SLIC_READ, 0x06, 0);
+	if (XPD_HW(xpd).type == 6) {
+		EXP_REQUEST(xpd->xbus, xpd, SLIC_READ,
+			REG_TYPE6_EXP_GPIOB, 0, 0);
+	} else {
+		for (i = 0; i < ARRAY_SIZE(input_ports_type1); i++) {
+			int pos = input_ports_type1[i];
+			if (pos >= 0) {
+				XPD_NOTICE(xpd, "%s polling slic %d\n", __func__, i);
+				SLIC_DIRECT_REQUEST(xpd->xbus, xpd, i, SLIC_READ, 0x06, 0);
+			}
+		}
 	}
 }
 #endif
@@ -1529,37 +1546,55 @@ HANDLER_DEF(FXS, SIG_CHANGED)
 }
 
 #ifdef	POLL_DIGITAL_INPUTS
+static inline void notify_digital_input(xpd_t *xpd, int input_port, int offhook)
+{
+	int channo = PHONEDEV(xpd).channels - LINES_DIGI_INP + input_port;
+
+	/* Stop ringing. No leds for digital inputs. */
+	PHONEDEV(xpd).ringing[channo] = 0;
+	if (offhook && !IS_OFFHOOK(xpd, channo)) {
+		LINE_DBG(SIGNAL, xpd, channo, "OFFHOOK\n");
+		hookstate_changed(xpd, channo, 1);
+	} else if (!offhook && IS_OFFHOOK(xpd, channo)) {
+		LINE_DBG(SIGNAL, xpd, channo, "ONHOOK\n");
+		hookstate_changed(xpd, channo, 0);
+	}
+}
+
 static void process_digital_inputs(xpd_t *xpd, const reg_cmd_t *info)
 {
-	int i;
-	bool offhook = (REG_FIELD(info, data_low) & 0x1) == 0;
-	xpp_line_t lines = BIT(info->h.portnum);
-
+	bool offhook;
 	/* Sanity check */
 	if (!PHONEDEV(xpd).digital_inputs) {
 		XPD_NOTICE(xpd, "%s called without digital inputs. Ignored\n",
 			   __func__);
 		return;
 	}
-	/* Map SLIC number into line number */
-	for (i = 0; i < ARRAY_SIZE(input_channels); i++) {
-		int channo = input_channels[i];
-		int newchanno;
+	if (XPD_HW(xpd).type == 6) {
+		static int input_values_type6[] = { 0x80, 0x20, 0x08, 0x02 };	/* I/O Expander values of input relays */
+		int i;
 
-		if (IS_SET(lines, channo)) {
-			newchanno = PHONEDEV(xpd).channels - LINES_DIGI_INP + i;
-			BIT_CLR(lines, channo);
-			BIT_SET(lines, newchanno);
-			/* Stop ringing. No leds for digital inputs. */
-			PHONEDEV(xpd).ringing[newchanno] = 0;
-			if (offhook && !IS_OFFHOOK(xpd, newchanno)) {
-				LINE_DBG(SIGNAL, xpd, newchanno, "OFFHOOK\n");
-				hookstate_changed(xpd, newchanno, 1);
-			} else if (!offhook && IS_OFFHOOK(xpd, newchanno)) {
-				LINE_DBG(SIGNAL, xpd, newchanno, "ONHOOK\n");
-				hookstate_changed(xpd, newchanno, 0);
-			}
+		/* Map I/O Expander GPIO into line number */
+		for (i = 0; i < ARRAY_SIZE(input_values_type6); i++) {
+			int chanmask = input_values_type6[i];
+
+			offhook = (REG_FIELD(info, data_low) & chanmask) == 0;
+			notify_digital_input(xpd, i, offhook);
 		}
+	} else {
+		int channo = info->h.portnum;
+		int input_port;
+		offhook = (REG_FIELD(info, data_low) & 0x1) == 0;
+		if (channo < 0 || channo >= ARRAY_SIZE(input_ports_type1)) {
+			XPD_ERR(xpd, "%s: got bad portnum=%d\n", __func__, channo);
+			return;
+		}
+		input_port = input_ports_type1[channo];
+		if (input_port < 0) {
+			XPD_ERR(xpd, "%s: portnum=%d is not input port\n", __func__, channo);
+			return;
+		}
+		notify_digital_input(xpd, input_port, offhook);
 	}
 }
 #endif
@@ -1668,7 +1703,9 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	/*
 	 * Process digital inputs polling results
 	 */
-	else if (!indirect && regnum == REG_TYPE1_DIGITAL_IOCTRL)
+	else if ( (XPD_HW(xpd).type == 1 && !indirect && regnum == REG_TYPE1_DIGITAL_IOCTRL) ||
+		  (XPD_HW(xpd).type == 6 && !indirect && regnum == REG_TYPE6_EXP_GPIOB && 
+		   REG_FIELD(info, do_expander)))
 		process_digital_inputs(xpd, info);
 #endif
 	else if (XPD_HW(xpd).type == 1 && !indirect && regnum == REG_TYPE1_LOOPCLOSURE) { /* OFFHOOK ? */
