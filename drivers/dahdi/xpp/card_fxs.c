@@ -826,23 +826,34 @@ static void start_stop_vm_led(xbus_t *xbus, xpd_t *xpd, lineno_t pos)
 
 static int relay_out(xpd_t *xpd, int pos, bool on)
 {
-	int value;
+	int ret = 0;
+	int value = 0;
 	int which = pos;
-	int relay_channels[] = { 0, 4 };
 
 	BUG_ON(!xpd);
 	/* map logical position to output port number (0/1) */
 	which -= (XPD_HW(xpd).subtype == 2) ? 6 : 8;
 	LINE_DBG(SIGNAL, xpd, pos, "which=%d -- %s\n", which,
 		 (on) ? "on" : "off");
-	which = which % ARRAY_SIZE(relay_channels);
-	value = BIT(2) | BIT(3);
-	value |=
-	    ((BIT(5) | BIT(6) | BIT(7)) & ~led_register_mask[OUTPUT_RELAY]);
-	if (on)
-		value |= led_register_vals[OUTPUT_RELAY];
-	return SLIC_DIRECT_REQUEST(xpd->xbus, xpd, relay_channels[which],
+	if (XPD_HW(xpd).type == 6) {
+		int relay_values_type6[] = { 0x01, 0x40 };
+		which = which % ARRAY_SIZE(relay_values_type6);
+		if (on)
+			value |= relay_values_type6[which];
+		ret = EXP_REQUEST(xpd->xbus, xpd, SLIC_WRITE,
+			REG_TYPE6_EXP_GPIOB, value, relay_values_type6[which]);
+	} else {
+		int relay_channels_type1[] = { 0, 4 };
+		which = which % ARRAY_SIZE(relay_channels_type1);
+		value = BIT(2) | BIT(3);
+		value |=
+		    ((BIT(5) | BIT(6) | BIT(7)) & ~led_register_mask[OUTPUT_RELAY]);
+		if (on)
+			value |= led_register_vals[OUTPUT_RELAY];
+		ret = SLIC_DIRECT_REQUEST(xpd->xbus, xpd, relay_channels_type1[which],
 				   SLIC_WRITE, REG_TYPE1_DIGITAL_IOCTRL, value);
+	}
+	return ret;
 }
 
 static int send_ring(xpd_t *xpd, lineno_t chan, bool on)
