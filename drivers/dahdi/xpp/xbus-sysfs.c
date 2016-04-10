@@ -676,6 +676,19 @@ static DEVICE_ATTR_READER(type_show, dev, buf)
 	return len;
 }
 
+static DEVICE_ATTR_READER(hwid_show, dev, buf)
+{
+	xpd_t *xpd;
+	int len = 0;
+
+	BUG_ON(!dev);
+	xpd = dev_to_xpd(dev);
+	if (!xpd)
+		return -ENODEV;
+	len += sprintf(buf, "%d.%d\n", XPD_HW(xpd).type, XPD_HW(xpd).subtype);
+	return len;
+}
+
 static DEVICE_ATTR_READER(offhook_show, dev, buf)
 {
 	xpd_t *xpd;
@@ -749,6 +762,7 @@ static struct device_attribute xpd_dev_attrs[] = {
 	__ATTR(blink, S_IRUGO | S_IWUSR, blink_show, blink_store),
 	__ATTR(span, S_IRUGO | S_IWUSR, span_show, span_store),
 	__ATTR_RO(type),
+	__ATTR_RO(hwid),
 	__ATTR_RO(offhook),
 	__ATTR_RO(timing_priority),
 	__ATTR_RO(refcount_xpd),
