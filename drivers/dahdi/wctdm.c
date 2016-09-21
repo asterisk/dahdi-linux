@@ -2411,6 +2411,7 @@ static int wctdm_initialize(struct wctdm *wc)
 	wc->span.channels = NUM_CARDS;
 	wc->span.flags = DAHDI_FLAG_RBS;
 	wc->span.ops = &wctdm_span_ops;
+	wc->span.spantype = SPANTYPE_ANALOG_MIXED;
 
 	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
 	if (dahdi_register_device(wc->ddev, &wc->dev->dev)) {

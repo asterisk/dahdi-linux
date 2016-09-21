@@ -685,6 +685,7 @@ static int wcfxo_initialize(struct wcfxo *wc)
 
 	wc->chan->pvt = wc;
 	wc->span.ops = &wcfxo_span_ops;
+	wc->span.spantype = SPANTYPE_ANALOG_FXO;
 	list_add_tail(&wc->span.device_node, &wc->ddev->spans);
 	if (dahdi_register_device(wc->ddev, &wc->dev->dev)) {
 		printk(KERN_NOTICE "Unable to register span with DAHDI\n");
