@@ -491,6 +491,10 @@ static int metering_gen(xpd_t *xpd, lineno_t chan, bool on)
 {
 	__u8 value = (on) ? 0x94 : 0x00;
 
+	if (XPD_HW(xpd).type == 6) {
+		XBUS_NOTICE("Metering not supported with FXS type 6");
+		return 0;
+	}
 	LINE_DBG(SIGNAL, xpd, chan, "METERING Generate: %s\n",
 		 (on) ? "ON" : "OFF");
 	return SLIC_DIRECT_REQUEST(xpd->xbus, xpd, chan, SLIC_WRITE, 0x23,
