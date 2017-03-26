@@ -56,7 +56,7 @@ my $eeprom_release_201 = 0;
 getopts('o:', \%opts);
 
 my %settings;
-$settings{debug} = 1;
+$settings{debug} = 0;
 $settings{fxs_skip_calib} = 0;
 my $chipregs;
 my $command;
@@ -172,7 +172,7 @@ sub read_reg($$$;$) {
 	my $bits_shift = shift // 0;
 	my $addr_low;
 	my $addr_high;
-	main::logit("read_reg: $slic, $addr, $direct");
+	main::debug("read_reg: $slic, $addr, $direct");
 	$addr_low = $addr & 0xFF;
 	$addr_high = $addr >> 8;
 
@@ -253,7 +253,7 @@ sub write_reg{#($$$) {
 
 	my $str  = sprintf "%s WD %02X %02X",
 		$slic, $reg, $val;
-	main::logit("write_reg: $slic, $reg, $val");
+	main::debug("write_reg: $slic, $reg, $val");
 	write_to_slic_file($str);
 }
 
@@ -276,7 +276,7 @@ sub write_ram($$$$) {
 	my $value_2;
 	my $value_3;
 	my $log_output = sprintf("write_ram: %d, %4d, 0x%08X", $slic, $addr, $value);
-	main::logit($log_output);
+	main::debug($log_output);
 	$value = $value << $bits_shift;
 	$addr_low = $addr & 0xFF;
 	$addr_high = $addr >> 8;
@@ -301,7 +301,7 @@ sub set_user_mode {
 	my $current = read_reg($slic, 0x7E, 'D');
 	$current &= 0x1;
 	$on &= 0x1;
-	main::logit("::set_user_mode($slic, $on): " . $current . " -> " . $on . "\n");
+	main::debug("::set_user_mode($slic, $on): " . $current . " -> " . $on . "\n");
 	return 1 if $current == $on;
 	write_reg($slic, 126, 0x02);
 	write_reg($slic, 126, 0x08);
@@ -325,11 +325,11 @@ sub init_early() {
 
 sub load_patch($) {
 	my $slic = shift // die;
-	main::logit "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
+	main::debug "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
 	FXS::set_user_mode($slic, 1);		# Turn on user mode
 	write_reg($slic, 81, 0x00);	# JMPEN, disable the patch
 
-	main::logit "=====Patch data======";
+	main::debug "=====Patch data======";
 	my @patch_data_array = (
 			141541,
 			540867,
@@ -591,7 +591,7 @@ sub load_patch($) {
 		write_ram($slic, 1359, $val, 12);	# PRAM_DATA, shl 12, addr auto inc
 	}
 
-	main::logit "=====Patch entries======";		# lowest 8 entries are registers
+	main::debug "=====Patch entries======";		# lowest 8 entries are registers
 	my @patch_entries_array = (
 			950,
 			4347,
@@ -622,7 +622,7 @@ sub load_patch($) {
 
 	write_ram($slic, 448, 0x06182014, 3); 		# PATCH_ID, shl 3, a unique code which is a hash of the patch.
 
-	main::logit "=====Patch support======";
+	main::debug "=====Patch support======";
 	my @patch_support_addr_array = (
 			800,
 			795,
@@ -671,7 +671,7 @@ sub load_patch($) {
 		write_ram($slic, $addr, $val, 3);
 	}
 
-	main::logit "=====Verify patch=======";
+	main::debug "=====Verify patch=======";
 	my $read_val;
 	write_ram($slic, 1358, 0x00000000, 3);			# PRAM_ADDR, reset the patch RAM address
 	foreach my $val (@patch_data_array) {
@@ -682,9 +682,9 @@ sub load_patch($) {
 			exit 0;
 		}
 	}
-	main::logit "Patch has been verified!";
+	main::debug "Patch has been verified!";
 
-	main::logit "=====Verify patch entries=======";
+	main::debug "=====Verify patch entries=======";
 	$jmp_table_low = 82;
 	$jmp_table_high = 1597;
 	foreach my $val (@patch_entries_array) {
@@ -705,9 +705,9 @@ sub load_patch($) {
 			exit 0;
 		}
 	}
-	main::logit "Patch entries has been verified!";
+	main::debug "Patch entries has been verified!";
 
-	main::logit "=====Verify patch support=======";
+	main::debug "=====Verify patch support=======";
 	for (my $i = 0; $i < @patch_support_addr_array; $i++) {
 		my $addr = $patch_support_addr_array[$i];
 		my $val = $patch_support_data_array[$i];
@@ -1057,7 +1057,7 @@ sub load_custom_preset($) {
 
 sub configure_pcm($) {
 	my $slic = shift // die;
-	main::logit "Configure_pcm()";
+	main::debug "Configure_pcm()";
 	my $pcm_offset = $slic * 8;
 	write_reg($slic, 12, $pcm_offset);	#PCMTXLO
 	write_reg($slic, 13, 0x00);		#PCMTXHI
@@ -1086,7 +1086,6 @@ main::logit "Starting '$0' (@SlicNums)\n";
 FXS::read_defaults();
 FXS::soft_reset();
 @SlicNums = FXS::check_slics();
-main::logit "Found Slics: @SlicNums\n";
 FXS::init_early();
 foreach my $slic (@SlicNums) {
 	FXS::load_patch($slic);
