@@ -1817,7 +1817,6 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	if (info->h.bytes == REG_CMD_SIZE(RAM)) {
 		uint addr;
 		unsigned long val;
-		XPD_INFO(xpd, "RAM reply is not fully implemented(%s)\n", __func__);
 		XPD_DBG(REGS, xpd, "port=%d, addr_low=0x%X, addr_high=0x%X, data_0=0x%X data_1=0x%X data_2=0x%X data_3=0x%X\n",
 			info->h.portnum,
 			REG_FIELD_RAM(info, addr_low),
