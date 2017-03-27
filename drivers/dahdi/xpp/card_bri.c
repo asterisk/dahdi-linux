@@ -564,7 +564,7 @@ static void fill_multibyte(xpd_t *xpd, xpacket_t *pack,
 	char *p;
 
 	XPACKET_INIT(pack, GLOBAL, REGISTER_REQUEST, xpd->xbus_idx, 0, 0);
-	XPACKET_LEN(pack) = RPACKET_SIZE(GLOBAL, REGISTER_REQUEST);
+	XPACKET_LEN(pack) = XFRAME_CMD_LEN(REG);
 	reg_cmd = &RPACKET_FIELD(pack, GLOBAL, REGISTER_REQUEST, reg_cmd);
 	reg_cmd->h.bytes = len;
 	reg_cmd->h.is_multibyte = 1;
@@ -610,7 +610,7 @@ static int tx_dchan(xpd_t *xpd)
 		return -ENOMEM;
 	}
 	for (packet_count = 0, eoframe = 0; !eoframe; packet_count++) {
-		int packet_len = RPACKET_SIZE(GLOBAL, REGISTER_REQUEST);
+		int packet_len = XFRAME_CMD_LEN(REG);
 		char buf[MULTIBYTE_MAX_LEN];
 		int len = MULTIBYTE_MAX_LEN;
 

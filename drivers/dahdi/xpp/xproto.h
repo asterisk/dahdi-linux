@@ -222,12 +222,16 @@ typedef struct reg_cmd {
 
 #ifdef __KERNEL__
 
+#define XFRAME_CMD_LEN(variant) \
+	( \
+		sizeof(struct xpacket_header) +		\
+		sizeof(struct reg_cmd_header) +		\
+		sizeof(struct reg_cmd_ ## variant)	\
+	)
+
 #define	XFRAME_NEW_REG_CMD(frm, p, xbus, card, variant, to) \
 	do {							\
-		int	pack_len = \
-				sizeof(struct xpacket_header) +		\
-				sizeof(struct reg_cmd_header) +		\
-				sizeof(struct reg_cmd_ ## variant);	\
+		int	pack_len = XFRAME_CMD_LEN(variant);	\
 								\
 		if (!XBUS_FLAGS(xbus, CONNECTED))		\
 			return -ENODEV;				\
