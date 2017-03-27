@@ -1264,8 +1264,15 @@ static xpd_t *PRI_card_new(xbus_t *xbus, int unit, int subunit,
 	struct PRI_priv_data *priv;
 	int channels = min(31, CHANNELS_PERXPD);	/* worst case */
 
-	if (unit_descriptor->ports_per_chip != 1) {
-		XBUS_ERR(xbus, "Bad subunit_ports=%d\n", unit_descriptor->ports_per_chip);
+	if ((unit_descriptor->ports_per_chip < 1) ||
+			(unit_descriptor->ports_per_chip > 4)) {
+		XBUS_ERR(xbus, "Bad ports_per_chip=%d\n",
+				unit_descriptor->ports_per_chip);
+		return NULL;
+	}
+	if (unit_descriptor->numchips != 1) {
+		XBUS_ERR(xbus, "Bad numchips=%d\n",
+				unit_descriptor->numchips);
 		return NULL;
 	}
 	XBUS_DBG(GENERAL, xbus, "\n");
