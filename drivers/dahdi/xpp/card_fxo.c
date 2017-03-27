@@ -1602,7 +1602,6 @@ static int __init card_fxo_startup(void)
 	}
 	if ((ret = xpd_driver_register(&fxo_driver.driver)) < 0)
 		return ret;
-	INFO("revision %s\n", XPP_VERSION);
 #ifdef	WITH_METERING
 	INFO("FEATURE: WITH METERING Detection\n");
 #else
@@ -1621,7 +1620,6 @@ static void __exit card_fxo_cleanup(void)
 MODULE_DESCRIPTION("XPP FXO Card Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 MODULE_ALIAS_XPD(XPD_TYPE_FXO);
 
 module_init(card_fxo_startup);

@@ -2745,7 +2745,6 @@ static int __init card_pri_startup(void)
 
 	if ((ret = xpd_driver_register(&pri_driver.driver)) < 0)
 		return ret;
-	INFO("revision %s\n", XPP_VERSION);
 #ifdef	DAHDI_AUDIO_NOTIFY
 	INFO("FEATURE: WITH DAHDI_AUDIO_NOTIFY\n");
 #else
@@ -2765,7 +2764,6 @@ static void __exit card_pri_cleanup(void)
 MODULE_DESCRIPTION("XPP PRI Card Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 MODULE_ALIAS_XPD(XPD_TYPE_PRI);
 
 module_init(card_pri_startup);

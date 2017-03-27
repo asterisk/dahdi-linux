@@ -22,8 +22,6 @@
  *
  */
 
-#include "xpp_version.h"
-
 #ifdef	__KERNEL__
 
 #include <linux/kernel.h>

@@ -1788,7 +1788,6 @@ static int __init card_bri_startup(void)
 
 	if ((ret = xpd_driver_register(&bri_driver.driver)) < 0)
 		return ret;
-	INFO("revision %s\n", XPP_VERSION);
 	xproto_register(&PROTO_TABLE(BRI));
 	return 0;
 }
@@ -1803,7 +1802,6 @@ static void __exit card_bri_cleanup(void)
 MODULE_DESCRIPTION("XPP BRI Card Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 MODULE_ALIAS_XPD(XPD_TYPE_BRI);
 
 module_init(card_bri_startup);

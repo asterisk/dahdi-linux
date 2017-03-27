@@ -103,7 +103,6 @@ void __exit parallel_dbg_cleanup(void)
 MODULE_DESCRIPTION("Use parallel port to debug drivers");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION("$Id:");
 
 module_init(parallel_dbg_init);
 module_exit(parallel_dbg_cleanup);

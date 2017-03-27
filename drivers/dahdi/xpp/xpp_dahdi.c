@@ -1195,8 +1195,7 @@ static int __init xpp_dahdi_init(void)
 	int ret = 0;
 	void *top = NULL;
 
-	INFO("revision %s MAX_XPDS=%d (%d*%d)\n", XPP_VERSION, MAX_XPDS,
-	     MAX_UNIT, MAX_SUBUNIT);
+	INFO("MAX_XPDS=%d (%d*%d)\n", MAX_XPDS, MAX_UNIT, MAX_SUBUNIT);
 #ifdef CONFIG_PROC_FS
 	xpp_proc_toplevel = proc_mkdir(PROC_DIR, NULL);
 	if (!xpp_proc_toplevel) {
@@ -1232,7 +1231,6 @@ static void __exit xpp_dahdi_cleanup(void)
 MODULE_DESCRIPTION("XPP Dahdi Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 
 module_init(xpp_dahdi_init);
 module_exit(xpp_dahdi_cleanup);

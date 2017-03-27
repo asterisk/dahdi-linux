@@ -36,19 +36,8 @@ EXTRA_CFLAGS	+= -DDEBUG_SYNC_PARPORT
 obj-m		+= parport_debug.o
 endif
 
-# Handle versioning
-XPP_VERSION_STR	?= $(shell if [ -r $(obj)/.version ]; then echo "\"`cat $(obj)/.version`\""; else echo '"Unknown"'; fi)
+# Just in case it was left from an older version:
 clean-files	+= xpp_version.h
-
-$(obj)/card_fxs.o $(obj)/card_fxo.o $(obj)/card_bri.o $(obj)/card_pri.o $(obj)/xpp_usb.o $(obj)/xpp.o: $(obj)/xpp_version.h
-
-$(obj)/xpp_version.h: FORCE
-	@echo '  VERSION $@'
-	$(Q)echo '#define	XPP_VERSION	$(XPP_VERSION_STR)' > $@.tmp
-	$(Q)if cmp -s $@.tmp $@ ; then echo; else \
-		mv $@.tmp $@ ; \
-	fi
-	$(Q)rm -f $@.tmp
 
 # Validations:
 #  - Syntactic verification of perl scripts
@@ -69,7 +58,7 @@ FXO_MODES  = $(src)/../fxo_modes.h
 FXO_VERIFY = $(obj)/init_card_2_$(XPP_PROTOCOL_VERSION) -v $(obj)/init_fxo_modes
 
 hostprogs-y			:= print_fxo_modes
-always				:= $(xpp_verified) xpp_version.h
+always				:= $(xpp_verified)
 print_fxo_modes-objs		:= print_fxo_modes.o
 HOSTCFLAGS_print_fxo_modes.o	+= -include $(FXO_MODES)
 

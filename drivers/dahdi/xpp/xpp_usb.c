@@ -1024,7 +1024,6 @@ static int __init xpp_usb_init(void)
 	int ret;
 	//xusb_t *xusb;
 
-	INFO("revision %s\n", XPP_VERSION);
 	xusb_cache =
 	    kmem_cache_create("xusb_cache", sizeof(xframe_t) + XFRAME_DATASIZE,
 #if (LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 22)) && defined(CONFIG_SLUB)
@@ -1144,7 +1143,6 @@ static const struct file_operations xusb_read_proc_ops = {
 MODULE_DESCRIPTION("XPP USB Transport Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 
 module_init(xpp_usb_init);
 module_exit(xpp_usb_shutdown);

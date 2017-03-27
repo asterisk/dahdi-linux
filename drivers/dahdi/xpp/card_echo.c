@@ -342,7 +342,6 @@ static int __init card_echo_startup(void)
 	ret = xpd_driver_register(&echo_driver.driver);
 	if (ret < 0)
 		return ret;
-	INFO("revision %s\n", XPP_VERSION);
 	INFO("FEATURE: WITH Octasic echo canceller\n");
 	xproto_register(&PROTO_TABLE(ECHO));
 	return 0;
@@ -358,7 +357,6 @@ static void __exit card_echo_cleanup(void)
 MODULE_DESCRIPTION("XPP ECHO Card Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 MODULE_ALIAS_XPD(XPD_TYPE_ECHO);
 
 module_init(card_echo_startup);

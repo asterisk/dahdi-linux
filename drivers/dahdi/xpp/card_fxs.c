@@ -2294,7 +2294,6 @@ static int __init card_fxs_startup(void)
 	if ((ret = xpd_driver_register(&fxs_driver.driver)) < 0)
 		return ret;
 
-	INFO("revision %s\n", XPP_VERSION);
 #ifdef	POLL_DIGITAL_INPUTS
 	INFO("FEATURE: with DIGITAL INPUTS support (polled every %d msec)\n",
 	     poll_digital_inputs);
@@ -2320,7 +2319,6 @@ static void __exit card_fxs_cleanup(void)
 MODULE_DESCRIPTION("XPP FXS Card Driver");
 MODULE_AUTHOR("Oron Peled <oron@actcom.co.il>");
 MODULE_LICENSE("GPL");
-MODULE_VERSION(XPP_VERSION);
 MODULE_ALIAS_XPD(XPD_TYPE_FXS);
 
 module_init(card_fxs_startup);
