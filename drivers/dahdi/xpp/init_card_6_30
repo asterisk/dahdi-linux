@@ -169,7 +169,8 @@ sub read_reg($$$;$) {
 	my $slic = shift;
 	my $addr = shift;
 	my $direct = shift;
-	my $bits_shift = shift // 0;
+	my $bits_shift = shift;
+	$bits_shift = 0 unless defined $bits_shift;
 	my $addr_low;
 	my $addr_high;
 	main::debug("read_reg: $slic, $addr, $direct");
@@ -247,9 +248,9 @@ WAIT_RESULTS:
 
 # TODO: rearange arguments
 sub write_reg{#($$$) {
-	my $slic = shift // die;
-	my $reg = shift // die;
-	my $val = shift // die;
+	my $slic = shift;
+	my $reg = shift;
+	my $val = shift;
 
 	my $str  = sprintf "%s WD %02X %02X",
 		$slic, $reg, $val;
@@ -265,9 +266,9 @@ sub write_reg{#($$$) {
 # 11 - address
 # 29 - data
 sub write_ram($$$$) {
-	my $slic = shift // die;
-	my $addr = shift // die;
-	my $value = shift // die;
+	my $slic = shift;
+	my $addr = shift;
+	my $value = shift;
 	my $bits_shift = shift;
 	my $addr_low;
 	my $addr_high;
@@ -296,8 +297,8 @@ sub write_ram($$$$) {
 }
 
 sub set_user_mode {
-	my $slic = shift // die;
-	my $on = shift // die;
+	my $slic = shift;
+	my $on = shift;
 	my $current = read_reg($slic, 0x7E, 'D');
 	$current &= 0x1;
 	$on &= 0x1;
@@ -324,7 +325,7 @@ sub init_early() {
 }
 
 sub load_patch($) {
-	my $slic = shift // die;
+	my $slic = shift;
 	main::debug "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
 	FXS::set_user_mode($slic, 1);		# Turn on user mode
 	write_reg($slic, 81, 0x00);	# JMPEN, disable the patch
@@ -728,7 +729,7 @@ sub load_patch($) {
 }
 
 sub load_general_params($) {
-	my $slic = shift // die;
+	my $slic = shift;
 	FXS::set_user_mode($slic, 1);		# Turn on user mode
 
 
@@ -886,10 +887,10 @@ sub load_general_params($) {
 }
 
 sub calibrate_slics($$$$) {
-	my $slic = shift // die;
-	my $cal0 = shift // die;
-	my $cal1 = shift // die;
-	my $cal2 = shift // die;
+	my $slic = shift;
+	my $cal0 = shift;
+	my $cal1 = shift;
+	my $cal2 = shift;
 
 	main::debug "Calibrating channel $slic";
 	write_reg($slic, 26, $cal0);		# CAL0
@@ -927,7 +928,7 @@ CALIB_LOOP:
 }
 
 sub dc_powerup($) {
-	my $slic = shift // die;
+	my $slic = shift;
 	FXS::set_user_mode($slic, 1);		# Turn on user mode
 	write_ram($slic, 1538, 0x700000, 3);	# PD_DCDC, In case OV or UV previously occurred
 #	write_ram($slic, 1555, 0x100000, 3);	# DCDC_CPUMP, Turn on charge pump
@@ -975,7 +976,7 @@ sub check_slics() {
 }
 
 sub load_custom_preset($) {
-	my $slic = shift // die;
+	my $slic = shift;
 	FXS::set_user_mode($slic, 1);		# Turn on user mode
 	write_ram($slic,  755, 0x00050000, 3);	#RTPER
 	write_ram($slic,  844, 0x7EFE000, 3);	#RINGFR = 20Hz
@@ -1058,7 +1059,7 @@ sub load_custom_preset($) {
 }
 
 sub configure_pcm($) {
-	my $slic = shift // die;
+	my $slic = shift;
 	main::debug "Configure_pcm()";
 	my $pcm_offset = $slic * 8;
 	write_reg($slic, 12, $pcm_offset);	#PCMTXLO
@@ -1073,8 +1074,8 @@ sub configure_pcm($) {
 }
 
 sub set_linefeed($$) {
-	my $slic = shift // die;
-	my $lfd = shift // die;
+	my $slic = shift;
+	my $lfd = shift;
 	write_reg($slic, 30, $lfd);		#LINEFEED
 }
 
