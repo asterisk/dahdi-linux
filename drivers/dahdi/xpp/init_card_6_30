@@ -671,54 +671,56 @@ sub load_patch($) {
 		write_ram($slic, $addr, $val, 3);
 	}
 
-	main::debug "=====Verify patch=======";
-	my $read_val;
-	write_ram($slic, 1358, 0x00000000, 3);			# PRAM_ADDR, reset the patch RAM address
-	foreach my $val (@patch_data_array) {
-		$read_val = read_reg($slic, 1359, 'R', 12);	# PRAM_DATA, shr 12, addr auto inc
-		if ($val != $read_val) {
-			printf "0x%X =? 0x%X\n", $val, $read_val;
-			printf "patch verification failed\n";
-			exit 0;
+	if ($settings{debug}) {
+		main::debug "=====Verify patch=======";
+		my $read_val;
+		write_ram($slic, 1358, 0x00000000, 3);			# PRAM_ADDR, reset the patch RAM address
+		foreach my $val (@patch_data_array) {
+			$read_val = read_reg($slic, 1359, 'R', 12);	# PRAM_DATA, shr 12, addr auto inc
+			if ($val != $read_val) {
+				printf "0x%X =? 0x%X\n", $val, $read_val;
+				printf "patch verification failed\n";
+				exit 0;
+			}
 		}
-	}
-	main::debug "Patch has been verified!";
+		main::debug "Patch has been verified!";
 
-	main::debug "=====Verify patch entries=======";
-	$jmp_table_low = 82;
-	$jmp_table_high = 1597;
-	foreach my $val (@patch_entries_array) {
-		last if $val == 0;
-		if ($jmp_table_low <= 97) {
-			$read_val = read_reg($slic, $jmp_table_low, 'D');# JMPnLO
-			$jmp_table_low++;
-			$read_val |= read_reg($slic, $jmp_table_low, 'D') << 8;# JMPnHI
-			$jmp_table_low++;
-		} else {
-			$read_val = read_reg($slic, $jmp_table_high, 'R', 3);	# PRAM_DATA, shr 3
-			$read_val &= 0x1FFF;
-			$jmp_table_high++;
+		main::debug "=====Verify patch entries=======";
+		$jmp_table_low = 82;
+		$jmp_table_high = 1597;
+		foreach my $val (@patch_entries_array) {
+			last if $val == 0;
+			if ($jmp_table_low <= 97) {
+				$read_val = read_reg($slic, $jmp_table_low, 'D');# JMPnLO
+				$jmp_table_low++;
+				$read_val |= read_reg($slic, $jmp_table_low, 'D') << 8;# JMPnHI
+				$jmp_table_low++;
+			} else {
+				$read_val = read_reg($slic, $jmp_table_high, 'R', 3);	# PRAM_DATA, shr 3
+				$read_val &= 0x1FFF;
+				$jmp_table_high++;
+			}
+			if ($val != $read_val) {
+				printf "0x%X =? 0x%X\n", $val, $read_val;
+				printf "patch entries verification failed\n";
+				exit 0;
+			}
 		}
-		if ($val != $read_val) {
-			printf "0x%X =? 0x%X\n", $val, $read_val;
-			printf "patch entries verification failed\n";
-			exit 0;
-		}
-	}
-	main::debug "Patch entries has been verified!";
+		main::debug "Patch entries has been verified!";
 
-	main::debug "=====Verify patch support=======";
-	for (my $i = 0; $i < @patch_support_addr_array; $i++) {
-		my $addr = $patch_support_addr_array[$i];
-		my $val = $patch_support_data_array[$i];
-		$read_val = read_reg($slic, $addr, 'R', 3);
-		if ($val != $read_val) {
-			printf "0x%X =? 0x%X\n", $val, $read_val;
-			printf "Patch support verification failed\n";
-			exit 0;
+		main::debug "=====Verify patch support=======";
+		for (my $i = 0; $i < @patch_support_addr_array; $i++) {
+			my $addr = $patch_support_addr_array[$i];
+			my $val = $patch_support_data_array[$i];
+			$read_val = read_reg($slic, $addr, 'R', 3);
+			if ($val != $read_val) {
+				printf "0x%X =? 0x%X\n", $val, $read_val;
+				printf "Patch support verification failed\n";
+				exit 0;
+			}
 		}
+		main::logit "patch support has been verified!";
 	}
-	main::logit "patch support has been verified!";
 
 	write_reg($slic, 81, 0x01);			# JMPEN, enable the patch
 	write_reg($slic, 05, 0x00);			# RAM_ADDR_HI, back to normal RAM access
