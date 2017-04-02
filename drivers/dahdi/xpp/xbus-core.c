@@ -719,6 +719,15 @@ static xpd_type_t xpd_hw2xpd_type(const struct unit_descriptor *unit_descriptor)
 	return xpd_type;
 }
 
+int subunits_of_xpd(const struct unit_descriptor* unit_descriptor,
+		const xproto_table_t *proto_table) {
+	int ports = unit_descriptor->ports_per_chip * unit_descriptor->numchips;
+
+	return
+		(ports + proto_table->ports_per_subunit - 1)
+		/ proto_table->ports_per_subunit;
+}
+
 static int new_card(xbus_t *xbus, const struct unit_descriptor *unit_descriptor)
 {
 	int unit = unit_descriptor->addr.unit;
@@ -764,9 +773,7 @@ static int new_card(xbus_t *xbus, const struct unit_descriptor *unit_descriptor)
 		xbus->echo_state.xpd_idx = XPD_IDX(unit, 0);
 	}
 	remaining_ports = ports;
-	subunits =
-	    (ports + proto_table->ports_per_subunit -
-	     1) / proto_table->ports_per_subunit;
+	subunits = subunits_of_xpd(unit_descriptor, proto_table);
 	XBUS_DBG(DEVICES, xbus,
 		"CARD %d xpd_type=%d/hw_type=%d ports=%d (%dx%d), "
 		"%d subunits, port-dir=0x%02X\n",

@@ -338,6 +338,8 @@ int waitfor_xpds(xbus_t *xbus, char *buf);
 int xbus_xpd_bind(xbus_t *xbus, xpd_t *xpd, int unit, int subunit);
 int xbus_xpd_unbind(xbus_t *xbus, xpd_t *xpd);
 
+int subunits_of_xpd(const struct unit_descriptor* unit_descriptor,
+		const xproto_table_t *proto_table);
 /* sysfs */
 int xpd_device_register(xbus_t *xbus, xpd_t *xpd);
 void xpd_device_unregister(xpd_t *xpd);

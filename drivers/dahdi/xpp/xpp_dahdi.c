@@ -572,6 +572,7 @@ __must_check xpd_t *xpd_alloc(xbus_t *xbus, int unit, int subunit,
 	xpd->unit_descriptor = *unit_descriptor;
 	xpd->xops = proto_table->xops;
 	xpd->xpd_state = XPD_STATE_START;
+	xpd->subunits = subunits_of_xpd(unit_descriptor, proto_table);
 	kref_init(&xpd->kref);
 
 	/* For USB-1 disable some channels */
