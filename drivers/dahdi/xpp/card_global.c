@@ -223,11 +223,12 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			goto out;
 		}
 		for (i = 0; i < num_args - 2; i++, argno++) {
-			input[i] = parse_hexbyte(argv[argno]);
-			if (input[i] < 0) {
+			int hexbyte= parse_hexbyte(argv[argno]);
+			if (hexbyte < 0) {
 				XPD_ERR(xpd, "Illegal input[%d] number '%s'\n", i, argv[argno]);
 				goto out;
 			}
+			input[i] = hexbyte;
 		}
 		ret = xpp_ram_request(xpd->xbus, xpd, portno, writing,
 			input[0],
