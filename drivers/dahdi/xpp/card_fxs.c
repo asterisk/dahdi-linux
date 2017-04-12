@@ -1417,7 +1417,6 @@ static void poll_inputs(xpd_t *xpd)
 		for (i = 0; i < ARRAY_SIZE(input_ports_type1); i++) {
 			int pos = input_ports_type1[i];
 			if (pos >= 0) {
-				XPD_NOTICE(xpd, "%s polling slic %d\n", __func__, i);
 				SLIC_DIRECT_REQUEST(xpd->xbus, xpd, i, SLIC_READ, 0x06, 0);
 			}
 		}
