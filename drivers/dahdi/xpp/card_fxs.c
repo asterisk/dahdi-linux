@@ -358,7 +358,8 @@ static int do_led(xpd_t *xpd, lineno_t chan, __u8 which, bool on)
 	if (XPD_HW(xpd).type == 6) {
 		int mask = 1 << chan;
 		value = (on) << chan;
-		XPD_INFO(xpd, "LED(%d): 0x%0X (mask: 0x%0X)\n", chan, value, mask);
+		XPD_DBG(LEDS, xpd, "LED(%d): 0x%0X (mask: 0x%0X)\n", chan,
+				value, mask);
 		if (which == LED_GREEN) { /* other leds ignored */
 			ret = EXP_REQUEST(xbus, xpd, SLIC_WRITE,
 				REG_TYPE6_EXP_GPIOA, value, mask);
