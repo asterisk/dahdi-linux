@@ -708,7 +708,7 @@ static void set_clocking(xpd_t *xpd)
 	/* Now set it */
 	if (best_xpd
 	    && ((struct PRI_priv_data *)(best_xpd->priv))->clock_source == 0) {
-		__u8 reg_pc_init[] = { VAL_PC_GPI, VAL_PC_GPI, VAL_PC_GPI };
+		__u8 reg_pc_init[] = { VAL_PC_SYPR, VAL_PC_GPI, VAL_PC_GPI };
 
 		for (i = 0; i < ARRAY_SIZE(reg_pc_init); i++) {
 			__u8 reg_pc = reg_pc_init[i];
