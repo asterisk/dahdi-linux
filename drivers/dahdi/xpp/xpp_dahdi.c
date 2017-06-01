@@ -124,7 +124,7 @@ int refcount_xpd(xpd_t *xpd)
 {
 	struct kref *kref = &xpd->kref;
 
-	return atomic_read(&kref->refcount);
+	return refcount_read(&kref->refcount);
 }
 
 xpd_t *get_xpd(const char *msg, xpd_t *xpd)

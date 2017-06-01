@@ -244,7 +244,7 @@ int refcount_xbus(xbus_t *xbus)
 {
 	struct kref *kref = &xbus->kref;
 
-	return atomic_read(&kref->refcount);
+	return refcount_read(&kref->refcount);
 }
 
 /*------------------------- Frame  Handling ------------------------*/

@@ -1000,7 +1000,7 @@ void xbus_sysfs_remove(xbus_t *xbus)
 		return;
 	}
 	XBUS_DBG(DEVICES, xbus, "going to unregister: refcount=%d\n",
-		atomic_read(&astribank->kobj.kref.refcount));
+		refcount_read(&astribank->kobj.kref.refcount));
 	BUG_ON(dev_get_drvdata(astribank) != xbus);
 	device_unregister(astribank);
 	dev_set_drvdata(astribank, NULL);

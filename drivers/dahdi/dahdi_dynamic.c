@@ -467,7 +467,7 @@ static int _destroy_dynamic(struct dahdi_dynamic_span *dds)
 
 	/* We shouldn't have more than the two references at this point.  If
 	 * we do, there are probably channels that are still opened. */
-	if (atomic_read(&d->kref.refcount) > 2) {
+	if (refcount_read(&d->kref.refcount) > 2) {
 		dynamic_put(d);
 		return -EBUSY;
 	}
