@@ -50,6 +50,10 @@
 #include <dahdi/kernel.h>
 #include <dahdi/wctdm_user.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#endif /* 4.11.0 */
+
 #include "proslic.h"
 
 #include <dahdi/kernel.h>

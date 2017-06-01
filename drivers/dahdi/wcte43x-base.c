@@ -46,6 +46,10 @@
 #include <stdbool.h>
 #include <dahdi/kernel.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#endif /* 4.11.0 */
+
 #include "wct4xxp/wct4xxp.h"	/* For certain definitions */
 #include "wcxb.h"
 #include "wcxb_spi.h"

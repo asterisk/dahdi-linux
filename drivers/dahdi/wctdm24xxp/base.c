@@ -44,6 +44,7 @@ Tx Gain - W/Pre-Emphasis: -23.99 to 0.00 db
 #include <linux/init.h>
 #include <linux/pci.h>
 #include <linux/sched.h>
+
 #include <linux/interrupt.h>
 #include <linux/workqueue.h>
 #include <linux/delay.h>
@@ -71,6 +72,10 @@ Tx Gain - W/Pre-Emphasis: -23.99 to 0.00 db
 
 #include <dahdi/kernel.h>
 #include <dahdi/wctdm_user.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#endif /* 4.11.0 */
 
 #include "proslic.h"
 

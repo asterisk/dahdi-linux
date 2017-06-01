@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/kmod.h>
 #include <linux/sched.h>
+
 #include <linux/pci.h>
 #include <linux/interrupt.h>
 #include <linux/delay.h>
@@ -40,7 +41,12 @@
 
 #include <stdbool.h>
 
-#include "dahdi/kernel.h"
+#include <dahdi/kernel.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#endif /* 4.11.0 */
+
 
 #include <linux/io.h>
 
