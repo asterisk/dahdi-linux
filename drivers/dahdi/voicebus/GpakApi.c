@@ -1560,7 +1560,7 @@ gpakReadDSPMemoryStat_t gpakReadDSPMemoryMap(
     if (DspStatus != 0)
         return (RmmFailure);
 
-	for (i = 0; i < MemoryLength_Word16; i++)
+    for (i = 0; i < MemoryLength_Word16; i++)
         pDest[i] = (short int) MsgBuffer[2 + i];
 
 
