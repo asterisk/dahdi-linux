@@ -907,32 +907,30 @@ sub load_general_params($) {
 	}
 }
 
-sub calibrate_slics($$$$) {
-	my $slic = shift;
+sub calibrate_slics($$$) {
 	my $cal0 = shift;
 	my $cal1 = shift;
 	my $cal2 = shift;
 
-	main::debug "Calibrating channel $slic";
-	write_reg($slic, 26, $cal0);		# CAL0
-	write_reg($slic, 27, $cal1);		# CAL1
-	write_reg($slic, 28, $cal2);		# CAL2
-	write_reg($slic, 29, 0x80);		# CAL3, CAN_EN
+	main::debug "Calibrating channels @SlicNums";
+	write_reg('*', 26, $cal0);		# CAL0
+	write_reg('*', 27, $cal1);		# CAL1
+	write_reg('*', 28, $cal2);		# CAL2
+	write_reg('*', 29, 0x80);		# CAL3, CAL_EN
 
 	# wait until all slics have finished calibration, or for timeout
 	# time periods in seconds:
 	my $sleep_time = 0.001;
 	my $timeout_time = 0.600; # Maximum from the spec
-	my @curr_slics;
+	my @curr_slics = @SlicNums;
 	my $sleep_cnt = 0;
-	push(@curr_slics, $slic);
 CALIB_LOOP:
 	while(1) {
 		main::mysleep($sleep_time);
 		my @next_slics;
 		for my $slic (@curr_slics) {
-			main::debug("checking slic $slic");
 			my $val = read_reg($slic, 29, 'D');
+			main::debug("checking slic $slic: $val.");
 			push(@next_slics, $slic) if ($val & 0x80) != 0;
 		}
 		@curr_slics = @next_slics;
@@ -949,19 +947,25 @@ CALIB_LOOP:
 }
 
 sub dc_powerup($) {
-	my $slic = shift;
-	FXS::set_user_mode($slic, 1);		# Turn on user mode
-	write_ram($slic, 1538, 0x700000, 3);	# PD_DCDC, In case OV or UV previously occurred
-#	write_ram($slic, 1555, 0x100000, 3);	# DCDC_CPUMP, Turn on charge pump
+	my $slics_ref = shift;
+	my @slics = @{ $slics_ref };
+
+	foreach my $slic (@slics) {
+		FXS::set_user_mode($slic, 1);	# Turn on user mode
+	}
+	write_ram('*', 1538, 0x700000, 3);	# PD_DCDC, In case OV or UV previously occurred
+#	write_ram('*', 1555, 0x100000, 3);	# DCDC_CPUMP, Turn on charge pump
 	main::mysleep(0.010);
-#	write_ram($slic, 1538, 0x00600000, 3);	# start up converter
+#	write_ram('*', 1538, 0x00600000, 3);	# start up converter
 	main::mysleep(0.500);
-	write_ram($slic, 1555, 0x000000, 3);	# DCDC_CPUMP, Turn off charge pump
-	write_ram($slic, 1542, 0x300000, 3);	# PD_OCLO
-	write_ram($slic, 1551, 0x00000000, 3);	# sClear DCDC status
+	write_ram('*', 1555, 0x000000, 3);	# DCDC_CPUMP, Turn off charge pump
+	write_ram('*', 1542, 0x300000, 3);	# PD_OCLO
+	write_ram('*', 1551, 0x00000000, 3);	# sClear DCDC status
 	main::mysleep(0.030);
-	write_ram($slic, 1538, 0x00400000, 3);
-	FXS::set_user_mode($slic, 0);		# Turn off user mode
+	write_ram('*', 1538, 0x00400000, 3);
+	foreach my $slic (@slics) {
+		FXS::set_user_mode($slic, 0);	# Turn off user mode
+	}
 }
 
 sub read_defaults() {
@@ -1130,21 +1134,15 @@ FXS::load_general_params(\@SlicNums);
 if($settings{fxs_skip_calib}) {
 	main::logit "==== WARNING: SKIPPED SLIC CALIBRATION =====";
 } else {
-	foreach my $slic (@SlicNums) {
-		FXS::calibrate_slics($slic, 0x00, 0x00, 0x01);
-	}
+	FXS::calibrate_slics(0x00, 0x00, 0x01);
 	main::mysleep(0.060);
-	foreach my $slic (@SlicNums) {
-		FXS::dc_powerup($slic);
-		FXS::calibrate_slics($slic, 0x00, 0xC0, 0x18); # remaining cals (except mads, lb)
-	}
+	FXS::dc_powerup(\@SlicNums);
+	FXS::calibrate_slics(0x00, 0xC0, 0x18); # remaining cals (except mads, lb)
 	main::mysleep(0.700);
 	foreach my $slic (@SlicNums) {
 		FXS::set_linefeed($slic, 0);
 		FXS::set_linefeed($slic, 1);
 	}
-	main::mysleep(0.010);
-	#FXS::calibrate_slics($slic, 0x0F, 0x00, 0x00); #
 	main::mysleep(1.000);
 
 }
