@@ -2414,6 +2414,9 @@ static ssize_t dahdi_chan_read(struct file *file, char __user *usrbuf,
 	if (unlikely(count < 1))
 		return -EINVAL;
 
+	if (unlikely(!test_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags)))
+		return -ENODEV;
+
 	for (;;) {
 		spin_lock_irqsave(&chan->lock, flags);
 		if (chan->eventinidx != chan->eventoutidx) {
@@ -2530,6 +2533,9 @@ static ssize_t dahdi_chan_write(struct file *file, const char __user *usrbuf,
 
 	if (unlikely(count < 1))
 		return -EINVAL;
+
+	if (unlikely(!test_bit(DAHDI_FLAGBIT_REGISTERED, &chan->flags)))
+		return -ENODEV;
 
 	for (;;) {
 		spin_lock_irqsave(&chan->lock, flags);
