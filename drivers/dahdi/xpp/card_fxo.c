@@ -620,12 +620,28 @@ static int FXO_card_dahdi_postregistration(xpd_t *xpd, bool on)
 	BUG_ON(!priv);
 	XPD_DBG(GENERAL, xpd, "%s\n", (on) ? "ON" : "OFF");
 	for_each_line(xpd, i) {
-		dahdi_report_battery(xpd, i);
 		MARK_OFF(priv, i, LED_GREEN);
 		msleep(2);
 		MARK_OFF(priv, i, LED_RED);
 		msleep(2);
 	}
+	return 0;
+}
+
+static int FXO_span_assigned(xpd_t *xpd)
+{
+	xbus_t *xbus;
+	struct FXO_priv_data *priv;
+	int i;
+
+	BUG_ON(!xpd);
+	xbus = xpd->xbus;
+	BUG_ON(!xbus);
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	XPD_DBG(GENERAL, xpd, "\n");
+	for_each_line(xpd, i)
+		dahdi_report_battery(xpd, i);
 	return 0;
 }
 
@@ -1314,6 +1330,7 @@ static const struct phoneops fxo_phoneops = {
 	.card_ioctl = FXO_card_ioctl,
 	.card_open = FXO_card_open,
 	.card_state = FXO_card_state,
+	.span_assigned = FXO_span_assigned,
 };
 
 static xproto_table_t PROTO_TABLE(FXO) = {
