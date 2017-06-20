@@ -1020,6 +1020,8 @@ void xpp_span_assigned(struct dahdi_span *span)
 		span->alarms &= ~DAHDI_ALARM_NOTOPEN;
 		dahdi_alarm_notify(&phonedev->span);
 	}
+	if (PHONE_METHOD(span_assigned, xpd))
+		CALL_PHONE_METHOD(span_assigned, xpd);
 }
 EXPORT_SYMBOL(xpp_span_assigned);
 

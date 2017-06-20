@@ -295,6 +295,7 @@ struct phoneops {
 	int (*card_open) (xpd_t *xpd, lineno_t pos);
 	int (*card_close) (xpd_t *xpd, lineno_t pos);
 	int (*card_state) (xpd_t *xpd, bool on);
+	int (*span_assigned) (xpd_t *xpd);
 };
 
 struct xops {
