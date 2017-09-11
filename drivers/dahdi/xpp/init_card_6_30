@@ -1044,12 +1044,11 @@ sub load_custom_preset($) {
 	write_ram('*', 636, 0x0040A0E0, 3); 	# SLOPE_ILIM
 	write_ram('*', 638, 0x1B27130B, 3); 	# SLOPE_DELTA1
 	write_ram('*', 639, 0x1DD87A3E, 3); 	# SLOPE_DELTA2
-#	write_ram('*', 640, 0x043AA4A6, 3);	# V_VLIM (36.000 v)
 	write_ram('*', 640, 0x034A1036, 3);	# V_VLIM (28.000 v)
 	write_ram('*', 641, 0x03A446AC, 3); 	# V_RFEED (31.000 v)
 	write_ram('*', 642, 0x034A0E48, 3); 	# V_ILIM  (28.000 v)
 	write_ram('*', 643, 0x01363429, 3); 	# CONST_RFEED (15.000 mA)
-	write_ram('*', 644, 0x005D0FA6, 3); 	# CONST_ILIM = 20 mA
+	write_ram('*', 644, 0x0045CBC2, 3); 	# CONST_ILIM = 15 mA
 	write_ram('*', 645, 0x00222A30, 3);	# I_VLIM = 0.000 mA
 	write_ram('*', 853, 0x005B0AFB, 3);	# LCRONHK (10.000 mA)
 	write_ram('*', 852, 0x006D4060, 3);	# LCROFFHK (12.000 mA)
