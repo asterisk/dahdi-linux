@@ -41,6 +41,7 @@ static DEF_PARM_BOOL(dtmf_detection, 1, 0644, "Do DTMF detection in hardware");
 #ifdef	POLL_DIGITAL_INPUTS
 static DEF_PARM(uint, poll_digital_inputs, 1000, 0644, "Poll Digital Inputs");
 #endif
+static DEF_PARM(uint, poll_chan_linefeed, 30000, 0644, "Poll Channel Linefeed");
 
 static DEF_PARM_BOOL(vmwi_ioctl, 1, 0644,
 		     "Asterisk support VMWI notification via ioctl");
@@ -140,6 +141,7 @@ enum neon_state {
 
 #define	REG_TYPE6_TONEN			0x3E	/* 62 - Hardware DTMF detection */
 #define	REG_TYPE6_TONEN_DTMF_DIS	BIT(2)	/*      DTMF Disable */
+#define REG_TYPE6_LINEFEED		0x1E	/* 30 - Linefeed */
 #define REG_TYPE6_TONDTMF		0x3C	/* 60 - DTMF Decode Status */
 #define	REG_TYPE6_EXP_GPIOA		0x12	/* I/O Expander GPIOA */
 #define	REG_TYPE6_EXP_GPIOB		0x13	/* I/O Expander GPIOB */
@@ -188,11 +190,13 @@ struct FXS_priv_data {
 	xpp_line_t vbat_h;		/* High voltage */
 	struct timeval prev_key_time[CHANNELS_PERXPD];
 	int led_counter[NUM_LEDS][CHANNELS_PERXPD];
+	int overheat_reset_counter[CHANNELS_PERXPD];
 	int ohttimer[CHANNELS_PERXPD];
 #define OHT_TIMER		6000	/* How long after RING to retain OHT */
 	/* IDLE changing hook state */
 	enum fxs_state idletxhookstate[CHANNELS_PERXPD];
 	enum fxs_state lasttxhook[CHANNELS_PERXPD];
+	enum fxs_state polledhook[CHANNELS_PERXPD];
 	struct dahdi_vmwi_info vmwisetting[CHANNELS_PERXPD];
 };
 
@@ -273,7 +277,7 @@ static int linefeed_control(xbus_t *xbus, xpd_t *xpd, lineno_t chan,
 		/* Make sure NEON state is off for */
 		if (value == FXS_LINE_POL_OHTRANS && IS_SET(priv->neon_blinking, chan))
 			set_vm_led_mode(xpd->xbus, xpd, chan, 0);
-		ret = SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, 0x1E, value);
+		ret = SLIC_DIRECT_REQUEST(xbus, xpd, chan, SLIC_WRITE, REG_TYPE6_LINEFEED, value);
 		if (value == FXS_LINE_POL_ACTIVE && PHONEDEV(xpd).msg_waiting[chan])
 			set_vm_led_mode(xpd->xbus, xpd, chan, PHONEDEV(xpd).msg_waiting[chan]);
 		return ret;
@@ -630,10 +634,12 @@ err:
 
 static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 {
+	struct FXS_priv_data *priv;
 	int ret = 0;
 	int i;
 
 	BUG_ON(!xpd);
+	priv = xpd->priv;
 	/*
 	 * Setup ring timers
 	 */
@@ -649,6 +655,9 @@ static int FXS_card_init(xbus_t *xbus, xpd_t *xpd)
 	if (ret < 0)
 		goto err;
 	for_each_line(xpd, i) {
+		if (XPD_HW(xpd).type == 6)
+			/* An arbitrary value that is not FXS_LINE_OPEN */
+			priv->polledhook[i] = FXS_LINE_ACTIVE;
 		linefeed_control(xbus, xpd, i, FXS_LINE_POL_ACTIVE);
 	}
 	XPD_DBG(GENERAL, xpd, "done\n");
@@ -1425,6 +1434,36 @@ static void poll_inputs(xpd_t *xpd)
 }
 #endif
 
+static void poll_linefeed(xpd_t *xpd)
+{
+	struct FXS_priv_data *priv;
+	int i;
+
+	if (XPD_HW(xpd).type != 6)
+		return;
+	if (xpd->xpd_state != XPD_STATE_READY)
+		return;
+	priv = xpd->priv;
+	BUG_ON(!priv);
+	BUG_ON(!xpd->xbus);
+
+	XPD_DBG(GENERAL, xpd, "periodic poll");
+	for_each_line(xpd, i) {
+		if (IS_SET(PHONEDEV(xpd).digital_outputs, i)
+		    || IS_SET(PHONEDEV(xpd).digital_inputs, i))
+			continue;
+		if (priv->polledhook[i] == FXS_LINE_OPEN &&
+				priv->lasttxhook[i] != FXS_LINE_OPEN) {
+			LINE_NOTICE(xpd, i, "Overheat detected, resetting.");
+			priv->overheat_reset_counter[i]++;
+			linefeed_control(xpd->xbus, xpd, i,
+					priv->lasttxhook[i]);
+		}
+		SLIC_DIRECT_REQUEST(xpd->xbus, xpd, i, SLIC_READ,
+				REG_TYPE6_LINEFEED, 0);
+	}
+}
+
 static void handle_linefeed(xpd_t *xpd)
 {
 	struct FXS_priv_data *priv;
@@ -1570,6 +1609,8 @@ static int FXS_card_tick(xbus_t *xbus, xpd_t *xpd)
 			poll_inputs(xpd);
 	}
 #endif
+	if ((xpd->timer_count % poll_chan_linefeed) == 0)
+		poll_linefeed(xpd);
 	handle_fxs_leds(xpd);
 	handle_linefeed(xpd);
 	if (XPD_HW(xpd).type == 6)
@@ -1808,7 +1849,8 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 	priv = xpd->priv;
 	BUG_ON(!priv);
 	if (info->h.bytes == REG_CMD_SIZE(REG)) {
-		indirect = (REG_FIELD(info, regnum) == 0x1E);
+		if ((XPD_HW(xpd).type == 1) && (REG_FIELD(info, regnum) == 0x1E))
+			indirect = 1;
 		regnum = (indirect) ? REG_FIELD(info, subreg) : REG_FIELD(info, regnum);
 		XPD_DBG(REGS, xpd, "%s reg_num=0x%X, dataL=0x%X dataH=0x%X\n",
 			(indirect) ? "I" : "D", regnum, REG_FIELD(info, data_low),
@@ -1835,6 +1877,12 @@ static int FXS_card_register_reply(xbus_t *xbus, xpd_t *xpd, reg_cmd_t *info)
 		__u8 val = REG_FIELD(info, data_low);
 
 		process_dtmf(xpd, info->h.portnum, val);
+	} else if ((XPD_HW(xpd).type == 6 && !indirect && regnum == REG_TYPE6_LINEFEED)) {
+		__u8 val = REG_FIELD(info, data_low);
+
+		LINE_DBG(SIGNAL, xpd, info->h.portnum,
+			"REG_TYPE6_LINEFEED: dataL=0x%X \n", val);
+		priv->polledhook[info->h.portnum] = val;
 	}
 #ifdef	POLL_DIGITAL_INPUTS
 	/*
@@ -2050,6 +2098,10 @@ static int proc_fxs_info_show(struct seq_file *sfile, void *not_used)
 				seq_printf(sfile, "%d ",
 					    LED_COUNTER(priv, i, led));
 		}
+	}
+	seq_printf(sfile, "\n%-12s", "overheats:");
+	for_each_line(xpd, i) {
+		seq_printf(sfile, "%4d", priv->overheat_reset_counter[i]);
 	}
 	seq_printf(sfile, "\n");
 	spin_unlock_irqrestore(&xpd->lock, flags);
