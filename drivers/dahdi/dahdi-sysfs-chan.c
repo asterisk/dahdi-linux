@@ -158,22 +158,38 @@ static BUS_ATTR_READER(ec_state_show, dev, buf)
 	return len;
 }
 
-static struct device_attribute chan_dev_attrs[] = {
-	__ATTR_RO(name),
-	__ATTR_RO(channo),
-	__ATTR_RO(chanpos),
-	__ATTR_RO(sig),
-	__ATTR_RO(sigcap),
-	__ATTR_RO(alarms),
-	__ATTR_RO(ec_factory),
-	__ATTR_RO(ec_state),
-	__ATTR_RO(blocksize),
+static DEVICE_ATTR_RO(name);
+static DEVICE_ATTR_RO(channo);
+static DEVICE_ATTR_RO(chanpos);
+static DEVICE_ATTR_RO(sig);
+static DEVICE_ATTR_RO(sigcap);
+static DEVICE_ATTR_RO(alarms);
+static DEVICE_ATTR_RO(ec_factory);
+static DEVICE_ATTR_RO(ec_state);
+static DEVICE_ATTR_RO(blocksize);
 #ifdef OPTIMIZE_CHANMUTE
-	__ATTR_RO(chanmute),
+static DEVICE_ATTR_RO(chanmute);
 #endif
-	__ATTR_RO(in_use),
-	__ATTR_NULL,
+static DEVICE_ATTR_RO(in_use);
+
+static struct attribute *chan_dev_attrs[] = {
+	&dev_attr_name.attr,
+	&dev_attr_channo.attr,
+	&dev_attr_chanpos.attr,
+	&dev_attr_sig.attr,
+	&dev_attr_sigcap.attr,
+	&dev_attr_alarms.attr,
+	&dev_attr_ec_factory.attr,
+	&dev_attr_ec_state.attr,
+	&dev_attr_blocksize.attr,
+#ifdef OPTIMIZE_CHANMUTE
+	&dev_attr_chanmute.attr,
+#endif
+	&dev_attr_in_use.attr,
+	NULL,
 };
+ATTRIBUTE_GROUPS(chan_dev);
+
 
 static void chan_release(struct device *dev)
 {
@@ -196,7 +212,7 @@ static int chan_match(struct device *dev, struct device_driver *driver)
 static struct bus_type chan_bus_type = {
 	.name		= "dahdi_channels",
 	.match		= chan_match,
-	.dev_attrs	= chan_dev_attrs,
+	.dev_groups	= chan_dev_groups
 };
 
 static int chan_probe(struct device *dev)
