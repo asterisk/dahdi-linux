@@ -214,6 +214,24 @@ static BUS_ATTR_READER(linecompat_show, dev, buf)
 	return len;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+static struct device_attribute span_dev_attrs[] = {
+	__ATTR_RO(name),
+	__ATTR_RO(desc),
+	__ATTR_RO(spantype),
+	__ATTR_RO(local_spanno),
+	__ATTR_RO(alarms),
+	__ATTR_RO(lbo),
+	__ATTR_RO(syncsrc),
+	__ATTR_RO(is_digital),
+	__ATTR_RO(is_sync_master),
+	__ATTR_RO(basechan),
+	__ATTR_RO(channels),
+	__ATTR_RO(lineconfig),
+	__ATTR_RO(linecompat),
+  	__ATTR_NULL,
+};
+#else
 static DEVICE_ATTR_RO(name);
 static DEVICE_ATTR_RO(desc);
 static DEVICE_ATTR_RO(spantype);
@@ -243,6 +261,7 @@ static struct attribute *span_dev_attrs[] = {
 	NULL,
 };
 ATTRIBUTE_GROUPS(span_dev);
+#endif
 
 static ssize_t master_span_show(struct device_driver *driver, char *buf)
 {
@@ -283,7 +302,11 @@ static struct bus_type spans_bus_type = {
 	.name           = "dahdi_spans",
 	.match          = span_match,
 	.uevent         = span_uevent,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+	.dev_attrs	= span_dev_attrs,
+#else
 	.dev_groups	= span_dev_groups,
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.drv_attrs	= dahdi_attrs,
 #else
@@ -703,6 +726,22 @@ dahdi_registration_time_show(struct device *dev,
 	return count;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+static struct device_attribute dahdi_device_attrs[] = {
+	__ATTR(manufacturer, S_IRUGO, manufacturer_show, NULL),
+	__ATTR(type, S_IRUGO, type_show, NULL),
+	__ATTR(span_count, S_IRUGO, span_count_show, NULL),
+	__ATTR(hardware_id, S_IRUGO, hardware_id_show, NULL),
+	__ATTR(location, S_IRUGO, location_show, NULL),
+	__ATTR(auto_assign, S_IWUSR, NULL, auto_assign_store),
+	__ATTR(assign_span, S_IWUSR, NULL, assign_span_store),
+	__ATTR(unassign_span, S_IWUSR, NULL, unassign_span_store),
+	__ATTR(spantype, S_IWUSR | S_IRUGO, dahdi_spantype_show,
+	       dahdi_spantype_store),
+	__ATTR(registration_time, S_IRUGO, dahdi_registration_time_show, NULL),
+	__ATTR_NULL,
+};
+#else
 static DEVICE_ATTR_RO(manufacturer);
 static DEVICE_ATTR_RO(type);
 static DEVICE_ATTR_RO(span_count);
@@ -727,11 +766,16 @@ static struct attribute *dahdi_device_attrs[] = {
 	NULL,
 };
 ATTRIBUTE_GROUPS(dahdi_device);
+#endif
 
 static struct bus_type dahdi_device_bus = {
 	.name = "dahdi_devices",
 	.uevent         = device_uevent,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+	.dev_attrs = dahdi_device_attrs,
+#else
 	.dev_groups = dahdi_device_groups,
+#endif
 };
 
 static void dahdi_sysfs_cleanup(void)

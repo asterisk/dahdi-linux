@@ -158,6 +158,24 @@ static BUS_ATTR_READER(ec_state_show, dev, buf)
 	return len;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+static struct device_attribute chan_dev_attrs[] = {
+	__ATTR_RO(name),
+	__ATTR_RO(channo),
+	__ATTR_RO(chanpos),
+	__ATTR_RO(sig),
+	__ATTR_RO(sigcap),
+	__ATTR_RO(alarms),
+	__ATTR_RO(ec_factory),
+	__ATTR_RO(ec_state),
+	__ATTR_RO(blocksize),
+#ifdef OPTIMIZE_CHANMUTE
+	__ATTR_RO(chanmute),
+#endif
+	__ATTR_RO(in_use),
+	__ATTR_NULL,
+};
+#else
 static DEVICE_ATTR_RO(name);
 static DEVICE_ATTR_RO(channo);
 static DEVICE_ATTR_RO(chanpos);
@@ -189,7 +207,7 @@ static struct attribute *chan_dev_attrs[] = {
 	NULL,
 };
 ATTRIBUTE_GROUPS(chan_dev);
-
+#endif
 
 static void chan_release(struct device *dev)
 {
@@ -212,7 +230,11 @@ static int chan_match(struct device *dev, struct device_driver *driver)
 static struct bus_type chan_bus_type = {
 	.name		= "dahdi_channels",
 	.match		= chan_match,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+	.dev_attrs	= chan_dev_attrs
+#else
 	.dev_groups	= chan_dev_groups
+#endif
 };
 
 static int chan_probe(struct device *dev)

@@ -339,6 +339,27 @@ static DEVICE_ATTR_READER(dahdi_registration_show, dev, buf)
 	return len;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+static struct device_attribute xbus_dev_attrs[] = {
+	__ATTR_RO(connector),
+	__ATTR_RO(label),
+	__ATTR_RO(status),
+	__ATTR_RO(timing),
+	__ATTR_RO(refcount_xbus),
+	__ATTR_RO(waitfor_xpds),
+	__ATTR_RO(driftinfo),
+	__ATTR(cls, S_IWUSR, NULL, cls_store),
+	__ATTR(xbus_state, S_IRUGO | S_IWUSR, xbus_state_show,
+	       xbus_state_store),
+#ifdef	SAMPLE_TICKS
+   __ATTR(samples, S_IWUSR | S_IRUGO, samples_show, samples_store),
+#endif
+	__ATTR(dahdi_registration, S_IRUGO | S_IWUSR,
+		dahdi_registration_show,
+		dahdi_registration_store),
+	__ATTR_NULL,
+};
+#else
 static DEVICE_ATTR_RO(connector);
 static DEVICE_ATTR_RO(label);
 static DEVICE_ATTR_RO(status);
@@ -370,6 +391,7 @@ static struct attribute *xbus_dev_attrs[] = {
    NULL,
 };
 ATTRIBUTE_GROUPS(xbus_dev);
+#endif
 
 static int astribank_match(struct device *dev, struct device_driver *driver)
 {
@@ -469,7 +491,11 @@ static struct bus_type toplevel_bus_type = {
 	.name = "astribanks",
 	.match = astribank_match,
 	.uevent = astribank_uevent,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+	.dev_attrs = xbus_dev_attrs,
+#else
 	.dev_groups = xbus_dev_groups,
+#endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	.drv_attrs = xpp_attrs,
 #else
@@ -781,6 +807,19 @@ static int xpd_match(struct device *dev, struct device_driver *driver)
 	return 1;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+static struct device_attribute xpd_dev_attrs[] = {
+	__ATTR(chipregs, S_IRUGO | S_IWUSR, chipregs_show, chipregs_store),
+	__ATTR(blink, S_IRUGO | S_IWUSR, blink_show, blink_store),
+	__ATTR(span, S_IRUGO | S_IWUSR, span_show, span_store),
+	__ATTR_RO(type),
+	__ATTR_RO(hwid),
+	__ATTR_RO(offhook),
+	__ATTR_RO(timing_priority),
+	__ATTR_RO(refcount_xpd),
+	__ATTR_NULL,
+};
+#else
 static DEVICE_ATTR_RW(chipregs);
 static DEVICE_ATTR_RW(blink);
 static DEVICE_ATTR_RW(span);
@@ -802,11 +841,16 @@ static struct attribute *xpd_dev_attrs[] = {
    NULL,
 };
 ATTRIBUTE_GROUPS(xpd_dev);
+#endif
 
 static struct bus_type xpd_type = {
 	.name = "xpds",
 	.match = xpd_match,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+	.dev_attrs = xpd_dev_attrs,
+#else
 	.dev_groups = xpd_dev_groups,
+#endif
 };
 
 int xpd_driver_register(struct device_driver *driver)
