@@ -1,6 +1,8 @@
 # Files that are generated as part of the build process which we do not want git
 # to track.
 
+/.pc
+
 *.[oa]
 *.mod
 *.mod.[oc]
