@@ -593,7 +593,7 @@ static xpd_t *FXS_card_new(xbus_t *xbus, int unit, int subunit,
 		regular_channels = min(8, subunit_ports);
 	channels = regular_channels;
 	/* Calculate digital inputs/outputs */
-	if (unit == 0 && unit_descriptor->subtype != 4) {
+	if (unit == 0 && unit_descriptor->subtype != 4 && unit_descriptor->numchips != 4) {
 		channels += 6;	/* 2 DIGITAL OUTPUTS, 4 DIGITAL INPUTS */
 		d_inputs = LINES_DIGI_INP;
 		d_outputs = LINES_DIGI_OUT;
