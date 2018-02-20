@@ -51,7 +51,6 @@ BEGIN { $init_dir = dirname($0); unshift(@INC, "$init_dir"); }
 use XppConfig $init_dir;
 my $unit_id;
 my %opts;
-my $eeprom_release_201 = 0;
 
 getopts('o:', \%opts);
 
@@ -96,9 +95,6 @@ if (-t STDERR) {
 		}
 	}
 	logit "XBUS_MODEL_STRING='$ENV{XBUS_MODEL_STRING}'";
-	if ($ENV{XBUS_MODEL_STRING} =~ m{.*/.*/201}) {
-		$eeprom_release_201 = 1;
-	}
 	$chipregs = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/chipregs",
 		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
 	$command = "/proc/xpp/$ENV{XBUS_NAME}/command";

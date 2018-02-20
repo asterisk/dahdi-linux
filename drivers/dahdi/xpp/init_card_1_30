@@ -94,7 +94,7 @@ if (-t STDERR) {
 		}
 	}
 	logit "XBUS_MODEL_STRING='$ENV{XBUS_MODEL_STRING}'";
-	if ($ENV{XBUS_MODEL_STRING} =~ m{.*/.*/201}) {
+	if ($ENV{XBUS_MODEL_STRING} =~ m{.*/.*/20.}) {
 		$eeprom_release_201 = 1;
 	}
 	$chipregs = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/chipregs",
