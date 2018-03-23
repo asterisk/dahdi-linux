@@ -4787,7 +4787,7 @@ static const struct net_device_ops dahdi_netdev_ops = {
 	.ndo_open       = dahdi_net_open,
 	.ndo_stop       = dahdi_net_stop,
 	.ndo_do_ioctl   = dahdi_net_ioctl,
-	.ndo_start_xmit = dahdi_xmit,
+	.ndo_start_xmit = hdlc_start_xmit,
 };
 #endif
 
