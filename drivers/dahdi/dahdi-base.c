@@ -95,7 +95,11 @@
 /* Get helper arithmetic */
 #include "arith.h"
 #if defined(CONFIG_DAHDI_MMX) || defined(ECHO_CAN_FP)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
 #include <asm/i387.h>
+#else
+#include <asm/fpu/api.h>
+#endif
 #endif
 
 #define hdlc_to_chan(h) (((struct dahdi_hdlc *)(h))->chan)
