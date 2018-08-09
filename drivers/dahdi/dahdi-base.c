@@ -5709,9 +5709,9 @@ static int dahdi_ioctl_setconf(struct file *file, unsigned long data)
 	}
 	  /* if changing confs, clear last added info */
 	if (conf.confno != chan->confna) {
-		memset(chan->conflast, 0, DAHDI_MAX_CHUNKSIZE);
-		memset(chan->conflast1, 0, DAHDI_MAX_CHUNKSIZE);
-		memset(chan->conflast2, 0, DAHDI_MAX_CHUNKSIZE);
+		memset(chan->conflast, 0, sizeof(chan->conflast));
+		memset(chan->conflast1, 0, sizeof(chan->conflast1));
+		memset(chan->conflast2, 0, sizeof(chan->conflast2));
 	}
 	oldconf = chan->confna;  /* save old conference number */
 	chan->confna = conf.confno;   /* set conference number */
