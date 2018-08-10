@@ -831,7 +831,7 @@ EXPORT_SYMBOL(dahdi_dynamic_unregister_driver);
 
 static struct timer_list alarmcheck;
 
-static void check_for_red_alarm(unsigned long ignored)
+static void check_for_red_alarm(TIMER_DATA_TYPE unused)
 {
 	int newalarm;
 	int alarmchanged = 0;
@@ -867,10 +867,7 @@ static const struct dahdi_dynamic_ops dahdi_dynamic_ops = {
 static int dahdi_dynamic_init(void)
 {
 	/* Start process to check for RED ALARM */
-	init_timer(&alarmcheck);
-	alarmcheck.expires = 0;
-	alarmcheck.data = 0;
-	alarmcheck.function = check_for_red_alarm;
+	timer_setup(&alarmcheck, check_for_red_alarm, 0);
 	/* Check once per second */
 	mod_timer(&alarmcheck, jiffies + 1 * HZ);
 #ifdef ENABLE_TASKLETS

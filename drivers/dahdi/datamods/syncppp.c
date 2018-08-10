@@ -148,7 +148,7 @@ static void sppp_lcp_open (struct sppp *sp);
 static void sppp_ipcp_open (struct sppp *sp);
 static int sppp_lcp_conf_parse_options (struct sppp *sp, struct lcp_header *h,
 	int len, u32 *magic);
-static void sppp_cp_timeout (unsigned long arg);
+static void sppp_cp_timeout (TIMER_DATA_TYPE timer);
 static char *sppp_lcp_type_name (u8 type);
 static char *sppp_ipcp_type_name (u8 type);
 static void sppp_print_bytes (u8 *p, u16 len);
@@ -189,12 +189,9 @@ static void sppp_set_timeout(struct sppp *p,int s)
 {
 	if (! (p->pp_flags & PP_TIMO)) 
 	{
-		init_timer(&p->pp_timer);
-		p->pp_timer.function=sppp_cp_timeout;
-		p->pp_timer.expires=jiffies+s*HZ;
-		p->pp_timer.data=(unsigned long)p;
 		p->pp_flags |= PP_TIMO;
-		add_timer(&p->pp_timer);
+		timer_setup(&p->pp_timer, sppp_cp_timeout, 0);
+		mod_timer(&p->pp_timer, jiffies + s*HZ);
 	}
 }
 

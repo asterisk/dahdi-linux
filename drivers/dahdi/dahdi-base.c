@@ -10069,7 +10069,7 @@ static inline unsigned long msecs_processed(const struct core_timer *const ct)
 	return atomic_read(&ct->count) * DAHDI_MSECS_PER_CHUNK;
 }
 
-static void coretimer_func(unsigned long param)
+static void coretimer_func(TIMER_DATA_TYPE unused)
 {
 	unsigned long flags;
 	unsigned long ms_since_start;
@@ -10150,16 +10150,14 @@ static void coretimer_func(unsigned long param)
 
 static void coretimer_init(void)
 {
-	init_timer(&core_timer.timer);
-	core_timer.timer.function = coretimer_func;
+	timer_setup(&core_timer.timer, coretimer_func, 0);
 	ktime_get_ts(&core_timer.start_interval);
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
 	core_timer.interval = max(msecs_to_jiffies(DAHDI_MSECS_PER_CHUNK), 1UL);
 	if (core_timer.interval < (HZ/250))
 		core_timer.interval = (HZ/250);
-	core_timer.timer.expires = jiffies + core_timer.interval;
-	add_timer(&core_timer.timer);
+	mod_timer(&core_timer.timer, jiffies + core_timer.interval);
 }
 
 static void coretimer_cleanup(void)
@@ -10455,7 +10453,7 @@ static const struct file_operations dahdi_chan_fops = {
 #ifdef CONFIG_DAHDI_WATCHDOG
 static struct timer_list watchdogtimer;
 
-static void watchdog_check(unsigned long ignored)
+static void watchdog_check(TIMER_DATA_TYPE ignored)
 {
 	unsigned long flags;
 	static int wdcheck=0;
@@ -10496,10 +10494,7 @@ static void watchdog_check(unsigned long ignored)
 
 static int __init watchdog_init(void)
 {
-	init_timer(&watchdogtimer);
-	watchdogtimer.expires = 0;
-	watchdogtimer.data =0;
-	watchdogtimer.function = watchdog_check;
+	timer_setup(&watchdogtimer, watchdog_check, 0);
 	/* Run every couple of jiffy or so */
 	mod_timer(&watchdogtimer, jiffies + 2);
 	return 0;

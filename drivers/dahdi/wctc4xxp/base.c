@@ -3701,9 +3701,9 @@ wctc4xxp_send_commands(struct wcdte *wc, struct list_head *to_send)
 }
 
 static void
-wctc4xxp_watchdog(unsigned long data)
+wctc4xxp_watchdog(TIMER_DATA_TYPE timer)
 {
-	struct wcdte *wc = (struct wcdte *)data;
+	struct wcdte *wc = from_timer(wc, timer, watchdog);
 	struct tcb *cmd, *temp;
 	LIST_HEAD(cmds_to_retry);
 	const int MAX_RETRIES = 5;
@@ -4090,13 +4090,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 			goto error_exit_swinit;
 	}
 
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 18)
-	wc->watchdog.function = wctc4xxp_watchdog;
-	wc->watchdog.data = (unsigned long)wc;
-	init_timer(&wc->watchdog);
-#	else
-	setup_timer(&wc->watchdog, wctc4xxp_watchdog, (unsigned long)wc);
-#	endif
+	timer_setup(&wc->watchdog, wctc4xxp_watchdog, 0);
 
 	/* ------------------------------------------------------------------
 	 * Load the firmware and start the DTE.

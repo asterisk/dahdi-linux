@@ -3204,9 +3204,9 @@ static void t43x_handle_interrupt(struct wcxb *xb, u32 pending)
 		wc->intr_span = 0;
 }
 
-static void t43x_timer(unsigned long data)
+static void t43x_timer(TIMER_DATA_TYPE timer)
 {
-	struct t43x *wc = (struct t43x *)data;
+	struct t43x *wc = from_timer(wc, timer, timer);
 
 	if (!is_initialized(wc))
 		return;
@@ -3432,7 +3432,7 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 		goto fail_exit;
 
 	mutex_init(&wc->lock);
-	setup_timer(&wc->timer, t43x_timer, (unsigned long)wc);
+	timer_setup(&wc->timer, t43x_timer, 0);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&wc->timer_work, timer_work_func, wc);

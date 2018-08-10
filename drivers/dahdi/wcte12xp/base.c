@@ -2766,10 +2766,10 @@ static void vpm_check_func(struct work_struct *work)
 	return;
 }
 
-static void te12xp_timer(unsigned long data)
+static void te12xp_timer(TIMER_DATA_TYPE timer)
 {
 	unsigned long flags;
-	struct t1 *wc = (struct t1 *)data;
+	struct t1 *wc = from_timer(wc, timer, timer);
 
 	if (unlikely(!test_bit(INITIALIZED, &wc->bit_flags)))
 		return;
@@ -2944,7 +2944,7 @@ static int __devinit te12xp_init_one(struct pci_dev *pdev, const struct pci_devi
 	spin_lock_init(&wc->reglock);
 	INIT_LIST_HEAD(&wc->active_cmds);
 	INIT_LIST_HEAD(&wc->pending_cmds);
-	setup_timer(&wc->timer, te12xp_timer, (unsigned long)wc);
+	timer_setup(&wc->timer, te12xp_timer, 0);
 
 #	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&wc->timer_work, timer_work_func, wc);

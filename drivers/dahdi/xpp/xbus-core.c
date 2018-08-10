@@ -1612,7 +1612,6 @@ xbus_t *xbus_new(struct xbus_ops *ops, ushort max_send_size,
 	transport_init(xbus, ops, max_send_size, transport_device, priv);
 	spin_lock_init(&xbus->lock);
 	init_waitqueue_head(&xbus->command_queue_empty);
-	init_timer(&xbus->command_timer);
 	atomic_set(&xbus->pcm_rx_counter, 0);
 	xbus->min_tx_sync = INT_MAX;
 	xbus->min_rx_sync = INT_MAX;

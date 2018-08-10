@@ -353,9 +353,9 @@ static void xpp_set_syncer(xbus_t *xbus, bool on)
 			 (syncer) ? syncer->busname : "NO-SYNC");
 }
 
-static void xbus_command_timer(unsigned long param)
+static void xbus_command_timer(TIMER_DATA_TYPE timer)
 {
-	xbus_t *xbus = (xbus_t *)param;
+	xbus_t *xbus = from_timer(xbus, timer, command_timer);
 	struct timeval now;
 
 	BUG_ON(!xbus);
@@ -371,10 +371,9 @@ void xbus_set_command_timer(xbus_t *xbus, bool on)
 	if (on) {
 		if (!timer_pending(&xbus->command_timer)) {
 			XBUS_DBG(SYNC, xbus, "add_timer\n");
-			xbus->command_timer.function = xbus_command_timer;
-			xbus->command_timer.data = (unsigned long)xbus;
-			xbus->command_timer.expires = jiffies + 1;
-			add_timer(&xbus->command_timer);
+			timer_setup(&xbus->command_timer,
+				xbus_command_timer, 0);
+			mod_timer(&xbus->command_timer, jiffies + 1);
 		}
 	} else if (timer_pending(&xbus->command_timer)) {
 		XBUS_DBG(SYNC, xbus, "del_timer\n");

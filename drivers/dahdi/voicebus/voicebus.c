@@ -1000,6 +1000,7 @@ __vb_rx_demand_poll(struct voicebus *vb)
 		__vb_setctl(vb, 0x0010, 0x00000000);
 }
 
+#ifndef CONFIG_VOICEBUS_TIMER
 static void
 __vb_enable_interrupts(struct voicebus *vb)
 {
@@ -1008,6 +1009,7 @@ __vb_enable_interrupts(struct voicebus *vb)
 	else
 		__vb_setctl(vb, IER_CSR7, DEFAULT_NORMAL_INTERRUPTS);
 }
+#endif
 
 static void
 __vb_disable_interrupts(struct voicebus *vb)
@@ -1033,8 +1035,7 @@ static void start_packet_processing(struct voicebus *vb)
 	clear_bit(VOICEBUS_STOP, &vb->flags);
 	clear_bit(VOICEBUS_STOPPED, &vb->flags);
 #if defined(CONFIG_VOICEBUS_TIMER)
-	vb->timer.expires = jiffies + HZ/1000;
-	add_timer(&vb->timer);
+	mod_timer(&vb->timer, jiffies + HZ/1000);
 #else
 	/* Clear the interrupt status register. */
 	__vb_setctl(vb, SR_CSR5, 0xffffffff);
@@ -1746,18 +1747,17 @@ vb_isr(int irq, void *dev_id)
  * the timer.
  */
 static void
-vb_timer(unsigned long data)
+vb_timer(TIMER_DATA_TYPE timer)
 {
 	unsigned long start = jiffies;
-	struct voicebus *vb = (struct voicebus *)data;
+	struct voicebus *vb = from_timer(vb, timer, timer);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
 	vb_isr(0, vb, 0);
 #else
 	vb_isr(0, vb);
 #endif
 	if (!test_bit(VOICEBUS_STOPPED, &vb->flags)) {
-		vb->timer.expires = start + HZ/1000;
-		add_timer(&vb->timer);
+		mod_timer(&vb->timer, start + HZ/1000);
 	}
 }
 #endif
@@ -1800,9 +1800,7 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 	INIT_LIST_HEAD(&vb->free_rx);
 
 #if defined(CONFIG_VOICEBUS_TIMER)
-	init_timer(&vb->timer);
-	vb->timer.function = vb_timer;
-	vb->timer.data = (unsigned long)vb;
+	timer_setup(&vb->timer, vb_timer, 0);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)

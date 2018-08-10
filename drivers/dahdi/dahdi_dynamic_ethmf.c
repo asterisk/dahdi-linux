@@ -681,16 +681,13 @@ static int ethmf_delay_dec(void)
  * Timer callback function to allow all spans to be added, prior to any of
  * them being used.
  */
-static void timer_callback(unsigned long param)
+static void timer_callback(TIMER_DATA_TYPE unused)
 {
 	if (ethmf_delay_dec()) {
-		if (!atomic_read(&timer_deleted)) {
-			timer.expires = jiffies + HZ;
-			add_timer(&timer);
-		}
+		if (!atomic_read(&timer_deleted))
+			mod_timer(&timer, jiffies + HZ);
 	} else {
 		printk(KERN_INFO "All TDMoE multiframe span groups are active.\n");
-		del_timer(&timer);
 	}
 }
 
@@ -764,11 +761,8 @@ static const struct file_operations ztdethmf_proc_fops = {
 
 static int __init ztdethmf_init(void)
 {
-	init_timer(&timer);
-	timer.expires = jiffies + HZ;
-	timer.function = &timer_callback;
-	if (!timer_pending(&timer))
-		add_timer(&timer);
+	timer_setup(&timer, timer_callback, 0);
+	mod_timer(&timer, jiffies + HZ);
 
 	dev_add_pack(&ztdethmf_ptype);
 	register_netdevice_notifier(&ztdethmf_nblock);

@@ -1404,6 +1404,33 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+
+#ifndef TIMER_DATA_TYPE
+#define TIMER_DATA_TYPE unsigned long
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
+
+/**
+ * timer_setup - Added in 4.13.0.  We can make a direct translation to the
+ * setup_timer interface since DAHDI does not pass any flags to any of the
+ * timer_setup functions.
+ *
+ */
+static inline void
+timer_setup(struct timer_list *timer,
+	    void (*timer_callback)(TIMER_DATA_TYPE data),
+	    unsigned long flags)
+{
+	WARN_ON(flags != 0);
+	setup_timer(timer, timer_callback, (TIMER_DATA_TYPE)timer);
+}
+
+#define from_timer(var, callback_timer, timer_fieldname) \
+	container_of((struct timer_list *)(callback_timer), \
+		     typeof(*var), timer_fieldname)
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 #define refcount_read atomic_read
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0)
@@ -1536,6 +1563,14 @@ static inline int strcasecmp(const char *s1, const char *s2)
 #endif /* 3.10.0 */
 #endif /* 3.16.0 */
 #endif /* 4.11.0 */
+#endif /* 4.13.0 */
+#else /* >= 4.15.0 */
+
+#ifndef TIMER_DATA_TYPE
+#define TIMER_DATA_TYPE struct timer_list *
+#endif
+
+#endif /* 4.15.0 */
 
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED
