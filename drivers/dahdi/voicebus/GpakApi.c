@@ -1636,6 +1636,8 @@ gpakWriteSysParmsStatus_t gpakWriteSystemParms(
     DSP_WORD MsgBuffer[MSG_BUFFER_SIZE];    /* message buffer */
     DSP_WORD DspStatus;                     /* DSP's reply status */
 
+    memset(MsgBuffer, 0, sizeof(MsgBuffer));
+
     /* Make sure the DSP Id is valid. */
     if (DspId >= MAX_DSP_CORES)
         return (WspInvalidDsp);
