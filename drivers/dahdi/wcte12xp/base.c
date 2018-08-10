@@ -2069,7 +2069,8 @@ static int t1_software_init(struct t1 *wc, enum linemode type)
 	t4_serial_setup(wc);
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
 	for (x = 0; x < wc->span.channels; x++) {
-		sprintf(wc->chans[x]->name, "%s/%d", wc->span.name, x + 1);
+		snprintf(wc->chans[x]->name, sizeof(wc->chans[x]->name),
+			 "%s/%d", wc->span.name, x + 1);
 		t1_chan_set_sigcap(&wc->span, x);
 		wc->chans[x]->pvt = wc;
 		wc->chans[x]->chanpos = x + 1;

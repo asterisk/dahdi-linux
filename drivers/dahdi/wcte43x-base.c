@@ -2536,7 +2536,8 @@ t43x_init_one_span(struct t43x *wc, struct t43x_span *ts, enum linemode type)
 
 	set_bit(DAHDI_FLAGBIT_RBS, &ts->span.flags);
 	for (x = 0; x < ts->span.channels; x++) {
-		sprintf(ts->chans[x]->name, "%s/%d", ts->span.name, x + 1);
+		snprintf(ts->chans[x]->name, sizeof(ts->chans[x]->name),
+			 "%s/%d", ts->span.name, x + 1);
 		t43x_chan_set_sigcap(&ts->span, x);
 		ts->chans[x]->pvt = wc;
 		ts->chans[x]->chanpos = x + 1;

@@ -1805,7 +1805,8 @@ static int t13x_software_init(struct t13x *wc, enum linemode type)
 	t13x_serial_setup(wc);
 	set_bit(DAHDI_FLAGBIT_RBS, &wc->span.flags);
 	for (x = 0; x < wc->span.channels; x++) {
-		sprintf(wc->chans[x]->name, "%s/%d", wc->span.name, x + 1);
+		snprintf(wc->chans[x]->name, sizeof(wc->chans[x]->name),
+			 "%s/%d", wc->span.name, x + 1);
 		t13x_chan_set_sigcap(&wc->span, x);
 		wc->chans[x]->pvt = wc;
 		wc->chans[x]->chanpos = x + 1;

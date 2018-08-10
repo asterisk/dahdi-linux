@@ -638,8 +638,8 @@ static int _create_dynamic(struct dahdi_dynamic_span *dds)
 		DAHDI_CONFIG_HDB3 | DAHDI_CONFIG_CRC4 | DAHDI_CONFIG_NOTOPEN;
 	d->span.ops = &dynamic_ops;
 	for (x = 0; x < d->span.channels; x++) {
-		sprintf(d->chans[x]->name, "DYN/%s/%s/%d",
-			dds->driver, dds->addr, x+1);
+		snprintf(d->chans[x]->name, sizeof(d->chans[x]->name),
+			 "DYN/%s/%s/%d", dds->driver, dds->addr, x+1);
 		d->chans[x]->sigcap = DAHDI_SIG_EM | DAHDI_SIG_CLEAR |
 				      DAHDI_SIG_FXSLS | DAHDI_SIG_FXSKS |
 				      DAHDI_SIG_FXSGS | DAHDI_SIG_FXOLS |
