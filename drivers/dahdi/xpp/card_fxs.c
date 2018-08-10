@@ -1341,11 +1341,13 @@ static int FXS_card_ioctl(xpd_t *xpd, int pos, unsigned int cmd,
 		if (!vmwi_ioctl) {
 			static bool notified;
 
-			if (!notified++)
+			if (!notified) {
+				notified = true;
 				LINE_NOTICE(xpd, pos,
 					"Got DAHDI_VMWI notification "
 					"but vmwi_ioctl parameter is off. "
 					"Ignoring.\n");
+			}
 			return 0;
 		}
 		/* Digital inputs/outputs don't have VM leds */
