@@ -190,8 +190,10 @@ dist-clean: clean
 firmware-download:
 	@$(MAKE) -C drivers/dahdi/firmware all
 
+ifneq (,$(wildcard test-script))
 test:
 	./test-script $(DESTDIR)/lib/modules/$(KVERS) dahdi
+endif
 
 docs: $(GENERATED_DOCS)
 
