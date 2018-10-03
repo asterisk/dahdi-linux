@@ -146,23 +146,6 @@ config DAHDI_WCTDM24XXP
 
 	  If unsure, say Y.
 
-config DAHDI_WCTE12XP
-	tristate "Digium Wildcard VoiceBus digital card Support"
-	depends on DAHDI && DAHDI_VOICEBUS
-	default DAHDI
-	---help---
-	  This driver provides support for the following Digium
-	  Wildcard products:
-
-  	  * TE120P (PCI/PCI-X)
-	  * TE121 (PCI/PCI-X)
-  	  * TE122 (PCI-E)
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called wcte12xp.
-
-	  If unsure, say Y.
-
 config DAHDI_PCIRADIO
 	tristate "PCI Radio Support"
 	depends on DAHDI && PCI
