@@ -223,4 +223,3 @@ config DAHDI_DYNAMIC_LOC
 	  If unsure, say Y.
 
 
-source "drivers/dahdi/xpp/Kconfig"
