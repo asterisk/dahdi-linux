@@ -252,16 +252,6 @@ config DAHDI_DYNAMIC_LOC
 	  If unsure, say Y.
 
 
-config DAHDI_WCT1XXP
-	tristate "Digium Wildcard T100P Support"
-	depends on DAHDI && PCI
-	default DAHDI
-	---help---
-	  To compile this driver as a module, choose M here: the
-	  module will be called wct1xxp.
-
-	  If unsure, say Y.
-
 config DAHDI_WCTE11XP
 	tristate "Digium Wildcard TE110P Support"
 	depends on DAHDI && PCI
