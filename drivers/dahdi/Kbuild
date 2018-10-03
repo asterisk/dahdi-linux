@@ -44,7 +44,6 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT1XXP)		+= wct1xxp.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE11XP)		+= wcte11xp.o
 
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCFXO)		+= wcfxo.o
-obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_TOR2)		+= tor2.o
 endif
 
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPP)		+= xpp/
@@ -157,12 +156,9 @@ ifeq ($(HPEC_PRESENT),yes)
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_HPEC)	+= dahdi_echocan_hpec.o
 endif
 
-$(obj)/tor2.o: $(obj)/tor2fw.h
 
 hostprogs-y := makefw
 
-$(obj)/tor2fw.h: $(src)/tormenta2.rbt $(obj)/makefw 
-	$(obj)/makefw $< tor2fw > $@
 
 
-clean-files	:= radfw.h tor2fw.h
+clean-files	:= radfw.h 
