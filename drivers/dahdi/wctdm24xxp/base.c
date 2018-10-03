@@ -6052,11 +6052,7 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 
 static DEFINE_PCI_DEVICE_TABLE(wctdm_pci_tbl) = {
 	{ 0xd161, 0x2400, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wctdm2400 },
-	{ 0xd161, 0x0800, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wctdm800 },
-	{ 0xd161, 0x8002, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wcaex800 },
 	{ 0xd161, 0x8003, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wcaex2400 },
-	{ 0xd161, 0x8005, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wctdm410 },
-	{ 0xd161, 0x8006, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wcaex410 },
 	{ 0xd161, 0x8007, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wcha80000 },
 	{ 0xd161, 0x8008, PCI_ANY_ID, PCI_ANY_ID, 0, 0, (unsigned long) &wchb80000 },
 	{ 0 }

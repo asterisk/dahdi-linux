@@ -102,8 +102,6 @@ install-modconf:
 		/sbin/update-modules ; \
 	fi
 
-install-xpp-firm:
-	$(MAKE) -C drivers/dahdi/xpp/firmwares install
 
 install-firmware:
 ifeq ($(HOTPLUG_FIRMWARE),yes)
