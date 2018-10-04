@@ -28,18 +28,12 @@ Digital Cards
   * Digium TE220: PCI-Express dual-port T1/E1/J1
   * Digium TE420: PCI-Express quad-port T1/E1/J1
   * Digium TE820: PCI-Express eight-port T1/E1/J1
-- wcte12xp:
-  * Digium TE120P: PCI single-port T1/E1/J1
-  * Digium TE121: PCI-Express single-port T1/E1/J1
-  * Digium TE122: PCI single-port T1/E1/J1
-- wcte11xp:
-  * Digium TE110P: PCI single-port T1/E1/J1
-- wct1xxp: 
-  * Digium T100P: PCI single-port T1
-  * Digium E100P: PCI single-port E1
 - wcb4xxp:
   * Digium B410: PCI quad-port BRI
-- tor2: Tormenta quad-span T1/E1 card from the Zapata Telephony project
+  * Digium B233: PCI-Express dual-port BRI with echo can
+  * Digium B234: PCI dual-port dual-port BRI with echo can
+  * Digium B433: PCI-Express quad-port BRI with echo can
+  * Digium B434: PCI quad-port BRI with echo can
 
 
 Analog Cards
@@ -51,19 +45,13 @@ Analog Cards
   * Digium A4B: PCI express up to 4 mixed FXS/FXO ports 
 - wctdm24xxp: 
   * Digium TDM2400P/AEX2400: up to 24 analog ports
-  * Digium TDM800P/AEX800: up to 8 analog ports
-  * Digium TDM410P/AEX410: up to 4 analog ports
   * Digium Hx8 Series: Up to 8 analog or BRI ports
-- wctdm:
-  * Digium TDM400P: up to 4 analog ports
 - xpp: Xorcom Astribank: a USB connected unit of up to 32 ports
   (including the digital BRI and E1/T1 modules)
-- wcfxo: X100P, similar and clones. A simple single-port FXO card
 
 
 Other Drivers
 ~~~~~~~~~~~~~
-- pciradio: Zapata Telephony PCI Quad Radio Interface
 - wctc4xxp: Digium hardware transcoder cards (also need dahdi_transcode)
 - dahdi_dynamic_eth: TDM over Ethernet (TDMoE) driver. Requires dahdi_dynamic
 - dahdi_dynamic_loc: Mirror a local span. Requires dahdi_dynamic
@@ -195,204 +183,6 @@ you a clue of the versions installed:
 
   find /lib/modules -name dahdi.ko
 
-
-Installing the B410P drivers with mISDN
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-DAHDI includes the wcb4xxp driver for the B410P, however, support for the
-B410P was historically provided by mISDN.  If you would like to use the mISDN
-driver with the B410P, please comment out the wcb4xxp line in /etc/dahdi/modules.
-This will prevent DAHDI from loading wcb4xxp which will conflict with the mISDN
-driver.
-
-To install the mISDN driver for the B410P, please see http://www.misdn.org for
-more information, but the following sequence of steps is roughly equivalent to
-'make b410p' from previous releases.
-
-  wget http://www.misdn.org/downloads/releases/mISDN-1_1_8.tar.gz
-  wget http://www.misdn.org/downloads/releases/mISDNuser-1_1_8.tar.gz
-  tar xfz mISDN-1_1_8.tar.gz
-  tar xfz mISDNuser-1_1_8.tar.gz
-  pushd mISDN-1_1_8
-  make install
-  popd
-  pushd mISDNuser-1_1_8
-  make install
-  popd
-  /usr/sbin/misdn-init config
-
-You will then also want to make sure /etc/init.d/misdn-init is started
-automatically with either 'chkconfig --add misdn-init' or 'update-rc.d
-misdn-init defaults 15 30' depending on your distribution.
-
-NOTE:  At the time this was written, misdn-1.1.8 is not compatible the
-2.6.25 kernel.  Please use a kernel version 2.6.25 or earlier.
-
-
-OSLEC
-~~~~~
-http://www.rowetel.com/ucasterisk/oslec.html[OSLEC] is an 
-Open Source Line Echo Canceller. It is currently in the staging subtree
-of the mainline kernel and will hopefully be fully merged at around
-version 2.6.29. The echo canceller module dahdi_echocan_oslec
-provides a DAHDI echo canceller module that uses the code from OSLEC. As
-OSLEC has not been accepted into mainline yet, its interface is not set
-in stone and thus this driver may need to change. Thus it is not
-built by default.
-
-Luckily the structure of the dahdi-linux tree matches that of the kernel
-tree. Hence you can basically copy drivers/staging/echo and place it
-under driver/staging/echo . In fact, dahdi_echocan_oslec assumes that
-this is where the oslec code lies. If it is elsewhere you'll need to fix
-the #include line.
-
-Thus for the moment, the simplest way to build OSLEC with dahdi is to
-copy the directory `drivers/staging/echo` from a recent kernel tree (at
-least 2.6.28-rc1) to the a subdirectory with the same name in the
-dahdi-linux tree.
-
-After doing that, you'll see the following when building (running
-'make')
-
-  ...
-  CC [M] /home/tzafrir/dahdi-linux/drivers/dahdi/dahdi_echocan_oslec.o
-  CC [M] /home/tzafrir/dahdi-linux/drivers/dahdi/../staging/echo/echo.o
-  ...
-
-As this is an experimental driver, problems building and using it should 
-be reported on the 
-https://lists.sourceforge.net/lists/listinfo/freetel-oslec[OSLEC mailing
-list].
-
-Alternatively you can also get the OSLEC code from the dahdi-linux-extra
-GIT repository:
-
-  git clone git://gitorious.org/dahdi-extra/dahdi-linux-extra.git
-  cd dahdi-linux-extra
-  git archive extra-2.6 drivers/staging | (cd ..; tar xf -)
-  cd ..; rm -rf dahdi-linux-extra
-
-
-Live Install
-~~~~~~~~~~~~
-In many cases you already have DAHDI installed on your system but would
-like to try a different version. E.g. in order to check if the latest
-version fixes a bug that your current system happens to have.
-
-DAHDI-linux includes a script to automate the task of installing DAHDI
-to a subtree and using it instead of the system copy. Module loading
-through modprobe cannot be used. Thus the script pre-loads the required
-modules with insmod (which requires some quesswork as for which modules
-to load). It also sets PATH and other environment variables to make all
-the commands do the right thing.
-
-There is an extra mode of operation to copy all the required files to a
-remote host and run things there, for those who don't like to test code
-on thir build system.
-
-Live Install: The Basics
-^^^^^^^^^^^^^^^^^^^^^^^^
-Basic operation is through running
-
-  ./build_tools/live_dahdi
-
-from the root directory of the dahdi-linux tree. Using DAHDI requires
-dahdi-tools as well, and the script builds and installs dahdi-tools. By
-default it assumes the tree of dahdi-tools is in the directory
-'dahdi-tools' alongside the dahdi-linux tree.  If you want to checkout
-the trunks from SVN, use:
-
-  svn checkout http://svn.asterisk.org/svn/dahdi/linux/trunk dahdi-linux
-  svn checkout http://svn.asterisk.org/svn/dahdi/tools/trunk dahdi-tools
-  cd dahdi-linux
-
-If the tools directory resides elsewhere, you'll need to edit
-live/live.conf (see later on). The usage message of live_dahdi:
-
- Usage:                    equivalent of:
- live_dahdi configure      ./configure
- live_dahdi install        make install
- live_dahdi config         make config
- live_dahdi unload         /etc/init.d/dahdi stop
- live_dahdi load           /etc/init.d/dahdi start
- live_dahdi reload         /etc/init.d/dahdi restart
- live_dahdi xpp-firm       (Reset and load xpp firmware)
- live_dahdi rsync TARGET   (copy filea to /tmp/live in host TARGET)
- live_dahdi exec  COMMAND  (Run COMMAND in 'live' environment)
-
-Normally you should run:
-
- ./build_tools/live_dahdi configure
- ./build_tools/live_dahdi install
- ./build_tools/live_dahdi config
-
-to build and install everything. Up until now no real change was done.
-This could actually be run by a non-root user. All files are installed
-under the subdirectory live/ .
-
-Reloading the modules (and restarting Asterisk) is done by:
-
- ./build_tools/live_dahdi reload
-
-Note: this stops Asterisk, unloads the DAHDI modules, loads the DAHDI
-modules from the live/ subdirectory, configures the system and re-starts
-Asterisk. This *can* do damage to your system. Furthermore, the DAHDI
-configuration is generated by dahdi_genconf. It can be influenced by
-a genconf_parameters file. But it may or may not be what you want.
-
-If you want to run a command in the environment of the live system, use
-the command 'exec':
-
- ./build_tools/live_dahdi lsdahdi
- ./build_tools/live_dahdi dahdi_hardware -v
-
-Note however:
-
- ./build_tools/live_dahdi dahdi_cfg -c live/etc/dahdi/system.conf
-
-Live Install Remote
-^^^^^^^^^^^^^^^^^^^
-As mentioned above, live_dahdi can also copy all the live system files
-to a remote system and run from there. This requires rsync installed on
-both system and assumes you can connect to the remove system through
-ssh.
-
-  tzafrir@hilbert $ ./build_tools/live_dahdi rsync root@david
-  root@david's password:
-  <f+++++++++ live_dahdi
-  cd+++++++++ live/
-  <f+++++++++ live/live.conf
-  cd+++++++++ live/dev/
-  cd+++++++++ live/dev/dahdi/
-  cd+++++++++ live/etc/
-  cd+++++++++ live/etc/asterisk/
-  cd+++++++++ live/etc/dahdi/
-  <f+++++++++ live/etc/dahdi/genconf_parameters
-  <f+++++++++ live/etc/dahdi/init.conf 
-  ...
-
-As you can see, it copies the script itselfand the whole live/
-subdirectory. The target directory is /tmp/live on the target directory
-(changing it should probably be simple, but I never needed that).
-
-Then, on the remove computer:
-
-  root@david:/tmp# ./live_dahdi reload
-
-
-Configuring a Live Install
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-The live_dahdi script reads a configuration file in 'live/live.conf' if
-it exists. This file has the format of a shell script snippet:
-
- var1=value # a '#' sign begins a comment
- var2='value'
-
- # comments and empty lines are ignored
- var3="value"
-
-The variables below can also be overriden from the environment:
-
- var1='value' ./build_tools/live_dahdi
 
 ===== LINUX_DIR
 The relative path to the dahdi-linux tree. The default is '.' and normally
@@ -1456,7 +1246,5 @@ http://issues.asterisk.org in the "DAHDI-linux" category.
 Links
 -----
 - http://asterisk.org/[] - The Asterisk PBX
-- http://voip-info.org/[]
-- http://voip-info.org/wiki/view/DAHDI[]
 - http://docs.tzafrir.org.il/dahdi-linux/README.html[Up-to-date HTML version
   of this file]
