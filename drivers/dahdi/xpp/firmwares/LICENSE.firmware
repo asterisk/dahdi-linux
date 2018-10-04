@@ -1,0 +1,37 @@
+The firmware files (*.hex) in this directory are software for the 
+Astribank itself and not intended to run on the Linux system itself. 
+They are generally freely distriributable (see exact terms below).
+
+/****************************************************************************/
+/*  Copyright (c) 2004-2006 Xorcom Inc. All Rights Reserved.                */
+/*  Redistribution and use of the microcode software ( Firmware ) is        */
+/*  permitted provided that the following conditions are met:               */
+/*                                                                          */
+/*          1. Firmware is redistributed verbatim without any modification; */
+/*          2. Any reproduction of Firmware must contain the above          */
+/*             copyright notice, this list of conditions and the below      */
+/*             disclaimer in the documentation and/or other materials       */
+/*             provided with the distribution; and                          */
+/*          3. The name of Xorcom may not be used to endorse or promote     */
+/*             products derived from this Firmware without specific prior   */
+/*             written consent.                                             */
+/*                                                                          */
+/*  Disclaimer: Xorcom provides this firmware "as is" with no warranties    */
+/*  or indemnities whatsoever. Xorcom expressly disclaims any express,      */
+/*  statutory or implied warranties, including, but not limited to, the     */
+/*  implied warranties of merchantability, fitness for a particular         */
+/*  purpose and non-infringement. In no event shall Xorcom be liable for    */
+/*  any direct, indirect, incidental, special, exemplary, or consequential  */
+/*  damages (including, but not limited to, procurement of substitute       */
+/*  goods or services; loss of use, data, or profits; or business           */
+/*  interruption) however caused and on any theory of liability, whether    */
+/*  in contract, strict liability, or tort (including negligence or         */
+/*  otherwise) arising in any way out of the use of this firmware, even     */
+/*  if advised of the possibility of such damage. User acknowledges and     */
+/*  agrees that the purchase or use of the firmware will not create or      */
+/*  give grounds for a license by implication, estoppel, or otherwise in    */
+/*  any intellectual property rights (patent, copyright, trade secret,      */
+/*  mask work, or other proprietary right) embodied in any other Xorcom     */
+/*  hardware or firmware either solely or in combination with the firmware. */
+/****************************************************************************/
+

@@ -1,0 +1,31 @@
+Sun Mar  1 2009 Oron Peled <oron@actcom.co.il> - xpp.r6795
+  * Fix cases where the command_queue overflowed during initialization.
+    - Also add a 'command_queue_length' parameter to xpp.ko
+  * More migrations to sysfs:
+    - Add a 'transport' attribute to our astribank devices which
+      points to the usb device we use. E.g:
+       /sys/bus/astribanks/devices/xbus-00/transport is symlinked to
+       ../../../../../../devices/pci0000:00/0000:00:10.4/usb5/5-4
+    - Move /proc/xpp/XBUS-??/XPD-??/span to
+      /sys/bus/xpds/devices/??:?:?/span
+    - Migrate from /proc/xpp/sync to:
+      /sys/bus/astribanks/drivers/xppdrv/sync
+    - New 'offhook' attribute in:
+      /sys/bus/xpds/devices/??:?:?/offhook
+  * PRI: change the "timing" priority to match the convention used by
+         other PRI cards -- I.e: lower numbers (not 0) have higher
+	 priority.
+  * FXO: 
+    - Power denial: create two module parameters instead of hard-coded
+      constants (power_denial_safezone, power_denial_minlen).
+      For sites that get non-standard power-denial signals from central
+      office on offhook.
+    - Don't hangup on power-denial, just notify Dahdi and wait for
+    - Fix caller-id detection for the case central office sends it before
+      first ring without any indication before.
+      Asterisk's desicion.
+  * USB_FW.hex:
+    - Fixes cases where firmware loading would fail.
+
+Thu, Aug 14 2008 Oron Peled <oron@actcom.co.il> - xpp.r6056
+  * First DAHDI-linux release.

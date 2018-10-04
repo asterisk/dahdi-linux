@@ -1,0 +1,82 @@
+#
+# XPP configuration
+#
+
+menuconfig DAHDI_XPP
+	tristate "Xorcom Astribank Support"
+	depends on DAHDI
+	default DAHDI
+	---help---
+	  Infrastructure support for Xorcom Astribank products.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpp.
+
+	  If unsure, say Y.
+
+config DAHDI_XPP_USB
+       tristate "Astribank USB transport"
+       depends on DAHDI_XPP && USB
+       default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpp_usb.
+
+	  If unsure, say Y.
+
+config DAHDI_XPP_MMAP
+       tristate "Astribank Blackfin transport"
+       depends on DAHDI_XPP && BF537
+       default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpp_mmap.
+	  
+	  This module can be compiled only on Blackfin architecture
+	  (with uClinux).
+
+	  If unsure, say N.
+
+config DAHDI_XPD_FXS
+	tristate "FXS port Support"
+	depends on DAHDI_XPP && (DAHDI_XPP_USB || DAHDI_XPP_MMAP)
+	default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpd_fxs.
+
+	  If unsure, say Y.
+
+config DAHDI_XPD_FXO
+	tristate "FXO port Support"
+	depends on DAHDI_XPP && (DAHDI_XPP_USB || DAHDI_XPP_MMAP)
+	default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpd_fxo.
+
+	  If unsure, say Y.
+
+config DAHDI_XPD_BRI
+	tristate "BRI port Support"
+	depends on DAHDI_XPP && (DAHDI_XPP_USB || DAHDI_XPP_MMAP)
+	default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpd_pri.
+
+	  Note: this driver will be automatically excluded
+	        from compilation if dahdi driver does not
+		contain the "bristuff" patch.
+
+	  If unsure, say Y.
+
+config DAHDI_XPD_PRI
+	tristate "PRI port Support"
+	depends on DAHDI_XPP && (DAHDI_XPP_USB || DAHDI_XPP_MMAP)
+	default DAHDI_XPP
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called xpd_pri.
+
+	  If unsure, say Y.

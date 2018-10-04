@@ -1,0 +1,19 @@
+This distribution includes the firmware files required by the Xorcom[tm] 
+Astribank[tm]. 
+
+This distribution inlcudes just the firmware files. Be sure to use a 
+zaptel distribution/package of a matching version.
+
+INSTALLATION
+""""""""""""
+run "make install" as root. (which will simply copy all the *.hex files 
+to /usr/share/zaptel )
+
+USAGE
+"""""
+When the firmware files are in place everything should work 
+automagically. Consult the xpp documentation included in the package 
+zaptel (or the debian package zaptel) that you use for further information.
+
+
+For further information contact support@xorcom.com       http://xorcom.com

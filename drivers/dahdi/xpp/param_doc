@@ -1,0 +1,40 @@
+#! /usr/bin/perl -w
+use strict;
+#
+# Extract parameter documentation from *.ko files.
+# Assumes that parameter description include the default
+# value in the format we use in our DEF_PARM() macro
+#
+
+@ARGV || die "Usage: $0 module.ko....\n";
+
+my $modinfo = '/sbin/modinfo';
+my @mod_params;
+
+foreach my $file (glob "@ARGV") {
+	undef @mod_params;
+	print "$file:\n";
+	open(F, "$modinfo '$file' |") || die;
+	while(<F>) {
+		chomp;
+		next unless s/^parm:\s*//;
+		my ($name, $description) = split(/:/, $_, 2);
+		# Extract type
+		$description =~ s/\s*\(([^)]+)\)$//;
+		my $type = $1;
+		# Extract default value
+		$description =~ s/\s*\[default\s+([^]]+)\]$//;
+		my $default = $1;
+		push(@mod_params, {
+			NAME	=> $name,
+			TYPE	=> $type,
+			DEFVAL	=> $default,
+			DESC	=> $description,
+			});
+	}
+	# Print sorted list
+	foreach my $p (sort { $a->{NAME} cmp $b->{NAME} } @mod_params) {
+		printf "\t%-8s %-22s = %-20s %s\n", $p->{TYPE}, $p->{NAME}, $p->{DEFVAL}, $p->{DESC};
+	}
+	close F || die;
+}

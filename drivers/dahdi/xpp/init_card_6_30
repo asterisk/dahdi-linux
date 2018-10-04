@@ -1,0 +1,1170 @@
+#! /usr/bin/perl -w
+use strict;
+
+# Make warnings fatal
+local $SIG{__WARN__} = sub { die @_ };
+
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2017, Xorcom
+#
+# All rights reserved.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# See the file LICENSE in the top level of this tarball.
+#
+
+#
+# $Id$
+#
+# Data format:
+#	- A comment start with ';' or '#' until the end of line
+#	- Blank lines are ignored
+#	- Fields are whitespace separated (spaces or tabs)
+#
+# The fields are (in command line order):
+#	1. SLIC select in decimal (range 0-7).
+#	   * is a special value which means ALL SLICS (only some registers
+#	   accept settings for ALL SLICS).
+#	2. Command word:
+#		- RD	Read Direct register.
+#		- RS	Read Sub-register.
+#		- WD	Write Direct register.
+#		- WS	Write Sub-register.
+#	3. Register number in hexadecimal.
+#	4. Low data byte in hexadecimal. (for WD and WS commands).
+#	5. High data byte in hexadecimal. (for WS command only).
+#
+#
+
+package main;
+use File::Basename;
+use Getopt::Std;
+
+my $program = basename("$0");
+my $init_dir = dirname("$0");
+BEGIN { $init_dir = dirname($0); unshift(@INC, "$init_dir"); }
+use XppConfig $init_dir;
+my $unit_id;
+my %opts;
+
+getopts('o:', \%opts);
+
+my %settings;
+$settings{debug} = 0;
+$settings{fxs_skip_calib} = 0;
+my $chipregs;
+my $command;
+my $expander_cmd;
+my $ring_registers;
+
+sub logit {
+	print STDERR "$unit_id: @_\n";
+}
+
+sub debug {
+	logit @_ if $settings{debug};
+}
+
+# Arrange for error logging
+if (-t STDERR) {
+	$unit_id = 'Interactive';
+	debug "Interactive startup";
+} else {
+	$unit_id = "$ENV{XBUS_NAME}/UNIT-$ENV{UNIT_NUMBER}";
+	open (STDERR, "| logger -t $program -p kern.info") || die;
+	debug "Non Interactive startup";
+	foreach my $k (qw(
+			XBUS_NAME
+			XBUS_NUMBER
+			XBUS_MODEL_STRING
+			UNIT_NUMBER
+			UNIT_TYPE
+			UNIT_SUBUNITS
+			UNIT_SUBUNITS_DIR
+			XBUS_REVISION
+			XBUS_CONNECTOR
+			XBUS_LABEL)) {
+		unless(defined $ENV{$k}) {
+			logit "Missing ENV{$k}\n";
+			die;
+		}
+	}
+	logit "XBUS_MODEL_STRING='$ENV{XBUS_MODEL_STRING}'";
+	$chipregs = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/chipregs",
+		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
+	$command = "/proc/xpp/$ENV{XBUS_NAME}/command";
+	if(! -f $chipregs) {
+		my $xpd_name = sprintf("XPD-%1d0", $ENV{UNIT_NUMBER});
+		$chipregs = "/proc/xpp/$ENV{XBUS_NAME}/$xpd_name/chipregs";
+		logit "OLD DRIVER: does not use /sys chipregs. Falling back to /proc"
+			if -f $chipregs;
+	}
+	$ring_registers = sprintf "/sys/bus/xpds/devices/%02d:%1d:0/fxs_ring_registers",
+		$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER};
+	logit "OLD DRIVER: missing '$ring_registers' -- fallback to hard-coded defaults"
+		unless -f $ring_registers;
+}
+
+sub set_output() {
+	my $output;
+
+	if($opts{o}) {
+		$output = $opts{o};
+	} else {
+		# No subunits in FXS (everything is subunit 0)
+		$output = $chipregs;
+	}
+	open(REG, ">$output") || die "Failed to open '$output': $!\n";
+	my $oldfh = select REG;
+	main::logit "# Setting output" if $opts{o};
+	return $oldfh;
+}
+
+sub mysleep($) {
+	my $timeout = shift;
+	select(undef,undef,undef,$timeout);
+}
+
+package FXS;
+
+sub gen {
+	my $fmt = shift;
+	$| = 1;
+	printf "$fmt\n", @_;
+}
+
+my @SlicNums;
+
+sub write_to_slic_file($) {
+	my $write_str = shift;
+
+	open(SLICS,">$chipregs") or
+		die("Failed writing to chipregs file $chipregs");
+	print SLICS $write_str;
+	close(SLICS) or die "Failed writing '$write_str' to '$chipregs': $!";
+	main::mysleep(0.001);
+
+}
+
+sub write_to_ring_register($) {
+	my $write_str = shift;
+
+	open(SLICS,">$ring_registers") or
+		die("Failed writing to ring_registers file $ring_registers");
+	print SLICS $write_str;
+	close(SLICS) or die "Failed writing '$write_str' to '$ring_registers': $!";
+	main::mysleep(0.001);
+}
+
+sub read_reg($$$;$) {
+	my $slic = shift;
+	my $addr = shift;
+	my $direct = shift;
+	my $bits_shift = shift;
+	$bits_shift = 0 unless defined $bits_shift;
+	my $addr_low;
+	my $addr_high;
+	main::debug("read_reg: $slic, $addr, $direct");
+	$addr_low = $addr & 0xFF;
+	$addr_high = $addr >> 8;
+
+	my $str;
+	if ($direct eq 'D') {
+		$str = sprintf "%s RD %02X",
+			$slic, $addr_low;
+	} else {
+		$str  = sprintf "%s RR %02X %02X",
+			$slic, $addr_low, $addr_high;
+	}
+	write_to_slic_file($str);
+
+	my $retries = 10;
+	my $reply = "";
+	# If the command queue is long, we may need to wait...
+WAIT_RESULTS:
+	{
+		my @results;
+
+		# The time to sleep is a tradeoff:
+		#   - Too long is a waste of time.
+		#   - Too short will cause many retries, wastes time.
+		# So the current value (after trial and error) is...
+		main::mysleep(0.013);
+		open(SLICS,$chipregs) or
+			die("Failed reading from chipregs file $chipregs");
+		while(<SLICS>){
+			s/#.*//;
+			next unless /\S/;
+			if ($direct eq 'D') {
+				@results = /^\s*(\d+)\s+[RW][DR]\s+([[:xdigit:]]+)\s+([[:xdigit:]]+)\s+([[:xdigit:]]*)/;
+			} else {
+				@results = /^\s*(\d+)\s+[RW][DR]\s+([[:xdigit:]]+)\s+([[:xdigit:]]+)\s+([[:xdigit:]]+)\s+([[:xdigit:]]+)\s+([[:xdigit:]]+)\s+([[:xdigit:]]*)/;
+			}
+			if(($direct eq 'D' && @results != 4) || ($direct eq 'R' && @results != 7)) {
+				main::logit "Failed reading from '$chipregs' ($direct, $slic,$addr)";
+				die;
+			}
+		}
+		close(SLICS);
+		my $read_addr;
+		if ($direct eq 'D') {
+			$read_addr = hex($results[1]);
+		} else {
+			$read_addr = hex(sprintf "0x$results[2]$results[1]");
+		}
+		if($results[0] ne $slic || $read_addr ne $addr) {
+			# We read obsolete values, need to wait some more
+			if(--$retries) {
+				main::debug "$slic R$direct $addr -- retry (@results, $read_addr)";
+				redo WAIT_RESULTS;
+			} else {
+				main::logit "Failed: $slic R$direct $addr returned @results, $addr";
+				die;
+			}
+		}
+		# Good.
+		$results[0] = "";
+		$results[1] = "";
+		if ($direct eq 'R') {
+			$results[2] = "";
+		}
+		foreach my $val (@results) {
+			$reply = sprintf("%s%s", $val, $reply);
+		}
+		$reply = hex(sprintf("0x%s", $reply));
+
+	}
+	return $reply >> $bits_shift;
+}
+
+# TODO: rearange arguments
+sub write_reg{#($$$) {
+	my $slic = shift;
+	my $reg = shift;
+	my $val = shift;
+
+	my $str  = sprintf "%s WD %02X %02X",
+		$slic, $reg, $val;
+	main::debug("write_reg: $slic, $reg, $val");
+	write_to_slic_file($str);
+}
+
+#
+# BITS:
+# 3  - port num
+# 1  - read/write
+# 1  - Register / RAM
+# 11 - address
+# 29 - data
+sub write_ram($$$$) {
+	my $slic = shift;
+	my $addr = shift;
+	my $value = shift;
+	my $bits_shift = shift;
+	my $addr_low;
+	my $addr_high;
+	my $value_0;
+	my $value_1;
+	my $value_2;
+	my $value_3;
+	my $log_output = sprintf("write_ram: %s, %4d, 0x%08X", $slic, $addr, $value);
+	main::debug($log_output);
+	$value = $value << $bits_shift;
+	$addr_low = $addr & 0xFF;
+	$addr_high = $addr >> 8;
+
+	$value_0 = $value & 0xFF;
+	$value >>= 8;
+	$value_1 = $value & 0xFF;
+	$value >>= 8;
+	$value_2 = $value & 0xFF;
+	$value >>= 8;
+	$value_3 = $value & 0xFF;
+
+	my $str  = sprintf "%s WR %02X %02X %02X %02X %02X %02X",
+		$slic, $addr_low, $addr_high,
+		$value_0, $value_1, $value_2, $value_3;
+	write_to_slic_file($str);
+}
+
+sub set_user_mode {
+	my $slic = shift;
+	my $on = shift;
+	my $current = read_reg($slic, 0x7E, 'D');
+	$current &= 0x1;
+	$on &= 0x1;
+	main::debug("::set_user_mode($slic, $on): " . $current . " -> " . $on . "\n");
+	return 1 if $current == $on;
+	write_reg($slic, 126, 0x02);
+	write_reg($slic, 126, 0x08);
+	write_reg($slic, 126, 0x0E);
+	write_reg($slic, 126, 0x00);
+	return 1;
+}
+
+sub init_early() {
+	# I/O Expander initialization
+	$expander_cmd = sprintf "echo 0A 00 0F %1d0 05 08 00 00 00 FF > %s",
+                $ENV{UNIT_NUMBER}, $command;		# enable outputs for Greed LEDs
+	system("$expander_cmd");
+	$expander_cmd = sprintf "echo 0A 00 0F %1d0 05 08 01 00 AA 55 > %s",
+                $ENV{UNIT_NUMBER}, $command;		# enable outputs for Red LEDs and relays
+	system("$expander_cmd");
+	$expander_cmd = sprintf "echo 0A 00 0F %1d0 05 08 0D 00 AA AA > %s",
+                $ENV{UNIT_NUMBER}, $command;		# enable pull-ups for inputs
+	system("$expander_cmd");
+}
+
+sub load_patch($) {
+	my $slics_ref = shift;
+	my @slics = @{ $slics_ref };
+	my $slic;
+
+	main::debug "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 1);		# Turn on user mode
+	}
+	write_reg('*', 81, 0x00);	# JMPEN, disable the patch
+
+	main::debug "=====Patch data======";
+	my @patch_data_array = (
+			141541,
+			540867,
+			141541,
+			543427,
+			141541,
+			553155,
+			141541,
+			577731,
+			141541,
+			579779,
+			141541,
+			581315,
+			141541,
+			592579,
+			141541,
+			633027,
+			141541,
+			637635,
+			141541,
+			639683,
+			141541,
+			650947,
+			141541,
+			651459,
+			141541,
+			651971,
+			141541,
+			652483,
+			141541,
+			652995,
+			141541,
+			653507,
+			736,
+			491712,
+			452200,
+			141541,
+			491200,
+			5733,
+			524290,
+			142565,
+			550083,
+			3685,
+			519266,
+			5220,
+			144098,
+			550083,
+			3685,
+			524291,
+			141541,
+			551619,
+			5221,
+			3682,
+			524292,
+			5,
+			141541,
+			135362,
+			98021,
+			727745,
+			474213,
+			17637,
+			557251,
+			101093,
+			557251,
+			473701,
+			515653,
+			843365,
+			188002,
+			843355,
+			145125,
+			560835,
+			524290,
+			660069,
+			518053,
+			517224,
+			518244,
+			142565,
+			564419,
+			524288,
+			521733,
+			843365,
+			188002,
+			524315,
+			145125,
+			568003,
+			843365,
+			522850,
+			523387,
+			147685,
+			573123,
+			522363,
+			145125,
+			575171,
+			521826,
+			141541,
+			575683,
+			518757,
+			521826,
+			141541,
+			575683,
+			521824,
+			522245,
+			522338,
+			141541,
+			716481,
+			173669,
+			523845,
+			141541,
+			730304,
+			523877,
+			141541,
+			690368,
+			614117,
+			588995,
+			457221,
+			558181,
+			457122,
+			457333,
+			143077,
+			588995,
+			144608,
+			587971,
+			524292,
+			141541,
+			588483,
+			524304,
+			671746,
+			558181,
+			410018,
+			437365,
+			143586,
+			100034,
+			141541,
+			98498,
+			550117,
+			619715,
+			558181,
+			410018,
+			403061,
+			143077,
+			619715,
+			524290,
+			143589,
+			608963,
+			402533,
+			524290,
+			400901,
+			29189,
+			431717,
+			408133,
+			432741,
+			406085,
+			392805,
+			407621,
+			792165,
+			405573,
+			406629,
+			792133,
+			408677,
+			431680,
+			432645,
+			409189,
+			392785,
+			402949,
+			141541,
+			630979,
+			560741,
+			400482,
+			398852,
+			143077,
+			615107,
+			402533,
+			398946,
+			400901,
+			29186,
+			400389,
+			141541,
+			630979,
+			400997,
+			262242,
+			143077,
+			618691,
+			524291,
+			400901,
+			29189,
+			141541,
+			630979,
+			558181,
+			407458,
+			524309,
+			694789,
+			558085,
+			694789,
+			403045,
+			524290,
+			143077,
+			630979,
+			405605,
+			792133,
+			408165,
+			431685,
+			406117,
+			432709,
+			407653,
+			392768,
+			402949,
+			694789,
+			560645,
+			694789,
+			743525,
+			119426,
+			141541,
+			1003201,
+			560741,
+			524290,
+			143584,
+			636099,
+			141541,
+			191682,
+			694789,
+			141541,
+			859842,
+			171109,
+			170565,
+			141541,
+			963776,
+			524291,
+			144613,
+			641731,
+			199685,
+			667365,
+			644803,
+			431717,
+			197189,
+			136805,
+			198725,
+			170597,
+			262242,
+			524291,
+			144613,
+			647875,
+			170501,
+			667365,
+			886464,
+			136805,
+			180293,
+			141541,
+			886464,
+			524293,
+			524293,
+			524293,
+			524293,
+			524293,
+			524293,
+		);
+
+	write_ram('*', 1358, 0x00000000, 3);		# PRAM_ADDR, reset the patch RAM address
+	foreach my $val (@patch_data_array) {
+		write_ram('*', 1359, $val, 12);	# PRAM_DATA, shl 12, addr auto inc
+	}
+
+	main::debug "=====Patch entries======";		# lowest 8 entries are registers
+	my @patch_entries_array = (
+			950,
+			4347,
+			3431,
+			1425,
+			1347,
+			4287,
+			4006,
+			4469,
+			1881,
+			1720,
+		);
+
+	my $jmp_table_low = 82;
+	my $jmp_table_high = 1597;
+	foreach my $val (@patch_entries_array) {
+		last if $val == 0;
+		if ($jmp_table_low <= 97) {
+			write_reg('*', $jmp_table_low, $val & 0xFF);# JMPnLO
+			$jmp_table_low++;
+			write_reg('*', $jmp_table_low, $val >> 8  );# JMPnHI
+			$jmp_table_low++;
+		} else {
+			write_ram('*', $jmp_table_high, $val & 0x1FFF, 3); 	# shl 3
+			$jmp_table_high++;
+		}
+	}
+
+	write_ram('*', 448, 0x06182014, 3); 		# PATCH_ID, shl 3, a unique code which is a hash of the patch.
+
+	main::debug "=====Patch support======";
+	my @patch_support_addr_array = (
+			800,
+			795,
+			799,
+			798,
+			794,
+			787,
+			786,
+			782,
+			892,
+			893,
+			925,
+			926,
+			1014,
+			1020,
+			1021,
+			1022,
+			333,
+			334,
+			352,
+		);
+	my @patch_support_data_array = (
+			0x200000,
+			0x7D80000,
+			0x69580EA,
+			0x82C58C,
+			0x1500000,
+			0x0,
+			0x320000,
+			0x0,
+			0x400000,
+			0x0,
+			0xA00000,
+			0x1F00000,
+			0x2D8000,
+			0x0,
+			0x2075F60,
+			0x220335B,
+			0x0,
+			0x0,
+			0x0,
+		);
+	for (my $i = 0; $i < @patch_support_addr_array; $i++) {
+		my $addr = $patch_support_addr_array[$i];
+		my $val = $patch_support_data_array[$i];
+		write_ram('*', $addr, $val, 3);
+	}
+
+	if ($settings{debug}) {
+		foreach $slic (@slics) {
+			main::debug "=====Verify patch=======";
+			my $read_val;
+			# PRAM_ADDR, reset the patch RAM address:
+			write_ram($slic, 1358, 0x00000000, 3);
+			foreach my $val (@patch_data_array) {
+				# PRAM_DATA, shr 12, addr auto inc
+				$read_val = read_reg($slic, 1359, 'R', 12);
+				if ($val != $read_val) {
+					printf "0x%X =? 0x%X\n", $val, $read_val;
+					printf "patch verification failed\n";
+					exit 0;
+				}
+			}
+			main::debug "Patch has been verified!";
+
+			main::debug "=====Verify patch entries=======";
+			$jmp_table_low = 82;
+			$jmp_table_high = 1597;
+			foreach my $val (@patch_entries_array) {
+				last if $val == 0;
+				if ($jmp_table_low <= 97) {
+					$read_val = read_reg($slic, $jmp_table_low, 'D');# JMPnLO
+					$jmp_table_low++;
+					$read_val |= read_reg($slic, $jmp_table_low, 'D') << 8;# JMPnHI
+					$jmp_table_low++;
+				} else {
+					$read_val = read_reg($slic, $jmp_table_high, 'R', 3);	# PRAM_DATA, shr 3
+					$read_val &= 0x1FFF;
+					$jmp_table_high++;
+				}
+				if ($val != $read_val) {
+					printf "0x%X =? 0x%X\n", $val, $read_val;
+					printf "patch entries verification failed\n";
+					exit 0;
+				}
+			}
+			main::debug "Patch entries has been verified!";
+
+			main::debug "=====Verify patch support=======";
+			for (my $i = 0; $i < @patch_support_addr_array; $i++) {
+				my $addr = $patch_support_addr_array[$i];
+				my $val = $patch_support_data_array[$i];
+				$read_val = read_reg($slic, $addr, 'R', 3);
+				if ($val != $read_val) {
+					printf "0x%X =? 0x%X\n", $val, $read_val;
+					printf "Patch support verification failed\n";
+					exit 0;
+				}
+			}
+		main::debug "patch support has been verified!";
+		}
+	}
+
+	write_reg('*', 81, 0x01);			# JMPEN, enable the patch
+	write_reg('*', 05, 0x00);			# RAM_ADDR_HI, back to normal RAM access
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 0);			# Turn off user mode
+	}
+}
+
+sub load_general_params($) {
+	my $slics_ref = shift;
+	my @slics = @{ $slics_ref };
+	my $slic;
+
+	main::debug "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 1);		# Turn on user mode
+	}
+
+	write_reg('*', 47, 0x00);		# ENHANCE
+	write_reg('*', 80, 0x2F);		# AUTO
+
+	write_ram('*',  764, 0x0050C480, 3);	#BAT_HYST
+	# Ringing parameters 65Vrms 0Vdc 20Hz LPR
+	# Loop = 500.0 ft @ 0.044 ohms/ft, REN = 5, Rcpe = 600 ohms
+	# Rprot = 30 ohms, Type = LPR, Waveform = SINE
+	write_ram('*',  637, 0x15E5200E, 3);	#ringing impedance = 100 ohms
+	write_ram('*',  766, 0xA3D705, 3);	#VBATL_EXPECT 10 V
+	write_ram('*',  767, 0xA3D705, 3);	#VBATH_EXPECT 10 V
+	write_ram('*',  768, 0x5ED285F, 3);	#VBATR_EXPECT 92.6 V
+	write_ram('*',  768, 0xFFF0000, 3);	#PWRSAVE_TIMER
+	write_ram('*',  916, 0x0F5C28F, 3);	#OFFHOOK_THRESH
+	write_ram('*',  919, 0x00F00000, 3);	#VBAT_TRACK_MIN
+	write_ram('*',  920, 0x02000000, 3);	#VBAT_TRACK_MIN_RNG
+	write_ram('*',  970, 0x00800000, 3);	#THERM_DBI
+
+	write_ram('*', 1004, 0x00F18900, 3);	#DCDC_VERR
+	write_ram('*', 1005, 0x0080C480, 3);	#DCDC_VERR_HYST
+	write_ram('*', 1006, 0x00800000, 3);	#DCDC_OITHRESH_LO
+	write_ram('*', 1007, 0x01F00000, 3);	#DCDC_OITHRESH_HI
+	write_ram('*', 1540, 0x00200000, 3);	#PD_UVLO
+	write_ram('*', 1541, 0x00300000, 3);	#PD_OVLO
+	write_ram('*', 1542, 0x00200000, 3);	#PD_OCLO
+
+	write_ram('*', 1545, 0x00C00000, 3);	#DCDC_UVHYST, (94v - 90v -1) / 0.257v = 12
+	write_ram('*', 1546, 0x03D00000, 3);	#DCDC_UVTHRESH, 94v / 1.543v = 61
+	write_ram('*', 1547, 0x1200000, 3);	#DCDC_OVTHRESH
+
+	write_ram('*', 1554, 0x07700000, 3);  #DCDC_UVPOL
+
+	write_ram('*', 1558, 0x00000000, 3);	#DCDC_VREF_CTRL
+	write_ram('*', 1560, 0x00200000, 3);	#DCDC_RNGTYPE
+	write_ram('*', 1585, 0x00300000, 3);	#DCDC_ANA_GAIN
+	write_ram('*', 1586, 0x00300000, 3);	#DCDC_ANA_TOFF
+	write_ram('*', 1587, 0x00100000, 3);	#DCDC_ANA_TONMIN
+	write_ram('*', 1588, 0x00FFC000, 3);	#DCDC_ANA_TONMAX
+	write_ram('*', 1589, 0x00F00000, 3);	#DCDC_ANA_DSHIFT
+	write_ram('*', 1590, 0x0FDA4000, 3);	#DCDC_ANA_LPOLY
+
+	write_ram('*', 759, 0x07FEB800, 3);	# COEF_P_HVIC
+	write_ram('*', 756, 0x0048D15B, 3);	# P_TH_HVIC
+
+	write_ram('*', 967, 0x03A2E8BA, 3);	# SCALE_KAUDIO
+
+	#             /* GC RAM locations that moved from RevB to RevC */
+	write_ram('*', 1018, 0x03000000, 3);	# LKG_OFHK_OFFSET
+	write_ram('*', 1017, 0x05000000, 3);	# LKG_LB_OFFSET
+	write_ram('*', 1013, 0x02200000, 3);	# VBATH_DELTA
+	write_ram('*', 1012, 0x03700000, 3);	# UVTHRESH_MAX
+	write_ram('*', 1011, 0x04F80200, 3);	# UVTHRESH_SCALE
+	write_ram('*', 1010, 0x00A23000, 3);	# UVTHRESH_BIAS
+
+	# /* Hardcoded mods to default settings */
+	write_reg('*',   98, 0x80);		#PDN
+	write_ram('*', 626, 0x723F235, 3);	# ROW0_C2
+	write_ram('*', 627, 0x57A9804, 3);	# ROW1_C2
+	write_ram('*', 918, 0x36000, 3);	# XTALK_TIMER
+	write_ram('*', 1616, 0x1100000, 3);	# DCDC_CPUMP_LP_MASK
+
+	#/* Smart VOV Default Settings - set here in case no ring preset is loaded */
+	write_ram('*', 973, 0xFFFFFF, 3);	# VOV_DCDC_SLOPE
+	write_ram('*', 974, 0xA18937, 3);	# VOV_DCDC_OS
+	write_ram('*', 975, 0xE49BA5, 3);	# VOV_RING_BAT_MAX
+
+	write_ram('*', 516, 0x10038D, 3);	# VDIFFLPF
+	write_ram('*', 513, 0x4EDDB9, 3);	# ILOOPLPF
+	write_ram('*', 514, 0x806D6, 3);	# ILONGLPF
+	write_ram('*', 517, 0x10059F, 3);	# VCMLPF
+	write_ram('*', 708, 0xF0000, 3);	# CM_SPEEDUP_TIMER
+	write_ram('*', 709, 0x106240, 3);	# VCM_TH
+
+	# /* Prevent Ref Osc from powering down in PLL Freerun mode (pd_ref_osc) */
+#	write_ram('*', 709, 0x106240, 3);	# PWRSAVE_CTRL_LO shall be arithmetic here
+
+	# batType == VCM_HYST
+	write_ram('*', 1565, 0xC00000, 3);	#
+	write_ram('*',  750, 0x0306280, 3);	#VCM_HYST
+	write_ram('*',  971, 0x2A00000, 3);	#LPR_SCALE
+	write_ram('*',  972, 0x061EB80, 3);	#LPR_CM_OS
+	write_ram('*', 1565, 0x0A00000, 3);	#DCDC_OIMASK
+	write_ram('*', 1643, 0x000000, 3);	#DCDC_OV_DEBOUNCE
+	write_ram('*', 1641, 0x0D00000, 3);	#DCDC_UV_DEBOUNCE
+
+	write_ram('*', 1512, 0x00200000, 3);	# PD_OFFLD_DAC
+	write_ram('*', 1513, 0x00200000, 3);	# PD_OFFLD_GM
+	write_ram('*', 1592, 0x0300000, 3);	#DCDC_PD_ANA
+	write_ram('*',  897, 0x0480CBF, 3);	#P_TH_OFFLOAD
+
+	write_reg('*',   35, 0x03);		#OFFLOAD
+
+	write_ram('*', 1553, 0x00000000, 3);	#DCDC_SWDRV_POL
+	write_ram('*',  860, 0x008B9ACA, 3);	# IRING_LIM (90.000 mA)
+
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 0);		# Turn on user mode
+	}
+
+# Loading Coeff before cal to ensure accurate zsynth results in OHT
+# This set of coefficients are for the following input parameters:
+# Device = Si3217x, R1 = 600, R2 = 0, C = 0, R_surge = 20, R_fuse = 24, 10.txt
+# Generated on 9/30/2009 2:51:17 PM
+	# TXACEQ
+	write_ram('*',  540, 0x07F55480, 3);	#TXACEQ_CO
+	write_ram('*',  541, 0x000D6400, 3);	#TXACEQ_C1
+	write_ram('*',  542, 0x00011A00, 3);	#TXACEQ_C2
+	write_ram('*',  543, 0x1FFD7F00, 3);	#TXACEQ_C3
+
+	# RXACEQ
+	write_ram('*',  546, 0x07F04900, 3);	#RXACEQ_CO
+	write_ram('*',  547, 0x00126A00, 3);	#RXACEQ_C1
+	write_ram('*',  548, 0x1FFE1D00, 3);	#RXACEQ_C2
+	write_ram('*',  549, 0x1FFC9480, 3);	#RXACEQ_C3
+
+	# ECFIR/ECIIR
+	write_ram('*',  563, 0x0012A580, 3);	#ECFIR_C2
+	write_ram('*',  564, 0x1FE59900, 3);	#ECFIR_C3
+	write_ram('*',  565, 0x01BCB180, 3);	#ECFIR_C4
+	write_ram('*',  566, 0x00790780, 3);	#ECFIR_C5
+	write_ram('*',  567, 0x02113380, 3);	#ECFIR_C6
+	write_ram('*',  568, 0x1F172380, 3);	#ECFIR_C7
+	write_ram('*',  569, 0x00805080, 3);	#ECFIR_C8
+	write_ram('*',  570, 0x1FD6E600, 3);	#ECFIR_C9
+	write_ram('*',  571, 0x1FFDF800, 3);	#ECIIR_B0
+	write_ram('*',  572, 0x00010980, 3);	#ECIIR_B1
+	write_ram('*',  573, 0x0E46D280, 3);	#ECIIR_A1
+	write_ram('*',  574, 0x19B4F900, 3);	#ECIIR_A2
+
+	# ZSYNTH
+	write_ram('*',  653, 0x007A8C00, 3);	#ZSYNTH_B0
+	write_ram('*',  654, 0x1F0BB880, 3);	#ZSYNTH_B1
+	write_ram('*',  655, 0x0079BD00, 3);	#ZSYNTH_B2
+	write_ram('*',  656, 0x0FF66D00, 3);	#ZSYNTH_A1
+	write_ram('*',  657, 0x18099080, 3);	#ZSYNTH_A2
+
+	write_reg('*',   45, 0x59);		#RA
+
+	# TXGAIN/RXGAIN
+	write_ram('*',  544, 0x08769A80, 3);	#TXACGAIN
+	write_ram('*',  545, 0x0141E080, 3);	#RXACGAIN
+	write_ram('*',  906, 0x0141E080, 3);	#RXACGAIN_SAVE
+
+	# RXACHPF
+	write_ram('*',  658, 0x07AC0400, 3);	#RXACHPF_B0_1
+	write_ram('*',  659, 0x1853FC80, 3);	#RXACHPF_B1_1
+	write_ram('*',  660, 0x07580880, 3);	#RXACHPF_A1_1
+
+	write_ram('*',  666, 0x8000000, 3);	#RXACHPF_GAIN
+
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 1);		# Turn on user mode
+	}
+	write_reg('*', 98, 0x80);			# Power up MADC
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 0);			# Turn off user mode
+	}
+}
+
+sub calibrate_slics($$$) {
+	my $cal0 = shift;
+	my $cal1 = shift;
+	my $cal2 = shift;
+
+	main::debug "Calibrating channels @SlicNums";
+	write_reg('*', 26, $cal0);		# CAL0
+	write_reg('*', 27, $cal1);		# CAL1
+	write_reg('*', 28, $cal2);		# CAL2
+	write_reg('*', 29, 0x80);		# CAL3, CAL_EN
+
+	# wait until all slics have finished calibration, or for timeout
+	# time periods in seconds:
+	my $sleep_time = 0.001;
+	my $timeout_time = 0.600; # Maximum from the spec
+	my @curr_slics = @SlicNums;
+	my $sleep_cnt = 0;
+CALIB_LOOP:
+	while(1) {
+		main::mysleep($sleep_time);
+		my @next_slics;
+		for my $slic (@curr_slics) {
+			my $val = read_reg($slic, 29, 'D');
+			main::debug("checking slic $slic: $val.");
+			push(@next_slics, $slic) if ($val & 0x80) != 0;
+		}
+		@curr_slics = @next_slics;
+		last unless @curr_slics;
+		if ($sleep_cnt * $sleep_time > $timeout_time) {
+			main::logit("Auto Calibration: Exiting on timeout: $timeout_time.");
+			last CALIB_LOOP;
+		}
+		main::debug("auto_calibrate not done yet($sleep_cnt): @curr_slics");
+		$sleep_cnt++;
+	}
+	#log_calib_params();
+
+}
+
+sub dc_powerup($) {
+	my $slics_ref = shift;
+	my @slics = @{ $slics_ref };
+
+	foreach my $slic (@slics) {
+		FXS::set_user_mode($slic, 1);	# Turn on user mode
+	}
+	write_ram('*', 1538, 0x700000, 3);	# PD_DCDC, In case OV or UV previously occurred
+#	write_ram('*', 1555, 0x100000, 3);	# DCDC_CPUMP, Turn on charge pump
+	main::mysleep(0.010);
+#	write_ram('*', 1538, 0x00600000, 3);	# start up converter
+	main::mysleep(0.500);
+	write_ram('*', 1555, 0x000000, 3);	# DCDC_CPUMP, Turn off charge pump
+	write_ram('*', 1542, 0x300000, 3);	# PD_OCLO
+	write_ram('*', 1551, 0x00000000, 3);	# sClear DCDC status
+	main::mysleep(0.030);
+	write_ram('*', 1538, 0x00400000, 3);
+	foreach my $slic (@slics) {
+		FXS::set_user_mode($slic, 0);	# Turn off user mode
+	}
+}
+
+sub read_defaults() {
+	if(XppConfig::read_config(\%settings)) {
+		main::logit "Defaults from $settings{xppconf}";
+	} else {
+		main::logit "No defaults file, use hard-coded defaults.";
+	}
+}
+
+sub soft_reset() {
+	write_reg('*', 1, 0x03);		# RESET
+}
+
+# Try to identify which slics are valid
+sub check_slics() {
+	my @slics;
+	main::debug "check_slics()";
+	foreach my $slic (0 .. 7) {
+		my $value = read_reg($slic, 0, 'D');
+		#main::logit sprintf "Slic($slic): RD 00 0x%X\n", $value;
+		next if($value != 0xC3);
+		write_reg($slic, 14, 0x40);
+		$value = read_reg($slic, 14, 'D');
+		#main::logit sprintf "Slic($slic): RD 14 0x%X\n", $value;
+		next if($value != 0x40);
+		$value = read_reg($slic, 3, 'D') & 0x1F;
+		#main::logit sprintf "Slic($slic): RD 03 0x%X\n", $value;
+		push(@slics, $slic) if $value == 0x1F;
+	}
+	main::logit "Found " . scalar(@slics) . " SLICS (@slics)";
+	return @slics;
+}
+
+sub load_custom_preset($) {
+	my $slics_ref = shift;
+	my @slics = @{ $slics_ref };
+	my $slic;
+
+	main::debug "Loading patch based on si3226x_patch_C_TSS_ISO_2014JUN18.c";
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 1);		# Turn on user mode
+	}
+	write_ram('*',  755, 0x00050000, 3);	#RTPER
+	write_ram('*',  844, 0x7EFE000, 3);	#RINGFR = 20Hz
+	write_ram('*',  845, 0x00208847, 3);	#RINGAMP = 53 Vrms open circuit with 100ohm ring impedance
+	write_ram('*',  846, 0x00000000, 3);	#RINGPHAS
+	write_ram('*',  843, 0x00000000, 3);	#RINGOF
+	write_ram('*',  637, 0x15E5200E, 3);	#SLOPE_RING (100.000 ohms)
+	write_ram('*',  848, 0x007B9068, 3);	#RTACTH (68.236 mA)
+	write_ram('*',  847, 0x0FFFFFFF, 3);	#RTDCTH (450.000 mA) */
+	write_ram('*',  850, 0x00006000, 3);	#RTACDB (75.000 ms)
+	write_ram('*',  849, 0x00006000, 3);	#RTDCDB (75.000 ms)
+	write_ram('*',  753, 0x00C49BA0, 3);	# VOV_RING_BAT (12.000 v)
+	write_ram('*',  896, 0x00000000, 3);	# VOV_RING_GND (0.000 v)
+	write_ram('*',  975, 0xE49BA5, 3);#vov_ring_bat_max = ~14V
+
+	write_reg('*',   39, 0x80);		#RINGTALO
+	write_reg('*',   40, 0x3E);		#RINGTAHI
+	write_reg('*',   41, 0x00);		#RINGTILO
+	write_reg('*',   42, 0x7D);		#RINGTIHI
+	write_reg('*',   38, 0x80);		#RINGCON Both timers are disabled; enable LPR
+	write_ram('*',  483, 0x28C000, 3);#delta_vcm: This means ring side needs 2v extra.
+	write_ram('*',  973, 0xFFFFFF, 3);# slope_vov_dcdc
+	write_ram('*',  974, 0xA18937, 3);# vov_dcdc_os = ~10v
+	write_ram('*',  509, 0x00C49BA0, 3);# VOV_RING_BAT (12.000 v)
+	write_ram('*',  975, 0xE49BA5, 3);#vov_ring_bat_max = ~14V
+	write_ram('*',  971, 0x2A00000, 3);# scale for LPR amplitude, full scale 28-bit
+	write_ram('*',  972, 0x61EB80, 3);# 6v CM offset
+	write_ram('*',  970, 0x800000, 3);#
+
+
+# DC_FEED:
+	write_ram('*', 634, 0x1C8A024C, 3); 	# SLOPE_VLIM
+	write_ram('*', 635, 0x1E3081AA, 3); 	# SLOPE_RFEED
+	write_ram('*', 636, 0x0040A0E0, 3); 	# SLOPE_ILIM
+	write_ram('*', 638, 0x1B27130B, 3); 	# SLOPE_DELTA1
+	write_ram('*', 639, 0x1DD87A3E, 3); 	# SLOPE_DELTA2
+	write_ram('*', 640, 0x034A1036, 3);	# V_VLIM (28.000 v)
+	write_ram('*', 641, 0x03A446AC, 3); 	# V_RFEED (31.000 v)
+	write_ram('*', 642, 0x034A0E48, 3); 	# V_ILIM  (28.000 v)
+	write_ram('*', 643, 0x01363429, 3); 	# CONST_RFEED (15.000 mA)
+	write_ram('*', 644, 0x0045CBC2, 3); 	# CONST_ILIM = 15 mA
+	write_ram('*', 645, 0x00222A30, 3);	# I_VLIM = 0.000 mA
+	write_ram('*', 853, 0x005B0AFB, 3);	# LCRONHK (10.000 mA)
+	write_ram('*', 852, 0x006D4060, 3);	# LCROFFHK (12.000 mA)
+	write_ram('*', 701, 0x00008000, 3);	# LCRDBI (5.000 ms)
+	write_ram('*', 858, 0x0048D595, 3);	# LONGHITH (8.000 mA)
+	write_ram('*', 859, 0x003FBAE2, 3);	# LONGLOTH (7.000 mA)
+	write_ram('*', 702, 0x00008000, 3);	# LONGDBI (5.000 ms)
+	write_ram('*', 854, 0x000F0000, 3);	# LCRMASK (150.000 ms)
+	write_ram('*', 855, 0x00080000, 3);	# LCRMASK_POLREV (80.000 ms)
+	write_ram('*', 856, 0x00140000, 3);	# LCRMASK_STATE (200.000 ms)
+	write_ram('*', 857, 0x00140000, 3);	# LCRMASK_LINECAP (200.000 ms)
+	write_ram('*', 748, 0x01BA5E35, 3);	# VCM_OH (27.000 v)
+	write_ram('*', 752, 0x0051EB85, 3);	# VOV_BAT (5.000 v)
+	write_ram('*', 751, 0x00415F45, 3);	# VOV_GND (3.990 v)
+
+	write_reg('*', 46, 0x04);	# zcal_en
+	write_reg('*', 23, 0x10);	# DTMF_EN = 1  Enable Interupts in IRQ2 Register 19
+	write_reg('*', 24, 0x03);	# P_HVIC_IE = 1, P_THERM_IE = 1  Enable Interupts in IRQ3 Register 20
+
+	write_reg('*', 66, 0x00);	# USERSTAT
+	write_reg('*', 71, 0x00);	# DIAG1
+	write_ram('*', 799, 95 * 1074 * 1000, 3);    #PRAM_VBATH_NEON = -95 V
+	write_ram('*', 786, 70 * 65536, 3);    #PRAM_LCRMASK_MWI = 70 mSec
+
+	foreach $slic (@slics) {
+		FXS::set_linefeed($slic, 1);
+	}
+	write_ram('*', 918, 0x36000, 3);
+
+	foreach $slic (@slics) {
+		FXS::set_user_mode($slic, 1);		# Turn on user mode
+	}
+	write_ram('*', 1018, 0x03000000, 3);	# LKG_OFHK_OFFSET
+	write_ram('*', 1017, 0x05000000, 3);	# LKG_LB_OFFSET
+
+	foreach $slic (@slics) {
+		if (($slic & 0x01) == 0) {
+			FXS::set_linefeed($slic, 0);
+			write_ram($slic, 1538, 0x00600000, 3);
+		} else {
+			write_ram($slic & 0xFE, 1538, 0x00400000, 3);
+		}
+		FXS::set_user_mode($slic, 0);		# Turn off user mode
+	}
+}
+
+sub configure_pcm($) {
+	my $slic = shift;
+	main::debug "Configure_pcm()";
+	my $pcm_offset = $slic * 8;
+	write_reg($slic, 12, $pcm_offset);	#PCMTXLO
+	write_reg($slic, 13, 0x00);		#PCMTXHI
+	write_reg($slic, 14, $pcm_offset);	#PCMTXLO
+	write_reg($slic, 15, 0x00);		#PCMTXHI
+
+	write_reg($slic, 11, 0x11);		#PCMMODE, u-Law
+
+#	write_reg($slic, 43, 0x00);		#LOOPBACK
+#	write_reg($slic, 44, 0x00);		#DIGCON
+}
+
+sub set_linefeed($$) {
+	my $slic = shift;
+	my $lfd = shift;
+	write_reg($slic, 30, $lfd);		#LINEFEED
+}
+
+sub overwrite_ring_registers() {
+}
+
+package main;
+
+main::logit "Starting '$0' (@SlicNums)\n";
+
+FXS::read_defaults();
+FXS::soft_reset();
+@SlicNums = FXS::check_slics();
+FXS::init_early();
+FXS::load_patch(\@SlicNums);
+FXS::load_general_params(\@SlicNums);
+
+if($settings{fxs_skip_calib}) {
+	main::logit "==== WARNING: SKIPPED SLIC CALIBRATION =====";
+} else {
+	FXS::calibrate_slics(0x00, 0x00, 0x01);
+	main::mysleep(0.060);
+	FXS::dc_powerup(\@SlicNums);
+	FXS::calibrate_slics(0x00, 0xC0, 0x18); # remaining cals (except mads, lb)
+	main::mysleep(0.700);
+	foreach my $slic (@SlicNums) {
+		FXS::set_linefeed($slic, 0);
+		FXS::set_linefeed($slic, 1);
+	}
+	main::mysleep(1.000);
+
+}
+FXS::load_custom_preset(\@SlicNums);
+foreach my $slic (@SlicNums) {
+	FXS::configure_pcm($slic);
+	FXS::set_linefeed($slic, 1);
+}
+
+set_output;
+while(<DATA>) {
+	chomp;
+	s/[#;].*$//;		# remove comments
+	s/^\s+//;		# trim whitespace
+	s/\s+$//;		# trim whitespace
+	s/\t+/ /g;		# replace tabs with spaces (for logs)
+	next unless /\S/;	# Skip empty lines
+	main::debug "writing: '$_'";
+	print "$_\n";
+}
+close REG;
+FXS::overwrite_ring_registers();
+
+main::debug "Ending '$0'";
+close STDERR;
+exit 0;
+
+# ----------------------------------==== 8-channel FXS unit initialization ===-----------------------------------------
+
+__DATA__

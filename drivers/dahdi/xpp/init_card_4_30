@@ -1,0 +1,419 @@
+#! /usr/bin/perl -w
+use strict;
+
+# Make warnings fatal
+local $SIG{__WARN__} = sub { die @_ };
+
+#
+# $Id$
+#
+
+#
+# Written by Oron Peled <oron@actcom.co.il>
+# Copyright (C) 2007, Xorcom
+#
+# All rights reserved.
+#
+# This program is free software;	you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation;	either version 2 of the License, or
+# (at your option) any later version.
+#
+# See the file LICENSE in the top level of this tarball.
+#
+
+# This script is run from the xpp kernel module upon detection
+# of a new XPD.
+#
+# Expects the following environment variables to be set:
+#	XBUS_NAME	- bus name
+#	UNIT_NUMBER	- xpd unit number
+#	UNIT_SUBUNITS	- number of subunits in this xpd
+#	UNIT_TYPE	- xpd type number (from protocol reply):
+#			1 - FXS
+#			2 - FXO
+#			3 - BRI
+#			4 - PRI
+#	XBUS_REVISION	- xbus revision number
+#	XBUS_CONNECTOR	- xbus connector string
+#	XBUS_LABEL	- xbus label string
+#
+# Output data format:
+#	- An optional comment start with ';' or '#' until the end of line
+#	- Optional Blank lines are ignored
+#	- Fields are whitespace separated (spaces or tabs)
+#
+# The fields are (in command line order):
+#	1. CHIP select in decimal (ignored, taken from 3 LSB's of subunit number)
+#	2. Command word:
+#		- RD	Read Direct register.
+#		- WD	Write Direct register.
+#	3. Register number in hexadecimal.
+#	5. Data byte in hexadecimal. (for WD command only).
+#
+
+package main;
+use File::Basename;
+use Getopt::Std;
+
+my $program = basename("$0");
+my $init_dir = dirname("$0");
+BEGIN { $init_dir = dirname($0); unshift(@INC, "$init_dir"); }
+use XppConfig $init_dir;
+my $unit_id;
+my %opts;
+
+getopts('o:', \%opts);
+
+my %settings;
+
+sub logit {
+	print STDERR "$unit_id: @_\n";
+}
+
+sub debug {
+	logit @_ if $settings{debug};
+}
+
+# Arrange for error logging
+if (-t STDERR) {
+	$unit_id = 'Interactive';
+	debug "Interactive startup";
+} else {
+	$unit_id = "$ENV{XBUS_NAME}/UNIT-$ENV{UNIT_NUMBER}";
+	open (STDERR, "| logger -t $program -p kern.info") || die;
+	debug "Non Interactive startup";
+	foreach my $k (qw(
+			XBUS_NAME
+			XBUS_NUMBER
+			UNIT_NUMBER
+			UNIT_TYPE
+			UNIT_SUBUNITS
+			UNIT_SUBUNITS_DIR
+			XBUS_REVISION
+			XBUS_CONNECTOR
+			XBUS_LABEL)) {
+		unless(defined $ENV{$k}) {
+			logit "Missing ENV{$k}\n";
+			die;
+		}
+	}
+}
+
+sub select_subunit($) {
+	my $subunit = shift;
+	die unless defined $subunit;
+	my $output;
+
+	if($opts{o}) {
+		$output = $opts{o};
+	} else {
+		$output = sprintf "/sys/bus/xpds/devices/%02d:%1d:%1d/chipregs",
+				$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER}, $subunit;
+		if(! -f $output) {
+			my $xpd_name = sprintf("XPD-%1d%1d", $ENV{UNIT_NUMBER}, $subunit);
+			$output = "/proc/xpp/$ENV{XBUS_NAME}/$xpd_name/chipregs";
+			logit "OLD DRIVER: does not use /sys chipregs. Falling back to /proc"
+				if -f $output;
+		}
+	}
+	open(REG, ">$output") || die "Failed to open '$output': $!\n";
+	my $oldfh = select REG;
+	print "# Selecting subunit $subunit\n" if $opts{o};
+	return $oldfh;
+}
+
+package PRI;
+
+sub gen {
+	my $fmt = shift;
+	$| = 1;
+	printf "$fmt\n", @_;
+}
+
+sub init_quad() {
+	main::select_subunit(0);
+
+	PRI::gen "0 WD D6 20"; 		# GPC6.COMP_DIS=1
+					# (Compatibility Mode Disable)
+
+	# Tuning of clocking unit to the 16.384 MHz reference frequence
+	# by setting Global Clock Mode registers (GCM[1:8]), same for E1 and T1/J1
+	PRI::gen "0 WD 92 00"; 		# GCM1
+	PRI::gen "0 WD 93 18";		# GCM2
+	PRI::gen "0 WD 94 FB";		# GCM3
+	PRI::gen "0 WD 95 0B";		# GCM4
+	PRI::gen "0 WD 96 01";		# GCM5
+	PRI::gen "0 WD 97 0B";		# GCM6
+	PRI::gen "0 WD 98 DB";		# GCM7
+	PRI::gen "0 WD 99 DF";		# GCM8
+}
+
+sub finish_quad() {
+	PRI::gen "0 WD BB 2C"; 		# REGFP
+	PRI::gen "0 WD BC FF"; 		# REGFD
+	PRI::gen "0 WD BB AC"; 		# REGFP
+	PRI::gen "0 WD BB 2B"; 		# REGFP
+	PRI::gen "0 WD BC 00"; 		# REGFD
+	PRI::gen "0 WD BB AB"; 		# REGFP
+	PRI::gen "0 WD BB 2A"; 		# REGFP
+	PRI::gen "0 WD BC FF"; 		# REGFD
+	PRI::gen "0 WD BB AA"; 		# REGFP
+	PRI::gen "0 WD BB 29"; 		# REGFP
+	PRI::gen "0 WD BC FF"; 		# REGFD
+	PRI::gen "0 WD BB A9"; 		# REGFP
+	PRI::gen "0 WD BB 28"; 		# REGFP
+	PRI::gen "0 WD BC 00"; 		# REGFD
+	PRI::gen "0 WD BB A8"; 		# REGFP
+	PRI::gen "0 WD BB 27"; 		# REGFP
+	PRI::gen "0 WD BC FF"; 		# REGFD
+	PRI::gen "0 WD BB A7"; 		# REGFP
+	PRI::gen "0 WD BB 00"; 		# REGFP
+
+#	PRI::gen "0 WD 80 00"; 	# PC1 (Port configuration 1): RPB_1.SYPR           , XPB_1.SYPX
+}
+
+sub read_defaults() {
+	if(XppConfig::read_config(\%settings)) {
+		main::logit "Defaults from $settings{xppconf}";
+	} else {
+		main::logit "No defaults file, use hard-coded defaults.";
+	}
+}
+
+package PRI::Port;
+
+sub new {
+	my $pack = shift;
+	my $port = { @_ };
+	bless $port, $pack;
+	return $port;
+}
+
+sub get_pri_protocol {
+	my $port = shift;
+	my $subunit = $port->{PORT_NUM};
+	my $xpd_name = "XPD-$ENV{UNIT_NUMBER}$subunit";
+	my $pri_protocol;
+	my @keys = (
+			"pri_protocol/connector:$ENV{XBUS_CONNECTOR}/$xpd_name",
+			"pri_protocol/label:$ENV{XBUS_LABEL}/$xpd_name",
+			"pri_protocol/$ENV{XBUS_NAME}/$xpd_name",
+			"pri_protocol"
+		);
+	foreach my $k (@keys) {
+		$k = lc($k);		# Lowercase
+		$pri_protocol = $settings{$k};
+		if(defined $pri_protocol) {
+			$port->{pri_protocol} = $pri_protocol;
+			return $pri_protocol;
+		}
+	}
+	return undef;
+}
+
+sub write_pri_info {
+	my $port = shift;
+	my $subunit = $port->{PORT_NUM};
+	my $pri_protocol = $port->get_pri_protocol;
+	my $xpd_name = sprintf("XPD-%1d%1d", $ENV{UNIT_NUMBER}, $subunit);
+
+	if(defined $pri_protocol) {
+		main::logit "$xpd_name: pri_protocol $pri_protocol";
+		my $file = sprintf "/sys/bus/xpds/devices/%02d:%1d:%1d/pri_protocol",
+				$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER}, $subunit;
+		if(! -f $file) {
+			$file = "/proc/xpp/$ENV{XBUS_NAME}/$xpd_name/pri_info";
+			main::logit "OLD DRIVER: does not use /sys chipregs. Falling back to /proc"
+				if -f $file;
+		}
+		open(INFO, ">$file") || die "Failed to open '$file': $!\n";
+		print INFO "$pri_protocol\n" || die "Failed writing '$pri_protocol' to '$file': $!\n";
+		close INFO || die "Failed during close of '$file': $!\n";
+	} else {
+		main::logit "$xpd_name: pri_protocol not given. Driver will use defaults.";
+	}
+}
+
+sub port_setup($) {
+	my $port = shift;
+	my $portno = $port->{PORT_NUM};
+	my $pri_protocol = $port->get_pri_protocol;
+
+	PRI::gen "$portno WD 28 40"; 	# XPM2.XLT Tristate
+
+	my $cmr5 = sprintf("%x", ($portno << 5));
+
+	PRI::gen "$portno WD 42 $cmr5"; # CMR5.DRSS=portno
+
+	PRI::gen "$portno WD 26 F6"; 	# XPM0: Pulse Shape Programming for R1=18Ohms 
+	PRI::gen "$portno WD 27 02"; 	# XPM1: ...3V Pulse Level at the line (Vp-p=6v)
+
+					# if (unchannelized)
+	#PRI::gen "$portno WD 1F 22";	# LOOP (Channel Looback): 
+					#      ECLB (Enable Channel Loop-Back) 
+					#      CLA  (Channel Address)
+	PRI::gen "$portno WD 2B EF";	# IDL (Idle): 
+					#      If channel loopback is enabled than transmit this code on the outgoing
+	PRI::gen "$portno WD 1F 00";	# LOOP (Channel Looback): 
+	#if($portno eq 0){ 
+	#	PRI::gen "0 WD 1F 00";	# LOOP (Channel Looback): 
+	#				#      channels (XL1/XL2)
+	#}else { 
+	#	PRI::gen "0 WD 1F 20";	# LOOP (Channel Looback): 
+	#}
+
+	# only one of the following loopbacks can be activated in the same time 
+	my $LIM1_RL  = 0 << 1; 	# RL  (Remote  Loopback)
+	my $lim1 = 0xB0 | $LIM1_RL;
+	PRI::gen "$portno WD 37 %02X", $lim1;
+					# LIM1: ~RL (Remote Loop bit 0x02),
+					#       ~DRS (Dual Rail Select, latch receive data while trasmit),
+					#       RIL1, RIL0 (Receive Input Treshold 0.62 V),
+					#       CLOS (Clear data in case of LOS)
+	PRI::gen "$portno WD 3A 20";	# LIM2: SLT1, SLT0 = 01 
+					#            (Receiver Slicer Threshold, the receive slicer 
+					#             generates a mark (digital one) if the voltage at
+					#             RL1/2 exceeds 50% of the peak amplitude,
+					#             default, recommended in E1 mode).
+	  
+	PRI::gen "$portno WD 38 0A"; 	# PCD: (Pulse Count Detection, LOS Detection after 176 consecutive 0s)
+	PRI::gen "$portno WD 39 15"; 	# PCR: (Pulse Count Recovery, LOS Recovery after 22 ones in PCD interval)
+
+	# Configure system interface
+	PRI::gen "$portno WD 3E C2";	# SIC1: SSC1 (System clock    ) is 8.192 Mhz, 
+					#       SSD1 (System Data rate) is 8.192 Mbit/s,
+					#	~BIM (Byte interleaved mode),
+					#	XBS  (Transmit Buffer Size) is 2 frames
+	PRI::gen "$portno WD 40 04";	# SIC3: Edges for capture, Synchronous Pulse Receive @Rising Edge
+	PRI::gen "$portno WD 41 04";	# CMR4: RCLK is 8.192 MHz
+	PRI::gen "$portno WD 43 04";	# CMR5: TCLK is 8.192 MHz
+	PRI::gen "$portno WD 44 34";	# CMR6: Receive reference clock generated by channel 1,
+					#       RCLK is at 8.192 Mhz dejittered, Clock recovered from the line
+					#       TCLK is at 8.192 MHz is de-jittered by DCO-R to drive a6.176 MHz 
+					#       clock on RCLK.*/
+
+	PRI::gen "$portno WD 22 00"; 	# XC0: (Transmit Counter Offset = 497/T=2)
+	PRI::gen "$portno WD 23 04"; 	# XC1: X=4  => T=4-X=0 offset
+
+	PRI::gen "$portno WD 24 00"; 	# RC0: (Receive  Counter Offset = 497/T=2)
+	PRI::gen "$portno WD 25 05"; 	# RC1: Remaining part of RC0
+
+	my $sic2 = sprintf("%x", 0x00 | ($portno << 1));
+
+	PRI::gen "$portno WD 3F $sic2";	# SIC2: No FFS, no center receive elastic buffer, data active at phase ($sic >> 1)
+		
+	# enable the following interrupt sources
+	PRI::gen "$portno WD 14 F7"; 	# IMR0 (Interrupt Mask Register2): Enable CASC_E1/RSC_T1
+	PRI::gen "$portno WD 16 00"; 	# IMR2 (Interrupt Mask Register2): Enable ALL
+		
+	PRI::gen "$portno WD 17 3F"; 	# IMR3 ~ES, ~SEC (Enable ES and SEC interrupts)
+	PRI::gen "$portno WD 18 00"; 	# IMR4: Enable ALL
+	PRI::gen "$portno WD 46 80"; 	# GCR: (Global Configuration Register)
+					#      VIS (Masked Interrupts Visible)
+
+	PRI::gen "$portno WD 08 04";	# IPC: SYNC is 8 Khz
+
+	PRI::gen "$portno WD 02 51"; 	# CMDR (Command Register): RRES, XRES, SRES (Receiver/Transmitter reset)
+	PRI::gen "$portno WD 02 00"; 	# CMDR
+
+
+	PRI::gen "$portno WD 45 00";	# CMR2: External sources for SYPR, SCLKR, SYPX, SCLKX for TX and RX.
+
+	#  Configure ports
+	PRI::gen "$portno WD 85 80";		# GPC1 (Global Port Configuration 1):
+	#PRI::gen "$portno WD 85 00";		# GPC1 (Global Port Configuration 1):
+								#      SMM (System Interface Multiplex Mode)
+	PRI::gen "$portno WD 80 00";	# PC1: SYPR/SYPX provided to RPA/XPA inputs
+
+	PRI::gen "$portno WD 84 31";	# PC5: XMFS active low, SCLKR is input, RCLK is output (unused)
+	PRI::gen "$portno WD 3B 00";	# Clear LCR1 - Loop Code Register 1
+
+	#  printk("TE110P: Successfully initialized serial bus for card\n");
+
+	# Initialize PCM and SIG regs
+	PRI::gen "$portno WD A0 00";	# TSEO (Time Slot Even/Odd Select) 
+	PRI::gen "$portno WD A1 FF";	# TSBS (Time Slot Bit Select)- only selected bits are used for HDLC channel 1
+					#      in selected time slots
+	PRI::gen "$portno WD 03 89";	# Mode Register:
+					#      MDS  (Mode Select) = 100 (No address comparison)
+					#      HRAC (Receiver Active - HDLC channel 1) 
+					#      RFT2 (HDLC Receive FIFO is 64 byte deep)
+	my $ccr1 = 0x18;		# CCR1 (Common Configuration Register1)
+					#      EITS (Enable Internal Time Slot 0 to 31 Signalling)
+					#      ITF  (Interframe Time Fill)
+	my $sysfs_pri_protocol;
+	if (defined $pri_protocol) {
+		$sysfs_pri_protocol = $pri_protocol;
+	} else {
+		my $file = sprintf "/sys/bus/xpds/devices/%02d:%1d:%1d/pri_protocol",
+				$ENV{XBUS_NUMBER}, $ENV{UNIT_NUMBER}, $portno;
+		# The 'open' will fail if the port does not exist.
+		# (or rather: the XPD for it does not exist). While
+		# we only read this file to get the default E1/T1 value,
+		# if it does not exist, it also implies the commands sent would
+		# get nowhere. So we might as well quit now.
+		open(F, $file) || return;
+		$sysfs_pri_protocol = <F>;
+		close F;
+		chomp $sysfs_pri_protocol;
+	}
+	if($sysfs_pri_protocol eq 'T1') {
+		$ccr1 |= 0x80;		#      RSCC (Serial CAS Format Selection)
+	}
+
+	PRI::gen "$portno WD 09 %02X", $ccr1;
+	PRI::gen "$portno WD 0A 04";	# CCR2 (Common Configuration Register2)
+					#      RCRC (enable CRC - HDLC channel 1enable CRC - HDLC channel 1)
+	PRI::gen "$portno WD 0C 00";	# RTR1 (Receive  Time Slot register 1)
+	PRI::gen "$portno WD 0D 00";	# RTR2 (Receive  Time Slot register 2)
+	PRI::gen "$portno WD 0E 00";	# RTR3 (Receive  Time Slot register 3), TS16 (Enable time slot 16) 
+	PRI::gen "$portno WD 0F 00";	# RTR4 (Receive  Time Slot register 4)
+
+	PRI::gen "$portno WD 10 00";	# TTR1 (Transmit Time Slot register 1)
+	PRI::gen "$portno WD 11 00";	# TTR2 (Transmit Time Slot register 2)
+	PRI::gen "$portno WD 12 00";	# TTR3 (Transmit Time Slot register 3), TS16 (Enable time slot 16) 
+	PRI::gen "$portno WD 13 00";	# TTR4 (Transmit Time Slot register 4)
+
+	# configure the best performance of the Bipolar Violation detection for all four channels
+	PRI::gen "$portno WD BD 00";	# BFR (Bugfix Register): ~BVP (Bipolar Violations),
+					#                         use Improved Bipolar Violation Detection instead
+}
+
+package main;
+
+main::debug "Starting '$0'";
+
+PRI::read_defaults;
+
+sub main() {
+	my @ports;
+	my $subunit;
+
+	main::debug "main(): Initializing chip ($ENV{UNIT_SUBUNITS} ports)";
+	PRI::init_quad;
+	# Must initialize all 4 ports, regardless how much there are
+	for($subunit = 0; $subunit < 4; $subunit++) {
+		#main::debug "main(): Initializing subunit $subunit";
+		my $p = PRI::Port->new(
+				'PORT_NUM'		=> $subunit,
+				'EXIST'			=> ($subunit < $ENV{UNIT_SUBUNITS})
+				);
+		$p->port_setup;
+		push(@ports, $p);
+	}
+	PRI::finish_quad;
+	foreach my $p (@ports) {
+		if($p->{EXIST}) {
+			$p->write_pri_info;
+		}
+	}
+}
+
+main;
+
+main::debug "Ending '$0'";
+
+close REG;
+close STDERR;
+exit 0;

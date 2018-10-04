@@ -1,0 +1,109 @@
+#! /bin/sh
+#
+# xpp_debug: Turn on/off debugging flags via /sys/module/*/parameters/debug
+#
+
+modules="xpp xpp_usb xpd_fxs xpd_fxo xpd_bri xpd_pri xpd_echo"
+dbg_names="DEFAULT PCM LEDS SYNC SIGNAL PROC REGS DEVICES COMMANDS"
+
+usage() {
+	echo 1>&2 "Usage: $0 [module_name] [[-]flags...]"
+	echo 1>&2 "	module_name => $modules"
+	echo 1>&2 "	flags       => NONE $dbg_names ANY"
+	echo 1>&2 ""
+	echo 1>&2 "	Example: $0 xpp ANY -PCM -LEDS"
+	echo 1>&2 ""
+}
+
+sysfs_name() {
+	f=''
+	if [ -f "/sys/module/$1/parameters/debug" ]; then
+		f="/sys/module/$1/parameters/debug"
+	elif [ -f "/sys/module/$1/debug" ]; then
+		f="/sys/module/$1/debug"
+	fi
+	echo "$f"
+}
+
+sysfs_value() {
+	f=`sysfs_name "$1"`
+	if [ "$f" != "" ]; then
+		cat "$f"
+	fi
+}
+
+show_debug() {
+	usage
+	for i in $modules
+	do
+		f=`sysfs_name "$i"`
+		if [ -f "$f" ]; then
+			val=`cat $f`
+			j=0
+			list=''
+			for n in $dbg_names
+			do
+				if [ $(( val & (1 << j) )) -ne 0 ]; then
+					list="$list $n"
+				fi
+				j=$((j+1))
+			done
+			if [ "$list" = "" ]; then
+				list=' NONE'
+			fi
+			echo "$i	$list"
+		fi
+	done
+}
+
+calc_debug() {
+	val="$1"
+	shift
+	for wanted in $*
+	do
+		j=0
+		found=0
+		for n in $dbg_names
+		do
+			if [ "$wanted" = "$n" ]; then
+				: $(( val |= (1 << j) ))
+				found=1
+			elif [ "$wanted" = -"$n" ]; then
+				: $(( val &= ~(1 << j) ))
+				found=1
+			elif [ "$wanted" = "ANY" ]; then
+				: $(( val = ~0 ))
+				found=1
+			elif [ "$wanted" = -"ANY" -o "$wanted" = "NONE" ]; then
+				val=0
+				found=1
+			fi
+			j=$((j+1))
+		done
+		if [ "$found" -eq 0 ]; then
+			echo >&2 "$0: Unknown debug flag '$wanted'"
+			exit 1
+		fi
+	done
+	echo $val
+}
+
+if [ "$#" = 0 ]; then
+	show_debug
+	exit 0
+fi
+
+module="$1"
+shift
+
+if ! echo "$modules" | grep -w "$module" > /dev/null; then
+	echo >&2 "$0: Unknown module $module"
+	exit 1
+fi
+
+oldval=`sysfs_value "$module"`
+val=`calc_debug "$oldval" $*`
+file=`sysfs_name $module`
+
+echo "$val" > "$file"
+show_debug
