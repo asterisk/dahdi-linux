@@ -135,18 +135,6 @@ static struct devtype wcb43xp = {"Wildcard B430P", .ports = 4,
 					.card_type = B430P};
 static struct devtype wcb23xp = {"Wildcard B230P", .ports = 2,
 					.card_type = B230P};
-static struct devtype hfc2s =	 {"HFC-2S Junghanns.NET duoBRI PCI", .ports = 2, .card_type = DUOBRI };
-static struct devtype hfc4s =	 {"HFC-4S Junghanns.NET quadBRI PCI", .ports = 4, .card_type = QUADBRI };
-static struct devtype hfc8s =	 {"HFC-8S Junghanns.NET octoBRI PCI", .ports = 8, .card_type = OCTOBRI };
-static struct devtype hfc2s_OV = {"OpenVox B200P", .ports = 2, .card_type = B200P_OV };
-static struct devtype hfc4s_OV = {"OpenVox B400P", .ports = 4, .card_type = B400P_OV };
-static struct devtype hfc8s_OV = {"OpenVox B800P", .ports = 8, .card_type = B800P_OV };
-static struct devtype hfc2s_BN = {"BeroNet BN2S0", .ports = 2, .card_type = BN2S0 };
-static struct devtype hfc4s_BN = {"BeroNet BN4S0", .ports = 4, .card_type = BN4S0 };
-static struct devtype hfc8s_BN = {"BeroNet BN8S0", .ports = 8, .card_type = BN8S0 };
-static struct devtype hfc4s_SW = {"Swyx 4xS0 SX2 QuadBri", .ports = 4, .card_type = BSWYX_SX2 };
-static struct devtype hfc4s_EV = {"CCD HFC-4S Eval. Board", .ports = 4,
-					.card_type = QUADBRI_EVAL };
 
 #define IS_B430P(card) ((card)->card_type == B430P)
 #define IS_B230P(card) ((card)->card_type == B230P)
