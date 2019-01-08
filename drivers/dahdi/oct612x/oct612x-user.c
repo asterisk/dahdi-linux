@@ -23,6 +23,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/hrtimer.h>
 
 #include <dahdi/kernel.h>
 
@@ -31,15 +32,11 @@
 UINT32 Oct6100UserGetTime(tPOCT6100_GET_TIME f_pTime)
 {
 	/* Why couldn't they just take a timeval like everyone else? */
-	struct timeval tv;
-	unsigned long long total_usecs;
-	unsigned int mask = ~0;
+	u64 total_usecs;
 
-	do_gettimeofday(&tv);
-	total_usecs = (((unsigned long long)(tv.tv_sec)) * 1000000) +
-				  (((unsigned long long)(tv.tv_usec)));
-	f_pTime->aulWallTimeUs[0] = (total_usecs & mask);
-	f_pTime->aulWallTimeUs[1] = (total_usecs >> 32);
+	total_usecs = ktime_to_us(ktime_get_real());
+	f_pTime->aulWallTimeUs[0] = total_usecs;
+	f_pTime->aulWallTimeUs[1] = total_usecs >> 32;
 	return cOCT6100_ERR_OK;
 }
 
