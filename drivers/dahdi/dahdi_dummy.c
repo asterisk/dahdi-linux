@@ -156,7 +156,7 @@ static unsigned long timespec_diff_ms(struct timespec *t0, struct timespec *t1)
 	return ms;
 }
 
-static void dahdi_dummy_timer(struct timer_timer *unused)
+static void dahdi_dummy_timer(TIMER_DATA_TYPE unused)
 {
 	unsigned long ms_since_start;
 	struct timespec now;
@@ -257,7 +257,7 @@ int init_module(void)
 	hrtimer_start(&zaptimer, ktime_set(0, DAHDI_TIME_NS), HRTIMER_MODE_REL);
 	printk(KERN_INFO "dahdi_dummy: High Resolution Timer started, good to go\n");
 #else
-	timer_setup(&timer, dahdi_dummy_timer);
+	timer_setup(&timer, dahdi_dummy_timer, 0);
 	ztd->start_interval = current_kernel_time();
 	atomic_set(&shutdown, 0);
 	mod_timer(&timer, jiffies + JIFFIES_INTERVAL);
