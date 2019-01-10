@@ -49,9 +49,8 @@
 #include <linux/moduleparam.h>
 #include <linux/slab.h>
 
-#if defined(USE_HIGHRESTIMER)
 #include <linux/hrtimer.h>
-#else
+#if !defined(USE_HIGHRESTIMER)
 #include <linux/timer.h>
 #endif
 
@@ -80,7 +79,7 @@ struct dahdi_dummy {
 	struct dahdi_chan *chan;
 #if !defined(USE_HIGHRESTIMER)
 	unsigned long calls_since_start;
-	struct timespec start_interval;
+	ktime_t start_interval;
 #endif
 };
 
@@ -138,36 +137,19 @@ static enum hrtimer_restart dahdi_dummy_hr_int(struct hrtimer *htmr)
 	return HRTIMER_RESTART;
 }
 #else
-static unsigned long timespec_diff_ms(struct timespec *t0, struct timespec *t1)
-{
-	long nanosec, sec;
-	unsigned long ms;
-	sec = (t1->tv_sec - t0->tv_sec);
-	nanosec = (t1->tv_nsec - t0->tv_nsec);
-	while (nanosec >= NSEC_PER_SEC) {
-		nanosec -= NSEC_PER_SEC;
-		++sec;
-	}
-	while (nanosec < 0) {
-		nanosec += NSEC_PER_SEC;
-		--sec;
-	}
-	ms = (sec * 1000) + (nanosec / 1000000L);
-	return ms;
-}
 
 static void dahdi_dummy_timer(TIMER_DATA_TYPE unused)
 {
-	unsigned long ms_since_start;
-	struct timespec now;
-	const unsigned long MAX_INTERVAL = 100000L;
-	const unsigned long MS_LIMIT = 3000;
+	long ms_since_start;
+	ktime_t now;
+	const long MAX_INTERVAL = 100000L;
+	const long MS_LIMIT = 3000;
 
 	if (!atomic_read(&shutdown))
 		mod_timer(&timer, jiffies + JIFFIES_INTERVAL);
 
-	now = current_kernel_time();
-	ms_since_start = timespec_diff_ms(&ztd->start_interval, &now);
+	now = ktime_get();
+	ms_since_start = ktime_ms_delta(now, ztd->start_interval);
 
 	/*
 	 * If the system time has changed, it is possible for us to be far
@@ -258,7 +240,7 @@ int init_module(void)
 	printk(KERN_INFO "dahdi_dummy: High Resolution Timer started, good to go\n");
 #else
 	timer_setup(&timer, dahdi_dummy_timer, 0);
-	ztd->start_interval = current_kernel_time();
+	ztd->start_interval = ktime_get();
 	atomic_set(&shutdown, 0);
 	mod_timer(&timer, jiffies + JIFFIES_INTERVAL);
 #endif
