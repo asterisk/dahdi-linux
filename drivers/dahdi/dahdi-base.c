@@ -198,7 +198,7 @@ static int maxlinks;
 
 static struct core_timer {
 	struct timer_list timer;
-	struct timespec start_interval;
+	ktime_t start_interval;
 	unsigned long interval;
 	int dahdi_receive_used;
 	atomic_t count;
@@ -10025,24 +10025,6 @@ static void coretimer_cleanup(void)
 
 #else
 
-static unsigned long core_diff_ms(struct timespec *t0, struct timespec *t1)
-{
-	long nanosec, sec;
-	unsigned long ms;
-	sec = (t1->tv_sec - t0->tv_sec);
-	nanosec = (t1->tv_nsec - t0->tv_nsec);
-	while (nanosec >= NSEC_PER_SEC) {
-		nanosec -= NSEC_PER_SEC;
-		++sec;
-	}
-	while (nanosec < 0) {
-		nanosec += NSEC_PER_SEC;
-		--sec;
-	}
-	ms = (sec * 1000) + (nanosec / 1000000L);
-	return ms;
-}
-
 static inline unsigned long msecs_processed(const struct core_timer *const ct)
 {
 	return atomic_read(&ct->count) * DAHDI_MSECS_PER_CHUNK;
@@ -10051,14 +10033,14 @@ static inline unsigned long msecs_processed(const struct core_timer *const ct)
 static void coretimer_func(TIMER_DATA_TYPE unused)
 {
 	unsigned long flags;
-	unsigned long ms_since_start;
-	struct timespec now;
+	long ms_since_start;
+	ktime_t now;
 	const unsigned long MAX_INTERVAL = 100000L;
 	const unsigned long ONESEC_INTERVAL = HZ;
 	const long MS_LIMIT = 3000;
 	long difference;
 
-	ktime_get_ts(&now);
+	now = ktime_get();
 
 	if (atomic_read(&core_timer.count) ==
 	    atomic_read(&core_timer.last_count)) {
@@ -10076,7 +10058,7 @@ static void coretimer_func(TIMER_DATA_TYPE unused)
 				  core_timer.interval);
 		}
 
-		ms_since_start = core_diff_ms(&core_timer.start_interval, &now);
+		ms_since_start = ktime_ms_delta(now, core_timer.start_interval);
 
 		/*
 		 * If the system time has changed, it is possible for us to be
@@ -10130,7 +10112,7 @@ static void coretimer_func(TIMER_DATA_TYPE unused)
 static void coretimer_init(void)
 {
 	timer_setup(&core_timer.timer, coretimer_func, 0);
-	ktime_get_ts(&core_timer.start_interval);
+	core_timer.start_interval = ktime_get();
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
 	core_timer.interval = max(msecs_to_jiffies(DAHDI_MSECS_PER_CHUNK), 1UL);
