@@ -2731,7 +2731,7 @@ static void deferred_work_func(struct work_struct *work)
 	service_rx_ring(wc);
 }
 
-DAHDI_IRQ_HANDLER(wctc4xxp_interrupt)
+static irqreturn_t wctc4xxp_interrupt(int irq, void *dev_id)
 {
 	struct wcdte *wc = dev_id;
 	bool packets_to_process = false;

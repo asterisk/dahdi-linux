@@ -60,8 +60,6 @@
 
 #define dahdi_pci_module pci_register_driver
 
-#define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id)
-
 #ifdef CONFIG_PCI
 #include <linux/pci-aspm.h>
 #endif

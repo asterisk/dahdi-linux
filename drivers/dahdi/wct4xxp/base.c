@@ -3941,7 +3941,7 @@ static irqreturn_t _t4_interrupt(int irq, void *dev_id)
 	return IRQ_RETVAL(1);
 }
 
-DAHDI_IRQ_HANDLER(t4_interrupt)
+static irqreturn_t t4_interrupt(int irq, void *dev_id)
 {
 	irqreturn_t ret;
 	unsigned long flags;
@@ -4263,7 +4263,7 @@ out:
 	return IRQ_RETVAL(1);
 }
 
-DAHDI_IRQ_HANDLER(t4_interrupt_gen2)
+static irqreturn_t t4_interrupt_gen2(int irq, void *dev_id)
 {
 	irqreturn_t ret;
 	unsigned long flags;

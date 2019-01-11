@@ -2963,7 +2963,7 @@ static void init_spans(struct b4xxp *b4)
 static void b4xxp_bottom_half(unsigned long data);
 
 /* top-half interrupt handler */
-DAHDI_IRQ_HANDLER(b4xxp_interrupt)
+static irqreturn_t b4xxp_interrupt(int irq, void *dev_id)
 {
 	struct b4xxp *b4 = dev_id;
 	unsigned char status;

@@ -478,7 +478,7 @@ static irqreturn_t _wcxb_isr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-DAHDI_IRQ_HANDLER(wcxb_isr)
+static irqreturn_t wcxb_isr(int irq, void *dev_id)
 {
 	irqreturn_t ret;
 	unsigned long flags;
