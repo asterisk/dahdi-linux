@@ -407,34 +407,6 @@ static int astribank_match(struct device *dev, struct device_driver *driver)
 		XBUS_ADD_UEVENT_VAR("XBUS_NAME=%s", xbus->busname);	\
 	} while (0)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-#define XBUS_ADD_UEVENT_VAR(fmt, val...)			\
-	do {							\
-		int err = add_uevent_var(envp, num_envp, &i,	\
-				buffer, buffer_size, &len,	\
-				fmt, val);			\
-		if (err)					\
-			return err;				\
-	} while (0)
-
-static int astribank_uevent(struct device *dev, char **envp, int num_envp,
-			    char *buffer, int buffer_size)
-{
-	xbus_t *xbus;
-	int i = 0;
-	int len = 0;
-	extern char *initdir;
-
-	if (!dev)
-		return -ENODEV;
-	xbus = dev_to_xbus(dev);
-	DBG(GENERAL, "SYFS bus_id=%s xbus=%s\n", dev_name(dev), xbus->busname);
-	XBUS_VAR_BLOCK;
-	envp[i] = NULL;
-	return 0;
-}
-
-#else
 #define XBUS_ADD_UEVENT_VAR(fmt, val...)			\
 	do {							\
 		int err = add_uevent_var(kenv, fmt, val);	\
@@ -454,8 +426,6 @@ static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 	XBUS_VAR_BLOCK;
 	return 0;
 }
-
-#endif
 
 void astribank_uevent_send(xbus_t *xbus, enum kobject_action act)
 {

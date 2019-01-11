@@ -393,16 +393,10 @@ struct vpmoct_load_work {
  * long running firmware load.
  *
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void vpmoct_load_complete_fn(void *data)
-{
-	struct vpmoct_load_work *work = data;
-#else
 static void vpmoct_load_complete_fn(struct work_struct *data)
 {
 	struct vpmoct_load_work *work =
 			container_of(data, struct vpmoct_load_work, work);
-#endif
 	/* Do not touch work->vpm after calling load complete. It may have
 	 * been freed in the function by the board driver. */
 	work->load_complete(work->vpm->dev, work->operational);
@@ -421,11 +415,7 @@ vpmoct_load_complete(struct vpmoct_load_work *work, bool operational)
 {
 	work->operational = operational;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&work->work, vpmoct_load_complete_fn, work);
-#else
 	INIT_WORK(&work->work, vpmoct_load_complete_fn);
-#endif
 	schedule_work(&work->work);
 }
 
@@ -490,16 +480,10 @@ static void vpmoct_release_firmware(const struct firmware *fw)
  * @vpm:  The VPMOCT032 module to check / load.
  *
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void vpmoct_load_flash(void *data)
-{
-	struct vpmoct_load_work *work = data;
-#else
 static void vpmoct_load_flash(struct work_struct *data)
 {
 	struct vpmoct_load_work *work =
 			container_of(data, struct vpmoct_load_work, work);
-#endif
 	int res;
 	struct vpmoct *const vpm = work->vpm;
 	const struct firmware *fw;
@@ -686,11 +670,7 @@ int vpmoct_init(struct vpmoct *vpm, load_complete_func_t load_complete)
 		return -ENOMEM;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&work->work, vpmoct_load_flash, work);
-#else
 	INIT_WORK(&work->work, vpmoct_load_flash);
-#endif
 
 	work->vpm = vpm;
 	work->load_complete = load_complete;

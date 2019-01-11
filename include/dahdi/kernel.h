@@ -60,41 +60,14 @@
 
 #define dahdi_pci_module pci_register_driver
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
 #define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id)
-#else
-#define DAHDI_IRQ_HANDLER(a) static irqreturn_t a(int irq, void *dev_id, struct pt_regs *regs)
-#endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #ifdef CONFIG_PCI
 #include <linux/pci-aspm.h>
-#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #define HAVE_NET_DEVICE_OPS
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
-#  ifdef RHEL_RELEASE_VERSION
-#    if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 6)
-#define dev_name(dev)		((dev)->bus_id)
-#define dev_set_name(dev, format, ...) \
-	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__)
-#    else
-#define dev_set_name(dev, format, ...) \
-	do { \
-		kobject_set_name(&(dev)->kobj, format, ## __VA_ARGS__); \
-		snprintf((dev)->bus_id, BUS_ID_SIZE, \
-			kobject_name(&(dev)->kobj));	\
-	} while (0)
-#    endif
-#  else
-#define dev_name(dev)		((dev)->bus_id)
-#define dev_set_name(dev, format, ...) \
-	snprintf((dev)->bus_id, BUS_ID_SIZE, format, ## __VA_ARGS__)
-#  endif
 #endif
 
 /* __dev* were removed in 3.8. They still have effect in 2.6.18. */
@@ -1476,100 +1449,9 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 31)
+
 #define KERN_CONT ""
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 27)
 
-#  ifndef RHEL_RELEASE_VERSION
-/* I'm not sure which 5.x release this was backported into. */
-static inline int try_wait_for_completion(struct completion *x)
-{
-	unsigned long flags;
-	int ret = 1;
-
-	spin_lock_irqsave(&x->wait.lock, flags);
-	if (!x->done)
-		ret = 0;
-	else
-		x->done--;
-	spin_unlock_irqrestore(&x->wait.lock, flags);
-	return ret;
-}
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
-#ifdef CONFIG_PROC_FS
-#include <linux/proc_fs.h>
-static inline struct proc_dir_entry *proc_create_data(const char *name,
-					mode_t mode,
-					struct proc_dir_entry *parent,
-					const struct file_operations *proc_fops,
-					void *data)
-{
-	struct proc_dir_entry *pde = create_proc_entry(name, mode, parent);
-	if (!pde)
-		return NULL;
-	pde->proc_fops = proc_fops;
-	pde->data = data;
-	return pde;
-}
-#endif /* CONFIG_PROC_FS */
-#ifndef clamp
-#define clamp(x, low, high) min(max(low, x), high)
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
-
-/* Some distributions backported fatal_signal_pending so we'll use a macro to
- * override the inline function definition. */
-#define fatal_signal_pending(p) \
-	(signal_pending((p)) && sigismember(&(p)->pending.signal, SIGKILL))
-
-#ifdef CONFIG_PCI
-#ifndef PCIE_LINK_STATE_L0S
-#define PCIE_LINK_STATE_L0S	1
-#define PCIE_LINK_STATE_L1	2
-#define PCIE_LINK_STATE_CLKPM	4
-#endif
-#define pci_disable_link_state dahdi_pci_disable_link_state
-void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state);
-#endif /* CONFIG_PCI */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
-
-#define list_first_entry(ptr, type, member) \
-	list_entry((ptr)->next, type, member)
-
-#define strncasecmp strnicmp
-
-#ifndef __packed
-#define __packed  __attribute__((packed))
-#endif 
-
-#include <linux/ctype.h>
-/* A define of 'clamp_val' happened to be added in the patch
- * linux-2.6-sata-prep-work-for-rhel5-3.patch kernel-2.6.spec that also
- * backported support for strcasecmp to some later RHEL/Centos kernels.
- * If you have an older kernel that breaks because strcasecmp is already
- * defined, somebody out-smarted us. In that case, replace the line below
- * with '#if 0' to get the code building, and file a bug report at
- * https://issues.asterisk.org/ .
- */
-#ifndef clamp_val
-static inline int strcasecmp(const char *s1, const char *s2)
-{
-	int c1, c2;
-
-	do {
-		c1 = tolower(*s1++);
-		c2 = tolower(*s2++);
-	} while (c1 == c2 && c1 != 0);
-	return c1 - c2;
-}
-#endif /* clamp_val */
-
-#endif /* 2.6.22 */
-#endif /* 2.6.25 */
-#endif /* 2.6.26 */
-#endif /* 2.6.27 */
 #endif /* 2.6.31 */
 #endif /* 3.10.0 */
 #endif /* 3.16.0 */

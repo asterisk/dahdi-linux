@@ -55,19 +55,6 @@
 #include "wcxb_spi.h"
 #include "wcxb_flash.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-#  ifdef RHEL_RELEASE_VERSION
-#    if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(5, 6)
-#      define T43X_HAVE_CANCEL_WORK_SYNC
-#    endif
-#  else
-static inline int delayed_work_pending(struct work_struct *work)
-{
-	return test_bit(0, &work->pending);
-}
-#  endif
-#endif
-
 static const char *TE435_FW_FILENAME = "dahdi-fw-te435.bin";
 static const char *TE436_FW_FILENAME = "dahdi-fw-te436.bin";
 static const u32 TE435_VERSION = 0x13001e;
@@ -120,11 +107,7 @@ struct t43x_span {
 };
 
 struct t43x_clksrc_work {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	struct work_struct work;
-#else
 	struct delayed_work work;
-#endif
 	spinlock_t lock;
 	enum wcxb_clock_sources clksrc;
 	bool is_timing_master;
@@ -1191,16 +1174,10 @@ static void __t43x_set_rclk_src(struct t43x *wc, int span)
 
 /* This is called from the workqueue to wait for the TDM engine stop */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void t43x_clksrc_work_fn(void *data)
-{
-	struct t43x_clksrc_work  *work = data;
-#else
 static void t43x_clksrc_work_fn(struct work_struct *data)
 {
-	struct t43x_clksrc_work  *work = container_of(to_delayed_work(data),
-						struct t43x_clksrc_work, work);
-#endif
+	struct t43x_clksrc_work *work = container_of(data,
+					  struct t43x_clksrc_work, work.work);
 	struct t43x *wc = container_of(work, struct t43x, clksrc_work);
 
 	if (debug) {
@@ -2029,16 +2006,10 @@ struct maint_work_struct {
 	struct dahdi_span *span;
 };
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void t43x_maint_work(void *data)
-{
-	struct maint_work_struct *w = data;
-#else
 static void t43x_maint_work(struct work_struct *work)
 {
 	struct maint_work_struct *w = container_of(work,
 					struct maint_work_struct, work);
-#endif
 
 	struct t43x *wc = w->wc;
 	struct dahdi_span *span = w->span;
@@ -2289,11 +2260,7 @@ static int t43x_maint(struct dahdi_span *span, int cmd)
 	work->wc = wc;
 	work->cmd = cmd;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&work->work, t43x_maint_work, work);
-#else
 	INIT_WORK(&work->work, t43x_maint_work);
-#endif
 	queue_work(wc->wq, &work->work);
 	return 0;
 }
@@ -3075,15 +3042,9 @@ static void t43x_handle_transmit(struct wcxb *xb, void *vfp)
 #define SPAN_ALARMS \
 	(ts->span.alarms & ~DAHDI_ALARM_NOTOPEN)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void timer_work_func(void *param)
-{
-	struct t43x *wc = param;
-#else
 static void timer_work_func(struct work_struct *work)
 {
 	struct t43x *wc = container_of(work, struct t43x, timer_work);
-#endif
 	struct t43x_span *ts;
 	int x;
 	bool start_timer = false;
@@ -3434,18 +3395,8 @@ static int __devinit t43x_init_one(struct pci_dev *pdev,
 	mutex_init(&wc->lock);
 	timer_setup(&wc->timer, t43x_timer, 0);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&wc->timer_work, timer_work_func, wc);
-#else
 	INIT_WORK(&wc->timer_work, timer_work_func);
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&wc->clksrc_work.work, t43x_clksrc_work_fn,
-		  &wc->clksrc_work.work);
-#else
 	INIT_DELAYED_WORK(&wc->clksrc_work.work, t43x_clksrc_work_fn);
-#endif
 	spin_lock_init(&wc->clksrc_work.lock);
 
 	wc->ddev = dahdi_create_device();
@@ -3601,16 +3552,7 @@ static void __devexit t43x_remove_one(struct pci_dev *pdev)
 		release_vpm450m(wc->vpm);
 	wc->vpm = NULL;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-#  ifdef T43X_HAVE_CANCEL_WORK_SYNC 
-	cancel_work_sync(&wc->clksrc_work.work);
-#  else
-	cancel_delayed_work(&wc->clksrc_work.work);
-	flush_workqueue(wc->wq);
-#  endif
-#else
 	cancel_delayed_work_sync(&wc->clksrc_work.work);
-#endif
 
 	del_timer_sync(&wc->timer);
 	flush_workqueue(wc->wq);

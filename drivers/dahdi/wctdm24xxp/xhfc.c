@@ -2386,15 +2386,9 @@ int b400m_dchan(struct dahdi_span *span)
 
 /*
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void xhfc_work(void *data)
-{
-	struct b400m *b4 = data;
-#else
 static void xhfc_work(struct work_struct *work)
 {
 	struct b400m *b4 = container_of(work, struct b400m, xhfc_wq);
-#endif
 	int i, j, k, fifo;
 	unsigned char b, b2;
 
@@ -2630,11 +2624,7 @@ void b400m_post_init(struct b400m *b4)
 	snprintf(b4->name, sizeof(b4->name) - 1, "b400m-%d",
 		 b4->b400m_no);
 	b4->xhfc_ws = create_singlethread_workqueue(b4->name);
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&b4->xhfc_wq, xhfc_work, b4);
-#	else
 	INIT_WORK(&b4->xhfc_wq, xhfc_work);
-#	endif
 	b4->inited = 1;
 }
 

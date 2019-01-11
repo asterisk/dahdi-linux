@@ -103,11 +103,7 @@
 #define chan_to_netdev(h) ((h)->hdlcnetdev->netdev)
 
 /* macro-oni for determining a unit (channel) number */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-#define	UNIT(file) MINOR(file->f_dentry->d_inode->i_rdev)
-#else
 #define	UNIT(file) MINOR(file->f_path.dentry->d_inode->i_rdev)
-#endif
 
 EXPORT_SYMBOL(dahdi_transcode_fops);
 EXPORT_SYMBOL(dahdi_init_tone_state);
@@ -1973,12 +1969,10 @@ static inline void print_debug_writebuf(struct dahdi_chan* ss, struct sk_buff *s
 #endif
 
 #ifdef CONFIG_DAHDI_NET
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 static inline struct net_device_stats *hdlc_stats(struct net_device *dev)
 {
 	return &dev->stats;
 }
-#endif
 
 static int dahdi_net_open(struct net_device *dev)
 {
@@ -3938,19 +3932,11 @@ static void __dahdi_find_master_span(void)
 		module_printk(KERN_NOTICE, "Master changed to %s\n", s->name);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void _dahdi_find_master_span(void *work)
-{
-	__dahdi_find_master_span();
-}
-static DECLARE_WORK(find_master_work, _dahdi_find_master_span, NULL);
-#else
 static void _dahdi_find_master_span(struct work_struct *work)
 {
 	__dahdi_find_master_span();
 }
 static DECLARE_WORK(find_master_work, _dahdi_find_master_span);
-#endif
 
 static void dahdi_find_master_span(void)
 {
@@ -4970,9 +4956,6 @@ static int dahdi_ioctl_chanconfig(struct file *file, unsigned long data)
 			chan->hdlcnetdev->netdev = alloc_hdlcdev(chan->hdlcnetdev);
 			if (chan->hdlcnetdev->netdev) {
 				chan->hdlcnetdev->chan = chan;
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 23)
-				SET_MODULE_OWNER(chan->hdlcnetdev->netdev);
-#endif
 				chan->hdlcnetdev->netdev->tx_queue_len = 50;
 #ifdef HAVE_NET_DEVICE_OPS
 				chan->hdlcnetdev->netdev->netdev_ops = &dahdi_netdev_ops;
@@ -9384,11 +9367,7 @@ that the waitqueue is empty. */
 #ifdef CONFIG_DAHDI_NET
 		if (skb && dahdi_have_netdev(ms))
 		{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,22)
-			skb->mac.raw = skb->data;
-#else
 			skb_reset_mac_header(skb);
-#endif
 			skb->dev = chan_to_netdev(ms);
 #ifdef DAHDI_HDLC_TYPE_TRANS
 			skb->protocol = hdlc_type_trans(skb,
@@ -10550,35 +10529,10 @@ failed_driver_init:
 	return res;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
-#ifdef CONFIG_PCI
-void dahdi_pci_disable_link_state(struct pci_dev *pdev, int state)
-{
-	u16 reg16;
-	int pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
-	state &= (PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1 |
-		  PCIE_LINK_STATE_CLKPM);
-	if (!pos)
-		return;
-	pci_read_config_word(pdev, pos + PCI_EXP_LNKCTL, &reg16);
-	reg16 &= ~(state);
-	pci_write_config_word(pdev, pos + PCI_EXP_LNKCTL, reg16);
-}
-EXPORT_SYMBOL(dahdi_pci_disable_link_state);
-#endif /* CONFIG_PCI */
-#endif /* 2.6.25 */
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 22)
-static inline void flush_find_master_work(void)
-{
-	flush_scheduled_work();
-}
-#else
 static inline void flush_find_master_work(void)
 {
 	cancel_work_sync(&find_master_work);
 }
-#endif
 
 static void __exit dahdi_cleanup(void)
 {

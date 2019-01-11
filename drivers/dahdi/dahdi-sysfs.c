@@ -61,38 +61,6 @@ static inline struct dahdi_span *dev_to_span(struct device *dev)
 		DAHDI_ADD_UEVENT_VAR("SPAN_NAME=%s", span->name);	\
 	} while (0)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-#define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
-	do {							\
-		int err = add_uevent_var(envp, num_envp, &i,	\
-				buffer, buffer_size, &len,	\
-				fmt, val);			\
-		if (err)					\
-			return err;				\
-	} while (0)
-
-static int span_uevent(struct device *dev, char **envp, int num_envp,
-		char *buffer, int buffer_size)
-{
-	struct dahdi_span	*span;
-	int			i = 0;
-	int			len = 0;
-
-	if (!dev)
-		return -ENODEV;
-
-	span = dev_to_span(dev);
-	if (!span)
-		return -ENODEV;
-
-	dahdi_dbg(GENERAL, "SYFS dev_name=%s span=%s\n",
-			dev_name(dev), span->name);
-	SPAN_VAR_BLOCK;
-	envp[i] = NULL;
-	return 0;
-}
-
-#else
 #define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
 	do {							\
 		int err = add_uevent_var(kenv, fmt, val);	\
@@ -114,8 +82,6 @@ static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 	SPAN_VAR_BLOCK;
 	return 0;
 }
-
-#endif
 
 #define span_attr(field, format_string)				\
 static BUS_ATTR_READER(field##_show, dev, buf)			\
@@ -465,37 +431,6 @@ static inline struct dahdi_device *to_ddev(struct device *dev)
 				ddev->location);			\
 	} while (0)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-#define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
-	do {							\
-		int err = add_uevent_var(envp, num_envp, &i,	\
-				buffer, buffer_size, &len,	\
-				fmt, val);			\
-		if (err)					\
-			return err;				\
-	} while (0)
-
-static int device_uevent(struct device *dev, char **envp, int num_envp,
-		char *buffer, int buffer_size)
-{
-	struct dahdi_device	*ddev;
-	int			i = 0;
-	int			len = 0;
-
-	if (!dev)
-		return -ENODEV;
-
-	ddev = to_ddev(dev);
-	if (!ddev)
-		return -ENODEV;
-
-	dahdi_dbg(GENERAL, "SYFS dev_name=%s\n", dev_name(dev));
-	DEVICE_VAR_BLOCK;
-	envp[i] = NULL;
-	return 0;
-}
-
-#else
 #define DAHDI_ADD_UEVENT_VAR(fmt, val...)			\
 	do {							\
 		int err = add_uevent_var(kenv, fmt, val);	\
@@ -516,8 +451,6 @@ static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 	DEVICE_VAR_BLOCK;
 	return 0;
 }
-
-#endif
 
 static ssize_t
 manufacturer_show(struct device *dev,

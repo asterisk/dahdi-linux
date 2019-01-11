@@ -33,11 +33,7 @@
 #include <linux/version.h>
 #include <linux/types.h>
 #include <linux/pci.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26)
 #include <linux/semaphore.h>
-#else
-#include <asm/semaphore.h>
-#endif
 #include <linux/slab.h>
 
 #include <dahdi/kernel.h>
@@ -380,15 +376,9 @@ static void update_channel_config(struct vpmadt032 *vpm, unsigned int channel,
  * the hardware can take some time while messages are sent to the VPMADT032
  * module and the driver waits for the responses.
  */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void vpmadt032_bh(void *data)
-{
-	struct vpmadt032 *vpm = data;
-#else
 static void vpmadt032_bh(struct work_struct *data)
 {
 	struct vpmadt032 *vpm = container_of(data, struct vpmadt032, work);
-#endif
 	struct change_order *order;
 
 	while ((order = get_next_order(vpm))) {
@@ -514,11 +504,7 @@ vpmadt032_alloc(struct vpmadt032_options *options)
 	sema_init(&vpm->sem, 1);
 	vpm->curpage = 0x80;
 	vpm->dspid = -1;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&vpm->work, vpmadt032_bh, vpm);
-#else
 	INIT_WORK(&vpm->work, vpmadt032_bh);
-#endif
 
 	/* Do not use the global workqueue for processing these events.  Some of
 	 * the operations can take 100s of ms, most of that time spent sleeping.

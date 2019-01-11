@@ -42,10 +42,7 @@
 #include <linux/workqueue.h>
 #include <linux/delay.h>
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 25)
 #include <linux/semaphore.h>
-#endif
 
 #include "gpakenum.h"
 #include "adt_lec.h"

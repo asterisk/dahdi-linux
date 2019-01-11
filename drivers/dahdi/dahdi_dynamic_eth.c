@@ -80,11 +80,7 @@ static int ztdeth_rcv(struct sk_buff *skb, struct net_device *dev, struct packet
 {
 	struct dahdi_span *span;
 	struct ztdeth_header *zh;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 	zh = (struct ztdeth_header *)skb_network_header(skb);
-#else
-	zh = (struct ztdeth_header *)skb->nh.raw;
-#endif
 	span = ztdeth_getspan(eth_hdr(skb)->h_source, zh->subaddr);
 	if (span) {
 		skb_pull(skb, sizeof(struct ztdeth_header));
@@ -166,18 +162,9 @@ static void ztdeth_transmit(struct dahdi_dynamic *dyn, u8 *msg, size_t msglen)
 
 			/* Setup protocol and such */
 			skb->protocol = __constant_htons(ETH_P_DAHDI_DETH);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 			skb_set_network_header(skb, 0);
-#else
-			skb->nh.raw = skb->data;
-#endif
 			skb->dev = dev;
-#if  LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 			dev_hard_header(skb, dev, ETH_P_DAHDI_DETH, addr, dev->dev_addr, skb->len);
-#else
-			if (dev->hard_header)
-				dev->hard_header(skb, dev, ETH_P_DAHDI_DETH, addr, dev->dev_addr, skb->len);
-#endif
 			skb_queue_tail(&skbs, skb);
 		}
 	}
@@ -368,11 +355,7 @@ static int ztdeth_create(struct dahdi_dynamic *dyn, const char *addr)
 			}
 			z->subaddr = htons(sub);
 		}
-		z->dev = dev_get_by_name(
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
-				&init_net,
-#endif
-				z->ethdev);
+		z->dev = dev_get_by_name(&init_net, z->ethdev);
 		if (!z->dev) {
 			printk(KERN_NOTICE "TDMoE: Invalid device '%s'\n", z->ethdev);
 			kfree(z);

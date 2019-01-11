@@ -48,15 +48,12 @@
 #include "wct4xxp.h"
 #include "vpm450m.h"
 
-/* Work queues are a way to better distribute load on SMP systems */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20))
 /*
  * Work queues can significantly improve performance and scalability
  * on multi-processor machines, but requires bypassing some kernel
  * API's, so it's not guaranteed to be compatible with all kernels.
  */
 /* #define ENABLE_WORKQUEUES */
-#endif
 
 /* Support first generation cards? */
 #define SUPPORT_GEN1 
@@ -4048,15 +4045,9 @@ static void t4_increase_latency(struct t4 *wc, int newlatency)
 
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void t4_work_func(void *data)
-{
-	struct t4 *wc = data;
-#else
 static void t4_work_func(struct work_struct *work)
 {
 	struct t4 *wc = container_of(work, struct t4, bh_work);
-#endif
 
 	if (test_bit(T4_CHANGE_LATENCY, &wc->checkflag)) {
 		if (wc->needed_latency != wc->numbufs) {
@@ -5144,11 +5135,7 @@ static int __devinit t4_launch(struct t4 *wc)
 			      &wc->ddev->spans);
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&wc->bh_work, t4_work_func, wc);
-#else
 	INIT_WORK(&wc->bh_work, t4_work_func);
-#endif
 
 	res = dahdi_register_device(wc->ddev, &wc->dev->dev);
 	if (res) {

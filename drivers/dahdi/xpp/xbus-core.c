@@ -1152,16 +1152,10 @@ err:
  * it returns only when all XPD's on the bus are detected and
  * initialized.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 20)
 static void xbus_populate(struct work_struct *work)
 {
 	struct xbus_workqueue *worker =
 	    container_of(work, struct xbus_workqueue, xpds_init_work);
-#else
-void xbus_populate(void *data)
-{
-	struct xbus_workqueue *worker = data;
-#endif
 	xbus_t *xbus;
 	struct list_head *card;
 	struct list_head *next_card;
@@ -1238,11 +1232,7 @@ int xbus_process_worker(xbus_t *xbus)
 	}
 	XBUS_DBG(DEVICES, xbus, "\n");
 	/* Initialize the work. (adapt to kernel API changes). */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 20)
 	INIT_WORK(&worker->xpds_init_work, xbus_populate);
-#else
-	INIT_WORK(&worker->xpds_init_work, xbus_populate, worker);
-#endif
 	BUG_ON(!xbus);
 	/* Now send it */
 	if (!queue_work(worker->wq, &worker->xpds_init_work)) {

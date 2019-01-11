@@ -104,26 +104,6 @@ static int vb_net_receive(struct voicebus *vb, int max)
 	return count;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-static int vb_net_poll(struct net_device *netdev, int *budget)
-{
-	struct voicebus *vb = voicebus_from_netdev(netdev);
-	int count = 0;
-	int quota = min(netdev->quota, *budget);
-
-	count = vb_net_receive(vb, quota);
-
-	*budget -=       count;
-	netdev->quota -= count;
-
-	if (!skb_queue_len(&vb->captured_packets)) {
-		netif_rx_complete(netdev);
-		return 0;
-	} else {
-		return -1;
-	}
-}
-#else
 static int vb_net_poll(struct napi_struct *napi, int budget)
 {
 	struct voicebus *vb = container_of(napi, struct voicebus, napi);
@@ -142,7 +122,6 @@ static int vb_net_poll(struct napi_struct *napi, int budget)
 	}
 	return count;
 }
-#endif
 
 static void vb_net_set_multi(struct net_device *netdev)
 {
@@ -155,11 +134,7 @@ static int vb_net_up(struct net_device *netdev)
 {
 	struct voicebus *vb = voicebus_from_netdev(netdev);
 	dev_dbg(&vb->pdev->dev, "%s\n", __func__);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	netif_poll_enable(netdev);
-#else
 	napi_enable(&vb->napi);
-#endif
 	return 0;
 }
 
@@ -167,11 +142,7 @@ static int vb_net_down(struct net_device *netdev)
 {
 	struct voicebus *vb = voicebus_from_netdev(netdev);
 	dev_dbg(&vb->pdev->dev, "%s\n", __func__);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	netif_poll_disable(netdev);
-#else
 	napi_disable(&vb->napi);
-#endif
 	return 0;
 }
 
@@ -231,12 +202,7 @@ int vb_net_register(struct voicebus *vb, const char *board_name)
 
 	netdev->promiscuity = 0;
 	netdev->flags |= IFF_NOARP;
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	netdev->poll = vb_net_poll;
-	netdev->weight = 64;
-#	else
 	netif_napi_add(netdev, &vb->napi, vb_net_poll, 64);
-#	endif
 
 	skb_queue_head_init(&vb->captured_packets);
 	res = register_netdev(netdev);
@@ -359,9 +325,7 @@ void vb_net_capture_vbb(struct voicebus *vb, const void *vbb, const int tx,
 		return;
 
 	skb_queue_tail(&vb->captured_packets, skb);
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-	netif_rx_schedule(netdev);
-#	elif LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
+#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 29)
 	netif_rx_schedule(netdev, &vb->napi);
 #	elif LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 30)
 	netif_rx_schedule(&vb->napi);

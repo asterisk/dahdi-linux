@@ -2272,15 +2272,9 @@ static void te13x_handle_transmit(struct wcxb *xb, void *vfp)
 #define SPAN_ALARMS \
 	(wc->span.alarms & ~DAHDI_ALARM_NOTOPEN)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-static void timer_work_func(void *param)
-{
-	struct t13x *wc = param;
-#else
 static void timer_work_func(struct work_struct *work)
 {
 	struct t13x *wc = container_of(work, struct t13x, timer_work);
-#endif
 	static int work_count;
 
 	if (debug)
@@ -2585,11 +2579,7 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	mutex_init(&wc->lock);
 	timer_setup(&wc->timer, te13xp_timer, 0);
 
-#	if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-	INIT_WORK(&wc->timer_work, timer_work_func, wc);
-#	else
 	INIT_WORK(&wc->timer_work, timer_work_func);
-#	endif
 
 	wc->ddev = dahdi_create_device();
 	if (!wc->ddev) {

@@ -103,11 +103,7 @@ typedef char *charp;
 #ifdef __KERNEL__
 
 /* Kernel versions... */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 20)
-#define	KMEM_CACHE_T	kmem_cache_t
-#else
 #define	KMEM_CACHE_T	struct kmem_cache
-#endif
 
 #define	KZALLOC(size, gfp)	my_kzalloc(size, gfp)
 #define	KZFREE(p) \
@@ -116,7 +112,6 @@ typedef char *charp;
 			kfree(p);			\
 		} while (0);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 #define	DEVICE_ATTR_READER(name, dev, buf) \
 		ssize_t name(struct device *dev, \
 		struct device_attribute *attr, char *buf)
@@ -124,12 +119,6 @@ typedef char *charp;
 		ssize_t name(struct device *dev, \
 		struct device_attribute *attr, \
 		const char *buf, size_t count)
-#else
-#define	DEVICE_ATTR_READER(name, dev, buf) \
-		ssize_t name(struct device *dev, char *buf)
-#define	DEVICE_ATTR_WRITER(name, dev, buf, count) \
-		ssize_t name(struct device *dev, const char *buf, size_t count)
-#endif
 #define	DRIVER_ATTR_READER(name, drv, buf) \
 		ssize_t name(struct device_driver *drv, char * buf)
 
@@ -142,19 +131,9 @@ typedef char *charp;
 #define	SET_PROC_DIRENTRY_OWNER(p) do { } while (0);
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
-/* Also don't define this for later RHEL >= 5.2. */
-#if defined(RHEL_RELEASE_CODE) && defined(RHEL_RELEASE_VERSION)
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(5, 3)
-typedef int bool;
-#endif
 #else
 typedef int bool;
-#endif
-#endif
-#else
-typedef int bool;
-#endif
+#endif /* ifdef __KERNEL__ */
 typedef struct xbus xbus_t;
 typedef struct xpd xpd_t;
 typedef struct xframe xframe_t;

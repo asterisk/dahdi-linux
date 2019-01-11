@@ -222,20 +222,8 @@ static unsigned bus_count;
 /* prevent races between open() and disconnect() */
 static DEFINE_MUTEX(protect_xusb_devices);
 
-/*
- * AsteriskNow kernel has backported the "lean" callback from 2.6.20
- * to 2.6.19 without any macro to notify of this fact -- how lovely.
- * Debian-Etch and Centos5 are using 2.6.18 for now (lucky for us).
- * Fedora6 jumped from 2.6.18 to 2.6.20. So far luck is on our side ;-)
- */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 19)
-#define	USB_PASS_CB(u)	struct urb *u, struct pt_regs *regs
-#else
-#define	USB_PASS_CB(u)	struct urb *u
-#endif
-
-static void xpp_send_callback(USB_PASS_CB(urb));
-static void xpp_receive_callback(USB_PASS_CB(urb));
+static void xpp_send_callback(struct urb *urb);
+static void xpp_receive_callback(struct urb *urb);
 static int xusb_probe(struct usb_interface *interface,
 		      const struct usb_device_id *id);
 static void xusb_disconnect(struct usb_interface *interface);
@@ -869,7 +857,7 @@ static void xusb_disconnect(struct usb_interface *interface)
 	mutex_unlock(&protect_xusb_devices);
 }
 
-static void xpp_send_callback(USB_PASS_CB(urb))
+static void xpp_send_callback(struct urb *urb)
 {
 	struct uframe *uframe = urb_to_uframe(urb);
 	xframe_t *xframe = &uframe->xframe;
@@ -935,7 +923,7 @@ static void xpp_send_callback(USB_PASS_CB(urb))
 		XUSB_ERR(xusb, "A urb from non-connected device?\n");
 }
 
-static void xpp_receive_callback(USB_PASS_CB(urb))
+static void xpp_receive_callback(struct urb *urb)
 {
 	struct uframe *uframe = urb_to_uframe(urb);
 	xframe_t *xframe = &uframe->xframe;
@@ -1026,15 +1014,7 @@ static int __init xpp_usb_init(void)
 
 	xusb_cache =
 	    kmem_cache_create("xusb_cache", sizeof(xframe_t) + XFRAME_DATASIZE,
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 22)) && defined(CONFIG_SLUB)
-			      0, SLAB_STORE_USER,
-#else
-			      0, 0,
-#endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 23)
-			      NULL,
-#endif
-			      NULL);
+			      0, 0, NULL);
 	if (!xusb_cache) {
 		ret = -ENOMEM;
 		goto failure;

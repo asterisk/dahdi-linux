@@ -31,10 +31,8 @@
 #include <linux/version.h>
 #include <linux/slab.h>
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 26)
 #define HAVE_RATELIMIT
 #include <linux/ratelimit.h>
-#endif
 
 #include <dahdi/kernel.h>
 
@@ -129,11 +127,7 @@ static inline bool wcxb_is_pcie(const struct wcxb *xb)
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 33)
 	return pci_is_pcie(xb->pdev);
 #else
-#ifndef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
 	return (xb->pdev->is_pcie > 0);
-#else
-	return (xb->flags.is_pcie > 0);
-#endif
 #endif
 }
 
@@ -652,10 +646,6 @@ int wcxb_init(struct wcxb *xb, const char *board_name, u32 int_mode)
 		return -EIO;
 
 	pci_set_master(pdev);
-
-#ifdef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
-	xb->flags.is_pcie = pci_find_capability(pdev, PCI_CAP_ID_EXP) ? 1 : 0;
-#endif
 
 	WARN_ON(!pdev);
 	if (!pdev)

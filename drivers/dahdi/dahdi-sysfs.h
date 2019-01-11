@@ -22,27 +22,12 @@
 		ssize_t name(struct device_driver *drv, char * buf)
 
 /* Device file creation macros */
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 #define CLASS_DEV_CREATE(class, devt, device, name) \
 	device_create(class, device, devt, NULL, "%s", name)
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
-#define CLASS_DEV_CREATE(class, devt, device, name) \
-	device_create(class, device, devt, name)
-#else
-#define CLASS_DEV_CREATE(class, devt, device, name) \
-	class_device_create(class, NULL, devt, device, name)
-#endif
 
 /* Device file destruction macros */
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 26)
 #define CLASS_DEV_DESTROY(class, devt) \
 	device_destroy(class, devt)
-#else
-#define CLASS_DEV_DESTROY(class, devt) \
-	class_device_destroy(class, devt)
-#endif
 
 /* Global */
 int __init dahdi_sysfs_chan_init(const struct file_operations *fops);

@@ -27,14 +27,6 @@
 #define WCXB_DEFAULT_MAXLATENCY 12U
 #define WCXB_DMA_CHAN_SIZE	128
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
-/* The is_pcie member was backported but I'm not sure in which version. */
-#  ifndef RHEL_RELEASE_VERSION
-#define WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
-#  endif
-#else
-#endif
-
 struct wcxb;
 
 struct wcxb_operations {
@@ -63,9 +55,6 @@ struct wcxb {
 		u32	have_msi:1;
 		u32	latency_locked:1;
 		u32	drive_timing_cable:1;
-#ifdef WCXB_PCI_DEV_DOES_NOT_HAVE_IS_PCIE
-		u32	is_pcie:1;
-#endif
 		u32	dma_ins:1;
 	} flags;
 	void __iomem			*membase;
