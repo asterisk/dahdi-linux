@@ -1413,6 +1413,31 @@ timer_setup(struct timer_list *timer,
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 #define refcount_read atomic_read
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
+
+#ifdef RHEL_RELEASE_VERSION
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(6, 8)
+#define DAHDI_HAVE_KTIME_MS_DELTA
+#endif
+#endif
+
+#ifndef DAHDI_HAVE_KTIME_MS_DELTA
+static inline s64 dahdi_ktime_to_ms(const ktime_t kt)
+{
+	struct timeval tv = ktime_to_timeval(kt);
+
+	return (s64) tv.tv_sec * MSEC_PER_SEC + tv.tv_usec / USEC_PER_MSEC;
+}
+
+static inline s64 ktime_ms_delta(const ktime_t later, const ktime_t earlier)
+{
+	return dahdi_ktime_to_ms(ktime_sub(later, earlier));
+}
+#else
+#undef DAHDI_HAVE_KTIME_MS_DELTA
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0)
 
 /* DAHDI only was using the xxx_clear_bit variants. */
@@ -1451,6 +1476,7 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif /* 2.6.31 */
 #endif /* 3.10.0 */
 #endif /* 3.16.0 */
+#endif /* 4.0.0 */
 #endif /* 4.11.0 */
 #endif /* 4.13.0 */
 #else /* >= 4.15.0 */
