@@ -3612,7 +3612,7 @@ static int __init t43x_init(void)
 		return -EINVAL;
 	}
 
-	res = dahdi_pci_module(&t43x_driver);
+	res = pci_register_driver(&t43x_driver);
 	if (res)
 		return -ENODEV;
 

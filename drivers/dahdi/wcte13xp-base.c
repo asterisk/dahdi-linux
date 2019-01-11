@@ -2788,7 +2788,7 @@ static int __init te13xp_init(void)
 		return -EINVAL;
 	}
 
-	res = dahdi_pci_module(&te13xp_driver);
+	res = pci_register_driver(&te13xp_driver);
 	if (res)
 		return -ENODEV;
 

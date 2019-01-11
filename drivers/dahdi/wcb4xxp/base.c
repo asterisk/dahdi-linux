@@ -3672,7 +3672,7 @@ static int __init b4xx_init(void)
 		printk(KERN_ERR "%s: ERROR: Could not initialize /proc/%s\n",THIS_MODULE->name, PROCFS_NAME);
 	}
 #endif
-	if (dahdi_pci_module(&b4xx_driver))
+	if (pci_register_driver(&b4xx_driver))
 		return -ENODEV;
 
 	return 0;

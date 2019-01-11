@@ -4236,7 +4236,7 @@ static int __init wctc4xxp_init(void)
 		return -ENOMEM;
 	spin_lock_init(&wctc4xxp_list_lock);
 	INIT_LIST_HEAD(&wctc4xxp_list);
-	res = dahdi_pci_module(&wctc4xxp_driver);
+	res = pci_register_driver(&wctc4xxp_driver);
 	if (res) {
 		kmem_cache_destroy(cmd_cache);
 		return -ENODEV;

@@ -6102,7 +6102,7 @@ static int __init wctdm_init(void)
 
 	b400m_module_init();
 
-	res = dahdi_pci_module(&wctdm_driver);
+	res = pci_register_driver(&wctdm_driver);
 	if (res)
 		return -ENODEV;
 

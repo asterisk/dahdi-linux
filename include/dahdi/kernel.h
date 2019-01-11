@@ -58,8 +58,6 @@
 
 #include <linux/poll.h>
 
-#define dahdi_pci_module pci_register_driver
-
 #ifdef CONFIG_PCI
 #include <linux/pci-aspm.h>
 #endif

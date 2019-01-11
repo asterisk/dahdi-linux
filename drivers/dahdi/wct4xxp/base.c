@@ -5543,7 +5543,7 @@ static int __init t4_init(void)
 			"Please use 'default_linemode' instead.\n");
 	}
 
-	res = dahdi_pci_module(&t4_driver);
+	res = pci_register_driver(&t4_driver);
 	if (res)
 		return -ENODEV;
 

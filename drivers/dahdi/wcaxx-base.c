@@ -4474,7 +4474,7 @@ static int __init wcaxx_init(void)
 	if (!battthresh)
 		battthresh = fxo_modes[_opermode].battthresh;
 
-	res = dahdi_pci_module(&wcaxx_driver);
+	res = pci_register_driver(&wcaxx_driver);
 	if (res)
 		return -ENODEV;
 
