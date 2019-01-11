@@ -48,13 +48,6 @@
 #include "wct4xxp.h"
 #include "vpm450m.h"
 
-/*
- * Work queues can significantly improve performance and scalability
- * on multi-processor machines, but requires bypassing some kernel
- * API's, so it's not guaranteed to be compatible with all kernels.
- */
-/* #define ENABLE_WORKQUEUES */
-
 /* Support first generation cards? */
 #define SUPPORT_GEN1 
 
@@ -75,88 +68,6 @@
 
 /* Maximum latency to be used with Gen 5 */
 #define GEN5_MAX_LATENCY	127
-
-#ifdef ENABLE_WORKQUEUES
-#include <linux/cpu.h>
-
-/* XXX UGLY!!!! XXX  We have to access the direct structures of the workqueue which
-  are only defined within workqueue.c because they don't give us a routine to allow us
-  to nail a work to a particular thread of the CPU.  Nailing to threads gives us substantially
-  higher scalability in multi-CPU environments though! */
-
-/*
- * The per-CPU workqueue (if single thread, we always use cpu 0's).
- *
- * The sequence counters are for flush_scheduled_work().  It wants to wait
- * until until all currently-scheduled works are completed, but it doesn't
- * want to be livelocked by new, incoming ones.  So it waits until
- * remove_sequence is >= the insert_sequence which pertained when
- * flush_scheduled_work() was called.
- */
- 
-struct cpu_workqueue_struct {
-
-	spinlock_t lock;
-
-	long remove_sequence;	/* Least-recently added (next to run) */
-	long insert_sequence;	/* Next to add */
-
-	struct list_head worklist;
-	wait_queue_head_t more_work;
-	wait_queue_head_t work_done;
-
-	struct workqueue_struct *wq;
-	task_t *thread;
-
-	int run_depth;		/* Detect run_workqueue() recursion depth */
-} ____cacheline_aligned;
-
-/*
- * The externally visible workqueue abstraction is an array of
- * per-CPU workqueues:
- */
-struct workqueue_struct {
-	/* TODO: Find out exactly where the API changed */
-	struct cpu_workqueue_struct *cpu_wq;
-	const char *name;
-	struct list_head list; 	/* Empty if single thread */
-};
-
-/* Preempt must be disabled. */
-static void __t4_queue_work(struct cpu_workqueue_struct *cwq,
-			 struct work_struct *work)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&cwq->lock, flags);
-	work->wq_data = cwq;
-	list_add_tail(&work->entry, &cwq->worklist);
-	cwq->insert_sequence++;
-	wake_up(&cwq->more_work);
-	spin_unlock_irqrestore(&cwq->lock, flags);
-}
-
-/*
- * Queue work on a workqueue. Return non-zero if it was successfully
- * added.
- *
- * We queue the work to the CPU it was submitted, but there is no
- * guarantee that it will be processed by that CPU.
- */
-static inline int t4_queue_work(struct workqueue_struct *wq, struct work_struct *work, int cpu)
-{
-	int ret = 0;
-	get_cpu();
-	if (!test_and_set_bit(0, &work->pending)) {
-		BUG_ON(!list_empty(&work->entry));
-		__t4_queue_work(wq->cpu_wq + cpu, work);
-		ret = 1;
-	}
-	put_cpu();
-	return ret;
-}
-
-#endif
 
 /*
  * Define CONFIG_FORCE_EXTENDED_RESET to allow the qfalc framer extra time
@@ -321,9 +232,6 @@ struct t4_span {
 	unsigned long dtmfmask;
 	unsigned long dtmfmutemask;
 #endif
-#ifdef ENABLE_WORKQUEUES
-	struct work_struct swork;
-#endif	
 	struct dahdi_chan *chans[32];		/* Individual channels */
 	struct dahdi_echocan_state *ec[32];	/* Echocan state for each channel */
 };
@@ -356,10 +264,6 @@ struct t4 {
 	int spansstarted;		/* number of spans started */
 	u32 *writechunk;		/* Double-word aligned write memory */
 	u32 *readchunk;			/* Double-word aligned read memory */
-#ifdef ENABLE_WORKQUEUES
-	atomic_t worklist;
-	struct workqueue_struct *workq;
-#endif
 	int last0;		/* for detecting double-missed IRQ */
 
 	/* DMA related fields */
@@ -3192,19 +3096,6 @@ static inline void __transmit_span(struct t4_span *ts)
 	_dahdi_transmit(&ts->span);
 }
 
-#ifdef ENABLE_WORKQUEUES
-static void workq_handlespan(void *data)
-{
-	struct t4_span *ts = data;
-	struct t4 *wc = ts->owner;
-	
-	__receive_span(ts);
-	__transmit_span(ts);
-	atomic_dec(&wc->worklist);
-	if (!atomic_read(&wc->worklist))
-		t4_pci_out(wc, WC_INTR, 0);
-}
-#else
 static void t4_prep_gen2(struct t4 *wc)
 {
 	int x;
@@ -3216,7 +3107,6 @@ static void t4_prep_gen2(struct t4 *wc)
 	}
 }
 
-#endif
 #ifdef SUPPORT_GEN1
 static void t4_transmitprep(struct t4 *wc, int irq)
 {
@@ -4094,10 +3984,6 @@ static irqreturn_t _t4_interrupt_gen2(int irq, void *dev_id)
 		return IRQ_NONE;
 	}
 
-#ifdef ENABLE_WORKQUEUES
-	__t4_pci_out(wc, WC_INTR, status & 0x00000008);
-#endif
-
 	if (unlikely(!wc->spansstarted)) {
 		dev_info(&wc->dev->dev, "Not prepped yet!\n");
 		return IRQ_NONE;
@@ -4160,28 +4046,6 @@ static irqreturn_t _t4_interrupt_gen2(int irq, void *dev_id)
 #endif
 
 	if (likely(status & 0x2)) {
-#ifdef ENABLE_WORKQUEUES
-		int cpus = num_online_cpus();
-		atomic_set(&wc->worklist, wc->numspans);
-		if (wc->tspans[0]->span.flags & DAHDI_FLAG_RUNNING)
-			t4_queue_work(wc->workq, &wc->tspans[0]->swork, 0);
-		else
-			atomic_dec(&wc->worklist);
-		if (wc->tspans[1]->span.flags & DAHDI_FLAG_RUNNING)
-			t4_queue_work(wc->workq, &wc->tspans[1]->swork, 1 % cpus);
-		else
-			atomic_dec(&wc->worklist);
-		if (wc->numspans == 4) {
-			if (wc->tspans[2]->span.flags & DAHDI_FLAG_RUNNING)
-				t4_queue_work(wc->workq, &wc->tspans[2]->swork, 2 % cpus);
-			else
-				atomic_dec(&wc->worklist);
-			if (wc->tspans[3]->span.flags & DAHDI_FLAG_RUNNING)
-				t4_queue_work(wc->workq, &wc->tspans[3]->swork, 3 % cpus);
-			else
-				atomic_dec(&wc->worklist);
-		}
-#else
 		unsigned int reg5 = __t4_pci_in(wc, 5);
 
 #ifdef DEBUG
@@ -4201,7 +4065,6 @@ static irqreturn_t _t4_interrupt_gen2(int irq, void *dev_id)
 			t4_prep_gen2(wc);
 		}
 
-#endif
 		t4_do_counters(wc);
 		spin_lock(&wc->reglock);
 		__handle_leds(wc);
@@ -4256,10 +4119,7 @@ out:
 	if (unlikely(test_bit(T4_CHANGE_LATENCY, &wc->checkflag) || test_bit(T4_CHECK_VPM, &wc->checkflag)))
 		schedule_work(&wc->bh_work);
 
-#ifndef ENABLE_WORKQUEUES
 	__t4_pci_out(wc, WC_INTR, 0);
-#endif	
-
 	return IRQ_RETVAL(1);
 }
 
@@ -4925,9 +4785,6 @@ __t4_hardware_init_1(struct t4 *wc, unsigned int cardflags, bool first_time)
 	if (debug) {
 		dev_info(&wc->dev->dev, "Burst Mode: %s\n",
 			(!(cardflags & FLAG_BURST) && noburst) ? "Off" : "On");
-#ifdef ENABLE_WORKQUEUES
-		dev_info(&wc->dev->dev, "Work Queues: Enabled\n");
-#endif
 	}
 
 	/* Check the field updatable firmware for the wcte820 */
@@ -5286,15 +5143,6 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	wc->num = x;
 	cards[x] = wc;
 	
-#ifdef ENABLE_WORKQUEUES
-	if (wc->devtype->flags & FLAG_2NDGEN) {
-		char tmp[20];
-
-		sprintf(tmp, "te%dxxp[%d]", wc->numspans, wc->num);
-		wc->workq = create_workqueue(tmp);
-	}
-#endif			
-
 	/* Allocate pieces we need here */
 	for (x = 0; x < ports_on_framer(wc); x++) {
 		struct t4_span *ts;
@@ -5307,9 +5155,6 @@ t4_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 		}
 		wc->tspans[x] = ts;
 
-#ifdef ENABLE_WORKQUEUES
-		INIT_WORK(&ts->swork, workq_handlespan, ts);
-#endif				
 		ts->spanflags |= wc->devtype->flags;
 		linemode = (wc->t1e1 & (1 << x)) ? E1 : ((j1mode) ? J1 : T1);
 		t4_alloc_channels(wc, wc->tspans[x], linemode);
@@ -5449,13 +5294,6 @@ static void _t4_remove_one(struct t4 *wc)
 	if (!(wc->tspans[0]->spanflags & FLAG_2NDGEN))
 		basesize = basesize * 2;
 
-#ifdef ENABLE_WORKQUEUES
-	if (wc->workq) {
-		flush_workqueue(wc->workq);
-		destroy_workqueue(wc->workq);
-	}
-#endif			
-	
 	free_irq(wc->dev->irq, wc);
 	
 	if (wc->membase)
