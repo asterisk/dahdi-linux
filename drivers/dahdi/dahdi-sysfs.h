@@ -21,14 +21,6 @@
 #define	DRIVER_ATTR_READER(name, drv, buf)	\
 		ssize_t name(struct device_driver *drv, char * buf)
 
-/* Device file creation macros */
-#define CLASS_DEV_CREATE(class, devt, device, name) \
-	device_create(class, device, devt, NULL, "%s", name)
-
-/* Device file destruction macros */
-#define CLASS_DEV_DESTROY(class, devt) \
-	device_destroy(class, devt)
-
 /* Global */
 int __init dahdi_sysfs_chan_init(const struct file_operations *fops);
 void dahdi_sysfs_chan_exit(void);

@@ -33,9 +33,11 @@
 
 /* shortcuts, for code readability */
 #define MAKE_DAHDI_DEV(num, name) \
-	CLASS_DEV_CREATE(dahdi_class, MKDEV(DAHDI_MAJOR, num), NULL, name)
+	device_create(dahdi_class, NULL, MKDEV(DAHDI_MAJOR, num), \
+		      NULL, "%s", name)
+
 #define DEL_DAHDI_DEV(num) \
-	CLASS_DEV_DESTROY(dahdi_class, MKDEV(DAHDI_MAJOR, num))
+	device_destroy(dahdi_class, MKDEV(DAHDI_MAJOR, num))
 
 static struct class *dahdi_class;
 
