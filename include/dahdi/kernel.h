@@ -1412,6 +1412,15 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
 
+#ifdef RHEL_RELEASE_VERSION
+#if RHEL_RELEASE_CODE > RHEL_RELEASE_VERSION(7, 5)
+#define DAHDI_HAVE_TIMER_SETUP
+#undef TIMER_DATA_TYPE
+#define TIMER_DATA_TYPE struct timer_list *
+#endif
+#endif
+
+#ifndef DAHDI_HAVE_TIMER_SETUP
 /**
  * timer_setup - Added in 4.13.0.  We can make a direct translation to the
  * setup_timer interface since DAHDI does not pass any flags to any of the
@@ -1430,6 +1439,8 @@ timer_setup(struct timer_list *timer,
 #define from_timer(var, callback_timer, timer_fieldname) \
 	container_of((struct timer_list *)(callback_timer), \
 		     typeof(*var), timer_fieldname)
+
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 #define refcount_read atomic_read
