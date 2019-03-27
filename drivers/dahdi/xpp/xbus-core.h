@@ -234,8 +234,8 @@ struct xbus {
 	spinlock_t lock;
 
 	/* PCM metrics */
-	struct timeval last_tx_sync;
-	struct timeval last_rx_sync;
+	ktime_t last_tx_sync;
+	ktime_t last_rx_sync;
 	unsigned long max_tx_sync;
 	unsigned long min_tx_sync;
 	unsigned long max_rx_sync;
@@ -255,7 +255,7 @@ struct xbus {
 	 */
 	int sync_adjustment;
 	int sync_adjustment_offset;
-	long pll_updated_at;
+	ktime_t pll_updated_at;
 
 	atomic_t num_xpds;
 
@@ -279,10 +279,10 @@ struct xframe {
 	struct list_head frame_list;
 	atomic_t frame_len;
 	xbus_t *xbus;
-	struct timeval tv_created;
-	struct timeval tv_queued;
-	struct timeval tv_submitted;
-	struct timeval tv_received;
+	ktime_t kt_created;
+	ktime_t kt_queued;
+	ktime_t kt_submitted;
+	ktime_t kt_received;
 	/* filled by transport layer */
 	size_t frame_maxlen;
 	__u8 *packets;		/* max XFRAME_DATASIZE */
@@ -357,5 +357,10 @@ int xbus_sysfs_create(xbus_t *xbus);
 void xbus_sysfs_remove(xbus_t *xbus);
 
 void astribank_uevent_send(xbus_t *xbus, enum kobject_action act);
+
+static inline s64 xpp_ktime_sec_delta(ktime_t later, ktime_t earlier)
+{
+	return ktime_divns(ktime_sub(later, earlier), NSEC_PER_SEC);
+}
 
 #endif /* XBUS_CORE_H */

@@ -31,6 +31,7 @@
 #include <linux/device.h>
 #include <linux/delay.h>	/* for msleep() to debug */
 #include <linux/sched.h>
+#include <dahdi/kernel.h>
 #include "xpd.h"
 #include "xpp_dahdi.h"
 #include "xbus-core.h"
@@ -117,24 +118,28 @@ static DEVICE_ATTR_READER(timing_show, dev, buf)
 	xbus_t *xbus;
 	struct xpp_drift *driftinfo;
 	int len = 0;
-	struct timeval now;
+	ktime_t now;
 
-	do_gettimeofday(&now);
+	now = ktime_get();
 	xbus = dev_to_xbus(dev);
 	driftinfo = &xbus->drift;
 	len +=
 	    snprintf(buf + len, PAGE_SIZE - len, "%-3s",
 		     sync_mode_name(xbus->sync_mode));
 	if (xbus->sync_mode == SYNC_MODE_PLL) {
+		bool pll_updated = !dahdi_ktime_equal(xbus->pll_updated_at,
+						      ktime_set(0, 0));
+		s64 update_delta =
+			(!pll_updated) ? 0 :
+				xpp_ktime_sec_delta(now, xbus->pll_updated_at);
 		len +=
 		    snprintf(buf + len, PAGE_SIZE - len,
 			     " %5d: lost (%4d,%4d) : ", xbus->ticker.cycle,
 			     driftinfo->lost_ticks, driftinfo->lost_tick_count);
 		len +=
 		    snprintf(buf + len, PAGE_SIZE - len,
-			     "DRIFT %3d %ld sec ago", xbus->sync_adjustment,
-			     (xbus->pll_updated_at ==
-			      0) ? 0 : now.tv_sec - xbus->pll_updated_at);
+			     "DRIFT %3d %lld sec ago", xbus->sync_adjustment,
+			     update_delta);
 	}
 	len += snprintf(buf + len, PAGE_SIZE - len, "\n");
 	return len;
@@ -229,7 +234,7 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	xbus_t *xbus;
 	struct xpp_drift *di;
 	struct xpp_ticker *ticker;
-	struct timeval now;
+	ktime_t now = ktime_get();
 	int len = 0;
 	int hours;
 	int minutes;
@@ -244,8 +249,7 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	/*
 	 * Calculate lost ticks time
 	 */
-	do_gettimeofday(&now);
-	seconds = now.tv_sec - di->last_lost_tick.tv.tv_sec;
+	seconds = ktime_ms_delta(now, di->last_lost_tick) / 1000;
 	minutes = seconds / 60;
 	seconds = seconds % 60;
 	hours = minutes / 60;

@@ -40,16 +40,6 @@ enum sync_mode {
 };
 
 /*
- * Abstract representation of timestamp.
- * It would (eventually) replace the hard-coded
- * timeval structs so we can migrate to better
- * time representations.
- */
-struct xpp_timestamp {
-	struct timeval tv;
-};
-
-/*
  * A ticker encapsulates the timing information of some
  * abstract tick source. The following tickers are used:
  *   - Each xbus has an embedded ticker.
@@ -60,8 +50,8 @@ struct xpp_timestamp {
 struct xpp_ticker {		/* for rate calculation */
 	int count;
 	int cycle;
-	struct xpp_timestamp first_sample;
-	struct xpp_timestamp last_sample;
+	ktime_t first_sample;
+	ktime_t last_sample;
 	int tick_period;	/* usec/tick */
 	spinlock_t lock;
 };
@@ -75,7 +65,7 @@ struct xpp_drift {
 	int lost_ticks;		/* occurances */
 	int lost_tick_count;
 	int sync_inaccuracy;
-	struct xpp_timestamp last_lost_tick;
+	ktime_t last_lost_tick;
 	long delta_sum;
 	int offset_prev;
 	int offset_range;
@@ -88,15 +78,10 @@ struct xpp_drift {
 
 void xpp_drift_init(xbus_t *xbus);
 
-static inline long usec_diff(const struct timeval *tv1,
-			     const struct timeval *tv2)
+static inline long usec_diff(const ktime_t *tv1,
+			     const ktime_t *tv2)
 {
-	long diff_sec;
-	long diff_usec;
-
-	diff_sec = tv1->tv_sec - tv2->tv_sec;
-	diff_usec = tv1->tv_usec - tv2->tv_usec;
-	return diff_sec * 1000000 + diff_usec;
+	return ktime_us_delta(*tv1, *tv2);
 }
 
 int xbus_pcm_init(void *top);

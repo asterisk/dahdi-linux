@@ -259,7 +259,7 @@ void xframe_init(xbus_t *xbus, xframe_t *xframe, void *buf, size_t maxsize,
 	xframe->packets = xframe->first_free = buf;
 	xframe->frame_maxlen = maxsize;
 	atomic_set(&xframe->frame_len, 0);
-	do_gettimeofday(&xframe->tv_created);
+	xframe->kt_created = ktime_get();
 	xframe->xframe_magic = XFRAME_MAGIC;
 }
 EXPORT_SYMBOL(xframe_init);
@@ -946,12 +946,12 @@ static int xbus_initialize(xbus_t *xbus)
 	int unit;
 	int subunit;
 	xpd_t *xpd;
-	struct timeval time_start;
-	struct timeval time_end;
+	ktime_t time_start;
+	ktime_t time_end;
 	unsigned long timediff;
 	int res = 0;
 
-	do_gettimeofday(&time_start);
+	time_start = ktime_get();
 	XBUS_DBG(DEVICES, xbus, "refcount_xbus=%d\n", refcount_xbus(xbus));
 	if (xbus_aquire_xpds(xbus) < 0)	/* Until end of initialization */
 		return -EBUSY;
@@ -989,7 +989,7 @@ static int xbus_initialize(xbus_t *xbus)
 		}
 	}
 	xbus_echocancel(xbus, 1);
-	do_gettimeofday(&time_end);
+	time_end = ktime_get();
 	timediff = usec_diff(&time_end, &time_start);
 	timediff /= 1000 * 100;
 	XBUS_INFO(xbus, "Initialized in %ld.%1ld sec\n", timediff / 10,
@@ -1755,8 +1755,7 @@ out:
 static void xbus_fill_proc_queue(struct seq_file *sfile, struct xframe_queue *q)
 {
 	seq_printf(sfile,
-		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d "
-		"worst_lag %02ld.%ld ms\n",
+		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%lld ms\n",
 		q->name, q->steady_state_count, q->count, q->max_count,
 		q->worst_count, q->overflows, q->worst_lag_usec / 1000,
 		q->worst_lag_usec % 1000);
@@ -1792,8 +1791,9 @@ static int xbus_proc_show(struct seq_file *sfile, void *data)
 		    seq_printf(sfile, "%5d ", xbus->cpu_rcv_tasklet[i]);
 		seq_printf(sfile, "\n");
 	}
-	seq_printf(sfile, "self_ticking: %d (last_tick at %ld)\n",
-		    xbus->self_ticking, xbus->ticker.last_sample.tv.tv_sec);
+	seq_printf(sfile, "self_ticking: %d (last_tick at %lld)\n",
+		    xbus->self_ticking, ktime_divns(xbus->ticker.last_sample,
+						    NSEC_PER_SEC));
 	seq_printf(sfile, "command_tick: %d\n",
 		    xbus->command_tick_counter);
 	seq_printf(sfile, "usec_nosend: %d\n", xbus->usec_nosend);

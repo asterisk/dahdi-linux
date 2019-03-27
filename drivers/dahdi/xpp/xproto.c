@@ -283,9 +283,8 @@ out:
 int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 {
 	int ret = 0;
-	struct timeval now;
-	struct timeval tv_received;
-	int usec;
+	ktime_t kt_received;
+	s64 usec;
 
 	if (XFRAME_LEN(xframe) < RPACKET_HEADERSIZE) {
 		static int rate_limit;
@@ -301,7 +300,7 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 		XBUS_DBG(GENERAL, xbus, "Dropped xframe. Is shutting down.\n");
 		return -ENODEV;
 	}
-	tv_received = xframe->tv_received;
+	kt_received = xframe->kt_received;
 	/*
 	 * We want to check that xframes do not mix PCM and other commands
 	 */
@@ -315,10 +314,7 @@ int xframe_receive(xbus_t *xbus, xframe_t *xframe)
 		ret = xframe_receive_cmd(xbus, xframe);
 	}
 	/* Calculate total processing time */
-	do_gettimeofday(&now);
-	usec =
-	    (now.tv_sec - tv_received.tv_sec) * 1000000 + now.tv_usec -
-	    tv_received.tv_usec;
+	usec = ktime_us_delta(ktime_get(), kt_received);
 	if (usec > xbus->max_rx_process)
 		xbus->max_rx_process = usec;
 	return ret;

@@ -200,7 +200,7 @@ struct xusb {
 	int counters[XUSB_COUNTER_MAX];
 
 	/* metrics */
-	struct timeval last_tx;
+	ktime_t last_tx;
 	unsigned int max_tx_delay;
 	uint usb_tx_delay[NUM_BUCKETS];
 	uint sluggish_debounce;
@@ -365,7 +365,7 @@ static int do_send_xframe(xbus_t *xbus, xframe_t *xframe)
 	BUG_ON(!urb);
 	/* update urb length */
 	urb->transfer_buffer_length = XFRAME_LEN(xframe);
-	do_gettimeofday(&xframe->tv_submitted);
+	xframe->kt_submitted = ktime_get();
 	ret = usb_submit_urb(urb, GFP_ATOMIC);
 	if (ret < 0) {
 		static int rate_limit;
@@ -863,8 +863,8 @@ static void xpp_send_callback(struct urb *urb)
 	xframe_t *xframe = &uframe->xframe;
 	xusb_t *xusb = uframe->xusb;
 	xbus_t *xbus = xbus_num(xusb->xbus_num);
-	struct timeval now;
-	long usec;
+	ktime_t now;
+	s64 usec;
 	int writes = atomic_read(&xusb->pending_writes);
 	int i;
 
@@ -875,9 +875,9 @@ static void xpp_send_callback(struct urb *urb)
 	}
 	//flip_parport_bit(6);
 	atomic_dec(&xusb->pending_writes);
-	do_gettimeofday(&now);
-	xusb->last_tx = xframe->tv_submitted;
-	usec = usec_diff(&now, &xframe->tv_submitted);
+	now = ktime_get();
+	xusb->last_tx = xframe->kt_submitted;
+	usec = ktime_us_delta(now, xframe->kt_submitted);
 	if (usec < 0)
 		usec = 0; /* System clock jumped */
 	if (usec > xusb->max_tx_delay)
@@ -931,9 +931,8 @@ static void xpp_receive_callback(struct urb *urb)
 	xbus_t *xbus = xbus_num(xusb->xbus_num);
 	size_t size;
 	bool do_resubmit = 1;
-	struct timeval now;
+	ktime_t now = ktime_get();
 
-	do_gettimeofday(&now);
 	atomic_dec(&xusb->pending_reads);
 	if (!xbus) {
 		XUSB_ERR(xusb,
@@ -961,7 +960,7 @@ static void xpp_receive_callback(struct urb *urb)
 		goto err;
 	}
 	atomic_set(&xframe->frame_len, size);
-	xframe->tv_received = now;
+	xframe->kt_received = now;
 
 //      if (debug)
 //              dump_xframe("USB_FRAME_RECEIVE", xbus, xframe, debug);

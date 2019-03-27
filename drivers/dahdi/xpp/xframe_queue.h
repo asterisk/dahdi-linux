@@ -19,7 +19,7 @@ struct xframe_queue {
 	/* statistics */
 	unsigned int worst_count;
 	unsigned int overflows;
-	unsigned long worst_lag_usec;	/* since xframe creation */
+	s64 worst_lag_usec;	/* since xframe creation */
 };
 
 void xframe_queue_init(struct xframe_queue *q, unsigned int steady_state_count,

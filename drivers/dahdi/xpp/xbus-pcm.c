@@ -111,24 +111,23 @@ static void xpp_ticker_init(struct xpp_ticker *ticker)
 {
 	memset(ticker, 0, sizeof(*ticker));
 	spin_lock_init(&ticker->lock);
-	do_gettimeofday(&ticker->last_sample.tv);
+	ticker->last_sample = ktime_get();
 	ticker->first_sample = ticker->last_sample;
 	ticker_set_cycle(ticker, SYNC_ADJ_QUICK);
 }
 
-static int xpp_ticker_step(struct xpp_ticker *ticker, const struct timeval *t)
+static int xpp_ticker_step(struct xpp_ticker *ticker, const ktime_t t)
 {
 	unsigned long flags;
-	long usec;
+	s64 usec;
 	bool cycled = 0;
 
 	spin_lock_irqsave(&ticker->lock, flags);
-	ticker->last_sample.tv = *t;
+	ticker->last_sample = t;
 	/* rate adjust */
 	if ((ticker->count % ticker->cycle) == ticker->cycle - 1) {
-		usec =
-		    (long)usec_diff(&ticker->last_sample.tv,
-				    &ticker->first_sample.tv);
+		usec = ktime_us_delta(ticker->last_sample,
+					ticker->first_sample);
 		ticker->first_sample = ticker->last_sample;
 		ticker->tick_period = usec / ticker->cycle;
 		cycled = 1;
@@ -147,7 +146,7 @@ static inline void xbus_drift_clear(xbus_t *xbus)
 {
 	struct xpp_drift *di = &xbus->drift;
 
-	do_gettimeofday(&di->last_lost_tick.tv);
+	di->last_lost_tick = ktime_get();
 	ticker_set_cycle(&xbus->ticker, SYNC_ADJ_QUICK);
 	di->max_speed = -SYNC_ADJ_MAX;
 	di->min_speed = SYNC_ADJ_MAX;
@@ -190,14 +189,14 @@ static void sample_tick(xbus_t *xbus, int sample)
  * including abrupt changes in sync -- to verify the stability of the
  * algorithm.
  */
-static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
+static void xpp_drift_step(xbus_t *xbus, const ktime_t kt)
 {
 	struct xpp_drift *di = &xbus->drift;
 	struct xpp_ticker *ticker = &xbus->ticker;
 	unsigned long flags;
 
 	spin_lock_irqsave(&di->lock, flags);
-	xpp_ticker_step(&xbus->ticker, tv);
+	xpp_ticker_step(&xbus->ticker, kt);
 	/*
 	 * Do we need to be synchronized and is there an established reference
 	 * ticker (another Astribank or another DAHDI device) already?
@@ -206,7 +205,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 	    && xbus->sync_mode == SYNC_MODE_PLL) {
 		int new_delta_tick = ticker->count - ref_ticker->count;
 		int lost_ticks = new_delta_tick - di->delta_tick;
-		long usec_delta;
+		s64 usec_delta;
 
 		di->delta_tick = new_delta_tick;
 		if (lost_ticks) {
@@ -233,9 +232,8 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 			}
 		} else {
 			/* Sample a delta */
-			usec_delta =
-			    (long)usec_diff(&ticker->last_sample.tv,
-					    &ref_ticker->last_sample.tv);
+			usec_delta = ktime_us_delta(ticker->last_sample,
+						    ref_ticker->last_sample);
 			sample_tick(xbus, usec_delta);
 			if ((ticker->count % SYNC_CYCLE) >
 			    (SYNC_CYCLE - SYNC_CYCLE_SAMPLE))
@@ -282,8 +280,7 @@ static void xpp_drift_step(xbus_t *xbus, const struct timeval *tv)
 					di->offset_min = offset;
 
 				XBUS_DBG(SYNC, xbus,
-					"offset: %d, min_speed=%d, "
-					"max_speed=%d, usec_delta(last)=%ld\n",
+					"offset: %d, min_speed=%d, max_speed=%d, usec_delta(last)=%lld\n",
 					offset_prev, di->min_speed,
 					di->max_speed, usec_delta);
 				XBUS_DBG(SYNC, xbus,
@@ -356,10 +353,8 @@ static void xpp_set_syncer(xbus_t *xbus, bool on)
 static void xbus_command_timer(TIMER_DATA_TYPE timer)
 {
 	xbus_t *xbus = from_timer(xbus, timer, command_timer);
-	struct timeval now;
 
 	BUG_ON(!xbus);
-	do_gettimeofday(&now);
 	xbus_command_queue_tick(xbus);
 	if (!xbus->self_ticking) /* Must be 1KHz rate */
 		mod_timer(&xbus->command_timer, jiffies + 1);
@@ -489,34 +484,34 @@ static void reset_sync_counters(void)
 
 static void send_drift(xbus_t *xbus, int drift)
 {
-	struct timeval now;
+	const ktime_t now = ktime_get();
 	const char *msg;
+	s64 msec_delta;
 
 	BUG_ON(abs(drift) > SYNC_ADJ_MAX);
-	do_gettimeofday(&now);
 	if (drift > xbus->sync_adjustment)
 		msg = "up";
 	else
 		msg = "down";
+	msec_delta = ktime_ms_delta(now, xbus->pll_updated_at);
 	XBUS_DBG(SYNC, xbus,
-		 "%sDRIFT adjust %s (%d) (last update %ld seconds ago)\n",
+		 "%sDRIFT adjust %s (%d) (last update %lld seconds ago)\n",
 		 (disable_pll_sync) ? "Fake " : "", msg, drift,
-		 now.tv_sec - xbus->pll_updated_at);
+		 msec_delta / MSEC_PER_SEC);
 	if (!disable_pll_sync)
 		CALL_PROTO(GLOBAL, SYNC_SOURCE, xbus, NULL, SYNC_MODE_PLL,
 			   drift);
-	xbus->pll_updated_at = now.tv_sec;
+	xbus->pll_updated_at = now;
 }
 
 static void global_tick(void)
 {
-	struct timeval now;
+	ktime_t now = ktime_get();
 
-	do_gettimeofday(&now);
 	atomic_inc(&xpp_tick_counter);
 	if ((atomic_read(&xpp_tick_counter) % BIG_TICK_INTERVAL) == 0)
 		reset_sync_counters();
-	xpp_ticker_step(&global_ticks_series, &now);
+	xpp_ticker_step(&global_ticks_series, now);
 }
 
 #ifdef	DAHDI_SYNC_TICK
@@ -525,11 +520,11 @@ void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 	struct phonedev *phonedev = container_of(span, struct phonedev, span);
 	xpd_t *xpd = container_of(phonedev, struct xpd, phonedev);
 	static int redundant_ticks;	/* for extra spans */
-	struct timeval now;
+	ktime_t now;
 
 	if (!force_dahdi_sync)
 		goto noop;
-	do_gettimeofday(&now);
+	now = ktime_get();
 	BUG_ON(!xpd);
 	/*
 	 * Detect if any of our spans is dahdi sync master
@@ -562,7 +557,7 @@ void dahdi_sync_tick(struct dahdi_span *span, int is_master)
 #endif
 		goto noop;
 	}
-	xpp_ticker_step(&dahdi_ticker, &now);
+	xpp_ticker_step(&dahdi_ticker, now);
 	dahdi_tick_count++;
 	//flip_parport_bit(1);
 noop:
@@ -854,15 +849,14 @@ static bool pcm_valid(xpd_t *xpd, xpacket_t *pack)
 static inline void pcm_frame_out(xbus_t *xbus, xframe_t *xframe)
 {
 	unsigned long flags;
-	struct timeval now;
-	unsigned long usec;
+	const ktime_t now = ktime_get();
+	s64 usec;
 
 	spin_lock_irqsave(&xbus->lock, flags);
-	do_gettimeofday(&now);
 	if (unlikely(disable_pcm || !XBUS_IS(xbus, READY)))
 		goto dropit;
 	if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
-		usec = usec_diff(&now, &xbus->last_tx_sync);
+		usec = ktime_us_delta(now, xbus->last_tx_sync);
 		xbus->last_tx_sync = now;
 		/* ignore startup statistics */
 		if (likely
@@ -872,8 +866,7 @@ static inline void pcm_frame_out(xbus_t *xbus, xframe_t *xframe)
 
 				if ((rate_limit++ % 5003) == 0)
 					XBUS_DBG(SYNC, xbus,
-						"Bad PCM TX timing(%d): "
-						"usec=%ld.\n",
+						"Bad PCM TX timing(%d): usec=%lld.\n",
 						rate_limit, usec);
 			}
 			if (usec > xbus->max_tx_sync)
@@ -1187,11 +1180,10 @@ static void xbus_tick(xbus_t *xbus)
 	while ((xframe = xframe_dequeue(&xbus->pcm_tospan)) != NULL) {
 		copy_pcm_tospan(xbus, xframe);
 		if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
-			struct timeval now;
-			unsigned long usec;
+			ktime_t now = ktime_get();
+			s64 usec;
 
-			do_gettimeofday(&now);
-			usec = usec_diff(&now, &xbus->last_rx_sync);
+			usec = ktime_us_delta(now, xbus->last_rx_sync);
 			xbus->last_rx_sync = now;
 			/* ignore startup statistics */
 			if (likely
@@ -1202,9 +1194,7 @@ static void xbus_tick(xbus_t *xbus)
 
 					if ((rate_limit++ % 5003) == 0)
 						XBUS_DBG(SYNC, xbus,
-							"Bad PCM RX "
-							"timing(%d): "
-							"usec=%ld.\n",
+							"Bad PCM RX timing(%d): usec=%lld.\n",
 							rate_limit, usec);
 				}
 				if (usec > xbus->max_rx_sync)
@@ -1235,7 +1225,7 @@ static void xbus_tick(xbus_t *xbus)
 	}
 }
 
-static void do_tick(xbus_t *xbus, const struct timeval *tv_received)
+static void do_tick(xbus_t *xbus, const ktime_t kt_received)
 {
 	int counter = atomic_read(&xpp_tick_counter);
 	unsigned long flags;
@@ -1244,7 +1234,7 @@ static void do_tick(xbus_t *xbus, const struct timeval *tv_received)
 	if (global_ticker == xbus)
 		global_tick();	/* called from here or dahdi_sync_tick() */
 	spin_lock_irqsave(&ref_ticker_lock, flags);
-	xpp_drift_step(xbus, tv_received);
+	xpp_drift_step(xbus, kt_received);
 	spin_unlock_irqrestore(&ref_ticker_lock, flags);
 	if (likely(xbus->self_ticking))
 		xbus_tick(xbus);
@@ -1268,7 +1258,7 @@ void xframe_receive_pcm(xbus_t *xbus, xframe_t *xframe)
 	 * FIXME: what about PRI split?
 	 */
 	if (XPACKET_ADDR_SYNC((xpacket_t *)xframe->packets)) {
-		do_tick(xbus, &xframe->tv_received);
+		do_tick(xbus, xframe->kt_received);
 		atomic_inc(&xbus->pcm_rx_counter);
 	} else
 		xbus->xbus_frag_count++;

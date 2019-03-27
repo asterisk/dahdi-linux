@@ -188,7 +188,7 @@ struct FXS_priv_data {
 	xpp_line_t neon_blinking;
 	xpp_line_t neonstate;
 	xpp_line_t vbat_h;		/* High voltage */
-	struct timeval prev_key_time[CHANNELS_PERXPD];
+	ktime_t prev_key_time[CHANNELS_PERXPD];
 	int led_counter[NUM_LEDS][CHANNELS_PERXPD];
 	int overheat_reset_counter[CHANNELS_PERXPD];
 	int ohttimer[CHANNELS_PERXPD];
@@ -1681,8 +1681,7 @@ static void process_hookstate(xpd_t *xpd, xpp_line_t offhook,
 			 * Reset our previous DTMF memories...
 			 */
 			BIT_CLR(priv->prev_key_down, i);
-			priv->prev_key_time[i].tv_sec =
-			    priv->prev_key_time[i].tv_usec = 0L;
+			priv->prev_key_time[i] = ktime_set(0L, 0UL);
 			if (IS_SET(offhook, i)) {
 				LINE_DBG(SIGNAL, xpd, i, "OFFHOOK\n");
 				MARK_ON(priv, i, LED_GREEN);
@@ -1795,8 +1794,9 @@ static void process_dtmf(xpd_t *xpd, uint portnum, __u8 val)
 	bool want_mute;
 	bool want_event;
 	struct FXS_priv_data *priv;
-	struct timeval now;
-	int msec = 0;
+	ktime_t now;
+	s64 msec = 0;
+	struct timespec64 ts;
 
 	if (!dtmf_detection)
 		return;
@@ -1813,16 +1813,16 @@ static void process_dtmf(xpd_t *xpd, uint portnum, __u8 val)
 		BIT_SET(priv->prev_key_down, portnum);
 	else
 		BIT_CLR(priv->prev_key_down, portnum);
-	do_gettimeofday(&now);
-	if (priv->prev_key_time[portnum].tv_sec != 0)
-		msec = usec_diff(&now, &priv->prev_key_time[portnum]) / 1000;
+	now = ktime_get();
+	if (!dahdi_ktime_equal(priv->prev_key_time[portnum], ktime_set(0, 0)))
+		msec = ktime_ms_delta(now, priv->prev_key_time[portnum]);
 	priv->prev_key_time[portnum] = now;
+	ts = ktime_to_timespec64(now);
 	LINE_DBG(SIGNAL, xpd, portnum,
-		"[%lu.%06lu] DTMF digit %-4s '%c' "
-		"(val=%d, want_mute=%s want_event=%s, delta=%d msec)\n",
-		now.tv_sec, now.tv_usec, (key_down) ? "DOWN" : "UP", digit,
-		val, (want_mute) ? "yes" : "no", (want_event) ? "yes" : "no",
-		msec);
+		"[%lld.%06ld] DTMF digit %-4s '%c' (val=%d, want_mute=%s want_event=%s, delta=%lld msec)\n",
+		(s64)ts.tv_sec, ts.tv_nsec * NSEC_PER_USEC,
+		(key_down) ? "DOWN" : "UP", digit, val,
+		(want_mute) ? "yes" : "no", (want_event) ? "yes" : "no", msec);
 	/*
 	 * FIXME: we currently don't use the want_dtmf_mute until
 	 * we are sure about the logic in Asterisk native bridging.

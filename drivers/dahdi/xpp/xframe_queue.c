@@ -34,15 +34,15 @@ static void __xframe_dump_queue(struct xframe_queue *q)
 	xframe_t *xframe;
 	int i = 0;
 	char prefix[30];
-	struct timeval now;
+	ktime_t now = ktime_get();
 
-	do_gettimeofday(&now);
 	printk(KERN_DEBUG "%s: dump queue '%s' (first packet in each frame)\n",
 	       THIS_MODULE->name, q->name);
 	list_for_each_entry_reverse(xframe, &q->head, frame_list) {
 		xpacket_t *pack = (xpacket_t *)&xframe->packets[0];
-		long usec = usec_diff(&now, &xframe->tv_queued);
-		snprintf(prefix, ARRAY_SIZE(prefix), "  %3d> %5ld.%03ld msec",
+		s64 usec = ktime_us_delta(now, xframe->kt_queued);
+
+		snprintf(prefix, ARRAY_SIZE(prefix), "  %3d> %5lld.%03lld msec",
 			 i++, usec / 1000, usec % 1000);
 		dump_packet(prefix, pack, 1);
 	}
@@ -60,9 +60,7 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	if (q->count >= q->max_count) {
 		q->overflows++;
 		if ((overflow_cnt++ % 1000) < 5) {
-			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d "
-				"worst %3d, overflows %3d "
-				"worst_lag %02ld.%ld ms\n",
+			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%lld ms\n",
 			     q->name, q->steady_state_count, q->count,
 			     q->max_count, q->worst_count, q->overflows,
 			     q->worst_lag_usec / 1000,
@@ -75,7 +73,7 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	if (++q->count > q->worst_count)
 		q->worst_count = q->count;
 	list_add_tail(&xframe->frame_list, &q->head);
-	do_gettimeofday(&xframe->tv_queued);
+	xframe->kt_queued = ktime_get();
 out:
 	return ret;
 }
@@ -96,8 +94,8 @@ static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 {
 	xframe_t *frm = NULL;
 	struct list_head *h;
-	struct timeval now;
-	unsigned long usec_lag;
+	ktime_t now;
+	s64 usec_lag;
 
 	if (list_empty(&q->head))
 		goto out;
@@ -105,12 +103,8 @@ static xframe_t *__xframe_dequeue(struct xframe_queue *q)
 	list_del_init(h);
 	--q->count;
 	frm = list_entry(h, xframe_t, frame_list);
-	do_gettimeofday(&now);
-	usec_lag =
-	    (now.tv_sec - frm->tv_queued.tv_sec) * 1000 * 1000 + (now.tv_usec -
-								  frm->
-								  tv_queued.
-								  tv_usec);
+	now = ktime_get();
+	usec_lag = ktime_us_delta(now, frm->kt_queued);
 	if (q->worst_lag_usec < usec_lag)
 		q->worst_lag_usec = usec_lag;
 out:
@@ -284,7 +278,7 @@ xframe_t *get_xframe(struct xframe_queue *q)
 	BUG_ON(xframe->xframe_magic != XFRAME_MAGIC);
 	atomic_set(&xframe->frame_len, 0);
 	xframe->first_free = xframe->packets;
-	do_gettimeofday(&xframe->tv_created);
+	xframe->kt_created = ktime_get();
 	/*
 	 * If later parts bother to correctly initialize their
 	 * headers, there is no need to memset() the whole data.
