@@ -907,7 +907,7 @@ struct dahdi_device {
 	const char *devicetype;
 	struct device dev;
 	unsigned int irqmisses;
-	struct timespec registration_time;
+	ktime_t registration_time;
 };
 
 struct dahdi_span {

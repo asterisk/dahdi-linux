@@ -654,10 +654,11 @@ dahdi_registration_time_show(struct device *dev,
 {
 	struct dahdi_device *ddev = to_ddev(dev);
 	int count = 0;
+	struct timespec64 ts = ktime_to_timespec64(ddev->registration_time);
 
-	count += sprintf(buf, "%010ld.%09ld\n",
-		ddev->registration_time.tv_sec,
-		ddev->registration_time.tv_nsec);
+	count += sprintf(buf, "%010lld.%09ld\n",
+		(s64)ts.tv_sec,
+		ts.tv_nsec);
 	return count;
 }
 
