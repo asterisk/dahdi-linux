@@ -1414,6 +1414,9 @@ timer_setup(struct timer_list *timer,
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 11, 0)
 #define refcount_read atomic_read
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 10, 0)
+#define dahdi_ktime_equal ktime_equal
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)
 
 #ifdef RHEL_RELEASE_VERSION
@@ -1477,6 +1480,7 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif /* 3.10.0 */
 #endif /* 3.16.0 */
 #endif /* 4.0.0 */
+#endif /* 4.10.0 */
 #endif /* 4.11.0 */
 #endif /* 4.13.0 */
 #else /* >= 4.15.0 */
@@ -1486,6 +1490,13 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif
 
 #endif /* 4.15.0 */
+
+#ifndef dahdi_ktime_equal
+static inline int dahdi_ktime_equal(const ktime_t cmp1, const ktime_t cmp2)
+{
+	return cmp1 == cmp2;
+}
+#endif
 
 #ifndef DEFINE_SPINLOCK
 #define DEFINE_SPINLOCK(x)      spinlock_t x = SPIN_LOCK_UNLOCKED
