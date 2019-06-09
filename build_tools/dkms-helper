@@ -65,6 +65,7 @@ add() {
         if [ -d .git ]; then
             ${GIT} checkout-index -a --prefix=/usr/src/dahdi-linux-${VERSION}/
         else
+            mkdir -p /usr/src/dahdi-linux-${VERSION}
             cp -f -r * /usr/src/dahdi-linux-${VERSION}/
         fi
     fi
