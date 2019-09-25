@@ -7943,7 +7943,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			memset(getlin, 0, DAHDI_CHUNKSIZE * sizeof(short));
 			txb[0] = DAHDI_LIN2X(0, ms);
 			memset(txb + 1, txb[0], DAHDI_CHUNKSIZE - 1);
-			/* fall through to normal conf mode */
+			/* fallthrough */
 		case DAHDI_CONF_CONF:	/* Normal conference mode */
 			if (is_pseudo_chan(ms)) /* if pseudo-channel */
 			   {
@@ -8506,7 +8506,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 			break;
 		}
 #endif
-		/* fall through intentionally */
+		/* fallthrough */
 	   case DAHDI_SIG_FXSGS:  /* FXS Groundstart */
 		if (rxsig == DAHDI_RXSIG_ONHOOK) {
 			chan->ringdebtimer = RING_DEBOUNCE_TIME;
@@ -8525,7 +8525,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 				chan->gotgs = 1;
 			}
 		}
-		/* fall through intentionally */
+		/* fallthrough */
 	   case DAHDI_SIG_FXOLS: /* FXO Loopstart */
 	   case DAHDI_SIG_FXOKS: /* FXO Kewlstart */
 		switch(rxsig) {

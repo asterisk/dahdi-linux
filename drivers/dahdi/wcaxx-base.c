@@ -1452,11 +1452,13 @@ wcaxx_check_battery_lost(struct wcaxx *wc, struct wcaxx_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
+		/* fallthrough */
 	case BATTERY_PRESENT:
 		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
 	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
+		/* fallthrough */
 	case BATTERY_DEBOUNCING_LOST: /* Intentional drop through */
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
@@ -1507,7 +1509,8 @@ wcaxx_check_battery_present(struct wcaxx *wc, struct wcaxx_module *const mod)
 
 	switch (fxo->battery_state) {
 	case BATTERY_DEBOUNCING_PRESENT_FROM_LOST_ALARM:
-	case BATTERY_DEBOUNCING_PRESENT: /* intentional drop through */
+		/* fallthrough */
+	case BATTERY_DEBOUNCING_PRESENT: 
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->xb.pdev->dev,
@@ -1560,7 +1563,8 @@ wcaxx_check_battery_present(struct wcaxx *wc, struct wcaxx_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-	case BATTERY_LOST: /* intentional drop through */
+		/* fallthrough */
+	case BATTERY_LOST:
 		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
