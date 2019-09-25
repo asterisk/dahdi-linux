@@ -87,6 +87,12 @@
  */
 /* #define CONFIG_WCT4XXP_DISABLE_ASPM */
 
+#ifdef CONFIG_WCT4XXP_DISABLE_ASPM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
+#endif
+
 #if defined(CONFIG_FORCE_EXTENDED_RESET) && defined(CONFIG_NOEXTENDED_RESET)
 #error "You cannot define both CONFIG_FORCE_EXTENDED_RESET and " \
 		"CONFIG_NOEXTENDED_RESET."

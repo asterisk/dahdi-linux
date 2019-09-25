@@ -67,6 +67,12 @@
 #include "wcxb_spi.h"
 #include "wcxb_flash.h"
 
+#ifdef CONFIG_VOICEBUS_DISABLE_ASPM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
+#endif
+
 /*!
  * \brief Default ringer debounce (in ms)
  */

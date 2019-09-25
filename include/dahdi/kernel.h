@@ -58,10 +58,6 @@
 
 #include <linux/poll.h>
 
-#ifdef CONFIG_PCI
-#include <linux/pci-aspm.h>
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #define HAVE_NET_DEVICE_OPS
 #endif
