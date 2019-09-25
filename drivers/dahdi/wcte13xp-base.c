@@ -1872,9 +1872,10 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 		break;
 	case SPANTYPE_DIGITAL_J1:
 		dev_info(&wc->xb.pdev->dev,
-			 "Changing from %s to E1 line mode.\n",
+			 "Changing from %s to J1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t13x_software_init(wc, J1);
+		break;
 	default:
 		dev_err(&wc->xb.pdev->dev,
 			"Got invalid linemode '%s' from dahdi\n",
