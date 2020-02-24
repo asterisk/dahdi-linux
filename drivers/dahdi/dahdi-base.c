@@ -1015,6 +1015,14 @@ static int dahdi_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, dahdi_seq_show, PDE_DATA(inode));
 }
 
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops dahdi_proc_ops = {
+	.proc_open		= dahdi_proc_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= single_release,
+};
+#else
 static const struct file_operations dahdi_proc_ops = {
 	.owner		= THIS_MODULE,
 	.open		= dahdi_proc_open,
@@ -1022,6 +1030,7 @@ static const struct file_operations dahdi_proc_ops = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
+#endif /* DAHDI_HAVE_PROC_OPS */
 
 #endif
 
