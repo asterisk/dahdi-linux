@@ -1,0 +1,11 @@
+FROM fedora:rawhide
+
+RUN dnf update -y && dnf install -y \
+        diffutils \
+        gcc \
+        git \
+        kmod \
+        make \
+        wget
+RUN dnf update -y && dnf install -y kernel-devel
+CMD ["/source/test/test-build.sh"]

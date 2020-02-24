@@ -3,6 +3,7 @@
 
 /.pc
 
+.cache.mk
 *.[oa]
 *.mod
 *.mod.[oc]
@@ -16,6 +17,7 @@ cscope.*
 *.symvers
 *.markers
 .*.o.d
+*.ur-safe
 
 README.html
 modules.order
