@@ -16,9 +16,9 @@ if command -v apt >/dev/null; then
   KERNELS=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*' -not -name '*common*')
 else
   if command -v dnf > /dev/null ; then
-    dnf update kernel-devel
+    dnf update -y dnf kernel-devel
   else
-    yum update kernel-devel
+    yum update -y kernel-devel
   fi
   KERNELS=$(find /usr/src/kernels -maxdepth 1 -type d -regextype sed -regex '.*[.]\(el\|fc\).*')
 fi
