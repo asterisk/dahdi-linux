@@ -58,7 +58,8 @@
 
 #include <linux/poll.h>
 
-#ifdef CONFIG_PCI
+#if defined(CONFIG_PCI) && \
+	(LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0))
 #include <linux/pci-aspm.h>
 #endif
 
