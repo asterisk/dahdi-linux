@@ -2140,7 +2140,11 @@ static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 			   some space for us */
 			ss->outwritebuf = oldbuf;
 		}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0)
+		netif_trans_update(dev);
+#else
 		dev->trans_start = jiffies;
+#endif
 		stats->tx_packets++;
 		stats->tx_bytes += ss->writen[oldbuf];
 		print_debug_writebuf(ss, skb, oldbuf);
