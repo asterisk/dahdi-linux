@@ -103,7 +103,11 @@ int total_registered_spans(void)
 }
 
 #ifdef	CONFIG_PROC_FS
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+static const struct proc_ops xpd_read_proc_ops;
+#else
 static const struct file_operations xpd_read_proc_ops;
+#endif
 #endif
 
 /*------------------------- XPD Management -------------------------*/
@@ -392,6 +396,14 @@ static int xpd_read_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, xpd_read_proc_show, PDE_DATA(inode));
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+static const struct proc_ops xpd_read_proc_ops = {
+	.proc_open	= xpd_read_proc_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+};
+#else
 static const struct file_operations xpd_read_proc_ops = {
 	.owner		= THIS_MODULE,
 	.open		= xpd_read_proc_open,
@@ -399,6 +411,7 @@ static const struct file_operations xpd_read_proc_ops = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
+#endif
 
 #endif
 

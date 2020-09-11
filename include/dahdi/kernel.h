@@ -59,7 +59,11 @@
 #include <linux/poll.h>
 
 #ifdef CONFIG_PCI
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0)
+#include <linux/pci.h>
+#else
 #include <linux/pci-aspm.h>
+#endif
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
