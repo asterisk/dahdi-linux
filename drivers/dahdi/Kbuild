@@ -153,7 +153,7 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_HPEC)	+= dahdi_echocan_hpec.o
 endif
 
 
-hostprogs-y := makefw
+hostprogs := makefw
 
 
 
