@@ -69,6 +69,18 @@ config DAHDI_ECHOCAN_HPEC
 
 	  If unsure, say Y.
 
+config DAHDI_WCTDM
+	tristate "Digium Wildcard TDM400P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  This driver provides support for the Digium Wildcard TDM400P.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wctdm.
+
+	  If unsure, say Y.
+
 config DAHDI_WCT4XXP
 	tristate "Digium Wildcard dual- and quad-T1/E1/J1 Support"
 	depends on DAHDI && PCI
