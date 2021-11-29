@@ -2156,10 +2156,12 @@ static int dahdi_xmit(struct sk_buff *skb, struct net_device *dev)
 	return retval;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0)
 static int dahdi_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	return hdlc_ioctl(dev, ifr, cmd);
 }
+#endif /* < 5.15 */
 
 #endif
 
@@ -4786,7 +4788,11 @@ static void recalc_slaves(struct dahdi_chan *chan)
 static const struct net_device_ops dahdi_netdev_ops = {
 	.ndo_open       = dahdi_net_open,
 	.ndo_stop       = dahdi_net_stop,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0)
+	.ndo_siocwandev	= hdlc_ioctl,
+#else
 	.ndo_do_ioctl   = dahdi_net_ioctl,
+#endif
 	.ndo_start_xmit = hdlc_start_xmit,
 };
 #endif
