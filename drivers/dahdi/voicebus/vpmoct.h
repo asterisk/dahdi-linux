@@ -30,7 +30,12 @@
 #include <linux/timer.h>
 #include "dahdi/kernel.h"
 
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
 #include <stdbool.h>
+#endif
 
 #define VPMOCT_FIRM_HEADER_LEN 32
 #define VPMOCT_BOOT_RAM_LEN 128
