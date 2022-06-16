@@ -54,7 +54,12 @@ Tx Gain - W/Pre-Emphasis: -23.99 to 0.00 db
 #include <linux/crc32.h>
 #include <linux/slab.h>
 
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
 #include <stdbool.h>
+#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
 /* Define this if you would like to load the modules in parallel.  While this
@@ -1955,12 +1960,14 @@ wctdm_check_battery_lost(struct wctdm *wc, struct wctdm_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
+		/* fallthrough */
 	case BATTERY_PRESENT:
 		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
 	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
-	case BATTERY_DEBOUNCING_LOST: /* Intentional drop through */
+		/* fallthrough */
+	case BATTERY_DEBOUNCING_LOST:
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->vb.pdev->dev,
@@ -2063,7 +2070,8 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-	case BATTERY_LOST: /* intentional drop through */
+		/* fallthrough */
+	case BATTERY_LOST:
 		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;

@@ -2558,9 +2558,10 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 	struct b400m *b4;
 	unsigned long flags;
 	int chiprev;
+	u8 lastreg = 0;
 
 	wctdm_setreg(wc, &wc->mods[modpos], 0x10, 0x10);
-	id = xhfc_getreg(wc, &wc->mods[modpos], R_CHIP_ID, &x);
+	id = xhfc_getreg(wc, &wc->mods[modpos], R_CHIP_ID, &lastreg);
 
 	/* chip ID high 7 bits must be 0x62, see datasheet */
 	if ((id & 0xfe) != 0x62)
@@ -2575,6 +2576,7 @@ static int b400m_probe(struct wctdm *wc, int modpos)
 
 	/* card found, enabled and main struct allocated.  Fill it out. */
 	b4->wc = wc;
+	b4->lastreg = lastreg;
 	b4->position = modpos;
 
 	/* which B400M in the system is this one? count all of them found so

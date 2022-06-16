@@ -50,8 +50,15 @@ static const char rcsid[] = "$Id$";
 #ifdef	PROTOCOL_DEBUG
 #ifdef	CONFIG_PROC_FS
 #define	PROC_XBUS_COMMAND	"command"
+
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops proc_xbus_command_ops;
+#else
 static const struct file_operations proc_xbus_command_ops;
+#endif /* DAHDI_HAVE_PROC_OPS */
+
 #endif
+
 #endif
 
 /* Command line parameters */
@@ -65,8 +72,15 @@ static DEF_PARM_BOOL(dahdi_autoreg, 0, 0444,
 		     "Register devices automatically (1) or not (0). UNUSED.");
 
 #ifdef	CONFIG_PROC_FS
+
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops xbus_read_proc_ops;
+#else
 static const struct file_operations xbus_read_proc_ops;
-#endif
+#endif /* DAHDI_HAVE_PROC_OPS */
+
+#endif /* CONFIG_PROC_FS */
+
 static void transport_init(xbus_t *xbus, struct xbus_ops *ops,
 			   ushort max_send_size,
 			   struct device *transport_device, void *priv);
@@ -1828,13 +1842,22 @@ static int xbus_read_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, xbus_proc_show, PDE_DATA(inode));
 }
 
-static const struct file_operations xbus_read_proc_ops = {
-	.owner		= THIS_MODULE,
-	.open		= xbus_read_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops xbus_read_proc_ops = {
+	.proc_open		= xbus_read_proc_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= single_release,
 };
+#else
+static const struct file_operations xbus_read_proc_ops = {
+	.owner			= THIS_MODULE,
+	.open			= xbus_read_proc_open,
+	.read			= seq_read,
+	.llseek			= seq_lseek,
+	.release		= single_release,
+};
+#endif /* DAHDI_HAVE_PROC_OPS */
 
 #ifdef	PROTOCOL_DEBUG
 static ssize_t proc_xbus_command_write(struct file *file,
@@ -1927,11 +1950,19 @@ static int proc_xbus_command_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops proc_xbus_command_ops = {
+	.proc_open		= proc_xbus_command_open,
+	.proc_write		= proc_xbus_command_write,
+};
+#else
 static const struct file_operations proc_xbus_command_ops = {
 	.owner		= THIS_MODULE,
 	.open		= proc_xbus_command_open,
 	.write		= proc_xbus_command_write,
 };
+#endif /* DAHDI_HAVE_PROC_OPS */
+
 #endif
 
 static int xpp_proc_read_show(struct seq_file *sfile, void *data)
@@ -1961,13 +1992,22 @@ static int xpp_proc_read_open(struct inode *inode, struct file *file)
 	return single_open(file, xpp_proc_read_show, PDE_DATA(inode));
 }
 
-static const struct file_operations xpp_proc_read_ops = {
-	.owner		= THIS_MODULE,
-	.open		= xpp_proc_read_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops xpp_proc_read_ops = {
+	.proc_open		= xpp_proc_read_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= single_release,
 };
+#else
+static const struct file_operations xpp_proc_read_ops = {
+	.owner			= THIS_MODULE,
+	.open			= xpp_proc_read_open,
+	.read			= seq_read,
+	.llseek			= seq_lseek,
+	.release		= single_release,
+};
+#endif /* DAHDI_HAVE_PROC_OPS */
 
 #endif
 

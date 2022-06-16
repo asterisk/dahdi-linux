@@ -34,9 +34,14 @@
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/crc32.h>
-
-#include <stdbool.h>
 #include <dahdi/kernel.h>
+
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
+#include <stdbool.h>
+#endif
 
 #include "wct4xxp/wct4xxp.h"	/* For certain definitions */
 #include "wcxb.h"
@@ -1872,9 +1877,10 @@ static int t13x_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 		break;
 	case SPANTYPE_DIGITAL_J1:
 		dev_info(&wc->xb.pdev->dev,
-			 "Changing from %s to E1 line mode.\n",
+			 "Changing from %s to J1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t13x_software_init(wc, J1);
+		break;
 	default:
 		dev_err(&wc->xb.pdev->dev,
 			"Got invalid linemode '%s' from dahdi\n",

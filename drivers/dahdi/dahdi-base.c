@@ -53,10 +53,6 @@
 #include <linux/ktime.h>
 #include <linux/slab.h>
 
-#if defined(HAVE_UNLOCKED_IOCTL) && defined(CONFIG_BKL)
-#include <linux/smp_lock.h>
-#endif
-
 #include <linux/ppp_defs.h>
 
 #include <asm/atomic.h>
@@ -86,7 +82,12 @@
 
 #include "hpec/hpec_user.h"
 
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
 #include <stdbool.h>
+#endif
 
 #if defined(EMPULSE) && defined(EMFLASH)
 #error "You cannot define both EMPULSE and EMFLASH"
@@ -1015,6 +1016,14 @@ static int dahdi_proc_open(struct inode *inode, struct file *file)
 	return single_open(file, dahdi_seq_show, PDE_DATA(inode));
 }
 
+#ifdef DAHDI_HAVE_PROC_OPS
+static const struct proc_ops dahdi_proc_ops = {
+	.proc_open		= dahdi_proc_open,
+	.proc_read		= seq_read,
+	.proc_lseek		= seq_lseek,
+	.proc_release		= single_release,
+};
+#else
 static const struct file_operations dahdi_proc_ops = {
 	.owner		= THIS_MODULE,
 	.open		= dahdi_proc_open,
@@ -1022,6 +1031,7 @@ static const struct file_operations dahdi_proc_ops = {
 	.llseek		= seq_lseek,
 	.release	= single_release,
 };
+#endif /* DAHDI_HAVE_PROC_OPS */
 
 #endif
 
@@ -4060,14 +4070,6 @@ dahdi_timer_unlocked_ioctl(struct file *file, unsigned int cmd,
 	return 0;
 }
 
-#ifndef HAVE_UNLOCKED_IOCTL
-static int dahdi_timer_ioctl(struct inode *inode, struct file *file,
-		unsigned int cmd, unsigned long data)
-{
-	return dahdi_timer_unlocked_ioctl(file, cmd, data);
-}
-#endif
-
 static int dahdi_ioctl_getgains(struct file *file, unsigned long data)
 {
 	int res = 0;
@@ -7002,25 +7004,6 @@ exit:
 	return ret;
 }
 
-#ifndef HAVE_UNLOCKED_IOCTL
-static int dahdi_ioctl(struct inode *inode, struct file *file,
-		unsigned int cmd, unsigned long data)
-{
-	return dahdi_unlocked_ioctl(file, cmd, data);
-}
-#endif
-
-#ifdef HAVE_COMPAT_IOCTL
-static long dahdi_ioctl_compat(struct file *file, unsigned int cmd,
-		unsigned long data)
-{
-	if (cmd == DAHDI_SFCONFIG)
-		return -ENOTTY; /* Not supported yet */
-
-	return dahdi_unlocked_ioctl(file, cmd, data);
-}
-#endif
-
 /**
  * _get_next_channo - Return the next taken channel number from the span list.
  * @span:	The span with which to start the search.
@@ -7943,7 +7926,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			memset(getlin, 0, DAHDI_CHUNKSIZE * sizeof(short));
 			txb[0] = DAHDI_LIN2X(0, ms);
 			memset(txb + 1, txb[0], DAHDI_CHUNKSIZE - 1);
-			/* fall through to normal conf mode */
+			/* fallthrough */
 		case DAHDI_CONF_CONF:	/* Normal conference mode */
 			if (is_pseudo_chan(ms)) /* if pseudo-channel */
 			   {
@@ -8506,7 +8489,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 			break;
 		}
 #endif
-		/* fall through intentionally */
+		/* fallthrough */
 	   case DAHDI_SIG_FXSGS:  /* FXS Groundstart */
 		if (rxsig == DAHDI_RXSIG_ONHOOK) {
 			chan->ringdebtimer = RING_DEBOUNCE_TIME;
@@ -8525,7 +8508,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 				chan->gotgs = 1;
 			}
 		}
-		/* fall through intentionally */
+		/* fallthrough */
 	   case DAHDI_SIG_FXOLS: /* FXO Loopstart */
 	   case DAHDI_SIG_FXOKS: /* FXO Kewlstart */
 		switch(rxsig) {
@@ -10274,14 +10257,7 @@ static const struct file_operations dahdi_fops = {
 	.owner   = THIS_MODULE,
 	.open    = dahdi_open,
 	.release = dahdi_release,
-#ifdef HAVE_UNLOCKED_IOCTL
 	.unlocked_ioctl  = dahdi_unlocked_ioctl,
-#ifdef HAVE_COMPAT_IOCTL
-	.compat_ioctl = dahdi_ioctl_compat,
-#endif
-#else
-	.ioctl   = dahdi_ioctl,
-#endif
 	.poll    = dahdi_poll,
 	.read    = dahdi_no_read,
 	.write   = dahdi_no_write,
@@ -10290,14 +10266,7 @@ static const struct file_operations dahdi_fops = {
 static const struct file_operations dahdi_timer_fops = {
 	.owner   = THIS_MODULE,
 	.release = dahdi_timer_release,
-#ifdef HAVE_UNLOCKED_IOCTL
 	.unlocked_ioctl  = dahdi_timer_unlocked_ioctl,
-#ifdef HAVE_COMPAT_IOCTL
-	.compat_ioctl = dahdi_timer_unlocked_ioctl,
-#endif
-#else
-	.ioctl   = dahdi_timer_ioctl,
-#endif
 	.poll    = dahdi_timer_poll,
 	.read    = dahdi_no_read,
 	.write   = dahdi_no_write,
@@ -10360,35 +10329,9 @@ nodev_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long data)
 	return nodev_common("ioctl");
 }
 
-#ifndef HAVE_UNLOCKED_IOCTL
-static int nodev_ioctl(struct inode *inode, struct file *file,
-		unsigned int cmd, unsigned long data)
-{
-	return nodev_unlocked_ioctl(file, cmd, data);
-}
-#endif
-
-#ifdef HAVE_COMPAT_IOCTL
-static long nodev_ioctl_compat(struct file *file, unsigned int cmd,
-		unsigned long data)
-{
-	if (cmd == DAHDI_SFCONFIG)
-		return -ENOTTY; /* Not supported yet */
-
-	return nodev_unlocked_ioctl(file, cmd, data);
-}
-#endif
-
 static const struct file_operations nodev_fops = {
 	.owner   = THIS_MODULE,
-#ifdef HAVE_UNLOCKED_IOCTL
 	.unlocked_ioctl  = nodev_unlocked_ioctl,
-#ifdef HAVE_COMPAT_IOCTL
-	.compat_ioctl = nodev_ioctl_compat,
-#endif
-#else
-	.ioctl   = nodev_ioctl,
-#endif
 	.read    = nodev_chan_read,
 	.write   = nodev_chan_write,
 	.poll    = nodev_chan_poll,
@@ -10398,14 +10341,7 @@ static const struct file_operations dahdi_chan_fops = {
 	.owner   = THIS_MODULE,
 	.open    = dahdi_open,
 	.release = dahdi_release,
-#ifdef HAVE_UNLOCKED_IOCTL
 	.unlocked_ioctl  = dahdi_unlocked_ioctl,
-#ifdef HAVE_COMPAT_IOCTL
-	.compat_ioctl = dahdi_ioctl_compat,
-#endif
-#else
-	.ioctl   = dahdi_ioctl,
-#endif
 	.read    = dahdi_chan_read,
 	.write   = dahdi_chan_write,
 	.poll    = dahdi_chan_poll,

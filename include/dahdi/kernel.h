@@ -58,13 +58,11 @@
 
 #include <linux/poll.h>
 
-#ifdef CONFIG_PCI
-#include <linux/pci-aspm.h>
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #define HAVE_NET_DEVICE_OPS
 #endif
+
+#define DAHDI_HAVE_PROC_OPS
 
 /* __dev* were removed in 3.8. They still have effect in 2.6.18. */
 #ifndef __devinit
@@ -1373,6 +1371,10 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
+
+#undef DAHDI_HAVE_PROC_OPS
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 
 #ifndef TIMER_DATA_TYPE
@@ -1483,13 +1485,18 @@ static inline void *PDE_DATA(const struct inode *inode)
 #endif /* 4.10.0 */
 #endif /* 4.11.0 */
 #endif /* 4.13.0 */
-#else /* >= 4.15.0 */
+#endif /* 4.15.0 */
+#endif /* 5.6 */
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
+#ifdef CONFIG_PROC_FS
+#define PDE_DATA(i)	pde_data(i)
+#endif
+#endif
 
 #ifndef TIMER_DATA_TYPE
 #define TIMER_DATA_TYPE struct timer_list *
 #endif
-
-#endif /* 4.15.0 */
 
 #ifndef dahdi_ktime_equal
 static inline int dahdi_ktime_equal(const ktime_t cmp1, const ktime_t cmp2)

@@ -1,0 +1,57 @@
+version: '3'
+services:
+
+  test-centos7:
+    build:
+      context: ./
+      dockerfile: test/docker/centos7
+    volumes:
+      - ./:/source
+    network_mode: "host"
+    security_opt:
+      - label=type:container_runtime_t
+    tty: true
+
+  test-centos6:
+    build:
+      context: ./
+      dockerfile: test/docker/centos6
+    volumes:
+      - ./:/source
+    network_mode: "host"
+    security_opt:
+      - label=type:container_runtime_t
+    tty: true
+
+  test-debianstable:
+    build:
+        context: ./
+        dockerfile: test/docker/debianstable
+    volumes:
+      - ./:/source
+    network_mode: "host"
+    security_opt:
+      - label=type:container_runtime_t
+    tty: true
+
+  test-debiantesting:
+    build:
+        context: ./
+        dockerfile: test/docker/debiantesting
+    volumes:
+      - ./:/source
+    network_mode: "host"
+    security_opt:
+      - label=type:container_runtime_t
+    tty: true
+
+  test-fedorarawhide:
+    build:
+      context: ./
+      dockerfile: test/docker/fedorarawhide
+    volumes:
+      - ./:/source
+    network_mode: "host"
+    security_opt:
+      - label=type:container_runtime_t
+    tty: true

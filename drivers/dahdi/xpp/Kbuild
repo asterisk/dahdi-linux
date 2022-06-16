@@ -57,8 +57,8 @@ xpp_verified			= $(foreach file, $(xpp_verifications), $(file).verified)
 FXO_MODES  = $(src)/../fxo_modes.h
 FXO_VERIFY = $(obj)/init_card_2_$(XPP_PROTOCOL_VERSION) -v $(obj)/init_fxo_modes
 
-hostprogs-y			:= print_fxo_modes
-always				:= $(xpp_verified)
+hostprogs			:= print_fxo_modes
+always-y			:= $(xpp_verified)
 print_fxo_modes-objs		:= print_fxo_modes.o
 HOSTCFLAGS_print_fxo_modes.o	+= -include $(FXO_MODES)
 
