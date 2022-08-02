@@ -58,6 +58,37 @@
 
 #include <linux/poll.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
+#include <linux/pci.h>
+#include <linux/dma-mapping.h>
+
+static inline void *pci_alloc_consistent(struct pci_dev *hwdev, size_t size, dma_addr_t *dma_handle)
+{
+    return dma_alloc_coherent(hwdev == NULL ? NULL : &hwdev->dev, size, dma_handle, GFP_ATOMIC);
+}
+
+static inline void pci_free_consistent(struct pci_dev *hwdev, size_t size, void *vaddr, dma_addr_t dma_handle)
+{
+    dma_free_coherent(hwdev == NULL ? NULL : &hwdev->dev, size, vaddr, dma_handle);
+}
+
+static inline dma_addr_t pci_map_single(struct pci_dev *hwdev, void *ptr, size_t size, int direction)
+{
+    return dma_map_single(&hwdev->dev, ptr, size, (enum dma_data_direction)direction);
+}
+
+static inline void pci_unmap_single(struct pci_dev *hwdev, dma_addr_t dma_addr, size_t size, int direction)
+{
+    dma_unmap_single(&hwdev->dev, dma_addr, size, (enum dma_data_direction)direction);
+}
+
+static inline int pci_set_dma_mask(struct pci_dev *dev, u64 mask)
+{
+    return dma_set_mask(&dev->dev, mask);
+}
+
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 #define HAVE_NET_DEVICE_OPS
 #endif
