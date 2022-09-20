@@ -34,8 +34,12 @@
 #include <linux/firmware.h>
 #include <linux/crc32.h>
 
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
 #include <stdbool.h>
-
+#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
 /* Define this if you would like to load the modules in parallel.  While this
@@ -66,6 +70,12 @@
 #include "wcxb.h"
 #include "wcxb_spi.h"
 #include "wcxb_flash.h"
+
+#ifdef CONFIG_VOICEBUS_DISABLE_ASPM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
+#endif
 
 /*!
  * \brief Default ringer debounce (in ms)
@@ -1446,11 +1456,13 @@ wcaxx_check_battery_lost(struct wcaxx *wc, struct wcaxx_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
+		/* fallthrough */
 	case BATTERY_PRESENT:
 		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
 	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
+		/* fallthrough */
 	case BATTERY_DEBOUNCING_LOST: /* Intentional drop through */
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
@@ -1501,7 +1513,8 @@ wcaxx_check_battery_present(struct wcaxx *wc, struct wcaxx_module *const mod)
 
 	switch (fxo->battery_state) {
 	case BATTERY_DEBOUNCING_PRESENT_FROM_LOST_ALARM:
-	case BATTERY_DEBOUNCING_PRESENT: /* intentional drop through */
+		/* fallthrough */
+	case BATTERY_DEBOUNCING_PRESENT: 
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
 				dev_info(&wc->xb.pdev->dev,
@@ -1554,7 +1567,8 @@ wcaxx_check_battery_present(struct wcaxx *wc, struct wcaxx_module *const mod)
 		break;
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
-	case BATTERY_LOST: /* intentional drop through */
+		/* fallthrough */
+	case BATTERY_LOST:
 		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;

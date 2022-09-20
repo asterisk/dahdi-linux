@@ -1,0 +1,12 @@
+FROM debian:testing
+
+ENV DEBIAN_FRONTEND noninteractive
+
+RUN apt-get update && apt-get install -y \
+      gcc \
+      git \
+      linux-headers-amd64 \
+      make \
+      wget
+
+CMD ["/source/test/test-build.sh"]

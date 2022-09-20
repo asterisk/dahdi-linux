@@ -1,0 +1,10 @@
+FROM centos:7
+
+RUN yum update -y
+RUN yum install -y \
+        gcc \
+        git \
+        make \
+        wget
+RUN yum install -y kernel-devel.x86_64 0:3.10.0-1062.12.1
+CMD ["/source/test/test-build.sh"]

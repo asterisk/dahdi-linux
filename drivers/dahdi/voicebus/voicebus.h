@@ -64,7 +64,11 @@
  * platform does not support it.
  *
  */
-#undef CONFIG_VOICEBUS_DISABLE_ASPM
+#ifdef CONFIG_VOICEBUS_DISABLE_ASPM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
+#endif
 
 /* Define this to use a FIFO for the software echocan reference.
  * (experimental) */

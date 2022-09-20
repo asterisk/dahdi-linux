@@ -38,10 +38,15 @@
 #include <linux/udp.h>
 #include <linux/etherdevice.h>
 #include <linux/timer.h>
-
-#include <stdbool.h>
-
 #include <dahdi/kernel.h>
+
+/* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
+#include <asm/types.h>
+#else
+#include <stdbool.h>
+#endif
+
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
 #include <linux/sched/signal.h>
