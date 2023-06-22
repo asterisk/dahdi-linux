@@ -418,7 +418,7 @@ static int astribank_match(struct device *dev, struct device_driver *driver)
 			return err;				\
 	} while (0)
 
-static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+static int astribank_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
 {
 	xbus_t *xbus;
 	extern char *initdir;

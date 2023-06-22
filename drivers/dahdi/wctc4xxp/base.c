@@ -643,7 +643,7 @@ wctc4xxp_net_register(struct wcdte *wc)
 		return -ENOMEM;
 	priv = netdev_priv(netdev);
 	priv->wc = wc;
-	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
+	memcpy((void *)netdev->dev_addr, our_mac, sizeof(our_mac));
 
 #	ifdef HAVE_NET_DEVICE_OPS
 	netdev->netdev_ops = &wctc4xxp_netdev_ops;
