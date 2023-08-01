@@ -1,0 +1,39 @@
+name: DAHDI Kernel CI for mainline kernel
+
+on: [push]
+
+jobs:
+  kernel_test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache kernel git repo
+        id: cache-kernel-git
+        uses: actions/cache@v3
+        with:
+          path: ./linux
+          key: kernel-mainline-git-cache
+
+      - if: ${{ steps.cache-kernel-git.outputs.cache-hit != 'true' }}
+        name: Clone Kernel repo
+        run: git clone git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git
+
+      - name: Update kernel git
+        run: git fetch
+        working-directory: ./linux
+
+      - name: Switch to desired branch
+        run: git checkout master
+        working-directory: ./linux
+
+      - name: Fetch dahdi-linux
+        uses: actions/checkout@v3
+        with:
+          path: dahdi-linux
+
+      - name: Create build container
+        run: docker build . -t dahdi-builder
+        working-directory: ./dahdi-linux
+
+      - name: Build dahdi-linux
+        run: "docker run -v ${PWD}/dahdi-linux:/src -v ${PWD}/linux:/linux dahdi-builder"
+
