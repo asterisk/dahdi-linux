@@ -10,7 +10,7 @@ jobs:
         id: cache-kernel-git
         uses: actions/cache@v3
         with:
-          path: ./linux
+          path: ./linux-next
           key: kernel-next-git-cache
 
       - if: ${{ steps.cache-kernel-git.outputs.cache-hit != 'true' }}
