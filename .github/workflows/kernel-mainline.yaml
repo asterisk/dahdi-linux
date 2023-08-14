@@ -1,6 +1,8 @@
 name: DAHDI Kernel CI for mainline kernel
 
-on: [push]
+on:
+  schedule:
+    - cron: 00 02 * * 1
 
 jobs:
   kernel_test:
