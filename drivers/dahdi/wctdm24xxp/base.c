@@ -224,7 +224,11 @@ mod_hooksig(struct wctdm *wc, struct wctdm_module *mod, enum dahdi_rxsig rxsig)
 }
 
 struct wctdm *ifaces[WC_MAX_IFACES];
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 DEFINE_SEMAPHORE(ifacelock);
+#else
+DEFINE_SEMAPHORE(ifacelock, 1);
+#endif
 
 static void wctdm_release(struct wctdm *wc);
 
