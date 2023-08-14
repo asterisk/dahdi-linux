@@ -58,6 +58,10 @@
 
 #include <linux/poll.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#define netif_napi_add netif_napi_add_weight
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 #include <linux/pci.h>
 #include <linux/dma-mapping.h>
