@@ -442,6 +442,7 @@ static inline struct dahdi_device *to_ddev(const struct device *dev)
 			return err;				\
 	} while (0)
 
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
 static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
 #else
