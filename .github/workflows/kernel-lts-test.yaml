@@ -43,7 +43,7 @@ jobs:
           path: dahdi-linux
 
       - name: Create build container
-        run: docker build . -t dahdi-builder
+        run: docker build ./ci  -t dahdi-builder
         working-directory: ./dahdi-linux
 
       - name: Build dahdi-linux
