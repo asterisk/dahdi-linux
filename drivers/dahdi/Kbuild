@@ -35,6 +35,7 @@ ifeq ($(HOTPLUG_FIRMWARE),yes)
   CFLAGS_wcaxx-base.o += -DHOTPLUG_FIRMWARE
 endif
 
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTDM)		+= wctdm.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_VOICEBUS)		+= voicebus/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCB4XXP)		+= wcb4xxp/
 
