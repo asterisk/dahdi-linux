@@ -13,6 +13,15 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTC4XXP)		+= wctc4xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTDM24XXP)	+= wctdm24xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE13XP)		+= wcte13xp.o
 
+ifndef HOTPLUG_FIRMWARE
+ifneq (,$(filter y m,$(CONFIG_FW_LOADER)))
+HOTPLUG_FIRMWARE := yes
+else
+HOTPLUG_FIRMWARE := no
+endif
+export HOTPLUG_FIRMWARE
+endif
+
 wcte13xp-objs := wcte13xp-base.o wcxb_spi.o wcxb.o wcxb_flash.o
 CFLAGS_wcte13xp-base.o += -I$(src)/oct612x -I$(src)/oct612x/include -I$(src)/oct612x/octdeviceapi -I$(src)/oct612x/octdeviceapi/oct6100api
 ifeq ($(HOTPLUG_FIRMWARE),yes)
@@ -61,15 +70,6 @@ obj-m += ../staging/echo/echo.o
 endif
 
 CFLAGS_MODULE += -I$(DAHDI_INCLUDE) -I$(src) -Wno-format-truncation
-
-ifndef HOTPLUG_FIRMWARE
-ifneq (,$(filter y m,$(CONFIG_FW_LOADER)))
-HOTPLUG_FIRMWARE := yes
-else
-HOTPLUG_FIRMWARE := no
-endif
-export HOTPLUG_FIRMWARE
-endif
 
 # fix typo present in CentOS and RHEL 2.6.9 kernels
 BAD_KERNELS_VERS := 22 34 34.0.1 34.0.2
