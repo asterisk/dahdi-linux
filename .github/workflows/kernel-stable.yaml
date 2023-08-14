@@ -1,0 +1,46 @@
+name: DAHDI Kernel CI for Stable kernel
+
+on: [push]
+
+jobs:
+  kernel_test:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        kernel_branch: [
+          'linux-6.4.y'
+          ]
+    steps:
+      - name: Cache kernel git repo
+        id: cache-kernel-git
+        uses: actions/cache@v3
+        with:
+          path: ./linux
+          key: kernel-git-cache
+
+      - if: ${{ steps.cache-kernel-git.outputs.cache-hit != 'true' }}
+        name: Clone Kernel repo
+        run: git clone git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+
+      - name: Update kernel git
+        run: git fetch
+        working-directory: ./linux
+
+      - name: Switch to desired branch
+        run: git checkout ${{matrix.kernel_branch}}
+        working-directory: ./linux
+
+      - name: Fetch dahdi-linux
+        uses: actions/checkout@v3
+        with:
+          path: dahdi-linux
+
+      - name: Create build container
+        run: docker build ./ci  -t dahdi-builder
+        working-directory: ./dahdi-linux
+
+      - name: Build dahdi-linux
+        run: "docker run -v ${PWD}/dahdi-linux:/src -v ${PWD}/linux:/linux dahdi-builder"
+
