@@ -10098,7 +10098,12 @@ static void coretimer_func(TIMER_DATA_TYPE unused)
 
 static void coretimer_init(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
+	init_timer(&core_timer.timer);
+	core_timer.timer.function = coretimer_func;
+#else
 	timer_setup(&core_timer.timer, coretimer_func, 0);
+#endif
 	core_timer.start_interval = ktime_get();
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
