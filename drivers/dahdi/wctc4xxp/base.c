@@ -643,7 +643,7 @@ wctc4xxp_net_register(struct wcdte *wc)
 		return -ENOMEM;
 	priv = netdev_priv(netdev);
 	priv->wc = wc;
-	memcpy(netdev->dev_addr, our_mac, sizeof(our_mac));
+	memcpy((void *)netdev->dev_addr, our_mac, sizeof(our_mac));
 
 #	ifdef HAVE_NET_DEVICE_OPS
 	netdev->netdev_ops = &wctc4xxp_netdev_ops;
@@ -827,8 +827,8 @@ wctc4xxp_initialize_descriptor_ring(struct pci_dev *pdev,
 	if (!dr->pending)
 		return -ENOMEM;
 
-	dr->desc = pci_alloc_consistent(pdev,
-			(sizeof(*d)+dr->padding)*dr->size, &dr->desc_dma);
+	dr->desc = dma_alloc_coherent(&pdev->dev,
+			(sizeof(*d)+dr->padding)*dr->size, &dr->desc_dma, GFP_ATOMIC);
 	if (!dr->desc) {
 		kfree(dr->pending);
 		return -ENOMEM;
@@ -878,7 +878,7 @@ wctc4xxp_submit(struct wctc4xxp_descriptor_ring *dr, struct tcb *c)
 	}
 	d->des1 &= cpu_to_le32(~(BUFFER1_SIZE_MASK));
 	d->des1 |= cpu_to_le32(len & BUFFER1_SIZE_MASK);
-	d->buffer1 = cpu_to_le32(pci_map_single(dr->pdev, c->data,
+	d->buffer1 = cpu_to_le32(dma_map_single(&dr->pdev->dev, c->data,
 			SFRAME_SIZE, dr->direction));
 
 	SET_OWNED(d); /* That's it until the hardware is done with it. */
@@ -900,7 +900,7 @@ wctc4xxp_retrieve(struct wctc4xxp_descriptor_ring *dr)
 	spin_lock_irqsave(&dr->lock, flags);
 	d = wctc4xxp_descriptor(dr, head);
 	if (d->buffer1 && !OWNED(d)) {
-		pci_unmap_single(dr->pdev, le32_to_cpu(d->buffer1),
+		dma_unmap_single(&dr->pdev->dev, le32_to_cpu(d->buffer1),
 			SFRAME_SIZE, dr->direction);
 		c = dr->pending[head];
 		WARN_ON(!c);
@@ -1580,7 +1580,7 @@ wctc4xxp_cleanup_descriptor_ring(struct wctc4xxp_descriptor_ring *dr)
 	for (i = 0; i < dr->size; ++i) {
 		d = wctc4xxp_descriptor(dr, i);
 		if (d->buffer1) {
-			pci_unmap_single(dr->pdev, d->buffer1,
+			dma_unmap_single(&dr->pdev->dev, d->buffer1,
 				SFRAME_SIZE, dr->direction);
 			d->buffer1 = 0;
 			/* Commands will also be sitting on the waiting for
@@ -1594,7 +1594,7 @@ wctc4xxp_cleanup_descriptor_ring(struct wctc4xxp_descriptor_ring *dr)
 	dr->head = 0;
 	dr->tail = 0;
 	dr->count = 0;
-	pci_free_consistent(dr->pdev, (sizeof(*d)+dr->padding) * dr->size,
+	dma_free_coherent(&dr->pdev->dev, (sizeof(*d)+dr->padding) * dr->size,
 		dr->desc, dr->desc_dma);
 	kfree(dr->pending);
 }
@@ -1946,7 +1946,7 @@ wctc4xxp_operation_allocate(struct dahdi_transcoder_channel *dtc)
 
 	if (test_bit(DTE_SHUTDOWN, &wc->flags)) {
 		res = -EIO;
-		if (wctc4xxp_need_firmware_reload(wc)) 
+		if (wctc4xxp_need_firmware_reload(wc))
 			res = wctc4xxp_reload_firmware(wc);
 	} else if (wctc4xxp_need_firmware_reload(wc)) {
 		res = wctc4xxp_reload_firmware(wc);
@@ -2022,7 +2022,7 @@ wctc4xxp_operation_release(struct dahdi_transcoder_channel *dtc)
 		 * state of all the channels. Therefore we do not want to
 		 * process any of the channel release logic even if the firmware
 		 * was reloaded successfully. */
-		if (wctc4xxp_need_firmware_reload(wc)) 
+		if (wctc4xxp_need_firmware_reload(wc))
 			wctc4xxp_reload_firmware(wc);
 		res = -EIO;
 	} else if (wctc4xxp_need_firmware_reload(wc)) {
@@ -3945,7 +3945,7 @@ wctc4xxp_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	INIT_WORK(&wc->deferred_work, deferred_work_func);
 	init_waitqueue_head(&wc->waitq);
 
-	if (pci_set_dma_mask(wc->pdev, DMA_BIT_MASK(32))) {
+	if (dma_set_mask(&wc->pdev->dev, DMA_BIT_MASK(32))) {
 		release_mem_region(pci_resource_start(wc->pdev, 1),
 			pci_resource_len(wc->pdev, 1));
 		if (wc->iobase)

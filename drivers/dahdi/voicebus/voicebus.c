@@ -260,8 +260,8 @@ vb_initialize_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *
 		dl->padding = 0;
 	}
 
-	dl->desc = pci_alloc_consistent(vb->pdev,
-		(sizeof(*d) + dl->padding) * DRING_SIZE, &dl->desc_dma);
+	dl->desc = dma_alloc_coherent(&vb->pdev->dev,
+		(sizeof(*d) + dl->padding) * DRING_SIZE, &dl->desc_dma, GFP_ATOMIC);
 	if (!dl->desc)
 		return -ENOMEM;
 
@@ -311,9 +311,9 @@ vb_initialize_tx_descriptors(struct voicebus *vb)
 		dl->padding = 0;
 	}
 
-	dl->desc = pci_alloc_consistent(vb->pdev,
+	dl->desc = dma_alloc_coherent(&vb->pdev->dev,
 					(sizeof(*d) + dl->padding) *
-					DRING_SIZE, &dl->desc_dma);
+					DRING_SIZE, &dl->desc_dma, GFP_ATOMIC);
 	if (!dl->desc)
 		return -ENOMEM;
 
@@ -544,8 +544,8 @@ vb_free_descriptors(struct voicebus *vb, struct voicebus_descriptor_list *dl)
 		return;
 	}
 	vb_cleanup_descriptors(vb, dl);
-	pci_free_consistent(
-		vb->pdev,
+	dma_free_coherent(
+		&vb->pdev->dev,
 		(sizeof(struct voicebus_descriptor)+dl->padding)*DRING_SIZE,
 		dl->desc, dl->desc_dma);
 	while (!list_empty(&vb->free_rx)) {
@@ -1135,7 +1135,11 @@ static void vb_stop_txrx_processors(struct voicebus *vb)
  */
 void voicebus_stop(struct voicebus *vb)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 	static DEFINE_SEMAPHORE(stop);
+#else
+	static DEFINE_SEMAPHORE(stop, 1);
+#endif
 
 	down(&stop);
 
@@ -1783,7 +1787,7 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 	/* ----------------------------------------------------------------
 	   Configure the hardware / kernel module interfaces.
 	   ---------------------------------------------------------------- */
-	if (pci_set_dma_mask(vb->pdev, DMA_BIT_MASK(32))) {
+	if (dma_set_mask(&vb->pdev->dev, DMA_BIT_MASK(32))) {
 		dev_err(&vb->pdev->dev, "No suitable DMA available.\n");
 		goto cleanup;
 	}
@@ -1826,7 +1830,7 @@ __voicebus_init(struct voicebus *vb, const char *board_name,
 	/* ----------------------------------------------------------------
 	   Configure the hardware interface.
 	   ---------------------------------------------------------------- */
-	if (pci_set_dma_mask(vb->pdev, DMA_BIT_MASK(32))) {
+	if (dma_set_mask(&vb->pdev->dev, DMA_BIT_MASK(32))) {
 		dev_warn(&vb->pdev->dev, "No suitable DMA available.\n");
 		goto cleanup;
 	}
