@@ -46,6 +46,8 @@ Analog Cards
 - wctdm24xxp: 
   * Digium TDM2400P/AEX2400: up to 24 analog ports
   * Digium Hx8 Series: Up to 8 analog or BRI ports
+- wctdm:
+  * Digium TDM400P: up to 4 analog ports
 - xpp: Xorcom Astribank: a USB connected unit of up to 32 ports
   (including the digital BRI and E1/T1 modules)
 
