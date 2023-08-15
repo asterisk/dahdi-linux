@@ -2140,6 +2140,7 @@ static int t1xxp_set_linemode(struct dahdi_span *span, enum spantypes linemode)
 			 "Changing from %s to E1 line mode.\n",
 			 dahdi_spantype2str(wc->span.spantype));
 		res = t1_software_init(wc, J1);
+		break;
 	default:
 		dev_err(&wc->vb.pdev->dev,
 			"Got invalid linemode '%s' from dahdi\n",
@@ -3180,7 +3181,7 @@ static int __init te12xp_init(void)
 		kmem_cache_destroy(cmd_cache);
 		return -EINVAL;
 	}
-	res = dahdi_pci_module(&te12xp_driver);
+	res = pci_register_driver(&te12xp_driver);
 	if (res) {
 		kmem_cache_destroy(cmd_cache);
 		return -ENODEV;

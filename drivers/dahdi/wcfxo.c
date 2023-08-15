@@ -428,7 +428,7 @@ static void wcfxo_tasklet(unsigned long data)
 static void wcfxo_stop_dma(struct wcfxo *wc);
 static void wcfxo_restart_dma(struct wcfxo *wc);
 
-DAHDI_IRQ_HANDLER(wcfxo_interrupt)
+static irqreturn_t wcfxo_interrupt(int irq, void *dev_id)
 {
 	struct wcfxo *wc = dev_id;
 	unsigned char ints;
@@ -1080,7 +1080,7 @@ static int __init wcfxo_init(void)
 			printk(KERN_INFO "%d: %s\n", x, fxo_modes[x].name);
 		return -ENODEV;
 	}
-	res = dahdi_pci_module(&wcfxo_driver);
+	res = pci_register_driver(&wcfxo_driver);
 	if (res)
 		return -ENODEV;
 	return 0;

@@ -1340,7 +1340,7 @@ static void t1_do_counters(struct t1 *wc)
 	spin_unlock_irqrestore(&wc->lock, flags);
 }
 
-DAHDI_IRQ_HANDLER(t1xxp_interrupt)
+static irqreturn_t t1xxp_interrupt(int irq, void *dev_id)
 {
 	struct t1 *wc = dev_id;
 	unsigned char ints;
@@ -1630,7 +1630,7 @@ static struct pci_driver t1xxp_driver = {
 static int __init t1xxp_init(void)
 {
 	int res;
-	res = dahdi_pci_module(&t1xxp_driver);
+	res = pci_register_driver(&t1xxp_driver);
 	if (res)
 		return -ENODEV;
 	return 0;
