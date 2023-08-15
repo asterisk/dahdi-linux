@@ -52,6 +52,7 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCB4XXP)		+= wcb4xxp/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT1XXP)		+= wct1xxp.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE11XP)		+= wcte11xp.o
 
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCFXO)		+= wcfxo.o
 endif
 
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_XPP)		+= xpp/
