@@ -2,7 +2,8 @@ name: DAHDI Kernel CI for Stable kernel
 
 on:
   schedule:
-    - cron: 00 02 * * 1
+    - cron: 00 02 * * *
+  pull_request:
 
 jobs:
   kernel_test:
