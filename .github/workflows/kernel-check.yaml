@@ -1,7 +1,7 @@
 name: Check Dahdi compilation against a kernel
 
 on:
-  workflow-call:
+  workflow_call:
     inputs:
       kernel-git-cache:
         description: 'The name of the cache for the kernel git repo'
