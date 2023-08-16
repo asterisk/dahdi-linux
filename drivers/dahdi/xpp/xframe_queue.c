@@ -35,15 +35,18 @@ static void __xframe_dump_queue(struct xframe_queue *q)
 	int i = 0;
 	char prefix[30];
 	ktime_t now = ktime_get();
+	s64 msec = 0;
+	s32 rem = 0;
 
 	printk(KERN_DEBUG "%s: dump queue '%s' (first packet in each frame)\n",
 	       THIS_MODULE->name, q->name);
 	list_for_each_entry_reverse(xframe, &q->head, frame_list) {
 		xpacket_t *pack = (xpacket_t *)&xframe->packets[0];
 		s64 usec = ktime_us_delta(now, xframe->kt_queued);
+		msec = div_s64_rem(usec, 1000, &rem);
 
-		snprintf(prefix, ARRAY_SIZE(prefix), "  %3d> %5lld.%03lld msec",
-			 i++, usec / 1000, usec % 1000);
+		snprintf(prefix, ARRAY_SIZE(prefix), "  %3d> %5lld.%03d msec",
+			 i++, msec, rem);
 		dump_packet(prefix, pack, 1);
 	}
 }
@@ -52,6 +55,8 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 {
 	int ret = 1;
 	static int overflow_cnt;
+	s64 msec = 0;
+	s32 rem = 0;
 
 	if (unlikely(q->disabled)) {
 		ret = 0;
@@ -60,11 +65,11 @@ static bool __xframe_enqueue(struct xframe_queue *q, xframe_t *xframe)
 	if (q->count >= q->max_count) {
 		q->overflows++;
 		if ((overflow_cnt++ % 1000) < 5) {
-			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%lld ms\n",
+			msec = div_s64_rem(q->worst_lag_usec, 1000, &rem);
+			NOTICE("Overflow of %-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%d ms\n",
 			     q->name, q->steady_state_count, q->count,
 			     q->max_count, q->worst_count, q->overflows,
-			     q->worst_lag_usec / 1000,
-			     q->worst_lag_usec % 1000);
+			     msec, rem);
 			__xframe_dump_queue(q);
 		}
 		ret = 0;

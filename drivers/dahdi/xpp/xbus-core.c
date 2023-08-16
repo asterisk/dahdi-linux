@@ -1771,11 +1771,14 @@ out:
 
 static void xbus_fill_proc_queue(struct seq_file *sfile, struct xframe_queue *q)
 {
+	s64 msec = 0;
+	s32 rem = 0;
+
+	msec = div_s64_rem(q->worst_lag_usec, 1000, &rem);
 	seq_printf(sfile,
-		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%lld ms\n",
+		"%-15s: counts %3d, %3d, %3d worst %3d, overflows %3d worst_lag %02lld.%d ms\n",
 		q->name, q->steady_state_count, q->count, q->max_count,
-		q->worst_count, q->overflows, q->worst_lag_usec / 1000,
-		q->worst_lag_usec % 1000);
+		q->worst_count, q->overflows, msec, rem);
 	xframe_queue_clearstats(q);
 }
 
