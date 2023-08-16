@@ -20,10 +20,9 @@ jobs:
           'linux-5.15.y',
           'linux-6.1.y'
           ]
-    steps:
-      call-kernel-check:
-        uses: asterisk/dahd-linux/.github/workflows/kernel-check.yaml@v1
-        with:
-          kernel-git-cache: kernel-git-cache
-          kernel-git-repo: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-          kernel-git-branch: ${{ matrix.kernel_branch }}
+    call-kernel-check:
+      uses: asterisk/dahd-linux/.github/workflows/kernel-check.yaml@v1
+      with:
+        kernel-git-cache: kernel-git-cache
+        kernel-git-repo: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+        kernel-git-branch: ${{ matrix.kernel_branch }}
