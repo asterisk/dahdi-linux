@@ -52,3 +52,14 @@ jobs:
       - name: Build dahdi-linux
         run: "docker run -v ${PWD}/dahdi-linux:/src -v ${PWD}/linux:/linux dahdi-builder"
 
+      - name: Archive kernel version
+        uses: actions/upload-artifact@v3
+        with:
+          name: Kernel Version
+          path: ./dahdi-linux/build_logs/kernel_version.txt
+
+      - name: Archive build log
+        uses: actions/upload-artifact@v3
+        with:
+          name: Build Log
+          path: ./dahdi-linux/build_logs/build_log.txt
