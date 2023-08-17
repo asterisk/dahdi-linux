@@ -20,8 +20,10 @@ jobs:
           'linux-5.15.y',
           'linux-6.1.y'
           ]
-    uses: asterisk/dahdi-linux/.github/workflows/kernel-check.yaml@master
-      with:
-        kernel-git-cache: kernel-git-cache
-        kernel-git-repo: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
-        kernel-git-branch: ${{ matrix.kernel_branch }}
+    steps:
+      - name: Run Build Test
+        uses: asterisk/dahdi-linux/.github/workflows/kernel-check.yaml@master
+        with:
+          kernel-git-cache: kernel-git-cache
+          kernel-git-repo: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+          kernel-git-branch: ${{ matrix.kernel_branch }}
