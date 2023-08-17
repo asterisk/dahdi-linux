@@ -20,7 +20,7 @@ jobs:
           'linux-5.15.y',
           'linux-6.1.y'
           ]
-    uses: asterisk/dahd-linux/.github/workflows/kernel-check.yaml@v1
+    uses: asterisk/dahdi-linux/.github/workflows/kernel-check.yaml@v1
       with:
         kernel-git-cache: kernel-git-cache
         kernel-git-repo: git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
