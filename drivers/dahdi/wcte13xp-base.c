@@ -2707,10 +2707,11 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	return 0;
 
 fail_exit:
-	if (&wc->xb)
+	/* As (&wc->xb) can never be null therefore check if wc is not null then release xb and free wc */
+	if (wc) {
 		wcxb_release(&wc->xb);
-
-	free_wc(wc);
+		free_wc(wc);
+	}
 	return res;
 }
 

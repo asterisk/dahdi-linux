@@ -535,9 +535,12 @@ static void ztdethmf_destroy(struct dahdi_dynamic *dyn)
 		kfree(z->msgbuf);
 		kfree(z);
 	} else {
-		if (z && z->span && z->span->name) {
-			printk(KERN_ERR "Cannot find interface for %s\n",
-				z->span->name);
+		if (z && z->span) {
+			if ( strlen(z->span->name) )
+				printk(KERN_ERR "Cannot find interface for %s\n",
+					z->span->name);
+			else
+				printk(KERN_ERR "Cannot find interface for \n");
 		}
 	}
 }

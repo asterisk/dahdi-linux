@@ -1410,6 +1410,14 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 
 #undef DAHDI_HAVE_PROC_OPS
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#if __has_attribute(__fallthrough__)
+# define fallthrough                    __attribute__((__fallthrough__))
+#else
+# define fallthrough                    do {} while (0)  /* fallthrough */
+#endif
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)

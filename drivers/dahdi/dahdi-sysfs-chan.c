@@ -381,10 +381,11 @@ static void fixed_devfiles_remove(void)
 		return;
 	for (i = 0; i < ARRAY_SIZE(fixed_minors); i++) {
 		void *d = fixed_minors[i].dev;
-		if (d && !IS_ERR(d))
+		if (d && !IS_ERR(d)) {
 			dahdi_dbg(DEVICES, "Removing fixed device file %s\n",
 				fixed_minors[i].name);
 			DEL_DAHDI_DEV(fixed_minors[i].minor);
+		}
 	}
 }
 
