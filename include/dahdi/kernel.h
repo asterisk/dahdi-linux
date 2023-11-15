@@ -1412,8 +1412,13 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+#undef TIMER_DATA_TYPE
+#define TIMER_DATA_TYPE struct timer_list *
+#else
 #ifndef TIMER_DATA_TYPE
 #define TIMER_DATA_TYPE unsigned long
+#endif
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
