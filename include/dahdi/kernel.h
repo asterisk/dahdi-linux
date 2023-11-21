@@ -1406,6 +1406,16 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,5,12)
+#undef flush_scheduled_work
+#define flush_scheduled_work()				\
+({							\
+	if (0)						\
+		__warn_flushing_systemwide_wq();	\
+	__flush_workqueue(system_wq);			\
+})
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
 
 #undef DAHDI_HAVE_PROC_OPS
