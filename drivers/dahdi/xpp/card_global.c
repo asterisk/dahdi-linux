@@ -149,6 +149,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			"'I' is deprecated in register commands. "
 			"Use 'S' instead.\n");
 		/* fall through */
+		fallthrough;
 	case 'S':
 		do_subreg = 1;
 		num_args += 2;	/* register + subreg */

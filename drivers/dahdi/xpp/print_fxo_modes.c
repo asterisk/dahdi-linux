@@ -3,12 +3,23 @@
 int main(int argc, char *argv[])
 {
 	size_t i;
+	int reg16 = 0;
+	int reg26 = 0;
+	int reg30 = 0;
+	int reg31 = 0x20;
+	char ring_osc[BUFSIZ] = "";
+	char ring_x[BUFSIZ] = "";
 
 	for (i = 0; i < (sizeof(fxo_modes) / sizeof(struct fxo_mode)); i++) {
 		if (fxo_modes[i].name == NULL)
 			break;
-		int reg16 = 0, reg26 = 0, reg30 = 0, reg31 = 0x20;
-		char ring_osc[BUFSIZ] = "", ring_x[BUFSIZ] = "";
+
+		reg16 = 0;
+		reg26 = 0;
+		reg30 = 0;
+		reg31 = 0x20;
+		ring_osc[0] = '\0';
+		ring_x[0] = '\0';
 
 		reg16 |= (fxo_modes[i].ohs << 6);
 		reg16 |= (fxo_modes[i].rz << 1);

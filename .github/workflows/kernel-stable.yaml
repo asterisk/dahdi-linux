@@ -13,7 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         kernel_branch: [
-          'linux-6.4.y'
+          'linux-6.5.y',
+          'linux-6.6.y'
           ]
     steps:
       - name: Cache kernel git repo

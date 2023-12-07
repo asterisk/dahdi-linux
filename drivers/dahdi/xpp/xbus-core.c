@@ -119,7 +119,10 @@ int xbus_check_unique(xbus_t *xbus)
 {
 	if (!xbus)
 		return -ENOENT;
-	if (xbus->label && *(xbus->label)) {
+
+	/* xbus->label can never be null as it is an array therefore memory will always be allocated therefore,
+	 * removing (xbus->label) check as Werror=address will give error */
+	if (*(xbus->label)) {
 		xbus_t *xbus_old;
 
 		XBUS_DBG(DEVICES, xbus, "Checking LABEL='%s'\n", xbus->label);

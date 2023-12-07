@@ -928,9 +928,12 @@ static int dahdi_seq_show(struct seq_file *sfile, void *data)
 	if (!s)
 		return -ENODEV;
 
-	if (s->name)
+	if ( strlen(s->name) )
 		seq_printf(sfile, "Span %d: %s ", s->spanno, s->name);
-	if (s->desc)
+	else
+		seq_printf(sfile, "Span %d: ", s->spanno);
+
+	if ( strlen(s->desc) )
 		seq_printf(sfile, "\"%s\"", s->desc);
 	else
 		seq_printf(sfile, "\"\"");
@@ -969,9 +972,11 @@ static int dahdi_seq_show(struct seq_file *sfile, void *data)
 	for (x = 0; x < s->channels; x++) {
 		struct dahdi_chan *chan = s->chans[x];
 
-		if (chan->name)
+		if ( strlen(chan->name) )
 			seq_printf(sfile, "\t%4d %s ", chan->channo,
 					chan->name);
+		else
+			seq_printf(sfile, "\t%4d ", chan->channo);
 
 		if (chan->sig) {
 			if (chan->sig == DAHDI_SIG_SLAVE)
@@ -7931,6 +7936,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 			txb[0] = DAHDI_LIN2X(0, ms);
 			memset(txb + 1, txb[0], DAHDI_CHUNKSIZE - 1);
 			/* fallthrough */
+			fallthrough;
 		case DAHDI_CONF_CONF:	/* Normal conference mode */
 			if (is_pseudo_chan(ms)) /* if pseudo-channel */
 			   {
@@ -7955,6 +7961,7 @@ static inline void __dahdi_process_getaudio_chunk(struct dahdi_chan *ss, unsigne
 				break;
 		 	   }
 			/* fall through */
+			fallthrough;
 		case DAHDI_CONF_CONFMON:	/* Conference monitor mode */
 			if (ms->confmode & DAHDI_CONF_LISTENER) {
 				/* Subtract out last sample written to conf */
@@ -8494,6 +8501,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 		}
 #endif
 		/* fallthrough */
+		fallthrough;
 	   case DAHDI_SIG_FXSGS:  /* FXS Groundstart */
 		if (rxsig == DAHDI_RXSIG_ONHOOK) {
 			chan->ringdebtimer = RING_DEBOUNCE_TIME;
@@ -8513,6 +8521,7 @@ static void __dahdi_hooksig_pvt(struct dahdi_chan *chan, enum dahdi_rxsig rxsig)
 			}
 		}
 		/* fallthrough */
+		fallthrough;
 	   case DAHDI_SIG_FXOLS: /* FXO Loopstart */
 	   case DAHDI_SIG_FXOKS: /* FXO Kewlstart */
 		switch(rxsig) {
@@ -8613,6 +8622,7 @@ void dahdi_rbsbits(struct dahdi_chan *chan, int cursig)
 			break;
 		}
 		/* Fall through */
+		fallthrough;
 	    case DAHDI_SIG_EM_E1:
 	    case DAHDI_SIG_FXOLS: /* FXO Loopstart */
 	    case DAHDI_SIG_FXOKS: /* FXO Kewlstart */
@@ -9060,6 +9070,7 @@ static inline void __dahdi_process_putaudio_chunk(struct dahdi_chan *ss, unsigne
 				break;
 			   }
 			/* fall through */
+			fallthrough;
 		case DAHDI_CONF_CONFANN:  /* Conference with announce */
 			if (ms->confmode & DAHDI_CONF_TALKER) {
 				/* Store temp value */
@@ -10098,12 +10109,8 @@ static void coretimer_func(TIMER_DATA_TYPE unused)
 
 static void coretimer_init(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
-	init_timer(&core_timer.timer);
-	core_timer.timer.function = coretimer_func;
-#else
 	timer_setup(&core_timer.timer, coretimer_func, 0);
-#endif
+
 	core_timer.start_interval = ktime_get();
 	atomic_set(&core_timer.count, 0);
 	atomic_set(&core_timer.shutdown, 0);
