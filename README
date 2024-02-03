@@ -515,7 +515,7 @@ with the option -v for a verbose output.
 Spans and Channels
 ~~~~~~~~~~~~~~~~~~
 DAHDI provides telephony *channels* to the userspace applications. 
-Those channels are channels are incorporated into logical units called
+Those channels are incorporated into logical units called
 *spans*.
 
 With digital telephony adapters (e.g: E1 or T1), a span normally 
