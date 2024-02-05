@@ -39,6 +39,11 @@
 /* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 #include <asm/types.h>
+#elif defined RHEL_RELEASE_VERSION
+#if defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+              RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,1)
+#include <asm/types.h>
+#endif
 #else
 #include <stdbool.h>
 #endif
