@@ -573,7 +573,7 @@ static int ztdethmf_create(struct dahdi_dynamic *dyn, const char *addr)
 	z->rcvbuf = kmalloc(bufsize, GFP_KERNEL);
 
 	/* Address should be <dev>/<macaddr>/subaddr */
-	strlcpy(src, addr, sizeof(src));
+	strscpy(src, addr, sizeof(src));
 	/* replace all / with space; otherwise kernel sscanf does not work */
 	src_ptr = src;
 	while (*src_ptr) {
