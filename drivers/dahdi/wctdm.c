@@ -2642,6 +2642,10 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			}
 			spin_lock_init(&wc->lock);
 			wc->curcard = -1;
+			if (!(pci_resource_flags(pdev, 0) & IORESOURCE_IO)) {
+				printk(KERN_NOTICE "wctdm: Unable to access PCI I/O resource type\n");
+				return -EIO;
+			}
 			wc->ioaddr = pci_resource_start(pdev, 0);
 			wc->dev = pdev;
 			wc->pos = x;
