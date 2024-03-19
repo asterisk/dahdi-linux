@@ -236,3 +236,21 @@ config DAHDI_DYNAMIC_LOC
 
 
 source "drivers/dahdi/xpp/Kconfig"
+
+config DAHDI_OPVXA1200
+	tristate "OpenVox 8/12 ports analog card Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  This driver provides support for the following OpenVox
+	  Wildcard products:
+
+	  * A1200P (PCI)
+	  * A1200E (PCI-E)
+	  * A800P (PCI)
+	  * A800E (PCI-E)
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called opvxa1200.
+
+	  If unsure, say Y.

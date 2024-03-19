@@ -1,0 +1,19 @@
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_OPVXA1200) += opvxa1200.o
+
+EXTRA_CFLAGS += -I$(src)/.. -Wno-undef
+
+opvxa1200-objs := base.o
+
+DAHDI_KERNEL_H_NAME:=kernel.h
+DAHDI_KERNEL_H_PATH:=$(DAHDI_INCLUDE)/dahdi/$(DAHDI_KERNEL_H_NAME)
+ifneq ($(DAHDI_KERNEL_H_PATH),)
+        DAHDI_SPAN_MODULE:=$(shell if grep -C 5 "struct dahdi_span {" $(DAHDI_KERNEL_H_PATH) | grep -q "struct module \*owner"; then echo "yes"; else echo "no"; fi)
+        DAHDI_SPAN_OPS:=$(shell if grep -q "struct dahdi_span_ops {" $(DAHDI_KERNEL_H_PATH); then echo "yes"; else echo "no"; fi)
+        ifeq ($(DAHDI_SPAN_MODULE),yes)
+                EXTRA_CFLAGS+=-DDAHDI_SPAN_MODULE
+        else
+                ifeq ($(DAHDI_SPAN_OPS),yes)
+                        EXTRA_CFLAGS+=-DDAHDI_SPAN_OPS
+                endif
+        endif
+endif
