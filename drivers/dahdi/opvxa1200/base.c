@@ -4,6 +4,7 @@
  * Written by MiaoLin<miaolin@openvox.cn>
  *
  * Copyright (C) 2005-2010 OpenVox Communication Co. Ltd,
+ * Copyright (C) 2024 Solid Silicon Corp.
  *
  * All rights reserved.
  *
@@ -2715,6 +2716,10 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 
 			spin_lock_init(&wc->lock);
 			wc->curcard = -1;
+			if (!(pci_resource_flags(pdev, 0) & IORESOURCE_IO)) {
+				printk(KERN_NOTICE "opvxa1200: Unable to access PCI I/O resource type\n");
+				return -EIO;
+			}
 			wc->ioaddr = pci_resource_start(pdev, 0);
 			wc->mem_region = pci_resource_start(pdev, 1);
 			wc->mem_len = pci_resource_len(pdev, 1);
