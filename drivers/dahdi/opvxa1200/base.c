@@ -1343,7 +1343,7 @@ static inline void wctdm_proslic_check_hook(struct wctdm *wc, int card)
 	wc->mod[card].fxs.lastrxhook = hook;
 }
 
-DAHDI_IRQ_HANDLER(wctdm_interrupt)
+static irqreturn_t wctdm_interrupt(int irq, void *dev_id)
 {
 	struct wctdm *wc = dev_id;
 	unsigned char ints;
@@ -2390,6 +2390,10 @@ static int wctdm_initialize(struct wctdm *wc)
 {
 	int x;
 
+	wc->ddev = dahdi_create_device();
+	if (!wc->ddev)
+		return -ENOMEM;
+
 	/* Dahdi stuff */
 	sprintf(wc->span.name, "OPVXA1200/%d", wc->pos);
 	snprintf(wc->span.desc, sizeof(wc->span.desc)-1, "%s Board %d", wc->variety, wc->pos + 1);
@@ -2975,7 +2979,6 @@ static struct pci_driver wctdm_driver = {
 
 static int __init wctdm_init(void)
 {
-	int res;
 	int x;
 	for (x=0;x<(sizeof(fxo_modes) / sizeof(fxo_modes[0])); x++) {
 		if (!strcmp(fxo_modes[x].name, opermode))
@@ -3004,8 +3007,7 @@ static int __init wctdm_init(void)
 		battthresh = fxo_modes[_opermode].battthresh;
 	}
 
-	res = dahdi_pci_module(&wctdm_driver);
-	if (res)
+	if (pci_register_driver(&wctdm_driver))
 		return -ENODEV;
 	return 0;
 }
