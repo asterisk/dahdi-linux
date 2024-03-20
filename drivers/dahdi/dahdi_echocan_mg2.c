@@ -44,7 +44,7 @@
 static int debug;
 static int aggressive;
 
-#define ABS(a) abs(a!=-32768?a:-32767)
+#define PARA_ABS(a) abs(a!=-32768?a:-32767)
 
 #define RESTORE_COEFFS {\
 				int x;\
@@ -464,9 +464,9 @@ static inline short sample_update(struct ec_pvt *pvt, short iref, short isig)
 			RESTORE_COEFFS;
 		}
 
-		sign_error = ABS(rs) - ABS(isig);
+		sign_error = PARA_ABS(rs) - PARA_ABS(isig);
 
-		if (ABS(sign_error) > MAX_SIGN_ERROR)
+		if (PARA_ABS(sign_error) > MAX_SIGN_ERROR)
 		{
 			rs = 0;
 			RESTORE_COEFFS;
