@@ -342,7 +342,7 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 		XBUS_DBG(GENERAL, xbus, "Dropped packet. Disconnected.\n");
 		return -EBUSY;
 	}
-	strlcpy(buf, cmdline, MAX_PROC_WRITE);	/* Save a copy */
+	strscpy(buf, cmdline, MAX_PROC_WRITE);	/* Save a copy */
 	if (buf[0] == '#' || buf[0] == ';')
 		XPD_DBG(REGS, xpd, "Note: '%s'\n", buf);
 	if ((p = strchr(buf, '#')) != NULL)	/* Truncate comments */
