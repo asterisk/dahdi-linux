@@ -104,6 +104,7 @@
 #include <asm/io.h>
 #include <linux/sched.h>
 #include <linux/nmi.h>
+#include <linux/pm_qos.h>
 #include "proslic.h"
    
 /* MiaoLin debug start */
@@ -349,7 +350,7 @@ struct wctdm {
 	unsigned char reg0shadow[MAX_NUM_CARDS];
 	unsigned char reg1shadow[MAX_NUM_CARDS];
 
-	unsigned long ioaddr;
+	void __iomem *ioaddr;
 	unsigned long mem_region;	/* 32 bit Region allocated to tiger320 */
 	unsigned long mem_len;		/* Length of 32 bit region */
 	volatile unsigned long mem32;	/* Virtual representation of 32 bit memory area */
@@ -378,6 +379,8 @@ struct wctdm {
 	int  cid_history_clone_cnt[MAX_NUM_CARDS];
 	enum cid_hook_state cid_state[MAX_NUM_CARDS];
    int 	cid_ring_on_time[MAX_NUM_CARDS];
+
+	struct pm_qos_request pm_qos_req;
 };
 
 static char* A1200P_Name = "A1200P";
@@ -435,8 +438,8 @@ static void wctdm_set_led(struct wctdm* wc, int card, int onoff)
 	
 	wc->ledstate &= ~(0x01<<card);
 	wc->ledstate |= (onoff<<card);
-	c = (inb(wc->ioaddr + WC_AUXD)&~BIT_LED_CLK)|BIT_LED_DATA;
-	outb( c,  wc->ioaddr + WC_AUXD);
+	c = (ioread8(wc->ioaddr + WC_AUXD)&~BIT_LED_CLK)|BIT_LED_DATA;
+	iowrite8( c,  wc->ioaddr + WC_AUXD);
 	for(i=MAX_NUM_CARDS-1; i>=0; i--)
 	{
 		if(wc->ledstate & (0x0001<<i))
@@ -450,9 +453,9 @@ static void wctdm_set_led(struct wctdm* wc, int card, int onoff)
 			else
 				c &= ~BIT_LED_DATA;
 			
-		outb( c,  wc->ioaddr + WC_AUXD);
-		outb( c|BIT_LED_CLK,  wc->ioaddr + WC_AUXD);
-		outb( (c&~BIT_LED_CLK)|BIT_LED_DATA,  wc->ioaddr + WC_AUXD);
+		iowrite8( c,  wc->ioaddr + WC_AUXD);
+		iowrite8( c|BIT_LED_CLK,  wc->ioaddr + WC_AUXD);
+		iowrite8( (c&~BIT_LED_CLK)|BIT_LED_DATA,  wc->ioaddr + WC_AUXD);
 	}	
 }
  
@@ -666,9 +669,9 @@ static inline void __write_8bits(struct wctdm *wc, unsigned char bits)
 		int x;
 		/* Drop chip select */
 		wc->ios |= BIT_SCLK;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		wc->ios &= ~BIT_CS;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		for (x=0;x<8;x++) {
 			/* Send out each bit, MSB first, drop SCLK as we do so */
 			if (bits & 0x80)
@@ -676,15 +679,15 @@ static inline void __write_8bits(struct wctdm *wc, unsigned char bits)
 			else
 				wc->ios &= ~BIT_SDI;
 			wc->ios &= ~BIT_SCLK;
-			outb(wc->ios, wc->ioaddr + WC_AUXD);
+			iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 			/* Now raise SCLK high again and repeat */
 			wc->ios |= BIT_SCLK;
-			outb(wc->ios, wc->ioaddr + WC_AUXD);
+			iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 			bits <<= 1;
 		}
 		/* Finally raise CS back high again */
 		wc->ios |= BIT_CS;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	}
 	else
 	{
@@ -702,24 +705,24 @@ static inline void __reset_spi(struct wctdm *wc)
 	
 	/* Drop chip select and clock once and raise and clock once */
 	wc->ios |= BIT_SCLK;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	wc->ios &= ~BIT_CS;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	wc->ios |= BIT_SDI;
 	wc->ios &= ~BIT_SCLK;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	/* Now raise SCLK high again and repeat */
 	wc->ios |= BIT_SCLK;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	/* Finally raise CS back high again */
 	wc->ios |= BIT_CS;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	/* Clock again */
 	wc->ios &= ~BIT_SCLK;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	/* Now raise SCLK high again and repeat */
 	wc->ios |= BIT_SCLK;
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	
 	__wctdm_setcreg(wc, WC_SPICTRL, spibyhw);
 
@@ -732,28 +735,28 @@ static inline unsigned char __read_8bits(struct wctdm *wc)
 	if(spibyhw == 0)
 	{
 		wc->ios &= ~BIT_CS;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		/* Drop chip select */
 		wc->ios &= ~BIT_CS;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		for (x=0;x<8;x++) {
 			res <<= 1;
 			/* Get SCLK */
 			wc->ios &= ~BIT_SCLK;
-			outb(wc->ios, wc->ioaddr + WC_AUXD);
+			iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 			/* Read back the value */
-			c = inb(wc->ioaddr + WC_AUXR);
+			c = ioread8(wc->ioaddr + WC_AUXR);
 			if (c & BIT_SDO)
 				res |= 1;
 			/* Now raise SCLK high again */
 			wc->ios |= BIT_SCLK;
-			outb(wc->ios, wc->ioaddr + WC_AUXD);
+			iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		}
 		/* Finally raise CS back high again */
 		wc->ios |= BIT_CS;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 		wc->ios &= ~BIT_SCLK;
-		outb(wc->ios, wc->ioaddr + WC_AUXD);
+		iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 	}
 	else
 	{
@@ -785,7 +788,7 @@ static void __wctdm_setcreg(struct wctdm *wc, unsigned char reg, unsigned char v
 	if(usememio)
 		__wctdm_setcreg_mem(wc, reg, val);
 	else
-		outb(val, wc->ioaddr + WC_REGBASE + ((reg & 0xf) << 2));
+		iowrite8(val, wc->ioaddr + WC_REGBASE + ((reg & 0xf) << 2));
 }
 
 static unsigned char __wctdm_getcreg(struct wctdm *wc, unsigned char reg)
@@ -793,7 +796,7 @@ static unsigned char __wctdm_getcreg(struct wctdm *wc, unsigned char reg)
 	if(usememio)
 		return __wctdm_getcreg_mem(wc, reg);
 	else
-		return inb(wc->ioaddr + WC_REGBASE + ((reg & 0xf) << 2));
+		return ioread8(wc->ioaddr + WC_REGBASE + ((reg & 0xf) << 2));
 }
 
 static inline void __wctdm_setcard(struct wctdm *wc, int card)
@@ -1351,12 +1354,12 @@ static irqreturn_t wctdm_interrupt(int irq, void *dev_id)
 	int x, y, z;
 	int mode;
 
-	ints = inb(wc->ioaddr + WC_INTSTAT);
+	ints = ioread8(wc->ioaddr + WC_INTSTAT);
 
 	if (!ints)
 		return IRQ_NONE;
 
-	outb(ints, wc->ioaddr + WC_INTSTAT);
+	iowrite8(ints, wc->ioaddr + WC_INTSTAT);
 	
 	if (ints & 0x10) {
 		/* Stop DMA, wait for watchdog */
@@ -2481,7 +2484,7 @@ static int wctdm_hardware_init(struct wctdm *wc)
 	
 	/* Signal Reset */
 	printk("before raise reset\n");
-	outb(0x01, wc->ioaddr + WC_CNTL);
+	iowrite8(0x01, wc->ioaddr + WC_CNTL);
 
 	/* Wait for 5 second */
 	
@@ -2496,7 +2499,7 @@ static int wctdm_hardware_init(struct wctdm *wc)
 	/* printk(KERN_INFO "after raise reset\n");*/
 
 	/* Check OpenVox chip */
-	x=inb(wc->ioaddr + WC_CNTL);
+	x=ioread8(wc->ioaddr + WC_CNTL);
 	ver = __wctdm_getcreg(wc, WC_VER);
 	wc->fwversion = ver;
 	/*if( ver & FLAG_A800)
@@ -2539,46 +2542,46 @@ static int wctdm_hardware_init(struct wctdm *wc)
 		__wctdm_setcreg(wc, WC_SPICTRL, 0);	
 		
 	/* Reset PCI Interface chip and registers (and serial) */
-	outb(0x06, wc->ioaddr + WC_CNTL);
+	iowrite8(0x06, wc->ioaddr + WC_CNTL);
 	/* Setup our proper outputs for when we switch for our "serial" port */
 	wc->ios = BIT_CS | BIT_SCLK | BIT_SDI;
 
-	outb(wc->ios, wc->ioaddr + WC_AUXD);
+	iowrite8(wc->ios, wc->ioaddr + WC_AUXD);
 
 	/* Set all to outputs except AUX 5, which is an input */
-	outb(0xdf, wc->ioaddr + WC_AUXC);
+	iowrite8(0xdf, wc->ioaddr + WC_AUXC);
 
 	/* Select alternate function for AUX0 */  /* Useless in OpenVox by MiaoLin. */
-	/* outb(0x4, wc->ioaddr + WC_AUXFUNC); */
+	/* iowrite8(0x4, wc->ioaddr + WC_AUXFUNC); */
 	
 	/* Wait 1/4 of a sec */
 	wait_just_a_bit(HZ/4);
 
 	/* Back to normal, with automatic DMA wrap around */
-	outb(0x30 | 0x01, wc->ioaddr + WC_CNTL);
+	iowrite8(0x30 | 0x01, wc->ioaddr + WC_CNTL);
 	wc->ledstate = 0;
 	wctdm_set_led(wc, 0, 0);
 	
 	/* Make sure serial port and DMA are out of reset */
-	outb(inb(wc->ioaddr + WC_CNTL) & 0xf9, wc->ioaddr + WC_CNTL);
+	iowrite8(ioread8(wc->ioaddr + WC_CNTL) & 0xf9, wc->ioaddr + WC_CNTL);
 	
 	/* Configure serial port for MSB->LSB operation */
-	outb(0xc1, wc->ioaddr + WC_SERCTL);
+	iowrite8(0xc1, wc->ioaddr + WC_SERCTL);
 
 	/* Delay FSC by 0 so it's properly aligned */
-	outb(0x01, wc->ioaddr + WC_FSCDELAY);  /* Modify to 1 by MiaoLin */
+	iowrite8(0x01, wc->ioaddr + WC_FSCDELAY);  /* Modify to 1 by MiaoLin */
 
 	/* Setup DMA Addresses */
-	outl(wc->writedma,                    wc->ioaddr + WC_DMAWS);		/* Write start */
-	outl(wc->writedma + DAHDI_CHUNKSIZE * 4 * 4 - 4, wc->ioaddr + WC_DMAWI);		/* Middle (interrupt) */
-	outl(wc->writedma + DAHDI_CHUNKSIZE * 8 * 4 - 4, wc->ioaddr + WC_DMAWE);			/* End */
+	iowrite32(wc->writedma,                    wc->ioaddr + WC_DMAWS);		/* Write start */
+	iowrite32(wc->writedma + DAHDI_CHUNKSIZE * 4 * 4 - 4, wc->ioaddr + WC_DMAWI);		/* Middle (interrupt) */
+	iowrite32(wc->writedma + DAHDI_CHUNKSIZE * 8 * 4 - 4, wc->ioaddr + WC_DMAWE);			/* End */
 	
-	outl(wc->readdma,                    	 wc->ioaddr + WC_DMARS);	/* Read start */
-	outl(wc->readdma + DAHDI_CHUNKSIZE * 4 * 4 - 4, 	 wc->ioaddr + WC_DMARI);	/* Middle (interrupt) */
-	outl(wc->readdma + DAHDI_CHUNKSIZE * 8 * 4 - 4, wc->ioaddr + WC_DMARE);	/* End */
+	iowrite32(wc->readdma,                    	 wc->ioaddr + WC_DMARS);	/* Read start */
+	iowrite32(wc->readdma + DAHDI_CHUNKSIZE * 4 * 4 - 4, 	 wc->ioaddr + WC_DMARI);	/* Middle (interrupt) */
+	iowrite32(wc->readdma + DAHDI_CHUNKSIZE * 8 * 4 - 4, wc->ioaddr + WC_DMARE);	/* End */
 	
 	/* Clear interrupts */
-	outb(0xff, wc->ioaddr + WC_INTSTAT);
+	iowrite8(0xff, wc->ioaddr + WC_INTSTAT);
 
 	/* Wait 1/4 of a second more */
 	wait_just_a_bit(HZ/4);
@@ -2635,51 +2638,52 @@ static int wctdm_hardware_init(struct wctdm *wc)
 static void wctdm_enable_interrupts(struct wctdm *wc)
 {
 	/* Clear interrupts */
-	outb(0xff, wc->ioaddr + WC_INTSTAT);
+	iowrite8(0xff, wc->ioaddr + WC_INTSTAT);
 
 	/* Enable interrupts (we care about all of them) */
-	outb(0x3c, wc->ioaddr + WC_MASK0);
+	iowrite8(0x3c, wc->ioaddr + WC_MASK0);
 	/* No external interrupts */
-	outb(0x00, wc->ioaddr + WC_MASK1);
+	iowrite8(0x00, wc->ioaddr + WC_MASK1);
 }
 
 static void wctdm_restart_dma(struct wctdm *wc)
 {
 	/* Reset Master and TDM */
-	outb(0x01, wc->ioaddr + WC_CNTL);
-	outb(0x01, wc->ioaddr + WC_OPER);
+	iowrite8(0x01, wc->ioaddr + WC_CNTL);
+	iowrite8(0x01, wc->ioaddr + WC_OPER);
 }
 
 static void wctdm_start_dma(struct wctdm *wc)
 {
 	/* Reset Master and TDM */
-	outb(0x0f, wc->ioaddr + WC_CNTL);
+	iowrite8(0x0f, wc->ioaddr + WC_CNTL);
 	set_current_state(TASK_INTERRUPTIBLE);
 	schedule_timeout(1);
-	outb(0x01, wc->ioaddr + WC_CNTL);
-	outb(0x01, wc->ioaddr + WC_OPER);
+	iowrite8(0x01, wc->ioaddr + WC_CNTL);
+	iowrite8(0x01, wc->ioaddr + WC_OPER);
 }
 
 static void wctdm_stop_dma(struct wctdm *wc)
 {
-	outb(0x00, wc->ioaddr + WC_OPER);
+	iowrite8(0x00, wc->ioaddr + WC_OPER);
 }
 
 static void wctdm_reset_tdm(struct wctdm *wc)
 {
 	/* Reset TDM */
-	outb(0x0f, wc->ioaddr + WC_CNTL);
+	iowrite8(0x0f, wc->ioaddr + WC_CNTL);
 }
 
 static void wctdm_disable_interrupts(struct wctdm *wc)	
 {
-	outb(0x00, wc->ioaddr + WC_MASK0);
-	outb(0x00, wc->ioaddr + WC_MASK1);
+	iowrite8(0x00, wc->ioaddr + WC_MASK0);
+	iowrite8(0x00, wc->ioaddr + WC_MASK1);
 }
 
 static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
 	int res;
+	int use_legacy_io = 1;
 	struct wctdm *wc;
 	struct wctdm_desc *d = (struct wctdm_desc *)ent->driver_data;
 	int x;
@@ -2717,10 +2721,30 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			spin_lock_init(&wc->lock);
 			wc->curcard = -1;
 			if (!(pci_resource_flags(pdev, 0) & IORESOURCE_IO)) {
-				printk(KERN_NOTICE "opvxa1200: Unable to access PCI I/O resource type\n");
+				printk(KERN_NOTICE "wctdm: Switching to PCI MMIO resources instead of legacy I/O cycles\n");
+				use_legacy_io = 0;
+			}
+			if (!use_legacy_io) {
+				if (!(pci_resource_flags(pdev, 1) & IORESOURCE_MEM)) {
+					printk(KERN_NOTICE "opvxa1200: Unable to access PCI memory resource type\n");
+					return -EIO;
+				}
+			}
+			if (pci_request_regions(pdev, "opvxa1200")) {
+				printk(KERN_NOTICE "opvxa1200: Unable to reserve PCI resources\n");
 				return -EIO;
 			}
-			wc->ioaddr = pci_resource_start(pdev, 0);
+			if (use_legacy_io)
+				wc->ioaddr = pci_iomap(pdev, 0, 0);
+			else
+				wc->ioaddr = pci_iomap(pdev, 1, 0);
+			if (!wc->ioaddr) {
+				pci_release_regions(pdev);
+				printk(KERN_NOTICE "opvxa1200: Unable to access PCI BAR0/1 resource\n");
+				return -EIO;
+			}
+			/* Keep track of whether we need to free the region */
+			wc->freeregion = 0x01;
 			wc->mem_region = pci_resource_start(pdev, 1);
 			wc->mem_len = pci_resource_len(pdev, 1);
 			wc->mem32 = (unsigned long)ioremap(wc->mem_region, wc->mem_len);
@@ -2729,25 +2753,20 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			wc->variety = d->name;
 			for (y=0;y<MAX_NUM_CARDS;y++)
 				wc->flags[y] = d->flags;
-			/* Keep track of whether we need to free the region */
-			if (request_region(wc->ioaddr, 0xff, "opvxa1200")) 
-				wc->freeregion = 1;
-			else
-				wc->freeregion = 0;
-			
-			if (request_mem_region(wc->mem_region, wc->mem_len, "opvxa1200"))
-				wc->freeregion |= 0x02;
+			/* Keep track of whether we need to free the regions */
+			wc->freeregion |= 0x02;
 
 			/* Allocate enough memory for two zt chunks, receive and transmit.  Each sample uses
 			   8 bits.  */
 			wc->writechunk = pci_alloc_consistent(pdev, DAHDI_MAX_CHUNKSIZE * (MAX_NUM_CARDS+NUM_FLAG) * 2 * 2, &wc->writedma);
 			if (!wc->writechunk) {
 				printk(KERN_NOTICE "opvxa1200: Unable to allocate DMA-able memory\n");
-				if (wc->freeregion & 0x01)
-					release_region(wc->ioaddr, 0xff);
+				if (wc->freeregion & 0x01) {
+					pci_iounmap(pdev, wc->ioaddr);
+					pci_release_regions(pdev);
+				}
 				if (wc->freeregion & 0x02)
 				{
-					release_mem_region(wc->mem_region, wc->mem_len);
 					iounmap((void *)wc->mem32);
 				}
 				return -ENOMEM;
@@ -2759,15 +2778,16 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			if (wctdm_initialize(wc)) {
 				printk(KERN_NOTICE "opvxa1200: Unable to intialize FXS\n");
 				/* Set Reset Low */
-				x=inb(wc->ioaddr + WC_CNTL);
-				outb((~0x1)&x, wc->ioaddr + WC_CNTL);
+				x=ioread8(wc->ioaddr + WC_CNTL);
+				iowrite8((~0x1)&x, wc->ioaddr + WC_CNTL);
 				/* Free Resources */
 				free_irq(pdev->irq, wc);
-				if (wc->freeregion & 0x01)
-					release_region(wc->ioaddr, 0xff);
+				if (wc->freeregion & 0x01) {
+					pci_iounmap(pdev, wc->ioaddr);
+					pci_release_regions(pdev);
+				}
 				if (wc->freeregion & 0x02)
 				{
-					release_mem_region(wc->mem_region, wc->mem_len);
 					iounmap((void *)wc->mem32);
 				}
 			}
@@ -2781,11 +2801,12 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 
 			if (request_irq(pdev->irq, wctdm_interrupt, IRQF_SHARED, "opvxa1200", wc)) {
 				printk(KERN_NOTICE "opvxa1200: Unable to request IRQ %d\n", pdev->irq);
-				if (wc->freeregion & 0x01)
-					release_region(wc->ioaddr, 0xff);
+				if (wc->freeregion & 0x01) {
+					pci_iounmap(pdev, wc->ioaddr);
+					pci_release_regions(pdev);
+				}
 				if (wc->freeregion & 0x02)
 				{
-					release_mem_region(wc->mem_region, wc->mem_len);
 					iounmap((void *)wc->mem32);
 				}
 				pci_free_consistent(pdev,  DAHDI_MAX_CHUNKSIZE * (MAX_NUM_CARDS+NUM_FLAG) * 2 * 2, (void *)wc->writechunk, wc->writedma);
@@ -2798,15 +2819,16 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 				unsigned char w;
 
 				/* Set Reset Low */
-				w=inb(wc->ioaddr + WC_CNTL);
-				outb((~0x1)&w, wc->ioaddr + WC_CNTL);
+				w=ioread8(wc->ioaddr + WC_CNTL);
+				iowrite8((~0x1)&w, wc->ioaddr + WC_CNTL);
 				/* Free Resources */
 				free_irq(pdev->irq, wc);
-				if (wc->freeregion & 0x01)
-					release_region(wc->ioaddr, 0xff);
+				if (wc->freeregion & 0x01) {
+					pci_iounmap(pdev, wc->ioaddr);
+					pci_release_regions(pdev);
+				}
 				if (wc->freeregion & 0x02)
 				{
-					release_mem_region(wc->mem_region, wc->mem_len);
 					iounmap((void *)wc->mem32);
 				}
 				pci_free_consistent(pdev,  DAHDI_MAX_CHUNKSIZE * (MAX_NUM_CARDS+NUM_FLAG) * 2 * 2, (void *)wc->writechunk, wc->writedma);
@@ -2842,6 +2864,9 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			}
 			
 			wctdm_post_initialize(wc);
+
+			// Enforce maximum sleep state latency of 10us to prevent modern deep idle CPU states from causing severe audio distortions
+			cpu_latency_qos_add_request(&wc->pm_qos_req, 10);
 
 			/* Enable interrupts */
 			wctdm_enable_interrupts(wc);
@@ -2879,11 +2904,12 @@ static void wctdm_release(struct wctdm *wc)
 	dahdi_unregister_device(wc->ddev);
 	kfree(wc->ddev->location);
 	dahdi_free_device(wc->ddev);
-	if (wc->freeregion & 0x01)
-		release_region(wc->ioaddr, 0xff);
+	if (wc->freeregion & 0x01) {
+		pci_iounmap(wc->dev, wc->ioaddr);
+		pci_release_regions(wc->dev);
+	}
 	if (wc->freeregion & 0x02)
 	{
-		release_mem_region(wc->mem_region, wc->mem_len);
 		iounmap((void *)wc->mem32);
 	}
 	
@@ -2937,6 +2963,9 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 
 		/* In case hardware is still there */
 		wctdm_disable_interrupts(wc);
+
+		/* Remove CPU latency requirement */
+		cpu_latency_qos_remove_request(&wc->pm_qos_req);
 		
 		/* Immediately free resources */
 		pci_free_consistent(pdev,  DAHDI_MAX_CHUNKSIZE * (MAX_NUM_CARDS+NUM_FLAG) * 2 * 2, (void *)wc->writechunk, wc->writedma);
@@ -2944,7 +2973,7 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 
 		/* Reset PCI chip and registers */
 		if(wc->fwversion > 0x11)
-			outb(0x0e, wc->ioaddr + WC_CNTL);
+			iowrite8(0x0e, wc->ioaddr + WC_CNTL);
 		else
 		{
 			wc->ledstate = 0;
