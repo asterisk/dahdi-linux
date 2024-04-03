@@ -4359,7 +4359,7 @@ static int dahdi_ioctl_getparams(struct file *file, unsigned long data)
 	param.pulsebreaktime = chan->pulsebreaktime;
 	param.pulseaftertime = chan->pulseaftertime;
 	param.spanno = (chan->span) ? chan->span->spanno : 0;
-	strlcpy(param.name, chan->name, sizeof(param.name));
+	strscpy(param.name, chan->name, sizeof(param.name));
 	param.chanpos = chan->chanpos;
 	param.sigcap = chan->sigcap;
 	/* Return current law */
@@ -4447,8 +4447,8 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 
 	spaninfo.spanno = s->spanno; /* put the span # in here */
 	spaninfo.totalspans = span_count();
-	strlcpy(spaninfo.desc, s->desc, sizeof(spaninfo.desc));
-	strlcpy(spaninfo.name, s->name, sizeof(spaninfo.name));
+	strscpy(spaninfo.desc, s->desc, sizeof(spaninfo.desc));
+	strscpy(spaninfo.name, s->name, sizeof(spaninfo.name));
 	spaninfo.alarms = s->alarms;		/* get alarm status */
 	spaninfo.rxlevel = s->rxlevel;	/* get rx level */
 	spaninfo.txlevel = s->txlevel;	/* get tx level */
@@ -4475,18 +4475,18 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 	spaninfo.lineconfig = s->lineconfig;
 	spaninfo.irq = 0;
 	spaninfo.linecompat = s->linecompat;
-	strlcpy(spaninfo.lboname, dahdi_lboname(s->lbo),
+	strscpy(spaninfo.lboname, dahdi_lboname(s->lbo),
 			  sizeof(spaninfo.lboname));
 	if (s->parent->manufacturer) {
-		strlcpy(spaninfo.manufacturer, s->parent->manufacturer,
+		strscpy(spaninfo.manufacturer, s->parent->manufacturer,
 			sizeof(spaninfo.manufacturer));
 	}
 	if (s->parent->devicetype) {
-		strlcpy(spaninfo.devicetype, s->parent->devicetype,
+		strscpy(spaninfo.devicetype, s->parent->devicetype,
 			sizeof(spaninfo.devicetype));
 	}
 	if (s->parent->location) {
-		strlcpy(spaninfo.location, s->parent->location,
+		strscpy(spaninfo.location, s->parent->location,
 			sizeof(spaninfo.location));
 	}
 	if (s->spantype) {
@@ -4505,11 +4505,11 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 		const char *st = dahdi_spantype2str(s->spantype);
 		switch (s->spantype) {
 		case SPANTYPE_DIGITAL_BRI_NT:
-			strlcpy(spaninfo.spantype, "NT",
+			strscpy(spaninfo.spantype, "NT",
 					sizeof(spaninfo.spantype));
 			break;
 		case SPANTYPE_DIGITAL_BRI_TE:
-			strlcpy(spaninfo.spantype, "TE",
+			strscpy(spaninfo.spantype, "TE",
 					sizeof(spaninfo.spantype));
 			break;
 		default:
@@ -4519,7 +4519,7 @@ static int dahdi_ioctl_spanstat(struct file *file, unsigned long data)
 			 * so no backward compatibility for this
 			 * broken interface.
 			 */
-			strlcpy(spaninfo.spantype, st,
+			strscpy(spaninfo.spantype, st,
 					sizeof(spaninfo.spantype));
 			break;
 		}
@@ -4568,10 +4568,10 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	spaninfo_v1.spanno = s->spanno; /* put the span # in here */
 	spaninfo_v1.totalspans = 0;
 	spaninfo_v1.totalspans = span_count();
-	strlcpy(spaninfo_v1.desc,
+	strscpy(spaninfo_v1.desc,
 			  s->desc,
 			  sizeof(spaninfo_v1.desc));
-	strlcpy(spaninfo_v1.name,
+	strscpy(spaninfo_v1.name,
 			  s->name,
 			  sizeof(spaninfo_v1.name));
 	spaninfo_v1.alarms = s->alarms;
@@ -4593,25 +4593,25 @@ static int dahdi_ioctl_spanstat_v1(struct file *file, unsigned long data)
 	spaninfo_v1.lineconfig = s->lineconfig;
 	spaninfo_v1.irq = 0;
 	spaninfo_v1.linecompat = s->linecompat;
-	strlcpy(spaninfo_v1.lboname,
+	strscpy(spaninfo_v1.lboname,
 			  dahdi_lboname(s->lbo),
 			  sizeof(spaninfo_v1.lboname));
 
 	if (s->parent->manufacturer) {
-		strlcpy(spaninfo_v1.manufacturer, s->parent->manufacturer,
+		strscpy(spaninfo_v1.manufacturer, s->parent->manufacturer,
 			sizeof(spaninfo_v1.manufacturer));
 	}
 
 	if (s->parent->devicetype) {
-		strlcpy(spaninfo_v1.devicetype, s->parent->devicetype,
+		strscpy(spaninfo_v1.devicetype, s->parent->devicetype,
 			sizeof(spaninfo_v1.devicetype));
 	}
 
-	strlcpy(spaninfo_v1.location, s->parent->location,
+	strscpy(spaninfo_v1.location, s->parent->location,
 		sizeof(spaninfo_v1.location));
 
 	if (s->spantype) {
-		strlcpy(spaninfo_v1.spantype,
+		strscpy(spaninfo_v1.spantype,
 				  dahdi_spantype2str(s->spantype),
 				  sizeof(spaninfo_v1.spantype));
 	}
@@ -5285,7 +5285,7 @@ static int dahdi_ioctl_attach_echocan(unsigned long data)
 			 * always use it instead of any configured software
 			 * echocan. This matches the behavior in dahdi 2.4.1.2
 			 * and earlier releases. */
-			strlcpy(ae.echocan, hwec_def_name, sizeof(ae.echocan));
+			strscpy(ae.echocan, hwec_def_name, sizeof(ae.echocan));
 
 		} else if (strcasecmp(ae.echocan, hwec_def_name) != 0) {
 			chan_dbg(GENERAL, chan,
@@ -5384,7 +5384,7 @@ static int dahdi_ioctl_get_version(unsigned long data)
 	bool have_hwec = dahdi_any_hwec_available();
 
 	memset(&vi, 0, sizeof(vi));
-	strlcpy(vi.version, dahdi_version, sizeof(vi.version));
+	strscpy(vi.version, dahdi_version, sizeof(vi.version));
 	spin_lock(&ecfactory_list_lock);
 	list_for_each_entry(cur, &ecfactory_list, list) {
 		const char * const ec_name = cur->ec->get_name(NULL);
@@ -5640,7 +5640,7 @@ static int ioctl_dahdi_dial(struct dahdi_chan *chan, unsigned long data)
 			rv = -EBUSY;
 			break;
 		}
-		strlcpy(chan->txdialbuf + strlen(chan->txdialbuf), tdo->dialstr,
+		strscpy(chan->txdialbuf + strlen(chan->txdialbuf), tdo->dialstr,
 			DAHDI_MAX_DTMF_BUF - strlen(chan->txdialbuf));
 		if (!chan->dialing) {
 			chan->dialing = 1;
