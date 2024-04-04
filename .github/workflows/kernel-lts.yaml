@@ -18,7 +18,8 @@ jobs:
           'linux-5.4.y',
           'linux-5.10.y',
           'linux-5.15.y',
-          'linux-6.1.y'
+          'linux-6.1.y',
+          'linux-6.6.y'
           ]
     steps:
       - name: Cache kernel git repo
