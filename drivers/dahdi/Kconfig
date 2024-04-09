@@ -158,6 +158,23 @@ config DAHDI_WCTDM24XXP
 
 	  If unsure, say Y.
 
+config DAHDI_WCTE12XP
+	tristate "Digium Wildcard VoiceBus digital card Support"
+	depends on DAHDI && DAHDI_VOICEBUS
+	default DAHDI
+	---help---
+	  This driver provides support for the following Digium
+	  Wildcard products:
+
+  	  * TE120P (PCI/PCI-X)
+	  * TE121 (PCI/PCI-X)
+  	  * TE122 (PCI-E)
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcte12xp.
+
+	  If unsure, say Y.
+
 config DAHDI_PCIRADIO
 	tristate "PCI Radio Support"
 	depends on DAHDI && PCI
@@ -234,5 +251,35 @@ config DAHDI_DYNAMIC_LOC
 
 	  If unsure, say Y.
 
+
+config DAHDI_WCFXO
+	tristate "Digium Wildcard X100P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcfxo.
+
+	  If unsure, say Y.
+
+config DAHDI_WCT1XXP
+	tristate "Digium Wildcard T100P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wct1xxp.
+
+	  If unsure, say Y.
+
+config DAHDI_WCTE11XP
+	tristate "Digium Wildcard TE110P Support"
+	depends on DAHDI && PCI
+	default DAHDI
+	---help---
+	  To compile this driver as a module, choose M here: the
+	  module will be called wcte11xp.
+
+	  If unsure, say Y.
 
 source "drivers/dahdi/xpp/Kconfig"
