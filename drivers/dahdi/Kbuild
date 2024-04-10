@@ -63,6 +63,10 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_STEVE2)	+= dahdi_echocan_sec2.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_KB1)	+= dahdi_echocan_kb1.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_ECHOCAN_MG2)	+= dahdi_echocan_mg2.o
 
+ifdef CONFIG_PCI
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_OPVXA1200)		+= opvxa1200/
+endif
+
 obj-m += $(DAHDI_MODULES_EXTRA)
 
 # If you want to build OSLEC, include the code in the standard location:
