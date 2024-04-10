@@ -527,7 +527,7 @@ with the option -v for a verbose output.
 Spans and Channels
 ~~~~~~~~~~~~~~~~~~
 DAHDI provides telephony *channels* to the userspace applications. 
-Those channels are channels are incorporated into logical units called
+Those hannels are incorporated into logical units called
 *spans*.
 
 With digital telephony adapters (e.g: E1 or T1), a span normally 
@@ -578,7 +578,7 @@ and one Astribank BRI+FXS:
 
 All spans here, except the FXS one, are BRI spans with 3 channels per span.
 
-In order to assign a span, we write three numbers separated by colns to
+In order to assign a span, we write three numbers separated by colons to
 the file 'assign_span' in the SysFS node
 
   local_num:span_num:base_chan_num
