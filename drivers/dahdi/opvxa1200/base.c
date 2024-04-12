@@ -378,9 +378,11 @@ struct wctdm {
 	int	 cid_history_ptr[MAX_NUM_CARDS];
 	int  cid_history_clone_cnt[MAX_NUM_CARDS];
 	enum cid_hook_state cid_state[MAX_NUM_CARDS];
-   int 	cid_ring_on_time[MAX_NUM_CARDS];
+        int  cid_ring_on_time[MAX_NUM_CARDS];
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 6, 19)
 	struct pm_qos_request pm_qos_req;
+#endif
 };
 
 static char* A1200P_Name = "A1200P";
@@ -2865,8 +2867,10 @@ static int __devinit wctdm_init_one(struct pci_dev *pdev, const struct pci_devic
 			
 			wctdm_post_initialize(wc);
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 6, 19)
 			// Enforce maximum sleep state latency of 10us to prevent modern deep idle CPU states from causing severe audio distortions
 			cpu_latency_qos_add_request(&wc->pm_qos_req, 10);
+#endif
 
 			/* Enable interrupts */
 			wctdm_enable_interrupts(wc);
@@ -2964,9 +2968,11 @@ static void __devexit wctdm_remove_one(struct pci_dev *pdev)
 		/* In case hardware is still there */
 		wctdm_disable_interrupts(wc);
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(5, 6, 19)
 		/* Remove CPU latency requirement */
 		cpu_latency_qos_remove_request(&wc->pm_qos_req);
-		
+#endif
+
 		/* Immediately free resources */
 		pci_free_consistent(pdev,  DAHDI_MAX_CHUNKSIZE * (MAX_NUM_CARDS+NUM_FLAG) * 2 * 2, (void *)wc->writechunk, wc->writedma);
 		free_irq(pdev->irq, wc);
