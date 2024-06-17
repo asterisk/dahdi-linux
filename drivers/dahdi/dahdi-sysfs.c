@@ -69,7 +69,12 @@ static inline struct dahdi_span *dev_to_span(const struct device *dev)
 	} while (0)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+#if defined RHEL_RELEASE_VERSION && (RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+        RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,4)
+static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
+#else
 static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif
 #else
 static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
 #endif
@@ -442,9 +447,13 @@ static inline struct dahdi_device *to_ddev(const struct device *dev)
 			return err;				\
 	} while (0)
 
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+#if defined RHEL_RELEASE_VERSION && (RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+        RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,4)
+static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
+#else
 static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif
 #else
 static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
 #endif
