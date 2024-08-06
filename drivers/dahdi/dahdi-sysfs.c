@@ -704,8 +704,16 @@ static DEVICE_ATTR_RO(location);
 static DEVICE_ATTR_WO(auto_assign);
 static DEVICE_ATTR_WO(assign_span);
 static DEVICE_ATTR_WO(unassign_span);
-static DEVICE_ATTR_RW(dahdi_spantype);
-static DEVICE_ATTR_RO(dahdi_registration_time);
+static struct device_attribute dev_attr_dahdi_spantype = {
+	.attr   = { .name = "spantype", .mode = 0644 },
+	.show   = dahdi_spantype_show,
+	.store  = dahdi_spantype_store,
+};
+static struct device_attribute dev_attr_dahdi_registration_time = {
+	.attr   = { .name = "registration_time", .mode = 0444 },
+	.show   = dahdi_registration_time_show,
+	.store  = NULL,
+};
 static struct attribute *dahdi_device_attrs[] = {
 	&dev_attr_manufacturer.attr,
 	&dev_attr_type.attr,
