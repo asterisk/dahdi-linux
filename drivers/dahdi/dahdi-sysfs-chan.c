@@ -484,15 +484,18 @@ int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 	should_cleanup.channel_driver = 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
-#if defined RHEL_RELEASE_VERSION && (RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
-	RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,4)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
 	dahdi_class = class_create("dahdi");
 #else
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
-#endif
+#endif /* RHEL_RELEASE_CODE */
+#else
+	dahdi_class = class_create(THIS_MODULE, "dahdi");
+#endif /* RHEL_RELEASE_VERSION */
 #else
 	dahdi_class = class_create("dahdi");
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (IS_ERR(dahdi_class)) {
 		res = PTR_ERR(dahdi_class);
 		dahdi_err("%s: class_create(dahi_chan) failed. Error: %d\n",
