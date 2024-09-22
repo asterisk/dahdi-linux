@@ -1172,7 +1172,7 @@ static int t4_ioctl(struct dahdi_chan *chan, unsigned int cmd, unsigned long dat
 	return 0;
 }
 
-static void inline t4_hdlc_xmit_fifo(struct t4 *wc, unsigned int span, struct t4_span *ts)
+static inline void t4_hdlc_xmit_fifo(struct t4 *wc, unsigned int span, struct t4_span *ts)
 {
 	int res, i;
 	unsigned int size = 32;
