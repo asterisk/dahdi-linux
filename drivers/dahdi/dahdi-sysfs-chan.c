@@ -220,7 +220,11 @@ static void chan_release(struct device *dev)
 	chan_dbg(DEVICES, chan, "SYSFS\n");
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int chan_match(struct device *dev, const struct device_driver *driver)
+#else
 static int chan_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_chan *chan;
 
