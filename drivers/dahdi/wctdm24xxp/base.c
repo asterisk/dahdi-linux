@@ -1516,16 +1516,16 @@ static int wait_access(struct wctdm *wc, struct wctdm_module *const mod)
 	unsigned char data = 0;
 	int count = 0;
 
-	#define MAX 10 /* attempts */
+	#define MAX_ATTEMPTS 10 /* attempts */
 
 	/* Wait for indirect access */
-	while (count++ < MAX) {
+	while (count++ < MAX_ATTEMPTS) {
 		data = wctdm_getreg(wc, mod, I_STATUS);
 		if (!data)
 			return 0;
 	}
 
-	if (count > (MAX-1)) {
+	if (count > (MAX_ATTEMPTS-1)) {
 		dev_notice(&wc->vb.pdev->dev,
 			   " ##### Loop error (%02x) #####\n", data);
 	}
