@@ -397,7 +397,11 @@ static struct attribute *xbus_dev_attrs[] = {
 ATTRIBUTE_GROUPS(xbus_dev);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int astribank_match(struct device *dev, const struct device_driver *driver)
+#else
 static int astribank_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	DBG(DEVICES, "SYSFS MATCH: dev->bus_id = %s, driver->name = %s\n",
 	    dev_name(dev), driver->name);
@@ -774,7 +778,11 @@ static DEVICE_ATTR_READER(refcount_xpd_show, dev, buf)
 	return len;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int xpd_match(struct device *dev, const struct device_driver *driver)
+#else
 static int xpd_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	struct xpd_driver *xpd_driver;
 	xpd_t *xpd;
