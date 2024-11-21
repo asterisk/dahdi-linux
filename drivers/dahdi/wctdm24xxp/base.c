@@ -230,7 +230,15 @@ mod_hooksig(struct wctdm *wc, struct wctdm_module *mod, enum dahdi_rxsig rxsig)
 
 struct wctdm *ifaces[WC_MAX_IFACES];
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 3)
+DEFINE_SEMAPHORE(ifacelock, 1);
+#else
 DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_CODE */
+#else
+DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_VERSION */
 #else
 DEFINE_SEMAPHORE(ifacelock, 1);
 #endif
