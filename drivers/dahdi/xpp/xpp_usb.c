@@ -887,7 +887,7 @@ static void xpp_send_callback(struct urb *urb)
 		usec = 0; /* System clock jumped */
 	if (usec > xusb->max_tx_delay)
 		xusb->max_tx_delay = usec;
-	i = usec / USEC_BUCKET;
+	i = div_s64(usec, USEC_BUCKET);
 	if (i >= NUM_BUCKETS)
 		i = NUM_BUCKETS - 1;
 	xusb->usb_tx_delay[i]++;

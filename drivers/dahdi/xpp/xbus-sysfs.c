@@ -249,7 +249,7 @@ static DEVICE_ATTR_READER(driftinfo_show, dev, buf)
 	/*
 	 * Calculate lost ticks time
 	 */
-	seconds = ktime_ms_delta(now, di->last_lost_tick) / 1000;
+	seconds = div_s64(ktime_ms_delta(now, di->last_lost_tick), 1000);
 	minutes = seconds / 60;
 	seconds = seconds % 60;
 	hours = minutes / 60;
