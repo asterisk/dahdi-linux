@@ -1,0 +1,64 @@
+name: Check Dahdi compilation against a kernel
+
+on:
+  workflow_call:
+    inputs:
+      kernel-git-cache:
+        description: 'The name of the cache for the kernel git repo'
+        required: true
+        type: string
+      kernel-git-repo:
+        description: 'The URL for the kernel git repo'
+        required: true
+        type: string
+      kernel-git-branch:
+        description: 'The branch to use'
+        type: string
+
+jobs:
+  kernel_test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Cache kernel git repo
+        id: cache-kernel-git
+        uses: actions/cache@v3
+        with:
+          path: ./linux
+          key: ${{ inputs.kernel-git-cache }}
+
+      - if: ${{ steps.cache-kernel-git.outputs.cache-hit != 'true' }}
+        name: Clone Kernel repo
+        run: git clone ${{ inputs.kernel-git-repo }}
+
+      - name: Update kernel git
+        run: git fetch
+        working-directory: ./linux
+
+      - name: Switch to desired branch
+        run: git checkout ${{ inputs.kernel-git-branch }}
+        working-directory: ./linux
+
+      - name: Fetch dahdi-linux
+        uses: actions/checkout@v3
+        with:
+          path: dahdi-linux
+
+      - name: Create build container
+        run: docker build ./ci  -t dahdi-builder
+        working-directory: ./dahdi-linux
+
+      - name: Build dahdi-linux
+        run: "docker run -v ${PWD}/dahdi-linux:/src -v ${PWD}/linux:/linux dahdi-builder"
+
+      - name: Archive kernel version
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.kernel-git-branch }} Kernel Version
+          path: ./dahdi-linux/build_logs/kernel_version.txt
+
+      - name: Archive build log
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.kernel-git-branch }} Build Log
+          path: ./dahdi-linux/build_logs/build_log.txt
