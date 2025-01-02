@@ -60,6 +60,10 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 #define netif_napi_add netif_napi_add_weight
+#elif defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE)
+#if (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 2)) || (RHEL_MAJOR == 8 && RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(8, 8))
+#define netif_napi_add netif_napi_add_weight
+#endif /* RHEL_RELEASE_CODE */
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
@@ -1406,14 +1410,37 @@ static inline short dahdi_txtone_nextsample(struct dahdi_chan *ss)
 /*! Maximum audio mask */
 #define DAHDI_FORMAT_AUDIO_MASK	((1 << 16) - 1)
 
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6,5,12)
+#undef flush_scheduled_work
+#define flush_scheduled_work()				\
+({							\
+	if (0)						\
+		__warn_flushing_systemwide_wq();	\
+	__flush_workqueue(system_wq);			\
+})
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 6, 0)
 
 #undef DAHDI_HAVE_PROC_OPS
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
+#if __has_attribute(__fallthrough__)
+# define fallthrough                    __attribute__((__fallthrough__))
+#else
+# define fallthrough                    do {} while (0)  /* fallthrough */
+#endif
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0)
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+#undef TIMER_DATA_TYPE
+#define TIMER_DATA_TYPE struct timer_list *
+#else
 #ifndef TIMER_DATA_TYPE
 #define TIMER_DATA_TYPE unsigned long
+#endif
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 13, 0)
@@ -1526,6 +1553,13 @@ static inline void *PDE_DATA(const struct inode *inode)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 #ifdef CONFIG_PROC_FS
 #define PDE_DATA(i)	pde_data(i)
+#endif
+#endif
+
+#ifdef RHEL_RELEASE_VERSION
+#if defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+              RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,1)
+#define PDE_DATA(i)     pde_data(i)
 #endif
 #endif
 

@@ -397,7 +397,11 @@ static struct attribute *xbus_dev_attrs[] = {
 ATTRIBUTE_GROUPS(xbus_dev);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int astribank_match(struct device *dev, const struct device_driver *driver)
+#else
 static int astribank_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	DBG(DEVICES, "SYSFS MATCH: dev->bus_id = %s, driver->name = %s\n",
 	    dev_name(dev), driver->name);
@@ -420,10 +424,18 @@ static int astribank_match(struct device *dev, struct device_driver *driver)
 
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
+static int astribank_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
+#else
 static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_CODE */
+#else
+static int astribank_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_VERSION */
 #else
 static int astribank_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* LINUX_VERSION_CODE */
 {
 	xbus_t *xbus;
 	extern char *initdir;
@@ -766,7 +778,11 @@ static DEVICE_ATTR_READER(refcount_xpd_show, dev, buf)
 	return len;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int xpd_match(struct device *dev, const struct device_driver *driver)
+#else
 static int xpd_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	struct xpd_driver *xpd_driver;
 	xpd_t *xpd;

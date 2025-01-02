@@ -28,6 +28,15 @@ Digital Cards
   * Digium TE220: PCI-Express dual-port T1/E1/J1
   * Digium TE420: PCI-Express quad-port T1/E1/J1
   * Digium TE820: PCI-Express eight-port T1/E1/J1
+- wcte12xp:
+  * Digium TE120P: PCI single-port T1/E1/J1
+  * Digium TE121: PCI-Express single-port T1/E1/J1
+  * Digium TE122: PCI single-port T1/E1/J1
+- wcte11xp:
+  * Digium TE110P: PCI single-port T1/E1/J1
+- wct1xxp:
+  * Digium T100P: PCI single-port T1
+  * Digium E100P: PCI single-port E1
 - wcb4xxp:
   * Digium B410: PCI quad-port BRI
   * Digium B233: PCI-Express dual-port BRI with echo can
@@ -43,11 +52,14 @@ Analog Cards
   * Digium A8B: PCI express up to 8 mixed FXS/FXO ports
   * Digium A4A: PCI up to 4 mixed FXS/FXO ports
   * Digium A4B: PCI express up to 4 mixed FXS/FXO ports 
-- wctdm24xxp: 
+- wctdm24xxp:
   * Digium TDM2400P/AEX2400: up to 24 analog ports
   * Digium Hx8 Series: Up to 8 analog or BRI ports
+- wctdm:
+  * Digium TDM400P: up to 4 analog ports
 - xpp: Xorcom Astribank: a USB connected unit of up to 32 ports
   (including the digital BRI and E1/T1 modules)
+- wcfxo: X100P, similar and clones. A simple single-port FXO card
 
 
 Other Drivers
@@ -515,7 +527,7 @@ with the option -v for a verbose output.
 Spans and Channels
 ~~~~~~~~~~~~~~~~~~
 DAHDI provides telephony *channels* to the userspace applications. 
-Those channels are channels are incorporated into logical units called
+Those hannels are incorporated into logical units called
 *spans*.
 
 With digital telephony adapters (e.g: E1 or T1), a span normally 
@@ -566,7 +578,7 @@ and one Astribank BRI+FXS:
 
 All spans here, except the FXS one, are BRI spans with 3 channels per span.
 
-In order to assign a span, we write three numbers separated by colns to
+In order to assign a span, we write three numbers separated by colons to
 the file 'assign_span' in the SysFS node
 
   local_num:span_num:base_chan_num

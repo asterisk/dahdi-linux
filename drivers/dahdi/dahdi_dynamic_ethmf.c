@@ -535,9 +535,12 @@ static void ztdethmf_destroy(struct dahdi_dynamic *dyn)
 		kfree(z->msgbuf);
 		kfree(z);
 	} else {
-		if (z && z->span && z->span->name) {
-			printk(KERN_ERR "Cannot find interface for %s\n",
-				z->span->name);
+		if (z && z->span) {
+			if ( strlen(z->span->name) )
+				printk(KERN_ERR "Cannot find interface for %s\n",
+					z->span->name);
+			else
+				printk(KERN_ERR "Cannot find interface for \n");
 		}
 	}
 }
@@ -570,7 +573,7 @@ static int ztdethmf_create(struct dahdi_dynamic *dyn, const char *addr)
 	z->rcvbuf = kmalloc(bufsize, GFP_KERNEL);
 
 	/* Address should be <dev>/<macaddr>/subaddr */
-	strlcpy(src, addr, sizeof(src));
+	strscpy(src, addr, sizeof(src));
 	/* replace all / with space; otherwise kernel sscanf does not work */
 	src_ptr = src;
 	while (*src_ptr) {

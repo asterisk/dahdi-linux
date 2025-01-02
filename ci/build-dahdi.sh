@@ -14,6 +14,12 @@ make x86_64_defconfig
 echo "  # make modules_prepare"
 make modules_prepare
 
+echo " # make kernel"
+make
+
+echo " #make modules"
+make modules
+
 echo "### Building DAHDI modules and installing"
 cd /src
 echo "  # make clean"

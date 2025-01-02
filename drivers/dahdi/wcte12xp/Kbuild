@@ -1,0 +1,5 @@
+obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCTE12XP) += wcte12xp.o
+
+EXTRA_CFLAGS += -I$(src)/.. -Wno-undef
+
+wcte12xp-objs := base.o

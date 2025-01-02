@@ -220,7 +220,11 @@ static void chan_release(struct device *dev)
 	chan_dbg(DEVICES, chan, "SYSFS\n");
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int chan_match(struct device *dev, const struct device_driver *driver)
+#else
 static int chan_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_chan *chan;
 
@@ -381,10 +385,11 @@ static void fixed_devfiles_remove(void)
 		return;
 	for (i = 0; i < ARRAY_SIZE(fixed_minors); i++) {
 		void *d = fixed_minors[i].dev;
-		if (d && !IS_ERR(d))
+		if (d && !IS_ERR(d)) {
 			dahdi_dbg(DEVICES, "Removing fixed device file %s\n",
 				fixed_minors[i].name);
 			DEL_DAHDI_DEV(fixed_minors[i].minor);
+		}
 	}
 }
 
@@ -483,10 +488,18 @@ int __init dahdi_sysfs_chan_init(const struct file_operations *fops)
 	should_cleanup.channel_driver = 1;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
+	dahdi_class = class_create("dahdi");
+#else
 	dahdi_class = class_create(THIS_MODULE, "dahdi");
+#endif /* RHEL_RELEASE_CODE */
+#else
+	dahdi_class = class_create(THIS_MODULE, "dahdi");
+#endif /* RHEL_RELEASE_VERSION */
 #else
 	dahdi_class = class_create("dahdi");
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (IS_ERR(dahdi_class)) {
 		res = PTR_ERR(dahdi_class);
 		dahdi_err("%s: class_create(dahi_chan) failed. Error: %d\n",

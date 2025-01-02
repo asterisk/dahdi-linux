@@ -39,6 +39,11 @@
 /* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 #include <asm/types.h>
+#elif defined RHEL_RELEASE_VERSION
+#if defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+              RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,1)
+#include <asm/types.h>
+#endif
 #else
 #include <stdbool.h>
 #endif
@@ -2707,10 +2712,11 @@ static int __devinit te13xp_init_one(struct pci_dev *pdev,
 	return 0;
 
 fail_exit:
-	if (&wc->xb)
+	/* As (&wc->xb) can never be null therefore check if wc is not null then release xb and free wc */
+	if (wc) {
 		wcxb_release(&wc->xb);
-
-	free_wc(wc);
+		free_wc(wc);
+	}
 	return res;
 }
 

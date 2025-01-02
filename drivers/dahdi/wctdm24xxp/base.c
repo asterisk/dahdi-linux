@@ -57,6 +57,11 @@ Tx Gain - W/Pre-Emphasis: -23.99 to 0.00 db
 /* Linux kernel 5.16 and greater has removed user-space headers from the kernel include path */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 16, 0)
 #include <asm/types.h>
+#elif defined RHEL_RELEASE_VERSION
+#if defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
+              RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,1)
+#include <asm/types.h>
+#endif
 #else
 #include <stdbool.h>
 #endif
@@ -225,7 +230,15 @@ mod_hooksig(struct wctdm *wc, struct wctdm_module *mod, enum dahdi_rxsig rxsig)
 
 struct wctdm *ifaces[WC_MAX_IFACES];
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 3)
+DEFINE_SEMAPHORE(ifacelock, 1);
+#else
 DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_CODE */
+#else
+DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_VERSION */
 #else
 DEFINE_SEMAPHORE(ifacelock, 1);
 #endif
@@ -1511,16 +1524,16 @@ static int wait_access(struct wctdm *wc, struct wctdm_module *const mod)
 	unsigned char data = 0;
 	int count = 0;
 
-	#define MAX 10 /* attempts */
+	#define MAX_ATTEMPTS 10 /* attempts */
 
 	/* Wait for indirect access */
-	while (count++ < MAX) {
+	while (count++ < MAX_ATTEMPTS) {
 		data = wctdm_getreg(wc, mod, I_STATUS);
 		if (!data)
 			return 0;
 	}
 
-	if (count > (MAX-1)) {
+	if (count > (MAX_ATTEMPTS-1)) {
 		dev_notice(&wc->vb.pdev->dev,
 			   " ##### Loop error (%02x) #####\n", data);
 	}
@@ -1965,12 +1978,14 @@ wctdm_check_battery_lost(struct wctdm *wc, struct wctdm_module *const mod)
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_ONHOOK);
 		/* fallthrough */
+		fallthrough;
 	case BATTERY_PRESENT:
 		fxo->battery_state = BATTERY_DEBOUNCING_LOST;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;
 		break;
 	case BATTERY_DEBOUNCING_LOST_FROM_PRESENT_ALARM:
 		/* fallthrough */
+		fallthrough;
 	case BATTERY_DEBOUNCING_LOST:
 		if (time_after(wc->framecount, fxo->battdebounce_timer)) {
 			if (debug) {
@@ -2075,6 +2090,7 @@ wctdm_check_battery_present(struct wctdm *wc, struct wctdm_module *const mod)
 	case BATTERY_UNKNOWN:
 		mod_hooksig(wc, mod, DAHDI_RXSIG_OFFHOOK);
 		/* fallthrough */
+		fallthrough;
 	case BATTERY_LOST:
 		fxo->battery_state = BATTERY_DEBOUNCING_PRESENT;
 		fxo->battdebounce_timer = wc->framecount + battdebounce;

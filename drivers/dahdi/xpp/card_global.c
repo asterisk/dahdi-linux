@@ -149,6 +149,7 @@ static int execute_chip_command(xpd_t *xpd, const int argc, char *argv[])
 			"'I' is deprecated in register commands. "
 			"Use 'S' instead.\n");
 		/* fall through */
+		fallthrough;
 	case 'S':
 		do_subreg = 1;
 		num_args += 2;	/* register + subreg */
@@ -341,7 +342,7 @@ int parse_chip_command(xpd_t *xpd, char *cmdline)
 		XBUS_DBG(GENERAL, xbus, "Dropped packet. Disconnected.\n");
 		return -EBUSY;
 	}
-	strlcpy(buf, cmdline, MAX_PROC_WRITE);	/* Save a copy */
+	strscpy(buf, cmdline, MAX_PROC_WRITE);	/* Save a copy */
 	if (buf[0] == '#' || buf[0] == ';')
 		XPD_DBG(REGS, xpd, "Note: '%s'\n", buf);
 	if ((p = strchr(buf, '#')) != NULL)	/* Truncate comments */

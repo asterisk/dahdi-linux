@@ -42,7 +42,11 @@ module_param(tools_rootdir, charp, 0444);
 MODULE_PARM_DESC(tools_rootdir,
 		"root directory of all tools paths (default /)");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int span_match(struct device *dev, const struct device_driver *driver)
+#else
 static int span_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	return 1;
 }
@@ -69,10 +73,18 @@ static inline struct dahdi_span *dev_to_span(const struct device *dev)
 	} while (0)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
+static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
+#else
 static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_CODE */
+#else
+static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_VERSION */
 #else
 static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_span *span;
 
@@ -442,12 +454,19 @@ static inline struct dahdi_device *to_ddev(const struct device *dev)
 			return err;				\
 	} while (0)
 
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
+static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
+#else
 static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_CODE */
+#else
+static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_VERSION */
 #else
 static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_device *ddev;
 
@@ -695,8 +714,16 @@ static DEVICE_ATTR_RO(location);
 static DEVICE_ATTR_WO(auto_assign);
 static DEVICE_ATTR_WO(assign_span);
 static DEVICE_ATTR_WO(unassign_span);
-static DEVICE_ATTR_RW(dahdi_spantype);
-static DEVICE_ATTR_RO(dahdi_registration_time);
+static struct device_attribute dev_attr_dahdi_spantype = {
+	.attr   = { .name = "spantype", .mode = 0644 },
+	.show   = dahdi_spantype_show,
+	.store  = dahdi_spantype_store,
+};
+static struct device_attribute dev_attr_dahdi_registration_time = {
+	.attr   = { .name = "registration_time", .mode = 0444 },
+	.show   = dahdi_registration_time_show,
+	.store  = NULL,
+};
 static struct attribute *dahdi_device_attrs[] = {
 	&dev_attr_manufacturer.attr,
 	&dev_attr_type.attr,
