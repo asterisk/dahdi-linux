@@ -23,8 +23,5 @@ octapi_files = octdeviceapi/oct6100api/oct6100_api/oct6100_adpcm_chan.o \
 		apilib/largmath/octapi_largmath.o \
 		apilib/llman/octapi_llman.o
 
-# TODO: ccflags was added in 2.6.24 in commit f77bf01425b11947eeb3b5b54. This
-# should be changed to a conditional compilation based on the Kernel Version.
-# ccflags-y := -I$(src)/.. -Wno-undef -I$(src)/include -I$(src)/octdeviceapi -I$(src)/octdeviceapi/oct6100api
-EXTRA_CFLAGS = -I$(src)/.. -Wno-undef -I$(src)/include -I$(src)/octdeviceapi -I$(src)/octdeviceapi/oct6100api
+ccflags-y := -I$(src)/.. -Wno-undef -I$(src)/include -I$(src)/octdeviceapi -I$(src)/octdeviceapi/oct6100api
 lib-y := $(octapi_files)

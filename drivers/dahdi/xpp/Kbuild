@@ -1,4 +1,4 @@
-EXTRA_CFLAGS	=	$(XPP_LOCAL_CFLAGS)	\
+ccflags-y	=	$(XPP_LOCAL_CFLAGS)	\
 			-DDEBUG			\
 			-DPOLL_DIGITAL_INPUTS	\
 			-DDEBUG_PCMTX		\
@@ -32,7 +32,7 @@ xpd_echo-objs		+= card_echo.o
 xpp_mmap-objs		+= mmapbus.o mmapdrv.o
 
 ifeq	(y,$(PARPORT_DEBUG))
-EXTRA_CFLAGS	+= -DDEBUG_SYNC_PARPORT
+ccflags-y	+= -DDEBUG_SYNC_PARPORT
 obj-m		+= parport_debug.o
 endif
 
