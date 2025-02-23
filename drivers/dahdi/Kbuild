@@ -134,6 +134,12 @@ endif
 
 dahdi_vpmadt032_loader-objs := vpmadt032_loader/dahdi_vpmadt032_loader.o 
 
+# Since kernel commit 13b25489b6f8bd73ed65f07928f7c27a481f1820,
+# the vpmadt032 object is no longer copied from the binary blob (.o_shipped)
+# by kernel kbuild for some reason. For now, do it manually:
+vpmadt032_loader/vpmadt032_%.o:
+	cp $@_shipped $@
+
 ifneq ($(DAHDI_ARCH),)
   ifneq ($(wildcard $(src)/vpmadt032_loader/vpmadt032_$(DAHDI_ARCH).o_shipped),)
     $(shell touch $(KBUILD_EXTMOD)/vpmadt032_loader/.vpmadt032_$(DAHDI_ARCH).o.cmd)
