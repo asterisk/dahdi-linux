@@ -66,6 +66,11 @@
 #endif /* RHEL_RELEASE_CODE */
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,15,0)
+#define del_timer timer_delete
+#define del_timer_sync timer_delete_sync
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 18, 0)
 #include <linux/pci.h>
 #include <linux/dma-mapping.h>
