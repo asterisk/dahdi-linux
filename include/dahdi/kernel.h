@@ -58,6 +58,10 @@
 
 #include <linux/poll.h>
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
+#define from_timer timer_container_of
+#endif
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
 #define netif_napi_add netif_napi_add_weight
 #elif defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE)
