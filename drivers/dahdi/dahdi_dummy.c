@@ -209,7 +209,7 @@ static int dahdi_dummy_initialize(struct dahdi_dummy *ztd)
 	return res;
 }
 
-int init_module(void)
+static int __init dummy_init(void)
 {
 	int res;
 	ztd = kzalloc(sizeof(*ztd), GFP_KERNEL);
@@ -252,8 +252,7 @@ int init_module(void)
 	return 0;
 }
 
-
-void cleanup_module(void)
+static void __exit dummy_exit(void)
 {
 #if defined(USE_HIGHRESTIMER)
 	/* Stop high resolution timer */
@@ -274,3 +273,6 @@ module_param(debug, int, 0600);
 MODULE_DESCRIPTION("Timing-Only Driver");
 MODULE_AUTHOR("Robert Pleh <robert.pleh@hermes.si>");
 MODULE_LICENSE("GPL v2");
+
+module_init(dummy_init);
+module_exit(dummy_exit);
