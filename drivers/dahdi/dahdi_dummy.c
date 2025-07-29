@@ -229,12 +229,14 @@ int init_module(void)
 
 #if defined(USE_HIGHRESTIMER)
 	printk(KERN_DEBUG "dahdi_dummy: Trying to load High Resolution Timer\n");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+	hrtimer_setup(&zaptimer, dahdi_dummy_hr_int, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+#else
 	hrtimer_init(&zaptimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	printk(KERN_DEBUG "dahdi_dummy: Initialized High Resolution Timer\n");
-
 	/* Set timer callback function */
 	zaptimer.function = dahdi_dummy_hr_int;
-
+#endif /* LINUX_VERSION_CODE */
+	printk(KERN_DEBUG "dahdi_dummy: Initialized High Resolution Timer\n");
 	printk(KERN_DEBUG "dahdi_dummy: Starting High Resolution Timer\n");
 	hrtimer_start(&zaptimer, ktime_set(0, DAHDI_TIME_NS), HRTIMER_MODE_REL);
 	printk(KERN_INFO "dahdi_dummy: High Resolution Timer started, good to go\n");
