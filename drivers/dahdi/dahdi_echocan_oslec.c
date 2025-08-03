@@ -30,9 +30,8 @@
 #include <linux/ctype.h>
 #include <linux/moduleparam.h>
 
-/* Fix this if OSLEC is elsewhere */
+/* Change this if OSLEC is elsewhere */
 #include "../staging/echo/oslec.h"
-//#include <linux/oslec.h>
 
 #include <dahdi/kernel.h>
 
