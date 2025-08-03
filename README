@@ -196,6 +196,41 @@ you a clue of the versions installed:
   find /lib/modules -name dahdi.ko
 
 
+OSLEC
+~~~~~
+The echo canceller module dahdi_echocan_oslec
+provides a DAHDI echo canceller module that uses the code from OSLEC.
+
+https://www.rowetel.com/ucasterisk/oslec.html[OSLEC] is an
+Open Source Line Echo Canceller. It was previously part of the mainline
+kernel but has since been removed; for licensing reasons, it is
+distributed separately in the dahdi-linux-extra repo.
+
+You can get the OSLEC code from the dahdi-linux-extra Git repository:
+
+  cd /usr/src
+  git clone --depth 1 --single-branch --branch extra-2.10.y https://notabug.org/tzafrir/dahdi-linux-extra.git
+  mv dahdi-linux-extra/drivers/staging dahdi-linux/drivers
+  rm -rf dahdi-linux-extra
+
+To use OSLEC, can copy drivers/staging/echo from dahdi-extra
+to drivers/staging/echo in dahdi-linux; dahdi_echocan_oslec assumes that
+this is where the oslec code lies. If it is elsewhere, you'll need to fix
+the #include line.
+
+After doing that, you'll see the following when building (running
+'make')
+
+  ...
+  CC [M] /usr/src/dahdi-linux/drivers/dahdi/dahdi_echocan_oslec.o
+  CC [M] /usr/src/dahdi-linux/drivers/dahdi/../staging/echo/echo.o
+  ...
+
+As this is an experimental driver, problems building and using it should
+be reported on the
+https://lists.sourceforge.net/lists/listinfo/freetel-oslec[OSLEC mailing
+list].
+
 ===== LINUX_DIR
 The relative path to the dahdi-linux tree. The default is '.' and normally
 there's no reason to override it.
