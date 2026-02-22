@@ -42,7 +42,7 @@ module_param(tools_rootdir, charp, 0444);
 MODULE_PARM_DESC(tools_rootdir,
 		"root directory of all tools paths (default /)");
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0) ||(defined(RHEL_RELEASE_CODE) && (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 8)))
 static int span_match(struct device *dev, const struct device_driver *driver)
 #else
 static int span_match(struct device *dev, struct device_driver *driver)
