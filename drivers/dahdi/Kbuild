@@ -83,13 +83,13 @@ CFLAGS_MODULE += -I$(DAHDI_INCLUDE) -I$(src) -Wno-format-truncation
 BAD_KERNELS_VERS := 22 34 34.0.1 34.0.2
 BAD_KERNELS := $(foreach ver,$(BAD_KERNELS_VERS),2.6.9-$(ver).EL 2.6.9-$(ver).ELsmp)
 ifneq (,$(filter $(KVERS),$(BAD_KERNELS)))
-EXTRA_CFLAGS+=-Drw_lock_t=rwlock_t
+ccflags-y+=-Drw_lock_t=rwlock_t
 endif
 
 # A number of Fedora 10 (9 also?) kernels backported hrtimer to 2.6.27
 # as part of an ALSA backport. TODO: Any better way to detect that?
 ifeq (1,$(shell fgrep -q ' hrtimer_set_expires' include/linux/hrtimer.h 2>/dev/null && echo 1))
-EXTRA_CFLAGS+=-DHAVE_HRTIMER_ACCESSORS=1
+ccflags-y+=-DHAVE_HRTIMER_ACCESSORS=1
 endif
 
 ifeq (1,$(shell fgrep -q 'wait_for_completion_timeout' include/linux/completion.h 2>/dev/null && echo 1))
