@@ -5402,15 +5402,15 @@ static int dahdi_ioctl_get_version(unsigned long data)
 			 */
 			 continue;
 		}
-		strncat(vi.echo_canceller + strlen(vi.echo_canceller),
-			ec_name, space);
-		ec_name_len = strlen(ec_name);
-		if (ec_name_len > space + 1)
+
+		strncat(vi.echo_canceller, ec_name, space);
+		space -= strlen(ec_name);
+		if (space < 1)
+
 			break;
 		space -= ec_name_len;
 		if (cur->list.next && (cur->list.next != &ecfactory_list)) {
-			strncat(vi.echo_canceller + strlen(vi.echo_canceller),
-				", ", space);
+			strncat(vi.echo_canceller, ", ", space);
 			space -= 2;
 			if (space < 1)
 				break;
