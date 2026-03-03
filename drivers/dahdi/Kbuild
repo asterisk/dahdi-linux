@@ -69,9 +69,8 @@ endif
 
 obj-m += $(DAHDI_MODULES_EXTRA)
 
-# If you want to build OSLEC, include the code in the standard location:
-# drivers/staging/echo . The DAHDI OSLEC echo canceller will be built as
-# well:
+# If you want to build OSLEC, include the code in drivers/staging/echo
+# The DAHDI OSLEC echo canceller will be built as well:
 ifneq (,$(wildcard $(src)/../staging/echo/echo.c))
 obj-m += dahdi_echocan_oslec.o
 obj-m += ../staging/echo/echo.o
@@ -83,13 +82,13 @@ CFLAGS_MODULE += -I$(DAHDI_INCLUDE) -I$(src) -Wno-format-truncation
 BAD_KERNELS_VERS := 22 34 34.0.1 34.0.2
 BAD_KERNELS := $(foreach ver,$(BAD_KERNELS_VERS),2.6.9-$(ver).EL 2.6.9-$(ver).ELsmp)
 ifneq (,$(filter $(KVERS),$(BAD_KERNELS)))
-EXTRA_CFLAGS+=-Drw_lock_t=rwlock_t
+ccflags-y+=-Drw_lock_t=rwlock_t
 endif
 
 # A number of Fedora 10 (9 also?) kernels backported hrtimer to 2.6.27
 # as part of an ALSA backport. TODO: Any better way to detect that?
 ifeq (1,$(shell fgrep -q ' hrtimer_set_expires' include/linux/hrtimer.h 2>/dev/null && echo 1))
-EXTRA_CFLAGS+=-DHAVE_HRTIMER_ACCESSORS=1
+ccflags-y+=-DHAVE_HRTIMER_ACCESSORS=1
 endif
 
 ifeq (1,$(shell fgrep -q 'wait_for_completion_timeout' include/linux/completion.h 2>/dev/null && echo 1))
@@ -133,6 +132,12 @@ endif
 ###############################################################################
 
 dahdi_vpmadt032_loader-objs := vpmadt032_loader/dahdi_vpmadt032_loader.o 
+
+# Since kernel commit 13b25489b6f8bd73ed65f07928f7c27a481f1820,
+# the vpmadt032 object is no longer copied from the binary blob (.o_shipped)
+# by kernel kbuild for some reason. For now, do it manually:
+vpmadt032_loader/vpmadt032_%.o:
+	cp $@_shipped $@
 
 ifneq ($(DAHDI_ARCH),)
   ifneq ($(wildcard $(src)/vpmadt032_loader/vpmadt032_$(DAHDI_ARCH).o_shipped),)

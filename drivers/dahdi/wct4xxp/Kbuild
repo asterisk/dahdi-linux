@@ -2,16 +2,16 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT4XXP) += wct4xxp.o
 
 FIRM_DIR	:= ../firmware
 
-EXTRA_CFLAGS += -I$(src)/.. -I$(src)/../oct612x/ $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
+ccflags-y += -I$(src)/.. -I$(src)/../oct612x/ $(shell $(src)/../oct612x/octasic-helper cflags $(src)/../oct612x) -Wno-undef
 
 # The OCT612X source files are from a vendor drop and we do not want to edit
 # them to make this warning go away. Therefore, turn off the
 # unused-but-set-variable warning for this driver.
 
-EXTRA_CFLAGS += $(call cc-option, -Wno-unused-but-set-variable)
+ccflags-y += $(call cc-option, -Wno-unused-but-set-variable)
 
 ifeq ($(HOTPLUG_FIRMWARE),yes)
-  EXTRA_CFLAGS+=-DHOTPLUG_FIRMWARE
+  ccflags-y+=-DHOTPLUG_FIRMWARE
 endif
 
 wct4xxp-objs := base.o vpm450m.o
