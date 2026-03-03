@@ -1169,10 +1169,12 @@ static int set_vmwi(xpd_t *xpd, int pos, unsigned long arg)
 			    "%s: VMWI(hvdc) is not implemented yet. Ignored.\n",
 			    __func__);
 	}
-	if (VMWI_TYPE(priv, pos, HVAC))
+	if (VMWI_TYPE(priv, pos, HVAC)) {
 		;		/* VMWI_NEON */
-	if (priv->vmwisetting[pos].vmwi_type == 0)
+	}
+	if (priv->vmwisetting[pos].vmwi_type == 0) {
 		;		/* Disable VMWI */
+	}
 	priv->vmwisetting[pos] = vmwisetting;
 	set_vm_led_mode(xpd->xbus, xpd, pos, PHONEDEV(xpd).msg_waiting[pos]);
 	return 0;

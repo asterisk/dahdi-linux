@@ -628,11 +628,11 @@ static int __wait_access(struct wctdm *wc, int card)
     unsigned char data = 0;
     int count = 0;
 
-    #define MAX 6000 /* attempts */
+    #define MAX_ATTEMPTS 6000 /* attempts */
 
 
     /* Wait for indirect access */
-    while (count++ < MAX)
+    while (count++ < MAX_ATTEMPTS)
 	 {
 		data = __wctdm_getreg(wc, card, I_STATUS);
 
@@ -641,7 +641,7 @@ static int __wait_access(struct wctdm *wc, int card)
 
 	 }
 
-    if(count > (MAX-1)) printk(KERN_NOTICE " ##### Loop error (%02x) #####\n", data);
+    if(count > (MAX_ATTEMPTS-1)) printk(KERN_NOTICE " ##### Loop error (%02x) #####\n", data);
 
 	return 0;
 }

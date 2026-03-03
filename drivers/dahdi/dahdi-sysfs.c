@@ -42,7 +42,11 @@ module_param(tools_rootdir, charp, 0444);
 MODULE_PARM_DESC(tools_rootdir,
 		"root directory of all tools paths (default /)");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static int span_match(struct device *dev, const struct device_driver *driver)
+#else
 static int span_match(struct device *dev, struct device_driver *driver)
+#endif /* LINUX_VERSION_CODE */
 {
 	return 1;
 }
@@ -69,15 +73,18 @@ static inline struct dahdi_span *dev_to_span(const struct device *dev)
 	} while (0)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
-#if defined RHEL_RELEASE_VERSION && (RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
-        RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,4)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
 static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
 #else
 static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* RHEL_RELEASE_CODE */
+#else
+static int span_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_VERSION */
 #else
 static int span_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_span *span;
 
@@ -448,15 +455,18 @@ static inline struct dahdi_device *to_ddev(const struct device *dev)
 	} while (0)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 3, 0)
-#if defined RHEL_RELEASE_VERSION && (RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5,14,0) && \
-        RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9,4)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 4)
 static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
 #else
 static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* RHEL_RELEASE_CODE */
+#else
+static int device_uevent(struct device *dev, struct kobj_uevent_env *kenv)
+#endif /* RHEL_RELEASE_VERSION */
 #else
 static int device_uevent(const struct device *dev, struct kobj_uevent_env *kenv)
-#endif
+#endif /* LINUX_VERSION_CODE */
 {
 	struct dahdi_device *ddev;
 

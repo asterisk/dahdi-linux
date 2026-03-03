@@ -1136,7 +1136,15 @@ static void vb_stop_txrx_processors(struct voicebus *vb)
 void voicebus_stop(struct voicebus *vb)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 3)
+	static DEFINE_SEMAPHORE(stop, 1);
+#else
 	static DEFINE_SEMAPHORE(stop);
+#endif /* RHEL_RELEASE_CODE */
+#else
+	static DEFINE_SEMAPHORE(stop);
+#endif /* RHEL_RELEASE_VERSION */
 #else
 	static DEFINE_SEMAPHORE(stop, 1);
 #endif

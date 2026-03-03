@@ -230,7 +230,15 @@ mod_hooksig(struct wctdm *wc, struct wctdm_module *mod, enum dahdi_rxsig rxsig)
 
 struct wctdm *ifaces[WC_MAX_IFACES];
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+#if defined(RHEL_RELEASE_VERSION) && defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE >= KERNEL_VERSION(5, 14, 0)
+#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(9, 3)
+DEFINE_SEMAPHORE(ifacelock, 1);
+#else
 DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_CODE */
+#else
+DEFINE_SEMAPHORE(ifacelock);
+#endif /* RHEL_RELEASE_VERSION */
 #else
 DEFINE_SEMAPHORE(ifacelock, 1);
 #endif
@@ -1516,16 +1524,16 @@ static int wait_access(struct wctdm *wc, struct wctdm_module *const mod)
 	unsigned char data = 0;
 	int count = 0;
 
-	#define MAX 10 /* attempts */
+	#define MAX_ATTEMPTS 10 /* attempts */
 
 	/* Wait for indirect access */
-	while (count++ < MAX) {
+	while (count++ < MAX_ATTEMPTS) {
 		data = wctdm_getreg(wc, mod, I_STATUS);
 		if (!data)
 			return 0;
 	}
 
-	if (count > (MAX-1)) {
+	if (count > (MAX_ATTEMPTS-1)) {
 		dev_notice(&wc->vb.pdev->dev,
 			   " ##### Loop error (%02x) #####\n", data);
 	}
