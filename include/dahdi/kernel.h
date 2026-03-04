@@ -58,7 +58,12 @@
 
 #include <linux/poll.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
+#ifndef RHEL_VERSION_GE
+#define RHEL_VERSION_GE(maj, min) \
+	(defined(RHEL_RELEASE_CODE) && defined(RHEL_RELEASE_VERSION) && \
+	 (RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(maj, min)))
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0) || RHEL_VERSION_GE(9, 8)
 #define from_timer timer_container_of
 #endif
 
