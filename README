@@ -134,6 +134,17 @@ If you build a custom kernel, note the following configuration items:
 - DAHDI needs the BKL (Big Kernel Lock). This may be annoying in
   >=2.6.37 kernels. Make sure you enable CONFIG_BKL on those kernels.
 
+Generic PPP Support
+^^^^^^^^^^^^^^^^^^^
+Generic PPP support is disabled by default, so ordinary DAHDI installations
+do not depend on the kernel's ppp_generic module. To include it, first enable
+CONFIG_PPP in the target kernel configuration, then build DAHDI with:
+
+  make DAHDI_PPP=1
+
+Use DAHDI_PPP=1 on every build invocation that compiles modules. This enables
+the DAHDI_HDLCPPP interface used by the DAHDI pppd plugin.
+
 
 Installing to a Subtree
 ~~~~~~~~~~~~~~~~~~~~~~~

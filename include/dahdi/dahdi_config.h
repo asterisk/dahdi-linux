@@ -82,11 +82,15 @@
 /* #define CONFIG_DAHDI_NET */
 
 /*
- * Uncomment for Generic PPP support (i.e. DAHDIRAS)
+ * Generic PPP support (i.e. DAHDIRAS) is enabled at build time with
+ * "make DAHDI_PPP=1".  It requires CONFIG_PPP to be enabled in the target
+ * kernel configuration.
  */
-
-#if defined(CONFIG_PPP) || defined(CONFIG_PPP_MODULE)
-/* #define CONFIG_DAHDI_PPP */
+#ifdef __KERNEL__
+#if defined(CONFIG_DAHDI_PPP) \
+	&& !defined(CONFIG_PPP) && !defined(CONFIG_PPP_MODULE)
+#error "CONFIG_DAHDI_PPP requires CONFIG_PPP"
+#endif
 #endif
 
 /*

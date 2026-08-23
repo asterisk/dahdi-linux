@@ -6,6 +6,12 @@ obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_DYNAMIC_ETH)	+= dahdi_dynamic_eth.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_DYNAMIC_ETHMF)	+= dahdi_dynamic_ethmf.o
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_TRANSCODE)		+= dahdi_transcode.o
 
+ifeq ($(DAHDI_PPP),1)
+# This must apply to low-level drivers too: they share struct dahdi_chan with
+# the core module.
+subdir-ccflags-y += -DCONFIG_DAHDI_PPP
+endif
+
 ifdef CONFIG_PCI
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_OCT612X)		+= oct612x/
 obj-$(DAHDI_BUILD_ALL)$(CONFIG_DAHDI_WCT4XXP)		+= wct4xxp/

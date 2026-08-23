@@ -53,7 +53,11 @@ INST_HEADERS:=kernel.h user.h fasthdlc.h wctdm_user.h dahdi_config.h
 
 DAHDI_BUILD_ALL:=m
 
-KMAKE=+$(MAKE) -C $(KSRC) M=$(PWD)/drivers/dahdi DAHDI_INCLUDE=$(PWD)/include DAHDI_MODULES_EXTRA="$(DAHDI_MODULES_EXTRA)" HOTPLUG_FIRMWARE=$(HOTPLUG_FIRMWARE)
+# Generic PPP support is opt-in so that the core module does not depend on
+# ppp_generic unless it is requested explicitly.
+DAHDI_PPP ?= 0
+
+KMAKE=+$(MAKE) -C $(KSRC) M=$(PWD)/drivers/dahdi DAHDI_INCLUDE=$(PWD)/include DAHDI_MODULES_EXTRA="$(DAHDI_MODULES_EXTRA)" HOTPLUG_FIRMWARE=$(HOTPLUG_FIRMWARE) DAHDI_PPP=$(DAHDI_PPP)
 
 ROOT_PREFIX:=
 

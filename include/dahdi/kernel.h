@@ -49,6 +49,7 @@
 #endif
 
 #ifdef CONFIG_DAHDI_PPP
+#include <linux/netdevice.h>
 #include <linux/ppp_channel.h>
 #include <linux/skbuff.h>
 #include <linux/interrupt.h>
