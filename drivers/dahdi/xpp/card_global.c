@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/kmod.h>
+#include <linux/umh.h>
 #include "xdefs.h"
 #include "xpd.h"
 #include "xpp_dahdi.h"
